@@ -969,11 +969,29 @@ class SupabaseCustomerRepository implements CustomerRepository {
         final purchasedDate = DateTime.tryParse(createdAtStr) ?? DateTime.now();
 
         final productData = item['products'] as Map<String, dynamic>? ?? {};
-        final productId = productData['id'] as String? ?? item['product_id'] as String? ?? '';
-        if (productId.isEmpty) continue; // skip if no product info
 
-        final productName = productData['name'] as String? ?? 'IZYHEAT System';
-        final category = productData['category'] as String? ?? 'other';
+        // Quote & Sales Order data
+        final quoteList = item['quotations'] as List?;
+        final quoteData = (quoteList != null && quoteList.isNotEmpty) ? quoteList.first as Map<String, dynamic> : (item['quotations'] as Map<String, dynamic>?);
+        final soList = item['sales_orders'] as List?;
+        final soData = (soList != null && soList.isNotEmpty) ? soList.first as Map<String, dynamic> : null;
+
+        String? lineItemDesc;
+        final qItems = (quoteData?['line_items'] as List?);
+        if (qItems != null && qItems.isNotEmpty) {
+          lineItemDesc = (qItems.first as Map)['description'] as String?;
+        }
+        final soItems = (soData?['line_items'] as List?);
+        if (lineItemDesc == null && soItems != null && soItems.isNotEmpty) {
+          lineItemDesc = (soItems.first as Map)['description'] as String?;
+        }
+
+        final productName = productData['name'] as String? 
+            ?? lineItemDesc 
+            ?? item['product_name'] as String?
+            ?? item['deal_name'] as String?
+            ?? 'IZYHEAT System';
+        final category = productData['category'] as String? ?? 'heat_pump';
         final modelNumber = category.toUpperCase();
         
         final imgList = List<String>.from(productData['image_urls'] ?? []);
@@ -983,9 +1001,9 @@ class SupabaseCustomerRepository implements CustomerRepository {
         final sellerName = 'IZYHEAT Industry';
 
         // Price paid
-        final quoteList = item['quotations'] as List?;
-        final quoteData = (quoteList != null && quoteList.isNotEmpty) ? quoteList.first as Map<String, dynamic> : (item['quotations'] as Map<String, dynamic>?);
-        final amountPaid = (quoteData?['grand_total'] as num?)?.toDouble() ?? 0.0;
+        final amountPaid = (quoteData?['grand_total'] as num?)?.toDouble() 
+            ?? (soData?['grand_total'] as num?)?.toDouble() 
+            ?? 0.0;
 
         // Warranty
         final warrantyList = item['warranty_cards'] as List?;
@@ -1003,8 +1021,6 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
         // Installation Location
         final custData = item['customers'] as Map<String, dynamic>?;
-        final soList = item['sales_orders'] as List?;
-        final soData = (soList != null && soList.isNotEmpty) ? soList.first as Map<String, dynamic> : null;
         final installationAddress = custData?['address'] as String? ?? soData?['shipping_address'] as String?;
 
         // AMC Contract info
@@ -1067,6 +1083,93 @@ class SupabaseCustomerRepository implements CustomerRepository {
           requestedServicesCount: requestedCount,
         ));
       }
+
+      // Query direct confirmed quotations / orders for this customer
+      try {
+        final directQuotes = await _supabase
+            .from('quotations')
+            .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, status, pipeline_id')
+            .or('customer_phone.eq.$cleanDigits,customer_phone.ilike.%$last10')
+            .eq('status', 'confirmed');
+        for (final q in (directQuotes as List? ?? [])) {
+          final qPipeId = q['pipeline_id'] as String?;
+          if (qPipeId != null && list.any((p) => p.productId == qPipeId)) {
+            continue;
+          }
+          final qId = q['id'] as String;
+          if (list.any((p) => p.productId == qId)) continue;
+          
+          final lineItems = (q['line_items'] as List?) ?? [];
+          final firstItem = lineItems.isNotEmpty ? lineItems.first as Map : {};
+          final qProdName = firstItem['description'] as String? ?? 'IZYHEAT Solar System';
+          final grandTotal = (q['grand_total'] as num?)?.toDouble() ?? 0.0;
+          final qCreatedAt = DateTime.tryParse(q['created_at'] ?? '') ?? DateTime.now();
+
+          list.add(Product(
+            productId: qId,
+            productName: qProdName,
+            modelNumber: 'COMMERCIAL',
+            imageUrl: 'assets/images/heatpump_placeholder.jpg',
+            purchasedDate: qCreatedAt,
+            sellerName: 'IZYHEAT Industry',
+            amountPaid: grandTotal,
+            currencyCode: 'INR',
+            warrantyStartDate: qCreatedAt,
+            warrantyExpiryDate: qCreatedAt.add(const Duration(days: 365)),
+            amcStatus: 'none',
+            serialNumber: q['quotation_number'] ?? qId,
+            category: 'heat_pump',
+            brochureUrls: const [],
+            installationAddress: null,
+            amcVisits: const [],
+            requestedServicesCount: requestedCount,
+          ));
+        }
+      } catch (_) {}
+
+      // Link any active AMC contract for this customer
+      try {
+        if (allCustomerIds.isNotEmpty) {
+          final allAmc = await _supabase
+              .from('amc_contracts')
+              .select('id, status, end_date, amc_number, number_of_visits_included, pipeline_id, customer_id, amc_service_visits (id, visit_number, scheduled_date, completed_date, status, notes)')
+              .inFilter('customer_id', allCustomerIds.toList());
+          for (final amc in (allAmc as List? ?? [])) {
+            final amcPipeId = amc['pipeline_id'] as String?;
+            final rawStatus = amc['status'] as String? ?? 'interested';
+            final statusStr = (rawStatus == 'active') ? 'active' : (rawStatus == 'expired' ? 'expired' : 'none');
+            final amcEndDate = DateTime.tryParse(amc['end_date'] ?? '');
+            final amcNum = amc['amc_number'] as String?;
+            final visitsIncluded = amc['number_of_visits_included'] as int? ?? 0;
+            final visitsList = amc['amc_service_visits'] as List?;
+            final visitsCompleted = visitsList != null ? visitsList.where((v) => v['status'] == 'completed').length : 0;
+            final amcVisitsList = visitsList != null ? visitsList.map((v) => Map<String, dynamic>.from(v as Map)).toList() : <Map<String, dynamic>>[];
+
+            for (int i = 0; i < list.length; i++) {
+              if (amcPipeId != null && list[i].productId == amcPipeId) {
+                list[i] = list[i].copyWith(
+                  amcStatus: statusStr,
+                  amcExpiryDate: amcEndDate ?? list[i].amcExpiryDate,
+                  serialNumber: amcNum ?? list[i].serialNumber,
+                  numberOfVisitsIncluded: visitsIncluded,
+                  numberOfVisitsCompleted: visitsCompleted,
+                  amcVisits: amcVisitsList,
+                );
+              } else if (list[i].amcStatus == 'none' && statusStr == 'active') {
+                list[i] = list[i].copyWith(
+                  amcStatus: statusStr,
+                  amcExpiryDate: amcEndDate ?? list[i].amcExpiryDate,
+                  serialNumber: amcNum ?? list[i].serialNumber,
+                  numberOfVisitsIncluded: visitsIncluded,
+                  numberOfVisitsCompleted: visitsCompleted,
+                  amcVisits: amcVisitsList,
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
       return list;
     } catch (e) {
       print("Error fetching purchased products: $e");

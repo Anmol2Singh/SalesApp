@@ -235,7 +235,7 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
       );
 
       try {
-        final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+        final placemarks = await Geocoding().placemarkFromCoordinates(position.latitude, position.longitude);
         if (placemarks.isNotEmpty) {
           final place = placemarks.first;
           final street = [place.street, place.subLocality].where((s) => s != null && s.trim().isNotEmpty).join(', ');

@@ -96,6 +96,52 @@ class Product {
       'brochureUrls': brochureUrls,
     };
   }
+
+  Product copyWith({
+    String? productId,
+    String? productName,
+    String? modelNumber,
+    String? imageUrl,
+    DateTime? purchasedDate,
+    String? sellerName,
+    double? amountPaid,
+    String? currencyCode,
+    DateTime? warrantyStartDate,
+    DateTime? warrantyExpiryDate,
+    String? amcStatus,
+    DateTime? amcExpiryDate,
+    String? serialNumber,
+    String? category,
+    int? numberOfVisitsIncluded,
+    int? numberOfVisitsCompleted,
+    List<Map<String, dynamic>>? brochureUrls,
+    String? installationAddress,
+    List<Map<String, dynamic>>? amcVisits,
+    int? requestedServicesCount,
+  }) {
+    return Product(
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      modelNumber: modelNumber ?? this.modelNumber,
+      imageUrl: imageUrl ?? this.imageUrl,
+      purchasedDate: purchasedDate ?? this.purchasedDate,
+      sellerName: sellerName ?? this.sellerName,
+      amountPaid: amountPaid ?? this.amountPaid,
+      currencyCode: currencyCode ?? this.currencyCode,
+      warrantyStartDate: warrantyStartDate ?? this.warrantyStartDate,
+      warrantyExpiryDate: warrantyExpiryDate ?? this.warrantyExpiryDate,
+      amcStatus: amcStatus ?? this.amcStatus,
+      amcExpiryDate: amcExpiryDate ?? this.amcExpiryDate,
+      serialNumber: serialNumber ?? this.serialNumber,
+      category: category ?? this.category,
+      numberOfVisitsIncluded: numberOfVisitsIncluded ?? this.numberOfVisitsIncluded,
+      numberOfVisitsCompleted: numberOfVisitsCompleted ?? this.numberOfVisitsCompleted,
+      brochureUrls: brochureUrls ?? this.brochureUrls,
+      installationAddress: installationAddress ?? this.installationAddress,
+      amcVisits: amcVisits ?? this.amcVisits,
+      requestedServicesCount: requestedServicesCount ?? this.requestedServicesCount,
+    );
+  }
 }
 
 class ServiceRequest {

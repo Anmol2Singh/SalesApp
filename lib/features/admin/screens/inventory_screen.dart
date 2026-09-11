@@ -495,16 +495,16 @@ class InventoryScreen extends ConsumerWidget {
 
   Future<void> _importExcel(BuildContext context, WidgetRef ref) async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
 
-      if (result == null || result.files.single.path == null) {
+      if (files.isEmpty || files.single.path == null) {
         return; // User canceled
       }
       
-      final file = File(result.files.single.path!);
+      final file = File(files.single.path!);
       final bytes = await file.readAsBytes();
       final excel = Excel.decodeBytes(bytes);
       

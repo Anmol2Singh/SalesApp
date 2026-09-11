@@ -329,7 +329,148 @@ class MainDashboard extends ConsumerWidget {
 
                 const SizedBox(height: 24),
 
-                // [B] NEXT ACTION CARD
+                // [B] MY PURCHASED PRODUCTS / MY EQUIPMENT
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'My Equipment',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        productsAsync.maybeWhen(
+                          data: (prods) => prods.isNotEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${prods.length}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                          orElse: () => const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 18),
+                      tooltip: 'Refresh equipment',
+                      onPressed: () => ref.refresh(productsProvider),
+                      color: subtitleColor,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                productsAsync.when(
+                  data: (products) {
+                    if (products.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.inventory_2_outlined, size: 40, color: subtitleColor),
+                            const SizedBox(height: 10),
+                            Text(
+                              'No equipment registered yet',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                color: textColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Purchased heating systems linked to your account will appear here.',
+                              style: TextStyle(fontSize: 12, color: subtitleColor),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: () => ref.refresh(productsProvider),
+                              icon: const Icon(Icons.refresh, size: 14),
+                              label: const Text('Check for Updates', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    // If single product, show the prominent Hero card
+                    if (products.length == 1) {
+                      return HeroProductCard(product: products.first);
+                    }
+
+                    // If multiple products, show Hero card for the first and carousel for others
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        HeroProductCard(product: products.first),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Other Systems (${products.length - 1})',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 270,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            clipBehavior: Clip.none,
+                            itemCount: products.length - 1,
+                            separatorBuilder: (context, index) => const SizedBox(width: 14),
+                            itemBuilder: (context, index) {
+                              return ProductCard(product: products[index + 1]);
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24.0),
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  ),
+                  error: (e, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: Text('Error loading products: $e', style: TextStyle(color: textColor)),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // [C] NEXT ACTION CARD
                 requestsAsync.when(
                   data: (requests) => _buildNextActionCard(context, requests),
                   loading: () => const Center(
@@ -342,75 +483,17 @@ class MainDashboard extends ConsumerWidget {
                   error: (e, _) => Center(child: Text('Error: $e')),
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
-                // [B2] QUICK ACTIONS
+                // [D] QUICK ACTIONS
                 _buildQuickActionCard(
                   context,
                   'Opt for AMC',
-                  'Secure your products',
+                  'Secure your products with scheduled maintenance',
                   Icons.verified_user,
                   AppColors.accent,
                   () => context.push('/amc_avail'),
                 ),
-
-                const SizedBox(height: 28),
-
-                // [C] MY PURCHASED PRODUCTS - Vertical List
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'My Products',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-            productsAsync.when(
-              data: (products) {
-                if (products.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16.0),
-                      child: Text(
-                        'No purchased products registered.',
-                        style: TextStyle(color: subtitleColor),
-                      ),
-                    ),
-                  );
-                }
-                return SizedBox(
-                  height: 280,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    clipBehavior: Clip.none,
-                    itemCount: products.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 16),
-                    itemBuilder: (context, index) {
-                      return ProductCard(product: products[index]);
-                    },
-                  ),
-                );
-              },
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20.0),
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              ),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: Text('Error loading products: $e', style: TextStyle(color: textColor)),
-                ),
-              ),
-            ),
 
             const SizedBox(height: 28),
 

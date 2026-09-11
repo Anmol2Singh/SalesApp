@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -698,21 +697,22 @@ class ProductCatalogScreen extends ConsumerWidget {
   }
 
   Future<void> _uploadBrochure(BuildContext context, WidgetRef ref, Product product) async {
-    final result = await FilePicker.platform.pickFiles(
+    final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
-      withData: true,
     );
 
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
+    if (files.isEmpty || files.first.path == null) return;
+    final file = files.first;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Uploading ${file.name}...'), backgroundColor: AppColors.info),
-    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Uploading ${file.name}...'), backgroundColor: AppColors.info),
+      );
+    }
 
     try {
-      final bytes = file.bytes ?? await File(file.path!).readAsBytes();
+      final bytes = await File(file.path!).readAsBytes();
       final supabase = ref.read(supabaseClientProvider);
       final filename = 'brochure_${product.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
