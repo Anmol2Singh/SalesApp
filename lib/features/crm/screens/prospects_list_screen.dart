@@ -23,11 +23,22 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
   @override
   Widget build(BuildContext context) {
     final prospectsAsync = ref.watch(prospectsProvider);
+    final leads = ref.watch(leadsProvider).value ?? [];
     final profile = ref.watch(currentProfileProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/dashboard');
+            }
+          },
+        ),
         title: const Text('Prospects'),
         actions: [
           IconButton(
@@ -66,6 +77,16 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                     return matchesSearch && matchesSource;
                   }).toList();
 
+                  // Sort: Unconverted at top, converted at bottom; then newest first
+                  filtered.sort((a, b) {
+                    final aConverted = a.convertedToLeadId != null && leads.any((l) => l.id == a.convertedToLeadId);
+                    final bConverted = b.convertedToLeadId != null && leads.any((l) => l.id == b.convertedToLeadId);
+                    if (aConverted != bConverted) {
+                      return aConverted ? 1 : -1;
+                    }
+                    return b.createdAt.compareTo(a.createdAt);
+                  });
+
                   if (filtered.isEmpty) {
                     return const Center(
                       child: Text('No prospects found.', style: TextStyle(color: AppColors.textSecondary)),
@@ -73,16 +94,17 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                   }
 
                   return ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     itemCount: filtered.length,
                     separatorBuilder: (context, index) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final prospect = filtered[index];
-                      final isConverted = prospect.convertedToLeadId != null;
+                      final isConverted = prospect.convertedToLeadId != null &&
+                          leads.any((l) => l.id == prospect.convertedToLeadId);
                       final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
                       final isCreatedByMe = prospect.createdBy == profile?.id;
                       final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
-                      final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager;
+                      final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
 
                       return Card(
                         elevation: 0,
@@ -179,12 +201,8 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                               ],
                             ],
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (isAdmin && prospect.assignedTo == null && !isConverted)
-                                ElevatedButton(
+                          trailing: (isAdmin && prospect.assignedTo == null && !isConverted)
+                              ? ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF6366F1),
                                     foregroundColor: Colors.white,
@@ -196,8 +214,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                   onPressed: () => _showTransferModal(context, ref, prospect),
                                   child: const Text('Assign', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                 )
-                              else
-                                Container(
+                              : Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: isConverted
@@ -223,8 +240,6 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                     ),
                                   ),
                                 ),
-                            ],
-                          ),
                         ),
                       );
                     },
@@ -258,6 +273,8 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
       },
     );
   }
+
+
 
   Widget _buildFilters() {
     return Container(
@@ -354,6 +371,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
   final _addressCtrl = TextEditingController();
   final _gstCtrl = TextEditingController();
   final _companyCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
   String _source = 'Manual';
   bool _isSaving = false;
 
@@ -365,6 +383,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
     _addressCtrl.dispose();
     _gstCtrl.dispose();
     _companyCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -381,6 +400,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
             gst: _gstCtrl.text,
             company: _companyCtrl.text,
             source: _source,
+            notes: _notesCtrl.text,
           );
       if (mounted) {
         context.pop();
@@ -416,9 +436,10 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('New Prospect', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  const Expanded(
+                    child: Text('New Prospect', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.close)),
                 ],
               ),
@@ -522,6 +543,16 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
                   ],
                 ],
               ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.note_alt_outlined),
+                ),
+                maxLines: 3,
+              ),
               const SizedBox(height: 24),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -579,22 +610,17 @@ class _AssignProspectSheetState extends ConsumerState<_AssignProspectSheet> {
       for (final r in (res as List? ?? [])) {
         final role = (r['primary_role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List) ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
-        if (role == 'sales' || role == 'admin' || role == 'manager' || role == 'sales_head' ||
-            role.contains('sales') || rolesList.contains('sales') || rolesList.contains('sales_head') || rolesList.contains('admin')) {
+        // Sales-only filtering (Task 3.3): exclude admin, manager, coordinator, technician
+        final isSales = role == 'sales' || role == 'sales_head' || role == 'saleshead' ||
+            rolesList.contains('sales') || rolesList.contains('sales_head');
+        final isExcluded = role == 'admin' || role == 'manager' || role == 'technician' || role == 'coordinator' ||
+            rolesList.contains('admin') || rolesList.contains('manager');
+        if (isSales && !isExcluded) {
           list.add(r as Map<String, dynamic>);
         }
       }
 
-      final List<dynamic> rawStaffList = (res is List) ? res : [];
-      final finalList = list.isNotEmpty
-          ? list
-          : rawStaffList
-              .where((r) {
-                final role = (r['primary_role'] as String? ?? '').toLowerCase();
-                return role != 'customer' && role != 'technician';
-              })
-              .map((r) => r as Map<String, dynamic>)
-              .toList();
+      final finalList = list;
 
       if (mounted) {
         setState(() {
@@ -652,11 +678,14 @@ class _AssignProspectSheetState extends ConsumerState<_AssignProspectSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Transfer Prospect to Sales Rep',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              const Expanded(
+                child: Text(
+                  'Transfer Prospect to Sales Rep',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],

@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../data/models/complaint_model.dart';
-import '../data/models/complaint_part_order.dart';
 import '../providers/complaints_provider.dart';
 import '../providers/part_orders_provider.dart';
 import '../services/complaint_pdf_service.dart';
@@ -333,52 +332,104 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
   void _showReassignModal(Complaint complaint, List<TechnicianInfo> technicians) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Assign Technician for ${complaint.ticketNumber}',
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              if (technicians.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('No technician staff profiles found.'),
-                )
-              else
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: technicians.length,
-                    itemBuilder: (context, idx) {
-                      final tech = technicians[idx];
-                      return ListTile(
-                        leading: CircleAvatar(child: Text(tech.name.substring(0, 1).toUpperCase())),
-                        title: Text(tech.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(tech.status),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6D28D9)),
-                          onPressed: () {
-                            ref.read(complaintsProvider.notifier).assignTechnician(complaint.id, tech);
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Assigned to ${tech.name}!'), backgroundColor: const Color(0xFF10B981)),
-                            );
-                          },
-                          child: const Text('Assign', style: TextStyle(color: Colors.white)),
-                        ),
-                      );
-                    },
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final filteredTechs = technicians.where((t) {
+              if (searchQuery.isEmpty) return true;
+              final q = searchQuery.toLowerCase();
+              return t.name.toLowerCase().contains(q) ||
+                  (t.phone ?? '').contains(q) ||
+                  (t.email ?? '').toLowerCase().contains(q);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.7,
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Assign Technician (${complaint.ticketNumber})',
+                        style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
                   ),
-                ),
-            ],
-          ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search technician by name or phone...',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (val) => setModalState(() => searchQuery = val.trim()),
+                  ),
+                  const SizedBox(height: 12),
+                  if (filteredTechs.isEmpty)
+                    const Expanded(
+                      child: Center(
+                        child: Text('No matching technician staff found.'),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: filteredTechs.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, idx) {
+                          final tech = filteredTechs[idx];
+                          final isCurrentlyAssigned = complaint.technicianId == tech.id;
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: isCurrentlyAssigned ? const Color(0xFF10B981) : AppColors.primary,
+                              child: Text(
+                                tech.name.isNotEmpty ? tech.name[0].toUpperCase() : 'T',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            title: Text(tech.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('${tech.status} • ${tech.phone ?? "No phone"}'),
+                            trailing: isCurrentlyAssigned
+                                ? const Chip(
+                                    label: Text('Assigned', style: TextStyle(fontSize: 11, color: Colors.white)),
+                                    backgroundColor: Color(0xFF10B981),
+                                  )
+                                : ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                    onPressed: () {
+                                      ref.read(complaintsProvider.notifier).assignTechnician(complaint.id, tech);
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Assigned to ${tech.name}!'),
+                                          backgroundColor: const Color(0xFF10B981),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text('Assign', style: TextStyle(color: Colors.white)),
+                                  ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
         );
       },
     );

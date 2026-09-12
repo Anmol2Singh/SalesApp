@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/models/user_role.dart';
 import '../../auth/providers/auth_provider.dart';
 
+import '../../../core/router/app_router.dart';
+
 class CrmShell extends ConsumerWidget {
   final Widget child;
   final String currentRoute;
@@ -16,15 +18,46 @@ class CrmShell extends ConsumerWidget {
     final isWide = MediaQuery.of(context).size.width >= 800;
     final profile = ref.watch(currentProfileProvider);
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
+    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
 
-    return Scaffold(
-      body: Column(
-        children: [
-          if (isWide) _buildDesktopCrmTabs(context, isSalesOrAdmin),
-          Expanded(child: child),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+          return;
+        }
+
+        if (context.canPop()) {
+          context.pop();
+          return;
+        }
+
+        // Sub-screens -> CRM Dashboard
+        if (currentRoute.startsWith('/crm/prospects') ||
+            currentRoute.startsWith('/crm/leads') ||
+            currentRoute.startsWith('/crm/customers')) {
+          context.go('/crm/dashboard');
+          return;
+        }
+
+        // CRM Dashboard -> Admin Dashboard (for Admin)
+        if (currentRoute == '/crm/dashboard' && isAdmin) {
+          context.go(AppRoutes.adminDashboard);
+          return;
+        }
+      },
+      child: Scaffold(
+        body: Column(
+          children: [
+            if (isWide) _buildDesktopCrmTabs(context, isSalesOrAdmin),
+            Expanded(child: child),
+          ],
+        ),
+        bottomNavigationBar: isWide ? null : _buildMobileCrmBottomNav(context, isSalesOrAdmin),
       ),
-      bottomNavigationBar: isWide ? null : _buildMobileCrmBottomNav(context, isSalesOrAdmin),
     );
   }
 

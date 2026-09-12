@@ -6,36 +6,173 @@ import 'package:intl/intl.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/searchable_dropdown.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../admin/screens/product_catalog_screen.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
+import '../../../core/services/record_edit_permissions.dart';
+import '../widgets/crm_delete_dialog.dart';
 
-class ProspectDetailScreen extends ConsumerWidget {
+class ProspectDetailScreen extends ConsumerStatefulWidget {
   final String id;
 
   const ProspectDetailScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final prospect = ref.watch(prospectByIdProvider(id));
+  ConsumerState<ProspectDetailScreen> createState() => _ProspectDetailScreenState();
+}
+
+class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
+  bool _isRefreshing = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await Future.wait([
+        ref.read(prospectsProvider.notifier).load(refresh: false),
+        ref.read(leadsProvider.notifier).load(refresh: false),
+      ]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('✓ Prospect details refreshed'),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prospectsAsync = ref.watch(prospectsProvider);
+    final prospect = ref.watch(prospectByIdProvider(widget.id));
     final profile = ref.watch(currentProfileProvider);
 
     if (prospect == null) {
+      if (prospectsAsync.isLoading) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(title: const Text('Prospect Details')),
+          body: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading prospect details...', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              ],
+            ),
+          ),
+        );
+      }
+
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(title: const Text('Prospect Details')),
-        body: const Center(child: Text('Prospect not found or loading...', style: TextStyle(color: AppColors.textSecondary))),
+        appBar: AppBar(
+          title: const Text('Prospect Details'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/crm/prospects');
+              }
+            },
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded, size: 48, color: Color(0xFFEF4444)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Prospect Not Found',
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This prospect may have been deleted or removed.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/crm/prospects');
+                    }
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Back to Prospects'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    final isConverted = prospect.convertedToLeadId != null;
+    final leads = ref.watch(leadsProvider).value ?? [];
+    final hasValidLead = prospect.convertedToLeadId != null &&
+        leads.any((l) => l.id == prospect.convertedToLeadId);
+    final isConverted = hasValidLead;
+
+    // If prospect references a deleted lead, silently clean it up in DB
+    if (prospect.convertedToLeadId != null && !hasValidLead) {
+      ref.read(supabaseClientProvider)
+          .from('crm_prospects')
+          .update({'converted_to_lead_id': null})
+          .eq('id', prospect.id)
+          .then((_) {});
+    }
+
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
     final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager;
+    final isOnlyAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
     final isSalesRole = profile?.primaryRole == UserRole.sales || (profile?.roles.contains(UserRole.sales) ?? false);
     final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
     final isCreatedByMe = prospect.createdBy == profile?.id;
     final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
+
+    final canEdit = RecordEditPermissions.canEditRecord(
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: prospect.createdBy,
+      assigneeId: prospect.assignedTo,
+    );
 
     // Can convert if: isSalesOrAdmin AND (Admin OR Assigned Salesperson OR Creator Salesperson without assignment)
     final canConvert = !isConverted && isSalesOrAdmin && (isAdmin || isAssignedToMe || (isSalesRole && prospect.assignedTo == null));
@@ -45,21 +182,54 @@ class ProspectDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(prospect.name),
         actions: [
+          if (canEdit && !isConverted)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit Prospect',
+              onPressed: () => _showEditProspectModal(context, ref, prospect),
+            ),
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.person_add_alt_1),
               tooltip: 'Transfer / Assign Salesperson',
               onPressed: () => _showTransferModal(context, ref, prospect),
             ),
+          if (isOnlyAdmin)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.25)),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFF87171), size: 20),
+                tooltip: 'Delete Prospect (Admin)',
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: () => _confirmDeleteProspect(context, ref, prospect),
+              ),
+            ),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(prospectsProvider.notifier).load(refresh: true),
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _isRefreshing ? null : _handleRefresh,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+      body: Column(
+        children: [
+          if (_isRefreshing) const LinearProgressIndicator(minHeight: 2.5),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Header Profile Card
@@ -209,6 +379,10 @@ class ProspectDetailScreen extends ConsumerWidget {
                       'Created Date',
                       '${prospect.createdAt.day.toString().padLeft(2, '0')}/${prospect.createdAt.month.toString().padLeft(2, '0')}/${prospect.createdAt.year}',
                     ),
+                    if (prospect.notes != null && prospect.notes!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildDetailRow(Icons.note_alt_outlined, 'Notes', prospect.notes!),
+                    ],
                     if (isConverted) ...[
                       const SizedBox(height: 12),
                       Row(
@@ -317,10 +491,13 @@ class ProspectDetailScreen extends ConsumerWidget {
                 ),
               ),
             ],
-          ],
+            ],
+          ),
         ),
       ),
-    );
+    ],
+  ),
+);
   }
 
   Widget _buildDetailRow(IconData icon, String label, String value) {
@@ -332,6 +509,18 @@ class ProspectDetailScreen extends ConsumerWidget {
         SizedBox(width: 100, child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500))),
         Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
       ],
+    );
+  }
+
+  void _showEditProspectModal(BuildContext context, WidgetRef ref, Prospect prospect) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _EditProspectSheet(prospect: prospect),
+      ),
     );
   }
 
@@ -423,6 +612,502 @@ class ProspectDetailScreen extends ConsumerWidget {
     final uri = Uri.parse('mailto:$email');
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
+
+  Future<void> _confirmDeleteProspect(BuildContext context, WidgetRef ref, Prospect prospect) async {
+    final isConverted = prospect.convertedToLeadId != null;
+    final supabase = ref.read(supabaseClientProvider);
+    String? customerId;
+
+    if (isConverted) {
+      try {
+        final leadRes = await supabase
+            .from('crm_leads')
+            .select('converted_to_customer_id')
+            .eq('id', prospect.convertedToLeadId!)
+            .maybeSingle();
+        customerId = leadRes?['converted_to_customer_id'] as String?;
+      } catch (_) {}
+
+      if (customerId == null) {
+        try {
+          final custRes = await supabase
+              .from('customers')
+              .select('id')
+              .eq('phone', prospect.phone)
+              .maybeSingle();
+          customerId = custRes?['id'] as String?;
+        } catch (_) {}
+      }
+    }
+
+    if (!context.mounted) return;
+
+    if (customerId != null) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => CrmDeleteConvertedDialog(
+          recordName: prospect.name,
+          recordType: 'Prospect',
+        ),
+      );
+
+      if (choice == null || choice == 'cancel') return;
+      final isBoth = choice == 'crm_and_customer';
+
+      if (!context.mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => CrmDeleteConfirmDialog(
+          title: isBoth ? 'Confirm Permanent Delete' : 'Delete from CRM Only',
+          message: isBoth
+              ? 'Are you sure you want to permanently delete "${prospect.name}" from CRM AND remove their customer profile? This action cannot be undone.'
+              : 'Are you sure you want to remove "${prospect.name}" from CRM? Their customer account and sales history will remain safely preserved.',
+          confirmLabel: isBoth ? 'Delete Both' : 'Delete from CRM',
+          isDestructive: true,
+        ),
+      );
+
+      if (confirm == true) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Text(
+                        isBoth ? 'Deleting from CRM & Customers...' : 'Deleting prospect...',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        try {
+          await ref.read(prospectsProvider.notifier).deleteProspect(
+                prospectId: prospect.id,
+                deleteCustomer: isBoth,
+                customerId: customerId,
+              );
+          await ref.read(leadsProvider.notifier).load();
+
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/prospects');
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        isBoth
+                            ? '✓ Prospect and customer record deleted successfully'
+                            : '✓ Prospect deleted successfully',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Error deleting prospect: $e'),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => CrmDeleteConfirmDialog(
+          title: 'Delete Prospect',
+          message: 'Are you sure you want to delete prospect "${prospect.name}"? This action cannot be undone.',
+          confirmLabel: 'Delete',
+          isDestructive: true,
+        ),
+      );
+
+      if (confirm == true) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                    SizedBox(width: 18),
+                    Expanded(
+                      child: Text(
+                        'Deleting prospect...',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        try {
+          await ref.read(prospectsProvider.notifier).deleteProspect(prospectId: prospect.id);
+          await ref.read(leadsProvider.notifier).load();
+
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/prospects');
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '✓ Prospect deleted successfully',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Error deleting prospect: $e'),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+class _EditProspectSheet extends ConsumerStatefulWidget {
+  final Prospect prospect;
+  const _EditProspectSheet({required this.prospect});
+
+  @override
+  ConsumerState<_EditProspectSheet> createState() => _EditProspectSheetState();
+}
+
+class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _gstCtrl;
+  late final TextEditingController _companyCtrl;
+  late final TextEditingController _notesCtrl;
+  late String _source;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.prospect.name);
+    _phoneCtrl = TextEditingController(text: widget.prospect.phone);
+    _emailCtrl = TextEditingController(text: widget.prospect.email ?? '');
+    _addressCtrl = TextEditingController(text: widget.prospect.address ?? '');
+    _gstCtrl = TextEditingController(text: widget.prospect.gst ?? '');
+    _companyCtrl = TextEditingController(text: widget.prospect.company ?? '');
+    _notesCtrl = TextEditingController(text: widget.prospect.notes ?? '');
+    _source = widget.prospect.source;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _addressCtrl.dispose();
+    _gstCtrl.dispose();
+    _companyCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSave() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(prospectsProvider.notifier).updateProspect(
+            prospectId: widget.prospect.id,
+            name: _nameCtrl.text,
+            phone: _phoneCtrl.text,
+            email: _emailCtrl.text,
+            address: _addressCtrl.text,
+            gst: _gstCtrl.text,
+            company: _companyCtrl.text,
+            source: _source,
+            notes: _notesCtrl.text,
+          );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Prospect details updated successfully!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating prospect: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = ref.watch(currentProfileProvider);
+    final canEditName = RecordEditPermissions.canEditField(
+      fieldName: 'name',
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: widget.prospect.createdBy,
+      assigneeId: widget.prospect.assignedTo,
+    );
+    final canEditPhone = RecordEditPermissions.canEditField(
+      fieldName: 'phone',
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: widget.prospect.createdBy,
+      assigneeId: widget.prospect.assignedTo,
+    );
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Edit Prospect Details',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameCtrl,
+                enabled: canEditName,
+                decoration: InputDecoration(
+                  labelText: 'Full Name *',
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border: const OutlineInputBorder(),
+                  helperText: canEditName ? null : 'Only creator or admin can edit name',
+                ),
+                validator: (val) =>
+                    val == null || val.trim().isEmpty ? 'Full name is required' : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _phoneCtrl,
+                enabled: canEditPhone,
+                decoration: InputDecoration(
+                  labelText: 'Phone Number *',
+                  prefixIcon: const Icon(Icons.phone_outlined),
+                  border: const OutlineInputBorder(),
+                  helperText: canEditPhone ? null : 'Only creator or admin can edit phone number',
+                ),
+                keyboardType: TextInputType.phone,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Phone number is required';
+                  if (val.trim().length < 7) return 'Enter a valid phone number';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _emailCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  prefixIcon: Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _addressCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Address',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _companyCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Company (Optional)',
+                        prefixIcon: Icon(Icons.business_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _gstCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'GST Number (Optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  prefixIcon: Icon(Icons.note_alt_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _isSaving ? null : _handleSave,
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text(
+                        'Save Changes',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AssignProspectDetailSheet extends ConsumerStatefulWidget {
@@ -461,22 +1146,17 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
       for (final r in (res as List? ?? [])) {
         final role = (r['primary_role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List) ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
-        if (role == 'sales' || role == 'admin' || role == 'manager' || role == 'sales_head' ||
-            role.contains('sales') || rolesList.contains('sales') || rolesList.contains('sales_head') || rolesList.contains('admin')) {
+        // Sales-only filtering (Task 3.3): exclude admin, manager, coordinator, technician
+        final isSales = role == 'sales' || role == 'sales_head' || role == 'saleshead' ||
+            rolesList.contains('sales') || rolesList.contains('sales_head');
+        final isExcluded = role == 'admin' || role == 'manager' || role == 'technician' || role == 'coordinator' ||
+            rolesList.contains('admin') || rolesList.contains('manager');
+        if (isSales && !isExcluded) {
           list.add(r as Map<String, dynamic>);
         }
       }
 
-      final List<dynamic> rawStaffList = (res is List) ? res : [];
-      final finalList = list.isNotEmpty
-          ? list
-          : rawStaffList
-              .where((r) {
-                final role = (r['primary_role'] as String? ?? '').toLowerCase();
-                return role != 'customer' && role != 'technician';
-              })
-              .map((r) => r as Map<String, dynamic>)
-              .toList();
+      final finalList = list;
 
       if (mounted) {
         setState(() {
@@ -534,11 +1214,14 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Transfer Prospect to Sales Rep',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              const Expanded(
+                child: Text(
+                  'Transfer Prospect to Sales Rep',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
@@ -595,6 +1278,32 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
   }
 }
 
+class ProductComboItem {
+  final String displayName;
+  final String productName;
+  final String? capacity;
+  final double price;
+  final String uom;
+
+  const ProductComboItem({
+    required this.displayName,
+    required this.productName,
+    this.capacity,
+    this.price = 0.0,
+    this.uom = 'SET',
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProductComboItem &&
+          runtimeType == other.runtimeType &&
+          displayName == other.displayName;
+
+  @override
+  int get hashCode => displayName.hashCode;
+}
+
 class ConvertToLeadForm extends ConsumerStatefulWidget {
   final Prospect prospect;
 
@@ -606,11 +1315,21 @@ class ConvertToLeadForm extends ConsumerStatefulWidget {
 
 class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
   final _formKey = GlobalKey<FormState>();
-  String? _selectedProductName;
-  String? _selectedCapacity;
-  final Set<String> _selectedComponentNames = {};
-  List<Map<String, dynamic>> _availableComponents = [];
-  bool _loadingComponents = false;
+  ProductComboItem? _selectedComboItem;
+  static List<ProductComboItem>? _cachedCombos;
+  static final List<ProductComboItem> _defaultCombos = [
+    const ProductComboItem(displayName: 'Boom Barrier - IZ-2026', productName: 'Boom Barrier', capacity: 'IZ-2026', price: 152500.0, uom: 'SET'),
+    const ProductComboItem(displayName: 'Boom Barrier - IZ-2001', productName: 'Boom Barrier', capacity: 'IZ-2001', price: 40000.0, uom: 'NOS'),
+    const ProductComboItem(displayName: 'Heat Pump - 4kW', productName: 'Heat Pump', capacity: '4kW', price: 110000.0, uom: 'SET'),
+    const ProductComboItem(displayName: 'Heat Pump - 8kW', productName: 'Heat Pump', capacity: '8kW', price: 180000.0, uom: 'SET'),
+    const ProductComboItem(displayName: 'Heat Pump - 10kW', productName: 'Heat Pump', capacity: '10kW', price: 230000.0, uom: 'SET'),
+    const ProductComboItem(displayName: 'Heat Pump - 18kW', productName: 'Heat Pump', capacity: '18kW', price: 330000.0, uom: 'SET'),
+    const ProductComboItem(displayName: 'Solar Water Heater - 200 Ltr', productName: 'Solar Water Heater', capacity: '200 Ltr', price: 60000.0, uom: 'NOS'),
+    const ProductComboItem(displayName: 'Solar Water Heater - 500 Ltr', productName: 'Solar Water Heater', capacity: '500 Ltr', price: 120000.0, uom: 'NOS'),
+    const ProductComboItem(displayName: 'Solar Water Heater - 1000 Ltr', productName: 'Solar Water Heater', capacity: '1000 Ltr', price: 210000.0, uom: 'NOS'),
+    const ProductComboItem(displayName: 'Commercial 10kW', productName: 'Commercial 10kW', capacity: '10kW', price: 542800.0, uom: 'SET'),
+  ];
+  List<ProductComboItem> _availableCombos = [];
   final _valCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime? _expectedDate;
@@ -619,62 +1338,102 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
   @override
   void initState() {
     super.initState();
-    _loadComponents();
+    _availableCombos = List<ProductComboItem>.from(_cachedCombos ?? _defaultCombos);
+    if (_availableCombos.isNotEmpty) {
+      _selectedComboItem = _availableCombos.first;
+      _valCtrl.text = _selectedComboItem!.price > 0 ? _selectedComboItem!.price.toStringAsFixed(0) : '0.00';
+    }
+    _loadCombos();
   }
 
-  Future<void> _loadComponents() async {
-    setState(() => _loadingComponents = true);
+  Future<void> _loadCombos() async {
     try {
       final supabase = ref.read(supabaseClientProvider);
-      final items = await supabase
-          .from('inventory_items')
-          .select('id, item_name, price, uom')
-          .order('item_name');
 
-      if (items.isNotEmpty) {
-        setState(() {
-          _availableComponents = items;
-        });
-      } else {
-        _useFallbackComponents();
-      }
-    } catch (_) {
-      _useFallbackComponents();
-    } finally {
-      if (mounted) setState(() => _loadingComponents = false);
-    }
-  }
+      // Fetch products and inventory items
+      final prodRes = await supabase.from('products').select('id, name, base_specs');
+      final invRes = await supabase.from('inventory_items').select('id, item_name, price, uom').order('item_name');
 
-  void _useFallbackComponents() {
-    _availableComponents = [
-      {'item_name': 'Heat Pump 10kw', 'price': 230000.0, 'uom': 'SET'},
-      {'item_name': 'Heat Pump 4kw', 'price': 110000.0, 'uom': 'SET'},
-      {'item_name': 'Heat Pump 18kw', 'price': 330000.0, 'uom': 'SET'},
-      {'item_name': 'GI pressurised Tank 1000Ltr', 'price': 80000.0, 'uom': 'NOS'},
-      {'item_name': 'GI pressurised Tank 500Ltr', 'price': 60000.0, 'uom': 'NOS'},
-      {'item_name': 'Wilo circulation pump 25/6', 'price': 12500.0, 'uom': 'NOS'},
-      {'item_name': 'Electrical Control Panel', 'price': 15000.0, 'uom': 'NOS'},
-    ];
-  }
+      final List<Map<String, dynamic>> inventoryItems = (invRes as List? ?? [])
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
 
-  void _toggleComponent(Map<String, dynamic> comp, bool isSelected) {
-    setState(() {
-      final name = comp['item_name'] as String;
-      if (isSelected) {
-        _selectedComponentNames.add(name);
-      } else {
-        _selectedComponentNames.remove(name);
-      }
-      double sum = 0.0;
-      for (final c in _availableComponents) {
-        if (_selectedComponentNames.contains(c['item_name'])) {
-          sum += (c['price'] as num?)?.toDouble() ?? 0.0;
+      final List<ProductComboItem> combos = [];
+
+      for (final p in (prodRes as List? ?? [])) {
+        final prodName = p['name'] as String? ?? '';
+        final specs = p['base_specs'] as Map<String, dynamic>? ?? {};
+        List<String> capacities = [];
+        if (specs['capacities'] is List) {
+          capacities = (specs['capacities'] as List).map((c) => c.toString()).toList();
+        }
+        if (capacities.isEmpty) {
+          if (prodName.toLowerCase().contains('heat pump')) {
+            capacities = ['4kW', '8kW', '10kW', '18kW'];
+          } else if (prodName.toLowerCase().contains('water heater')) {
+            capacities = ['100 Ltr', '200 Ltr', '300 Ltr', '500 Ltr', '1000 Ltr'];
+          } else if (prodName.toLowerCase().contains('barrier')) {
+            capacities = ['IZ-2001', 'IZ-2026'];
+          } else {
+            capacities = ['Standard'];
+          }
+        }
+
+        for (final cap in capacities) {
+          final displayName = '$prodName - $cap';
+          double price = 0.0;
+          String uom = 'SET';
+
+          final cleanCap = cap.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+          final cleanProd = prodName.toLowerCase();
+
+          for (final inv in inventoryItems) {
+            final invName = (inv['item_name'] as String? ?? '').replaceAll(RegExp(r'\s+'), '').toLowerCase();
+            if (invName.contains(cleanCap) || (invName.contains(cleanProd) && invName.contains(cleanCap))) {
+              price = (inv['price'] as num?)?.toDouble() ?? 0.0;
+              uom = inv['uom'] as String? ?? 'SET';
+              break;
+            }
+          }
+
+          combos.add(ProductComboItem(
+            displayName: displayName,
+            productName: prodName,
+            capacity: cap,
+            price: price,
+            uom: uom,
+          ));
         }
       }
-      if (sum > 0) {
-        _valCtrl.text = sum.toStringAsFixed(0);
+
+      // Also add standalone inventory items if price > 0
+      for (final inv in inventoryItems) {
+        final invName = inv['item_name'] as String? ?? '';
+        final price = (inv['price'] as num?)?.toDouble() ?? 0.0;
+        final uom = inv['uom'] as String? ?? 'NOS';
+        if (!combos.any((c) => c.displayName.toLowerCase() == invName.toLowerCase())) {
+          combos.add(ProductComboItem(
+            displayName: invName,
+            productName: invName,
+            price: price,
+            uom: uom,
+          ));
+        }
       }
-    });
+
+      if (mounted && combos.isNotEmpty) {
+        setState(() {
+          _availableCombos = combos;
+          _cachedCombos = combos;
+          if (_selectedComboItem == null || !_availableCombos.any((c) => c.displayName == _selectedComboItem!.displayName)) {
+            _selectedComboItem = _availableCombos.first;
+            _valCtrl.text = _selectedComboItem!.price > 0 ? _selectedComboItem!.price.toStringAsFixed(0) : '0.00';
+          }
+        });
+      }
+    } catch (_) {
+      // Default combos are already populated
+    }
   }
 
   @override
@@ -686,7 +1445,7 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
 
   Future<void> _handleConvert() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedProductName == null || _selectedProductName!.isEmpty) {
+    if (_selectedComboItem == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a registered product'), backgroundColor: AppColors.error),
       );
@@ -695,32 +1454,22 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
 
     setState(() => _isConverting = true);
     try {
-      final selectedComps = _availableComponents
-          .where((c) => _selectedComponentNames.contains(c['item_name']))
-          .map((c) => {
-                'name': c['item_name'],
-                'price': (c['price'] as num?)?.toDouble() ?? 0.0,
-                'uom': c['uom'] ?? 'NOS',
-              })
-          .toList();
-
       final leadId = await ref.read(prospectsProvider.notifier).convertToLead(
             prospectId: widget.prospect.id,
             prospectName: widget.prospect.name,
             contactPhone: widget.prospect.phone,
-            productName: _selectedProductName!,
-            estimatedValue: double.tryParse(_valCtrl.text.trim()) ?? 0.0,
+            productName: _selectedComboItem!.displayName,
+            estimatedValue: double.tryParse(_valCtrl.text.trim()) ?? _selectedComboItem!.price,
             expectedDate: _expectedDate,
             notes: _notesCtrl.text.trim(),
-            capacity: _selectedCapacity,
-            components: selectedComps,
+            capacity: _selectedComboItem!.capacity,
           );
 
       if (mounted) {
         context.pop();
         ref.read(leadsProvider.notifier).load(refresh: true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Converted to Lead successfully!'), backgroundColor: AppColors.success),
+          const SnackBar(content: Text('✓ Converted to Lead successfully!'), backgroundColor: AppColors.success),
         );
         if (leadId != null) {
           context.push('/crm/leads/$leadId');
@@ -739,16 +1488,10 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
 
   @override
   Widget build(BuildContext context) {
-    final productsAsync = ref.watch(productsProvider);
-    final availableProducts = productsAsync.value?.map((p) => p.name).toList() ?? [
-      'Boom Barrier',
-      'Heat Pump',
-      'Solar Water Heater',
-    ];
-
+    final availableHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-      padding: const EdgeInsets.all(24),
+      constraints: BoxConstraints(maxHeight: (availableHeight * 0.9).clamp(320.0, double.infinity)),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -761,9 +1504,15 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Convert to Qualified Lead', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  const Expanded(
+                    child: Text(
+                      'Convert to Qualified Lead',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.close)),
                 ],
               ),
@@ -773,106 +1522,61 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
                 style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: _selectedProductName,
-                decoration: const InputDecoration(
-                  labelText: 'Product Name *',
-                  hintText: 'Select registered product',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.solar_power_outlined),
+
+              SearchableDropdown<ProductComboItem>(
+                label: 'Product Name (Product + Capacity) *',
+                hint: 'Search product or capacity...',
+                value: _selectedComboItem,
+                items: _availableCombos,
+                  itemLabel: (item) => item.displayName,
+                  itemSubtitle: (item) => item.price > 0
+                      ? '₹${NumberFormat('#,##,##0', 'en_IN').format(item.price)} (${item.uom})'
+                      : item.uom,
+                  itemLeading: (item) => const Icon(Icons.solar_power_outlined, color: AppColors.primary),
+                  onChanged: (selected) {
+                    setState(() {
+                      _selectedComboItem = selected;
+                      if (selected != null) {
+                        _valCtrl.text = selected.price > 0 ? selected.price.toStringAsFixed(0) : '0.00';
+                      }
+                    });
+                  },
+                  validator: (val) => val == null ? 'Please select a product' : null,
                 ),
-                items: availableProducts
-                    .map((prod) => DropdownMenuItem(value: prod, child: Text(prod)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedProductName = val),
-                validator: (v) => v == null || v.isEmpty ? 'Please select a product' : null,
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _selectedCapacity,
-                decoration: const InputDecoration(
-                  labelText: 'Capacity (Ltr / kW)',
-                  hintText: 'Select capacity',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.speed),
-                ),
-                items: [
-                  '100 Ltr',
-                  '200 Ltr',
-                  '300 Ltr',
-                  '500 Ltr',
-                  '1000 Ltr',
-                  '2000 Ltr',
-                  '3 kW',
-                  '4 kW',
-                  '5 kW',
-                  '10 kW',
-                  '18 kW',
-                ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (val) => setState(() => _selectedCapacity = val),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Select System Components (Auto-sums Value):',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              if (_loadingComponents)
-                const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)))
-              else
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 180),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(10),
-                    color: AppColors.surface,
-                  ),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _availableComponents.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final item = _availableComponents[index];
-                      final name = item['item_name'] as String? ?? '';
-                      final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-                      final checked = _selectedComponentNames.contains(name);
-                      return CheckboxListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                        value: checked,
-                        title: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                        subtitle: Text('₹${NumberFormat('#,##,##0', 'en_IN').format(price)}', style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
-                        activeColor: AppColors.primary,
-                        onChanged: (val) => _toggleComponent(item, val ?? false),
-                      );
-                    },
-                  ),
-                ),
-              const SizedBox(height: 12),
+
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _valCtrl,
-                decoration: const InputDecoration(
+                readOnly: true,
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                decoration: InputDecoration(
                   labelText: 'Estimated Deal Value (₹) *',
-                  hintText: 'e.g. 250000',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.currency_rupee),
+                  hintText: '0.00',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.currency_rupee),
+                  helperText: 'Auto-fetched from inventory price',
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
                 ),
-                keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.trim().isEmpty ? 'Please enter estimated value' : null,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Deal value is required';
+                  final numVal = double.tryParse(val.trim());
+                  if (numVal == null || numVal < 0) return 'Enter a valid amount';
+                  return null;
+                },
               ),
-              const SizedBox(height: 12),
+
+              const SizedBox(height: 16),
               InkWell(
                 onTap: () async {
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: DateTime.now().add(const Duration(days: 14)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    initialDate: _expectedDate ?? today.add(const Duration(days: 14)),
+                    firstDate: today.add(const Duration(days: 1)),
+                    lastDate: today.add(const Duration(days: 365)),
                   );
                   if (picked != null) {
                     setState(() => _expectedDate = picked);
@@ -894,7 +1598,8 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _notesCtrl,
                 decoration: const InputDecoration(
@@ -904,6 +1609,7 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
                 ),
                 maxLines: 3,
               ),
+
               const SizedBox(height: 24),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(

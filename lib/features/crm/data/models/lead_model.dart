@@ -18,6 +18,9 @@ class Lead {
   final String? assignedByName;
   final String? capacity;
   final List<dynamic>? components;
+  final DateTime? reminderDate;
+  final String? reminderNote;
+  final List<Map<String, dynamic>> reminders;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -39,6 +42,9 @@ class Lead {
     this.assignedByName,
     this.capacity,
     this.components,
+    this.reminderDate,
+    this.reminderNote,
+    this.reminders = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -66,6 +72,15 @@ class Lead {
       assignedByName: (json['assignee'] as Map<String, dynamic>?)?['full_name'] as String? ?? json['assignee_name'] as String?,
       capacity: json['capacity'] as String?,
       components: json['components'] as List<dynamic>?,
+      reminderDate: json['reminder_date'] != null
+          ? DateTime.tryParse(json['reminder_date'].toString())
+          : null,
+      reminderNote: json['reminder_note'] as String?,
+      reminders: (json['reminders'] is List)
+          ? (json['reminders'] as List)
+              .map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{})
+              .toList()
+          : [],
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
@@ -92,6 +107,9 @@ class Lead {
       if (assignedTo != null) 'assigned_to': assignedTo,
       if (capacity != null) 'capacity': capacity,
       if (components != null) 'components': components,
+      if (reminderDate != null) 'reminder_date': reminderDate!.toIso8601String(),
+      if (reminderNote != null) 'reminder_note': reminderNote,
+      'reminders': reminders,
     };
   }
 
@@ -113,6 +131,9 @@ class Lead {
     String? assignedByName,
     String? capacity,
     List<dynamic>? components,
+    DateTime? reminderDate,
+    String? reminderNote,
+    List<Map<String, dynamic>>? reminders,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -134,6 +155,9 @@ class Lead {
       assignedByName: assignedByName ?? this.assignedByName,
       capacity: capacity ?? this.capacity,
       components: components ?? this.components,
+      reminderDate: reminderDate ?? this.reminderDate,
+      reminderNote: reminderNote ?? this.reminderNote,
+      reminders: reminders ?? this.reminders,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

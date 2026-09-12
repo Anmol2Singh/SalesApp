@@ -22,6 +22,8 @@ class Complaint {
   final String? afterImageUrl;
   final String? customerSignatureUrl;
   final String? technicianSignatureUrl;
+  final String source; // 'staff' or 'customer'
+  final String? notes;
   final DateTime createdAt;
 
   Complaint({
@@ -46,6 +48,8 @@ class Complaint {
     this.afterImageUrl,
     this.customerSignatureUrl,
     this.technicianSignatureUrl,
+    this.source = 'staff',
+    this.notes,
     required this.createdAt,
   });
 
@@ -72,6 +76,8 @@ class Complaint {
       afterImageUrl: json['after_image_url'] ?? json['afterImageUrl'],
       customerSignatureUrl: json['customer_signature_url'] ?? json['customerSignatureUrl'],
       technicianSignatureUrl: json['technician_signature_url'] ?? json['technicianSignatureUrl'],
+      source: json['source'] as String? ?? 'staff',
+      notes: json['notes'] as String?,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
     );
   }
@@ -91,7 +97,7 @@ class Complaint {
       'title': title,
       'description': description,
       'status': status,
-      'technician_id': null, // Bypass foreign key constraint to profiles
+      'technician_id': technicianId,
       'technician_name': technicianName,
       'technician_avatar_url': technicianAvatarUrl,
       'tat_remaining': tatRemaining,
@@ -99,6 +105,8 @@ class Complaint {
       'after_image_url': afterImageUrl,
       'customer_signature_url': customerSignatureUrl,
       'technician_signature_url': technicianSignatureUrl,
+      'source': source,
+      'notes': notes,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -125,6 +133,8 @@ class Complaint {
     String? afterImageUrl,
     String? customerSignatureUrl,
     String? technicianSignatureUrl,
+    String? source,
+    String? notes,
     DateTime? createdAt,
   }) {
     return Complaint(
@@ -149,6 +159,8 @@ class Complaint {
       afterImageUrl: afterImageUrl ?? this.afterImageUrl,
       customerSignatureUrl: customerSignatureUrl ?? this.customerSignatureUrl,
       technicianSignatureUrl: technicianSignatureUrl ?? this.technicianSignatureUrl,
+      source: source ?? this.source,
+      notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
     );
   }

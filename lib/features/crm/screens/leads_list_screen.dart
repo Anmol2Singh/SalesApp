@@ -1,5 +1,3 @@
-// lib/features/crm/screens/leads_list_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +6,7 @@ import '../../../core/services/excel_service.dart';
 import '../../admin/screens/product_catalog_screen.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
+import '../../../core/widgets/searchable_dropdown.dart';
 
 class LeadsListScreen extends ConsumerStatefulWidget {
   const LeadsListScreen({super.key});
@@ -28,6 +27,16 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/dashboard');
+            }
+          },
+        ),
         title: const Text('Leads & Deals'),
         actions: [
           IconButton(
@@ -83,6 +92,16 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                     return matchesSearch && matchesStatus;
                   }).toList();
 
+                  // Sort: Uncompleted leads at top, Won & Lost at bottom; then newest first
+                  filtered.sort((a, b) {
+                    final aDone = a.status == 'Won' || a.status == 'Lost' || a.convertedToCustomerId != null;
+                    final bDone = b.status == 'Won' || b.status == 'Lost' || b.convertedToCustomerId != null;
+                    if (aDone != bDone) {
+                      return aDone ? 1 : -1;
+                    }
+                    return b.createdAt.compareTo(a.createdAt);
+                  });
+
                   if (filtered.isEmpty) {
                     return const Center(
                       child: Text('No leads found.', style: TextStyle(color: AppColors.textSecondary)),
@@ -90,7 +109,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                   }
 
                   return ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     itemCount: filtered.length,
                     separatorBuilder: (context, index) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
@@ -152,27 +171,21 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                               ),
                             ],
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: statusColor.withOpacity(0.5)),
-                                ),
-                                child: Text(
-                                  lead.status,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: statusColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: statusColor.withOpacity(0.5)),
+                            ),
+                            child: Text(
+                              lead.status,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: statusColor,
+                                fontWeight: FontWeight.bold,
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       );
@@ -258,6 +271,8 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     );
   }
 
+
+
   void _showAddLeadForm(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -287,7 +302,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
   Prospect? _selectedProspect;
   final _contactPhoneCtrl = TextEditingController();
   String? _selectedProductName;
-  final _valCtrl = TextEditingController();
+  final _valCtrl = TextEditingController(text: '0.00');
   final _notesCtrl = TextEditingController();
   DateTime? _expectedDate;
   bool _isSaving = false;
@@ -371,9 +386,10 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('New Sales Lead', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  const Expanded(
+                    child: Text('New Sales Lead', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
                   IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.close)),
                 ],
               ),
@@ -467,34 +483,35 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
               ),
               const SizedBox(height: 12),
 
-              // 3. Registered Products Dropdown
-              DropdownButtonFormField<String>(
+              // 3. Registered Products Searchable Dropdown
+              SearchableDropdown<String>(
+                label: 'Product Name *',
+                hint: 'Select registered product',
                 value: _selectedProductName,
+                items: availableProducts,
+                itemLabel: (prod) => prod,
+                onChanged: (val) => setState(() => _selectedProductName = val),
+                validator: (v) => v == null || v.isEmpty ? 'Please select a product' : null,
                 decoration: const InputDecoration(
                   labelText: 'Product Name *',
-                  hintText: 'Select registered product',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.solar_power_outlined),
                 ),
-                items: availableProducts
-                    .map((prod) => DropdownMenuItem(value: prod, child: Text(prod)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedProductName = val),
-                validator: (v) => v == null || v.isEmpty ? 'Please select a product' : null,
               ),
               const SizedBox(height: 12),
 
-              // 4. Estimated Deal Value
+              // 4. Estimated Deal Value (Read-only on lead creation)
               TextFormField(
                 controller: _valCtrl,
+                readOnly: true,
                 decoration: const InputDecoration(
-                  labelText: 'Estimated Deal Value (₹) *',
-                  hintText: 'e.g. 500000',
+                  labelText: 'Estimated Deal Value (₹)',
+                  helperText: 'Deal value will be determined by Quotation',
+                  filled: true,
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.currency_rupee),
                 ),
                 keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.trim().isEmpty ? 'Please enter estimated value' : null,
               ),
               const SizedBox(height: 12),
 

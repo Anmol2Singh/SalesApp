@@ -15,6 +15,7 @@ import '../../../core/widgets/inventory_autocomplete.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
+import '../../crm/providers/crm_providers.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 
@@ -39,6 +40,7 @@ class QuotationFormScreen extends ConsumerStatefulWidget {
 
 class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _tabController = ValueNotifier<int>(0);
   final _termsController = TextEditingController();
 
   // New document meta controllers
@@ -64,6 +66,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   final _shippingAddressController = TextEditingController();
   final _stateCodeController = TextEditingController(text: '27');
   final _salesmanController = TextEditingController();
+  final _customPaymentTermsController = TextEditingController();
 
   // Dynamic product spec fields
   final Map<String, TextEditingController> _specControllers = {};
@@ -201,6 +204,32 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             .single();
         _leadData = leadData;
 
+        final status = leadData['status'] as String? ?? '';
+        if (status == 'Won' || status == 'Lost') {
+          if (mounted) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Quotations Locked'),
+                  content: Text('This lead is marked as $status. Quotations cannot be created or modified for Won or Lost leads.'),
+                  actions: [
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Go Back'),
+                    ),
+                  ],
+                ),
+              );
+            });
+          }
+          return;
+        }
+
         _customerNameController.text = leadData['prospect_name'] ?? '';
         _customerPhoneController.text = leadData['contact_phone'] ?? '';
         _shippingNameController.text = _customerNameController.text;
@@ -212,7 +241,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         // Determine next revision number for this lead
         final leadQuots = await supabase
             .from('quotations')
-            .select('revision')
+            .select('revision, line_items, payment_terms')
             .eq('lead_id', widget.leadId!)
             .order('revision', ascending: false)
             .limit(1);
@@ -225,20 +254,61 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _isEditing = true;
 
         if (_lineItems.isEmpty) {
-          final estVal = (leadData['estimated_value'] as num?)?.toDouble() ?? 0.0;
-          final prodName = leadData['product_name'] as String? ?? 'Solar System';
-          final cap = leadData['capacity'] as String?;
-          final desc = cap != null && cap.isNotEmpty ? '$prodName ($cap)' : prodName;
-          _lineItems.add({
-            'description': TextEditingController(text: desc),
-            'hsn_sac': TextEditingController(text: '84191920'),
-            'qty': TextEditingController(text: '1'),
-            'free_qty': TextEditingController(text: '0'),
-            'uom': TextEditingController(text: 'SET'),
-            'unit_price': TextEditingController(
-                text: estVal > 0 ? estVal.toStringAsFixed(2) : '0.00'),
-            'disc_percent': TextEditingController(text: '0.0'),
-          });
+          if (leadQuots.isNotEmpty && leadQuots.first['line_items'] != null) {
+            // Revision 2+: Pre-fill line items directly from previous revision without mutating prices
+            final prevLineItems = leadQuots.first['line_items'] as List;
+            for (final item in prevLineItems) {
+              if (item is Map) {
+                _lineItems.add({
+                  'description': TextEditingController(text: item['description']?.toString() ?? ''),
+                  'hsn_sac': TextEditingController(text: item['hsn_sac']?.toString() ?? '84191920'),
+                  'qty': TextEditingController(text: (item['qty'] as num?)?.toString() ?? '1'),
+                  'free_qty': TextEditingController(text: (item['free_qty'] as num?)?.toString() ?? '0'),
+                  'uom': TextEditingController(text: item['uom']?.toString() ?? 'NOS'),
+                  'unit_price': TextEditingController(
+                      text: (item['unit_price'] as num?)?.toStringAsFixed(2) ?? '0.00'),
+                  'disc_percent': TextEditingController(
+                      text: (item['disc_percent'] as num?)?.toString() ?? '0.0'),
+                });
+              }
+            }
+          }
+
+          if (_lineItems.isEmpty) {
+            // Revision 1: Pre-fill line item 1 with product combo name and base price from inventory
+            final prodName = leadData['product_name'] as String? ?? 'Solar System';
+            final cap = leadData['capacity'] as String?;
+            final desc = (cap != null && cap.isNotEmpty && !prodName.contains(cap))
+                ? '$prodName ($cap)'
+                : prodName;
+
+            double unitPrice = 0.0;
+            try {
+              final invRes = await supabase
+                  .from('inventory_items')
+                  .select('selling_price')
+                  .ilike('item_name', '%$prodName%')
+                  .limit(1);
+              if (invRes.isNotEmpty && invRes.first['selling_price'] != null) {
+                unitPrice = (invRes.first['selling_price'] as num).toDouble();
+              }
+            } catch (_) {}
+
+            if (unitPrice == 0.0 && (leadData['estimated_value'] as num?) != null) {
+              unitPrice = (leadData['estimated_value'] as num).toDouble();
+            }
+
+            _lineItems.add({
+              'description': TextEditingController(text: desc),
+              'hsn_sac': TextEditingController(text: '84191920'),
+              'qty': TextEditingController(text: '1'),
+              'free_qty': TextEditingController(text: '0'),
+              'uom': TextEditingController(text: 'SET'),
+              'unit_price': TextEditingController(
+                  text: unitPrice > 0 ? unitPrice.toStringAsFixed(2) : '0.00'),
+              'disc_percent': TextEditingController(text: '0.0'),
+            });
+          }
         }
       } else if (widget.pipelineId != null) {
         // Mode 3: Traditional pipeline quotation
@@ -923,12 +993,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           : _remarksController.text.trim(),
     };
 
+    String quotationId;
     if (_existingQuotation != null) {
       await supabase
           .from('quotations')
           .update(data)
           .eq('id', _existingQuotation!.id);
-      return _existingQuotation!.id;
+      quotationId = _existingQuotation!.id;
     } else {
       final response = await supabase
           .from('quotations')
@@ -958,8 +1029,38 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           }));
-      return id;
+      quotationId = id;
     }
+
+    if (widget.leadId != null) {
+      try {
+        final currentLeadRes = await supabase
+            .from('crm_leads')
+            .select('status, estimated_value')
+            .eq('id', widget.leadId!)
+            .maybeSingle();
+
+        String? newStatus;
+        if (currentLeadRes != null) {
+          final curStatus = currentLeadRes['status'] as String? ?? 'New';
+          final curEst = (currentLeadRes['estimated_value'] as num?)?.toDouble() ?? 0.0;
+          if (curStatus == 'New') {
+            newStatus = 'In Progress';
+          } else if (curStatus != 'Won' && curStatus != 'Lost' && (curEst - _grandTotal).abs() > 0.01) {
+            newStatus = 'Negotiating';
+          }
+        }
+
+        await supabase.from('crm_leads').update({
+          'estimated_value': _grandTotal,
+          if (newStatus != null) 'status': newStatus,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', widget.leadId!);
+        ref.read(leadsProvider.notifier).load(refresh: true);
+      } catch (_) {}
+    }
+
+    return quotationId;
   }
 
   Future<void> _handleAmcInterest() async {

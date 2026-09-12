@@ -30,7 +30,7 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   }
 
   Future<void> load({bool refresh = false}) async {
-    if (refresh) state = const AsyncValue.loading();
+    if (refresh && !state.hasValue) state = const AsyncValue.loading();
     try {
       dynamic query = _supabase.from('crm_prospects').select();
 
@@ -123,6 +123,7 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     String? gst,
     String? company,
     String source = 'Manual',
+    String? notes,
   }) async {
     if (_userId == null) return null;
     try {
@@ -134,6 +135,7 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         if (gst != null && gst.trim().isNotEmpty) 'gst': gst.trim(),
         if (company != null && company.trim().isNotEmpty) 'company': company.trim(),
         'source': source,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         'created_by': _userId,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
@@ -143,6 +145,55 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
       final newProspect = Prospect.fromJson(response);
       await load();
       return newProspect;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> updateProspect({
+    required String prospectId,
+    String? name,
+    String? phone,
+    String? email,
+    String? address,
+    String? gst,
+    String? company,
+    String? source,
+    String? notes,
+  }) async {
+    final data = <String, dynamic>{
+      if (name != null) 'name': name.trim(),
+      if (phone != null) 'phone': phone.trim(),
+      if (email != null) 'email': email.trim(),
+      if (address != null) 'address': address.trim(),
+      if (gst != null) 'gst': gst.trim(),
+      if (company != null) 'company': company.trim(),
+      if (source != null) 'source': source,
+      if (notes != null) 'notes': notes.trim(),
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    await _supabase.from('crm_prospects').update(data).eq('id', prospectId);
+    await load();
+  }
+
+  Future<void> deleteProspect({
+    required String prospectId,
+    bool deleteCustomer = false,
+    String? customerId,
+  }) async {
+    try {
+      if (deleteCustomer && customerId != null && customerId.isNotEmpty) {
+        try {
+          await _supabase.from('customers').delete().eq('id', customerId);
+        } catch (_) {}
+      }
+
+      try {
+        await _supabase.from('crm_leads').delete().eq('prospect_id', prospectId);
+      } catch (_) {}
+
+      await _supabase.from('crm_prospects').delete().eq('id', prospectId);
+      await load();
     } catch (e) {
       rethrow;
     }
@@ -228,7 +279,7 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
   }
 
   Future<void> load({bool refresh = false}) async {
-    if (refresh) state = const AsyncValue.loading();
+    if (refresh && !state.hasValue) state = const AsyncValue.loading();
     try {
       dynamic query = _supabase.from('crm_leads').select();
 
@@ -363,6 +414,160 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
     await load();
   }
 
+  Future<void> updateLead({
+    required String leadId,
+    String? prospectName,
+    String? contactPhone,
+    String? productName,
+    double? estimatedValue,
+    DateTime? expectedDate,
+    String? status,
+    String? notes,
+    String? capacity,
+    List<Map<String, dynamic>>? components,
+    DateTime? reminderDate,
+    String? reminderNote,
+  }) async {
+    final data = <String, dynamic>{
+      if (prospectName != null) 'prospect_name': prospectName.trim(),
+      if (contactPhone != null) 'contact_phone': contactPhone.trim(),
+      if (productName != null) 'product_name': productName.trim(),
+      if (estimatedValue != null) 'estimated_value': estimatedValue,
+      if (expectedDate != null) 'expected_date': expectedDate.toIso8601String(),
+      if (status != null) 'status': status,
+      if (notes != null) 'notes': notes.trim(),
+      if (capacity != null) 'capacity': capacity.trim(),
+      if (components != null) 'components': components,
+      if (reminderDate != null) 'reminder_date': reminderDate.toUtc().toIso8601String(),
+      if (reminderNote != null) 'reminder_note': reminderNote.trim(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    if (estimatedValue != null) {
+      final currentLeads = state.value ?? [];
+      final existingLead = currentLeads.where((l) => l.id == leadId).firstOrNull;
+      if (existingLead != null &&
+          existingLead.estimatedValue != estimatedValue &&
+          existingLead.status != 'Won' &&
+          existingLead.status != 'Lost') {
+        data['status'] = 'Negotiating';
+      }
+    }
+
+    await _supabase.from('crm_leads').update(data).eq('id', leadId);
+    await load();
+  }
+
+  Future<void> setReminder({
+    required String leadId,
+    required DateTime reminderDate,
+    String? reminderNote,
+  }) async {
+    final utcDate = reminderDate.toUtc();
+    await _supabase.from('crm_leads').update({
+      'reminder_date': utcDate.toIso8601String(),
+      if (reminderNote != null) 'reminder_note': reminderNote.trim(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', leadId);
+    await load();
+  }
+
+  Future<void> addReminder({
+    required String leadId,
+    required DateTime reminderDate,
+    String? reminderNote,
+  }) async {
+    final utcDate = reminderDate.toUtc();
+    final newReminder = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'date_time': utcDate.toIso8601String(),
+      'note': reminderNote?.trim() ?? '',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    final currentLeads = state.value ?? [];
+    final currentLead = currentLeads.where((l) => l.id == leadId).firstOrNull;
+    final List<dynamic> currentReminders = currentLead?.reminders != null
+        ? List<dynamic>.from(currentLead!.reminders)
+        : [];
+    currentReminders.add(newReminder);
+
+    await _supabase.from('crm_leads').update({
+      'reminders': currentReminders,
+      'reminder_date': utcDate.toIso8601String(),
+      if (reminderNote != null) 'reminder_note': reminderNote.trim(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', leadId);
+    await load();
+  }
+
+  Future<void> deleteReminder({
+    required String leadId,
+    required String reminderId,
+  }) async {
+    final currentLeads = state.value ?? [];
+    final currentLead = currentLeads.where((l) => l.id == leadId).firstOrNull;
+    final List<dynamic> currentReminders = currentLead?.reminders != null
+        ? List<dynamic>.from(currentLead!.reminders)
+        : [];
+    currentReminders.removeWhere((r) => r is Map && r['id'] == reminderId);
+
+    DateTime? nextDate;
+    String? nextNote;
+    for (final r in currentReminders) {
+      if (r is Map && r['date_time'] != null) {
+        final d = DateTime.tryParse(r['date_time'].toString());
+        if (d != null && (nextDate == null || d.isBefore(nextDate))) {
+          nextDate = d;
+          nextNote = r['note']?.toString();
+        }
+      }
+    }
+
+    await _supabase.from('crm_leads').update({
+      'reminders': currentReminders,
+      'reminder_date': nextDate?.toIso8601String(),
+      'reminder_note': nextNote,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', leadId);
+    await load();
+  }
+
+  Future<void> deleteLead({
+    required String leadId,
+    bool deleteCustomer = false,
+    String? customerId,
+  }) async {
+    try {
+      if (deleteCustomer && customerId != null && customerId.isNotEmpty) {
+        try {
+          await _supabase.from('customers').delete().eq('id', customerId);
+        } catch (_) {}
+      }
+
+      try {
+        await _supabase.from('crm_communications').delete().eq('lead_id', leadId);
+      } catch (_) {}
+
+      try {
+        await _supabase.from('quotations').delete().eq('lead_id', leadId);
+      } catch (_) {}
+
+      // Reset converted_to_lead_id on any prospect linked to this lead
+      try {
+        await _supabase
+            .from('crm_prospects')
+            .update({'converted_to_lead_id': null})
+            .eq('converted_to_lead_id', leadId);
+      } catch (_) {}
+
+      await _supabase.from('crm_leads').delete().eq('id', leadId);
+      await load();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<String?> convertToCustomer({
     required String leadId,
     required String customerName,
@@ -370,6 +575,7 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
     String? email,
     String? address,
     String? gstNumber,
+    String? notes,
   }) async {
     if (_userId == null) return null;
     try {
@@ -386,11 +592,13 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       // 1. Insert into customers table
       final customerData = {
         'customer_name': customerName.trim(),
+        'company_name': customerName.trim(),
         'contact_person': customerName.trim(),
         'phone': phone.trim(),
         if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
         if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
         if (gstNumber != null && gstNumber.trim().isNotEmpty) 'gst_number': gstNumber.trim(),
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         'created_by': _userId,
         if (currentLead?.assignedTo != null) 'assigned_to': currentLead!.assignedTo,
         'converted_by': _userId,
@@ -402,7 +610,68 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       final custRes = await _supabase.from('customers').insert(customerData).select().single();
       final customerId = custRes['id'] as String;
 
-      // 2. Update lead status to 'Won' and set converted_to_customer_id, converted_by, converted_by_name
+      // 2. Lookup product_id
+      String? productId;
+      if (currentLead?.productName != null && currentLead!.productName.isNotEmpty) {
+        try {
+          final prodRes = await _supabase
+              .from('products')
+              .select('id')
+              .ilike('name', '%${currentLead.productName.trim()}%')
+              .limit(1);
+          if (prodRes.isNotEmpty) {
+            productId = prodRes.first['id'] as String;
+          }
+        } catch (_) {}
+      }
+      if (productId == null) {
+        try {
+          final firstProd = await _supabase.from('products').select('id').limit(1);
+          if (firstProd.isNotEmpty) {
+            productId = firstProd.first['id'] as String;
+          }
+        } catch (_) {}
+      }
+
+      // 3. Auto-create Deal in sales_pipelines
+      String? pipelineId;
+      if (productId != null) {
+        try {
+          final pipelineRes = await _supabase.from('sales_pipelines').insert({
+            'customer_id': customerId,
+            'product_id': productId,
+            'created_by': _userId,
+            'current_step': 'sales_order',
+            'status': 'in_progress',
+            if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          }).select().single();
+          pipelineId = pipelineRes['id'] as String;
+        } catch (_) {}
+      }
+
+      // 4. Query latest quotation for the lead and link to deal
+      try {
+        final quots = await _supabase
+            .from('quotations')
+            .select('id')
+            .eq('lead_id', leadId)
+            .order('revision', ascending: false)
+            .limit(1);
+        if (quots.isNotEmpty) {
+          final qId = quots.first['id'] as String;
+          await _supabase.from('quotations').update({
+            'is_final': true,
+            'status': 'confirmed',
+            if (pipelineId != null) 'pipeline_id': pipelineId,
+            if (productId != null) 'product_id': productId,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', qId);
+        }
+      } catch (_) {}
+
+      // 5. Update lead status to 'Won' and set converted_to_customer_id, converted_by, converted_by_name
       await _supabase.from('crm_leads').update({
         'status': 'Won',
         'converted_to_customer_id': customerId,
@@ -471,6 +740,16 @@ class LeadCommunicationsNotifier extends StateNotifier<AsyncValue<List<Communica
       };
 
       await _supabase.from('crm_communications').insert(data);
+      // Auto-update lead status to 'In Progress' if currently 'New'
+      try {
+        final leadRes = await _supabase.from('crm_leads').select('status').eq('id', leadId).maybeSingle();
+        if (leadRes != null && leadRes['status'] == 'New') {
+          await _supabase.from('crm_leads').update({
+            'status': 'In Progress',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', leadId);
+        }
+      } catch (_) {}
       await load();
     } catch (e) {
       rethrow;
@@ -487,21 +766,24 @@ final crmSourcesProvider = StateNotifierProvider<CrmSourcesNotifier, AsyncValue<
 class CrmSourcesNotifier extends StateNotifier<AsyncValue<List<String>>> {
   final SupabaseClient _supabase;
   static const List<String> defaultSources = [
-    'Manual',
-    'Website',
-    'WhatsApp',
-    'Referral',
-    'Exhibition',
     'Cold Call',
+    'Exhibition',
+    'IndiaMart',
+    'JustDial',
+    'Manual',
+    'Referral',
     'Social Media',
     'Walk-in',
+    'Website',
+    'WhatsApp',
   ];
 
   CrmSourcesNotifier(this._supabase) : super(const AsyncValue.loading()) {
     load();
   }
 
-  Future<void> load() async {
+  Future<void> load({bool refresh = false}) async {
+    if (refresh) state = const AsyncValue.loading();
     try {
       final res = await _supabase
           .from('crm_sources')
@@ -512,10 +794,14 @@ class CrmSourcesNotifier extends StateNotifier<AsyncValue<List<String>>> {
           .where((n) => n.trim().isNotEmpty)
           .toList();
       if (list.isEmpty) {
+        for (final s in defaultSources) {
+          try {
+            await _supabase.from('crm_sources').insert({'name': s});
+          } catch (_) {}
+        }
         state = const AsyncValue.data(defaultSources);
       } else {
-        final set = {...list, ...defaultSources};
-        state = AsyncValue.data(set.toList());
+        state = AsyncValue.data(list);
       }
     } catch (e) {
       state = const AsyncValue.data(defaultSources);
@@ -531,9 +817,92 @@ class CrmSourcesNotifier extends StateNotifier<AsyncValue<List<String>>> {
     await load();
   }
 
+  Future<void> updateSource(String oldName, String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      await _supabase.from('crm_sources').update({'name': trimmed}).eq('name', oldName);
+    } catch (_) {}
+    await load();
+  }
+
   Future<void> deleteSource(String name) async {
     try {
       await _supabase.from('crm_sources').delete().eq('name', name);
+    } catch (_) {}
+    await load();
+  }
+}
+
+// --- INTERACTION TYPES ---
+final crmInteractionTypesProvider = StateNotifierProvider<CrmInteractionTypesNotifier, AsyncValue<List<String>>>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return CrmInteractionTypesNotifier(supabase);
+});
+
+class CrmInteractionTypesNotifier extends StateNotifier<AsyncValue<List<String>>> {
+  final SupabaseClient _supabase;
+  static const List<String> defaultTypes = [
+    'Call',
+    'WhatsApp',
+    'Email',
+    'Meeting',
+    'Note',
+    'Site Visit',
+    'Demo',
+  ];
+
+  CrmInteractionTypesNotifier(this._supabase) : super(const AsyncValue.loading()) {
+    load();
+  }
+
+  Future<void> load({bool refresh = false}) async {
+    if (refresh) state = const AsyncValue.loading();
+    try {
+      final res = await _supabase
+          .from('crm_interaction_types')
+          .select('name')
+          .order('name');
+      final list = (res as List)
+          .map((r) => r['name'] as String)
+          .where((n) => n.trim().isNotEmpty)
+          .toList();
+      if (list.isEmpty) {
+        for (final t in defaultTypes) {
+          try {
+            await _supabase.from('crm_interaction_types').insert({'name': t});
+          } catch (_) {}
+        }
+        state = const AsyncValue.data(defaultTypes);
+      } else {
+        state = AsyncValue.data(list);
+      }
+    } catch (e) {
+      state = const AsyncValue.data(defaultTypes);
+    }
+  }
+
+  Future<void> addType(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      await _supabase.from('crm_interaction_types').insert({'name': trimmed});
+    } catch (_) {}
+    await load();
+  }
+
+  Future<void> updateType(String oldName, String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      await _supabase.from('crm_interaction_types').update({'name': trimmed}).eq('name', oldName);
+    } catch (_) {}
+    await load();
+  }
+
+  Future<void> deleteType(String name) async {
+    try {
+      await _supabase.from('crm_interaction_types').delete().eq('name', name);
     } catch (_) {}
     await load();
   }

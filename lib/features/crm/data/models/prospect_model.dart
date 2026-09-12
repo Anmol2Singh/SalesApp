@@ -9,6 +9,7 @@ class Prospect {
   final String? gst;
   final String? company;
   final String source;
+  final String? notes;
   final String? convertedToLeadId;
   final String createdBy;
   final String? createdByName;
@@ -27,6 +28,7 @@ class Prospect {
     this.gst,
     this.company,
     this.source = 'Manual',
+    this.notes,
     this.convertedToLeadId,
     required this.createdBy,
     this.createdByName,
@@ -50,6 +52,7 @@ class Prospect {
       gst: json['gst'] as String?,
       company: json['company'] as String?,
       source: json['source'] as String? ?? 'Manual',
+      notes: json['notes'] as String?,
       convertedToLeadId: json['converted_to_lead_id'] as String?,
       createdBy: json['created_by'] as String? ?? '',
       createdByName: creator?['full_name'] as String? ?? json['creator_name'] as String?,
@@ -74,6 +77,7 @@ class Prospect {
       'gst': gst,
       'company': company,
       'source': source,
+      if (notes != null) 'notes': notes,
       if (convertedToLeadId != null) 'converted_to_lead_id': convertedToLeadId,
       'created_by': createdBy,
       if (assignedTo != null) 'assigned_to': assignedTo,
@@ -89,6 +93,7 @@ class Prospect {
     String? gst,
     String? company,
     String? source,
+    String? notes,
     String? convertedToLeadId,
     String? createdBy,
     String? assignedTo,
@@ -104,6 +109,7 @@ class Prospect {
       gst: gst ?? this.gst,
       company: company ?? this.company,
       source: source ?? this.source,
+      notes: notes ?? this.notes,
       convertedToLeadId: convertedToLeadId ?? this.convertedToLeadId,
       createdBy: createdBy ?? this.createdBy,
       assignedTo: assignedTo ?? this.assignedTo,

@@ -12,6 +12,7 @@ class Customer {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
+  final String? notes;
   final String? salesmanName;
   final String? assignedTo;
   final String? assignedToName;
@@ -29,6 +30,7 @@ class Customer {
     this.email,
     this.address,
     this.gstNumber,
+    this.notes,
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
@@ -62,6 +64,7 @@ class Customer {
       email: json['email'] as String?,
       address: json['address'] as String?,
       gstNumber: json['gst_number'] as String?,
+      notes: json['notes'] as String?,
       createdBy: json['created_by'] as String? ?? '',
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now())
@@ -95,6 +98,7 @@ class Customer {
     'email': email,
     'address': address,
     'gst_number': gstNumber,
+    if (notes != null) 'notes': notes,
     'created_by': createdBy,
     if (assignedTo != null) 'assigned_to': assignedTo,
     if (assignedToName != null) 'assigned_to_name': assignedToName,
@@ -109,6 +113,7 @@ class Customer {
     String? email,
     String? address,
     String? gstNumber,
+    String? notes,
     String? salesmanName,
     String? assignedTo,
     String? assignedToName,
@@ -124,6 +129,7 @@ class Customer {
       email: email ?? this.email,
       address: address ?? this.address,
       gstNumber: gstNumber ?? this.gstNumber,
+      notes: notes ?? this.notes,
       createdBy: createdBy,
       createdAt: createdAt,
       updatedAt: updatedAt,

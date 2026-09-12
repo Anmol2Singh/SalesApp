@@ -1272,7 +1272,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
       final advertisementProducts = <Product>[];
       for (final p in dbProducts as List) {
         final String prodId = p['id'] as String;
-        // if (purchasedProductIds.contains(prodId)) continue;
+        if (purchasedProductIds.contains(prodId)) continue;
 
         final imgList = List<String>.from(p['image_urls'] ?? []);
         final String firstImg = imgList.isNotEmpty ? imgList.first : '';
@@ -1448,10 +1448,13 @@ class SupabaseCustomerRepository implements CustomerRepository {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return [];
 
+    final customerId = await _resolveCustomerId();
+    final ids = {currentUser.id, customerId}.toList();
+
     final response = await _supabase
         .from('invoices')
         .select('*, bookings(*, amc_contracts(*, products(*)))')
-        .eq('customer_id', currentUser.id)
+        .inFilter('customer_id', ids)
         .order('created_at', ascending: false);
 
     return (response as List).map((item) {
@@ -1611,6 +1614,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
       'title': request.issueCategory,
       'description': request.issueDescription,
       'status': 'pending',
+      'source': 'customer',
       'tat_remaining': '24h',
       'before_image_url': request.photoUrls.isNotEmpty ? request.photoUrls.first : null,
       'created_at': DateTime.now().toIso8601String(),

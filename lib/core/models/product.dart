@@ -37,13 +37,21 @@ class ProductField {
 class ProductBaseSpecs {
   final List<ProductField> quotationFields;
   final List<ProductField> boqRequiredFields;
+  final List<String> capacities;
+  final Map<String, dynamic> raw;
 
   const ProductBaseSpecs({
     required this.quotationFields,
     required this.boqRequiredFields,
+    this.capacities = const [],
+    this.raw = const {},
   });
 
   factory ProductBaseSpecs.fromJson(Map<String, dynamic> json) {
+    List<String> caps = [];
+    if (json['capacities'] is List) {
+      caps = (json['capacities'] as List).map((e) => e.toString()).toList();
+    }
     return ProductBaseSpecs(
       quotationFields: (json['quotation_fields'] as List<dynamic>? ?? [])
           .map((f) => ProductField.fromJson(f as Map<String, dynamic>))
@@ -51,6 +59,8 @@ class ProductBaseSpecs {
       boqRequiredFields: (json['boq_required_fields'] as List<dynamic>? ?? [])
           .map((f) => ProductField.fromJson(f as Map<String, dynamic>))
           .toList(),
+      capacities: caps,
+      raw: json,
     );
   }
 }

@@ -1,10 +1,9 @@
-// lib/features/crm/screens/lead_detail_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../data/models/lead_model.dart';
@@ -12,30 +11,147 @@ import '../data/models/prospect_model.dart';
 import '../services/crm_pdf_service.dart';
 import '../providers/crm_providers.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../widgets/crm_delete_dialog.dart';
 import '../../quotation/screens/quotation_form_screen.dart';
 import '../../../core/models/quotation.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
+import '../../../core/services/record_edit_permissions.dart';
 
-class LeadDetailScreen extends ConsumerWidget {
+class LeadDetailScreen extends ConsumerStatefulWidget {
   final String id;
 
   const LeadDetailScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lead = ref.watch(leadByIdProvider(id));
+  ConsumerState<LeadDetailScreen> createState() => _LeadDetailScreenState();
+}
+
+class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
+  bool _isRefreshing = false;
+
+  Future<void> _handleRefresh(String leadId) async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await Future.wait([
+        ref.read(leadsProvider.notifier).load(refresh: false),
+        ref.read(prospectsProvider.notifier).load(refresh: false),
+        ref.read(leadCommunicationsProvider(leadId).notifier).load(),
+      ]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('✓ Lead details refreshed'),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final leadsAsync = ref.watch(leadsProvider);
+    final lead = ref.watch(leadByIdProvider(widget.id));
     final prospect = lead?.prospectId != null ? ref.watch(prospectByIdProvider(lead!.prospectId!)) : null;
     final profile = ref.watch(currentProfileProvider);
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
+    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
 
     if (lead == null) {
+      if (leadsAsync.isLoading) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(title: const Text('Lead Details')),
+          body: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading lead details...', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              ],
+            ),
+          ),
+        );
+      }
+
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(title: const Text('Lead Details')),
-        body: const Center(child: Text('Lead not found or loading...', style: TextStyle(color: AppColors.textSecondary))),
+        appBar: AppBar(
+          title: const Text('Lead Details'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/crm/leads');
+              }
+            },
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded, size: 48, color: Color(0xFFEF4444)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Lead Not Found',
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This lead may have been deleted or removed.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/crm/leads');
+                    }
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Back to Leads'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -49,29 +165,76 @@ class LeadDetailScreen extends ConsumerWidget {
 
     final isConverted = lead.convertedToCustomerId != null || lead.status == 'Won';
 
+    final canEdit = RecordEditPermissions.canEditRecord(
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: lead.createdBy,
+      assigneeId: lead.assignedTo,
+    );
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/leads');
+            }
+          },
+        ),
         title: Text(displayName),
         actions: [
+          if (canEdit && !isConverted)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit Lead',
+              onPressed: () => _showEditLeadModal(context, ref, lead),
+            ),
+          if (isAdmin)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.25)),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFF87171), size: 20),
+                tooltip: 'Delete Lead (Admin)',
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: () => _confirmDeleteLead(context, ref, lead, prospect, displayName),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             tooltip: 'Download Communication & Lead PDF',
             onPressed: () => _downloadReportPdf(context, ref, lead, prospect),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
             tooltip: 'Refresh',
-            onPressed: () {
-              ref.read(leadsProvider.notifier).load(refresh: true);
-              ref.read(leadCommunicationsProvider(lead.id).notifier).load();
-            },
+            onPressed: _isRefreshing ? null : () => _handleRefresh(lead.id),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+      body: Column(
+        children: [
+          if (_isRefreshing) const LinearProgressIndicator(minHeight: 2.5),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // 1. Lead Header Card
@@ -133,7 +296,7 @@ class LeadDetailScreen extends ConsumerWidget {
                             color: AppColors.primary,
                             onTap: () => _makePhoneCall(context, ref, lead.id, displayPhone),
                           ),
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 20),
                           _QuickActionButton(
                             icon: Icons.chat,
                             label: 'WhatsApp',
@@ -142,7 +305,7 @@ class LeadDetailScreen extends ConsumerWidget {
                           ),
                         ],
                         if (displayEmail != null && displayEmail.isNotEmpty) ...[
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 20),
                           _QuickActionButton(
                             icon: Icons.email,
                             label: 'Email',
@@ -150,8 +313,156 @@ class LeadDetailScreen extends ConsumerWidget {
                             onTap: () => _sendEmail(context, ref, lead.id, displayEmail),
                           ),
                         ],
+                        const SizedBox(width: 20),
+                        _QuickActionButton(
+                          icon: Icons.notification_add_outlined,
+                          label: (lead.reminders.isNotEmpty || lead.reminderDate != null)
+                              ? 'Alerts (${lead.reminders.isNotEmpty ? lead.reminders.length : 1})'
+                              : 'Set Alert',
+                          color: const Color(0xFFD97706),
+                          onTap: () => _showSetReminderDialog(context, ref, lead),
+                        ),
                       ],
                     ),
+                    if (lead.reminders.isNotEmpty || lead.reminderDate != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFF59E0B)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: const [
+                                    Text('🔔', style: TextStyle(fontSize: 16)),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Scheduled Follow-up Alerts',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF92400E),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                InkWell(
+                                  onTap: () => _showSetReminderDialog(context, ref, lead),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Text(
+                                      '+ Add Alert',
+                                      style: TextStyle(
+                                        color: Color(0xFFB45309),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(color: Color(0xFFFDE68A), height: 16),
+                            if (lead.reminders.isNotEmpty)
+                              ...lead.reminders.map((r) {
+                                final rId = r['id']?.toString() ?? '';
+                                final dtStr = r['date_time']?.toString() ?? '';
+                                final dt = DateTime.tryParse(dtStr)?.toLocal();
+                                final note = r['note']?.toString();
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.alarm, size: 16, color: Color(0xFFD97706)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              dt != null
+                                                  ? DateFormat('dd MMM yyyy, hh:mm a').format(dt)
+                                                  : 'Follow-up scheduled',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF92400E),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            if (note != null && note.isNotEmpty)
+                                              Text(
+                                                note,
+                                                style: const TextStyle(
+                                                  color: Color(0xFF78350F),
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.close, size: 16, color: Color(0xFFB45309)),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        tooltip: 'Delete alert',
+                                        onPressed: () {
+                                          if (rId.isNotEmpty) {
+                                            ref.read(leadsProvider.notifier).deleteReminder(
+                                                  leadId: lead.id,
+                                                  reminderId: rId,
+                                                );
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              })
+                            else if (lead.reminderDate != null)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.alarm, size: 16, color: Color(0xFFD97706)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          DateFormat('dd MMM yyyy, hh:mm a').format(lead.reminderDate!.toLocal()),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF92400E),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        if (lead.reminderNote != null && lead.reminderNote!.isNotEmpty)
+                                          Text(
+                                            lead.reminderNote!,
+                                            style: const TextStyle(
+                                              color: Color(0xFF78350F),
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -175,7 +486,7 @@ class LeadDetailScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Deal Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                        _StatusDropdown(leadId: lead.id, currentStatus: lead.status, isConverted: isConverted),
+                        _DealStatusHeader(lead: lead, isConverted: isConverted),
                       ],
                     ),
                     const Divider(height: 24),
@@ -308,10 +619,13 @@ class LeadDetailScreen extends ConsumerWidget {
                 icon: const Icon(Icons.star, color: Colors.white),
                 label: const Text('Convert to Customer (Won)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
+    ],
+  ),
+);
   }
 
   Future<void> _downloadReportPdf(BuildContext context, WidgetRef ref, Lead lead, Prospect? prospect) async {
@@ -357,6 +671,182 @@ class LeadDetailScreen extends ConsumerWidget {
     );
   }
 
+  void _showEditLeadModal(BuildContext context, WidgetRef ref, Lead lead) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _EditLeadSheet(lead: lead),
+      ),
+    );
+  }
+
+  void _showSetReminderDialog(BuildContext context, WidgetRef ref, Lead lead) {
+    DateTime selectedDate = lead.reminderDate?.toLocal() ?? DateTime.now().add(const Duration(days: 1));
+    TimeOfDay selectedTime = TimeOfDay.fromDateTime(selectedDate);
+    final noteCtrl = TextEditingController(text: lead.reminderNote ?? '');
+    final timeTextCtrl = TextEditingController(
+      text: '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.alarm, color: Color(0xFFD97706)),
+              SizedBox(width: 8),
+              Text('Set Follow-up Alert'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Schedule a reminder to call or follow up on this lead:',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today, color: AppColors.primary),
+                  title: const Text('Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(DateFormat('dd MMM yyyy').format(selectedDate)),
+                  onTap: () async {
+                    final today = DateTime.now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate.isBefore(today) ? today : selectedDate,
+                      firstDate: DateTime(today.year, today.month, today.day),
+                      lastDate: today.add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => selectedDate = picked);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: timeTextCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Time (HH:mm)',
+                          hintText: 'e.g. 14:30 or 02:30 PM',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.access_time, color: AppColors.primary),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (val) {
+                          final parts = val.trim().split(':');
+                          if (parts.length == 2) {
+                            final h = int.tryParse(parts[0].trim());
+                            final m = int.tryParse(parts[1].trim());
+                            if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
+                              selectedTime = TimeOfDay(hour: h, minute: m);
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.timer_outlined, color: AppColors.primary, size: 28),
+                      tooltip: 'Pick Time',
+                      onPressed: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime,
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            selectedTime = picked;
+                            timeTextCtrl.text =
+                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noteCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Reminder Note',
+                    hintText: 'e.g. Call to discuss pricing proposal',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.notes_outlined),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                int finalHour = selectedTime.hour;
+                int finalMinute = selectedTime.minute;
+                final rawTime = timeTextCtrl.text.trim();
+                final match = RegExp(r'^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$', caseSensitive: false).firstMatch(rawTime);
+                if (match != null) {
+                  int h = int.parse(match.group(1)!);
+                  int m = int.parse(match.group(2)!);
+                  final ampm = match.group(3)?.toLowerCase();
+                  if (ampm == 'pm' && h < 12) h += 12;
+                  if (ampm == 'am' && h == 12) h = 0;
+                  if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+                    finalHour = h;
+                    finalMinute = m;
+                  }
+                }
+
+                final combined = DateTime(
+                  selectedDate.year,
+                  selectedDate.month,
+                  selectedDate.day,
+                  finalHour,
+                  finalMinute,
+                );
+
+                Navigator.pop(ctx);
+                await ref.read(leadsProvider.notifier).addReminder(
+                      leadId: lead.id,
+                      reminderDate: combined,
+                      reminderNote: noteCtrl.text.trim().isNotEmpty ? noteCtrl.text.trim() : null,
+                    );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('🔔 Follow-up alert added successfully!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Save Alert'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAssignLeadSheet(BuildContext context, WidgetRef ref, Lead lead) {
     showModalBottomSheet(
       context: context,
@@ -384,6 +874,7 @@ class LeadDetailScreen extends ConsumerWidget {
     final emailCtrl = TextEditingController(text: defaultEmail ?? '');
     final addressCtrl = TextEditingController(text: defaultAddress ?? '');
     final gstCtrl = TextEditingController(text: defaultGst ?? '');
+    final notesCtrl = TextEditingController(text: lead.notes ?? '');
     bool isSaving = false;
 
     showModalBottomSheet(
@@ -393,8 +884,9 @@ class LeadDetailScreen extends ConsumerWidget {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final availHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).viewInsets.bottom;
             return Container(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+              constraints: BoxConstraints(maxHeight: (availHeight * 0.9).clamp(320.0, double.infinity)),
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
                 top: 24,
@@ -413,17 +905,15 @@ class LeadDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Convert Lead to Customer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                          const Expanded(
+                            child: Text('Convert Lead to Customer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
                           IconButton(onPressed: () => ctx.pop(), icon: const Icon(Icons.close)),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Marking this deal as Won will create a permanent Customer account for "${lead.productName}".',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                      ),
+                      Text('Marking this lead as WON and creating a formal customer account.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: nameCtrl,
@@ -454,6 +944,12 @@ class LeadDetailScreen extends ConsumerWidget {
                         decoration: const InputDecoration(labelText: 'GST Number (Optional)', border: OutlineInputBorder()),
                         textCapitalization: TextCapitalization.characters,
                       ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: notesCtrl,
+                        decoration: const InputDecoration(labelText: 'Notes (Optional)', border: OutlineInputBorder()),
+                        maxLines: 3,
+                      ),
                       const SizedBox(height: 24),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -475,6 +971,7 @@ class LeadDetailScreen extends ConsumerWidget {
                                         email: emailCtrl.text.trim(),
                                         address: addressCtrl.text.trim(),
                                         gstNumber: gstCtrl.text.trim(),
+                                        notes: notesCtrl.text.trim(),
                                       );
                                   if (ctx.mounted) {
                                     ctx.pop();
@@ -568,6 +1065,123 @@ class LeadDetailScreen extends ConsumerWidget {
     });
   }
 
+  static Future<void> _showManageInteractionTypesModal(BuildContext context, WidgetRef ref) async {
+    final addCtrl = TextEditingController();
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final typesAsync = ref.watch(crmInteractionTypesProvider);
+          final types = typesAsync.value ?? CrmInteractionTypesNotifier.defaultTypes;
+          final availHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).viewInsets.bottom;
+
+          return Container(
+            constraints: BoxConstraints(maxHeight: (availHeight * 0.85).clamp(280.0, double.infinity)),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              top: 20,
+              left: 20,
+              right: 20,
+            ),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Manage Interaction Types',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Add custom interaction channels or remove unused ones:',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: addCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'New Type Name',
+                          hintText: 'e.g. Site Visit, Demo',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                      onPressed: () async {
+                        final text = addCtrl.text.trim();
+                        if (text.isNotEmpty) {
+                          await ref.read(crmInteractionTypesProvider.notifier).addType(text);
+                          addCtrl.clear();
+                          setSheetState(() {});
+                        }
+                      },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: types.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final item = types[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 14,
+                          backgroundColor: AppColors.primary.withOpacity(0.1),
+                          child: const Icon(Icons.chat_bubble_outline, size: 14, color: AppColors.primary),
+                        ),
+                        title: Text(item, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                          tooltip: 'Delete type',
+                          onPressed: () async {
+                            await ref.read(crmInteractionTypesProvider.notifier).deleteType(item);
+                            setSheetState(() {});
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   static void _showLogDialog(BuildContext context, WidgetRef ref, String leadId, {String defaultType = 'Call'}) {
     final summaryCtrl = TextEditingController();
     String selectedType = defaultType;
@@ -579,7 +1193,15 @@ class LeadDetailScreen extends ConsumerWidget {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final typeList = ref.watch(crmInteractionTypesProvider).value ?? CrmInteractionTypesNotifier.defaultTypes;
+            if (!typeList.contains(selectedType)) {
+              selectedType = typeList.isNotEmpty ? typeList.first : 'Call';
+            }
+
+            final availHeight = MediaQuery.of(context).size.height - MediaQuery.of(context).viewInsets.bottom;
+
             return Container(
+              constraints: BoxConstraints(maxHeight: (availHeight * 0.9).clamp(300.0, double.infinity)),
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
                 top: 24,
@@ -590,22 +1212,43 @@ class LeadDetailScreen extends ConsumerWidget {
                 color: AppColors.surface,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Log Communication', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      const Expanded(
+                        child: Text('Log Communication', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
                       IconButton(onPressed: () => ctx.pop(), icon: const Icon(Icons.close)),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Interaction Type *',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+                        icon: const Icon(Icons.settings, size: 14),
+                        label: const Text('Manage Types', style: TextStyle(fontSize: 12)),
+                        onPressed: () async {
+                          await _showManageInteractionTypesModal(context, ref);
+                          setSheetState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   DropdownButtonFormField<String>(
                     value: selectedType,
-                    decoration: const InputDecoration(labelText: 'Interaction Type', border: OutlineInputBorder()),
-                    items: ['Call', 'WhatsApp', 'Email', 'Meeting', 'Note']
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    items: typeList
                         .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                         .toList(),
                     onChanged: (val) {
@@ -647,10 +1290,502 @@ class LeadDetailScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            );
+            ),
+          );
           },
         );
       },
+    );
+  }
+
+  Future<void> _confirmDeleteLead(
+    BuildContext context,
+    WidgetRef ref,
+    Lead lead,
+    Prospect? prospect,
+    String displayName,
+  ) async {
+    String? customerId = lead.convertedToCustomerId;
+    if (customerId == null) {
+      try {
+        final client = ref.read(supabaseClientProvider);
+        final custRes = await client
+            .from('customers')
+            .select('id')
+            .or('lead_id.eq.${lead.id},phone.eq.${lead.contactPhone ?? ""}')
+            .maybeSingle();
+        if (custRes != null) {
+          customerId = custRes['id'] as String?;
+        }
+      } catch (_) {}
+    }
+
+    if (!context.mounted) return;
+
+    if (customerId != null) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => CrmDeleteConvertedDialog(
+          recordName: displayName,
+          recordType: 'Lead',
+        ),
+      );
+
+      if (choice == null || choice == 'cancel') return;
+      final isBoth = choice == 'crm_and_customer';
+
+      if (!context.mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => CrmDeleteConfirmDialog(
+          title: isBoth ? 'Confirm Permanent Delete' : 'Delete from CRM Only',
+          message: isBoth
+              ? 'Are you sure you want to permanently delete lead for "$displayName" from CRM AND remove their customer profile? This action cannot be undone.'
+              : 'Are you sure you want to remove lead for "$displayName" from CRM? Their customer account and order history will remain safely preserved.',
+          confirmLabel: isBoth ? 'Delete Both' : 'Delete from CRM',
+          isDestructive: true,
+        ),
+      );
+
+      if (confirm == true) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Text(
+                        isBoth ? 'Deleting from CRM & Customers...' : 'Deleting lead...',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        try {
+          await ref.read(leadsProvider.notifier).deleteLead(
+                leadId: lead.id,
+                deleteCustomer: isBoth,
+                customerId: customerId,
+              );
+          await ref.read(prospectsProvider.notifier).load();
+
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/leads');
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        isBoth
+                            ? '✓ Lead and customer record deleted successfully'
+                            : '✓ Lead deleted successfully',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Error deleting lead: $e'),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => CrmDeleteConfirmDialog(
+          title: 'Delete Lead',
+          message: 'Are you sure you want to delete lead for "$displayName"? This action cannot be undone.',
+          confirmLabel: 'Delete',
+          isDestructive: true,
+        ),
+      );
+
+      if (confirm == true) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                    SizedBox(width: 18),
+                    Expanded(
+                      child: Text(
+                        'Deleting lead...',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        try {
+          await ref.read(leadsProvider.notifier).deleteLead(leadId: lead.id);
+          await ref.read(prospectsProvider.notifier).load();
+
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/crm/leads');
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '✓ Lead deleted successfully',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop(); // dismiss progress dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Error deleting lead: $e'),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+class _EditLeadSheet extends ConsumerStatefulWidget {
+  final Lead lead;
+  const _EditLeadSheet({required this.lead});
+
+  @override
+  ConsumerState<_EditLeadSheet> createState() => _EditLeadSheetState();
+}
+
+class _EditLeadSheetState extends ConsumerState<_EditLeadSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _productCtrl;
+  late final TextEditingController _valCtrl;
+  late final TextEditingController _notesCtrl;
+  late final TextEditingController _capacityCtrl;
+  DateTime? _expectedDate;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.lead.prospectName ?? '');
+    _phoneCtrl = TextEditingController(text: widget.lead.contactPhone ?? '');
+    _productCtrl = TextEditingController(text: widget.lead.productName);
+    _valCtrl = TextEditingController(text: widget.lead.estimatedValue.toStringAsFixed(0));
+    _notesCtrl = TextEditingController(text: widget.lead.notes ?? '');
+    _capacityCtrl = TextEditingController(text: widget.lead.capacity ?? '');
+    _expectedDate = widget.lead.expectedDate;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _productCtrl.dispose();
+    _valCtrl.dispose();
+    _notesCtrl.dispose();
+    _capacityCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSave() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(leadsProvider.notifier).updateLead(
+            leadId: widget.lead.id,
+            prospectName: _nameCtrl.text.trim(),
+            contactPhone: _phoneCtrl.text.trim(),
+            productName: _productCtrl.text.trim(),
+            estimatedValue: double.tryParse(_valCtrl.text.trim()),
+            expectedDate: _expectedDate,
+            notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+            capacity: _capacityCtrl.text.trim().isEmpty ? null : _capacityCtrl.text.trim(),
+          );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lead updated successfully!'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update lead: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = ref.watch(currentProfileProvider);
+    final canEditName = RecordEditPermissions.canEditField(
+      fieldName: 'name',
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: widget.lead.createdBy,
+      assigneeId: widget.lead.assignedTo,
+    );
+    final canEditPhone = RecordEditPermissions.canEditField(
+      fieldName: 'phone',
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: widget.lead.createdBy,
+      assigneeId: widget.lead.assignedTo,
+    );
+    final isRestricted = !canEditName || !canEditPhone;
+
+    return Container(
+      padding: EdgeInsets.only(
+        top: 24,
+        left: 24,
+        right: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Edit Lead Details',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              if (isRestricted)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Color(0xFFD97706)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Contact Name and Phone are managed by creator/admin.',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _nameCtrl,
+                enabled: canEditName,
+                decoration: InputDecoration(
+                  labelText: 'Customer / Prospect Name *',
+                  filled: !canEditName,
+                  fillColor: !canEditName ? Colors.grey.shade100 : null,
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _phoneCtrl,
+                enabled: canEditPhone,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'Phone Number *',
+                  filled: !canEditPhone,
+                  fillColor: !canEditPhone ? Colors.grey.shade100 : null,
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Phone is required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _productCtrl,
+                decoration: const InputDecoration(labelText: 'Product / System Interest *'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Product is required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _capacityCtrl,
+                decoration: const InputDecoration(labelText: 'System Capacity (e.g. 5kW, 10kW)'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _valCtrl,
+                readOnly: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Estimated Deal Value (₹)',
+                  helperText: 'Deal value is updated automatically from Quotations',
+                  filled: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today, color: AppColors.primary),
+                title: Text(
+                  _expectedDate == null ? 'Set Target Close Date' : 'Target: ${DateFormat('dd MMM yyyy').format(_expectedDate!)}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                trailing: TextButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _expectedDate ?? DateTime.now().add(const Duration(days: 14)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) setState(() => _expectedDate = picked);
+                  },
+                  child: const Text('Change'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  hintText: 'Customer requirements, site details, follow-up history...',
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _isSaving ? null : _handleSave,
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text(
+                        'Save Changes',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -689,7 +1824,7 @@ class _LeadCommunicationSection extends ConsumerWidget {
                       onPressed: onDownloadPdf,
                     ),
                     TextButton.icon(
-                      onPressed: () => LeadDetailScreen._showLogDialog(context, ref, leadId),
+                      onPressed: () => _LeadDetailScreenState._showLogDialog(context, ref, leadId),
                       icon: const Icon(Icons.add_comment_outlined, size: 18),
                       label: const Text('Add Log', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
@@ -776,47 +1911,134 @@ class _LeadCommunicationSection extends ConsumerWidget {
   }
 }
 
-class _StatusDropdown extends ConsumerWidget {
-  final String leadId;
-  final String currentStatus;
+class _DealStatusHeader extends ConsumerWidget {
+  final Lead lead;
   final bool isConverted;
 
-  const _StatusDropdown({required this.leadId, required this.currentStatus, required this.isConverted});
+  const _DealStatusHeader({required this.lead, required this.isConverted});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (isConverted) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(12)),
-        child: const Text('Won', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
-      );
+    Color statusColor = Colors.blue;
+    if (lead.status == 'Won' || isConverted) {
+      statusColor = AppColors.success;
+    } else if (lead.status == 'Lost') {
+      statusColor = AppColors.error;
+    } else if (lead.status == 'Negotiating') {
+      statusColor = Colors.purple;
+    } else if (lead.status == 'In Progress') {
+      statusColor = Colors.orange;
     }
 
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: currentStatus,
-          icon: const Icon(Icons.arrow_drop_down, size: 20),
-          style: const TextStyle(fontSize: 14, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
-          items: ['New', 'In Progress', 'Negotiating', 'Won', 'Lost']
-              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-              .toList(),
-          onChanged: (val) {
-            if (val != null) {
-              ref.read(leadsProvider.notifier).updateStatus(leadId, val);
-            }
-          },
+    final isClosed = lead.status == 'Won' || lead.status == 'Lost' || isConverted;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: statusColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: statusColor.withOpacity(0.6)),
+          ),
+          child: Text(
+            isConverted ? 'Won' : lead.status,
+            style: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
         ),
+        if (!isClosed) ...[
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+              minimumSize: const Size(60, 28),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            icon: const Icon(Icons.cancel_outlined, size: 14),
+            label: const Text('Mark as Lost', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            onPressed: () => _confirmMarkAsLost(context, ref),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _confirmMarkAsLost(BuildContext context, WidgetRef ref) async {
+    final reasonCtrl = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.cancel, color: AppColors.error),
+            SizedBox(width: 8),
+            Text('Mark Deal as Lost'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to mark this deal as Lost? You can enter an optional reason below:',
+              style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Reason for Lost Deal (Optional)',
+                hintText: 'e.g. Price too high, Competitor chosen',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark as Lost'),
+          ),
+        ],
       ),
     );
+
+    if (confirm == true) {
+      try {
+        await ref.read(leadsProvider.notifier).updateStatus(lead.id, 'Lost');
+        final reason = reasonCtrl.text.trim();
+        if (reason.isNotEmpty) {
+          try {
+            await ref.read(leadCommunicationsProvider(lead.id).notifier).logCommunication(
+                  type: 'Note',
+                  summary: 'Deal marked as Lost. Reason: $reason',
+                );
+          } catch (_) {}
+        }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Lead marked as Lost.'), backgroundColor: AppColors.error),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error updating status: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
   }
 }
 
@@ -973,11 +2195,14 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Assign / Transfer Lead',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              const Expanded(
+                child: Text(
+                  'Assign / Transfer Lead',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ],
@@ -1177,6 +2402,8 @@ class _LeadQuotationsSectionState
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
+    final isLeadClosed = widget.lead.status == 'Won' || widget.lead.status == 'Lost';
+    final isWon = widget.lead.status == 'Won';
 
     return Card(
       elevation: 0,
@@ -1191,58 +2418,96 @@ class _LeadQuotationsSectionState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.request_quote_outlined, size: 20, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Quotations & Revisions',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (_quotations.isNotEmpty) ...[
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.request_quote_outlined, size: 20, color: AppColors.primary),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                      const Flexible(
                         child: Text(
-                          '${_quotations.length}',
-                          style: const TextStyle(
-                            fontSize: 12,
+                          'Quotations & Revisions',
+                          style: TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                            color: AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_quotations.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${_quotations.length}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-                if (widget.isSalesOrAdmin)
+                const SizedBox(width: 6),
+                if (widget.isSalesOrAdmin && !isLeadClosed)
                   ElevatedButton.icon(
                     onPressed: () => _openCreateQuotation(),
-                    icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                    icon: const Icon(Icons.add, size: 14, color: Colors.white),
                     label: const Text(
                       'Quotation',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      minimumSize: const Size(80, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: const Size(60, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
               ],
             ),
             const Divider(height: 24),
+            if (isLeadClosed)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isWon ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isWon ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isWon ? Icons.lock : Icons.lock_outline,
+                      color: isWon ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Quotations locked — Lead is ${widget.lead.status}. No further revisions allowed.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isWon ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (_isLoading)
               const Center(
                 child: Padding(
@@ -1262,7 +2527,7 @@ class _LeadQuotationsSectionState
                         'No quotation generated for this lead yet.',
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
-                      if (widget.isSalesOrAdmin) ...[
+                      if (widget.isSalesOrAdmin && !isLeadClosed) ...[
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           onPressed: () => _openCreateQuotation(),
@@ -1317,7 +2582,32 @@ class _LeadQuotationsSectionState
                                   ),
                                 ),
                               ),
-                              if (isLatest) ...[
+                              if (isWon && isLatest) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.verified, color: Colors.white, size: 12),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'FINAL QUOTATION',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else if (isLatest) ...[
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1384,7 +2674,7 @@ class _LeadQuotationsSectionState
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                           ),
-                          if (widget.isSalesOrAdmin) ...[
+                          if (widget.isSalesOrAdmin && !isLeadClosed) ...[
                             const SizedBox(width: 8),
                             ElevatedButton.icon(
                               onPressed: () => _openCreateQuotation(initialQuotation: quot),

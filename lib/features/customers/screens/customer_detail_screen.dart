@@ -15,6 +15,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/widgets/breadcrumbs.dart';
+import '../../../core/services/record_edit_permissions.dart';
 
 class CustomerDetailScreen extends ConsumerWidget {
   final String customerId;
@@ -42,8 +43,12 @@ class CustomerDetailScreen extends ConsumerWidget {
                         : AppRoutes.salesDashboard,
                   ),
                   BreadcrumbItem(
-                      label: 'Customers', route: AppRoutes.customers),
-                  BreadcrumbItem(label: 'Customer Detail'),
+                    label: 'Customers',
+                    route: AppRoutes.customers,
+                  ),
+                  BreadcrumbItem(
+                    label: customer.customerName,
+                  ),
                 ],
               ),
             ),
@@ -74,16 +79,20 @@ class CustomerDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildAppBar(BuildContext context, WidgetRef ref, Customer customer) {
+    final profile = ref.watch(currentProfileProvider);
+    final canEdit = RecordEditPermissions.canEditRecord(
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: customer.createdBy,
+      assigneeId: customer.assignedTo,
+    );
+
     return SliverAppBar(
-      expandedHeight: 200,
+      expandedHeight: 180,
       pinned: true,
       backgroundColor: AppColors.primary,
-      clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(24),
-        ),
-      ),
+      foregroundColor: Colors.white,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () {
@@ -95,7 +104,7 @@ class CustomerDetailScreen extends ConsumerWidget {
         },
       ),
       actions: [
-        if (ref.watch(currentProfileProvider)?.primaryRole.canEditCustomers == true)
+        if (canEdit)
           IconButton(
             icon: const Icon(Icons.edit_outlined, color: Colors.white),
             tooltip: 'Edit Customer',
@@ -453,7 +462,13 @@ class _InfoCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
     final canViewPersonal = profile?.primaryRole.canViewCustomerPersonalData ?? false;
-    final canEdit = profile?.primaryRole.canEditCustomers ?? false;
+    final canEdit = RecordEditPermissions.canEditRecord(
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: customer.createdBy,
+      assigneeId: customer.assignedTo,
+    );
     final canAssign = profile?.primaryRole == UserRole.admin ||
         profile?.primaryRole == UserRole.salesHead ||
         profile?.primaryRole == UserRole.manager;
@@ -509,74 +524,79 @@ class _InfoCard extends ConsumerWidget {
           const SizedBox(height: 8),
           const Divider(height: 1),
           const SizedBox(height: 8),
-          // Assigned Salesperson row with Assign/Reassign action
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.badge_outlined, size: 16, color: AppColors.textSecondary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Assigned Salesperson',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        customer.assignedToName?.isNotEmpty == true
-                            ? customer.assignedToName!
-                            : (customer.salesmanName?.isNotEmpty == true
-                                ? customer.salesmanName!
-                                : 'Not Assigned'),
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (canAssign)
-                  InkWell(
-                    onTap: () => _showAssignCustomerSheet(context, ref, customer),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            customer.assignedToName != null ? Icons.sync : Icons.person_add_alt_1,
-                            size: 13,
-                            color: AppColors.primary,
+          if (customer.assignedToName != null || customer.salesmanName != null || canAssign)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_pin, size: 20, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Assigned Salesperson',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            customer.assignedToName != null ? 'Reassign' : 'Assign',
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
-                            ),
+                        ),
+                        Text(
+                          customer.assignedToName?.isNotEmpty == true
+                              ? customer.assignedToName!
+                              : (customer.salesmanName?.isNotEmpty == true
+                                  ? customer.salesmanName!
+                                  : 'Not Assigned'),
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                  if (canAssign)
+                    InkWell(
+                      onTap: () => _showAssignCustomerSheet(context, ref, customer),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              customer.assignedToName != null ? Icons.sync : Icons.person_add_alt_1,
+                              size: 13,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              customer.assignedToName != null ? 'Reassign' : 'Assign',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
           if (customer.convertedByName != null && customer.convertedByName!.isNotEmpty)
             _InfoRow(
               Icons.verified_user_outlined,
@@ -584,8 +604,7 @@ class _InfoCard extends ConsumerWidget {
               customer.convertedByName!,
             ),
           if (customer.contactPerson != null && customer.contactPerson!.isNotEmpty)
-            _InfoRow(Icons.person_outline, 'Contact Person',
-                canViewPersonal ? customer.contactPerson! : '[Restricted]'),
+            _InfoRow(Icons.person_outline, 'Contact Person', customer.contactPerson!),
           if (customer.phone != null && customer.phone!.isNotEmpty)
             _InfoRow(
                 Icons.phone_outlined,
@@ -600,6 +619,8 @@ class _InfoCard extends ConsumerWidget {
             _InfoRow(Icons.location_on_outlined, 'Address', customer.address!),
           if (customer.gstNumber != null && customer.gstNumber!.isNotEmpty)
             _InfoRow(Icons.receipt_long_outlined, 'GSTIN', customer.gstNumber!),
+          if (customer.notes != null && customer.notes!.isNotEmpty)
+            _InfoRow(Icons.note_alt_outlined, 'Notes', customer.notes!),
           _InfoRow(
             Icons.calendar_today_outlined,
             'Customer Since',
@@ -988,6 +1009,7 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _gstCtrl;
+  late final TextEditingController _notesCtrl;
   bool _isSaving = false;
 
   @override
@@ -999,6 +1021,7 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
     _emailCtrl = TextEditingController(text: widget.customer.email ?? '');
     _addressCtrl = TextEditingController(text: widget.customer.address ?? '');
     _gstCtrl = TextEditingController(text: widget.customer.gstNumber ?? '');
+    _notesCtrl = TextEditingController(text: widget.customer.notes ?? '');
   }
 
   @override
@@ -1009,6 +1032,7 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
     _emailCtrl.dispose();
     _addressCtrl.dispose();
     _gstCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -1019,12 +1043,14 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
     try {
       final supabase = ref.read(supabaseClientProvider);
       await supabase.from('customers').update({
+        'customer_name': _companyNameCtrl.text.trim(),
         'company_name': _companyNameCtrl.text.trim(),
         'contact_person': _contactPersonCtrl.text.trim().isEmpty ? null : _contactPersonCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         'email': _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         'address': _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
         'gst_number': _gstCtrl.text.trim().isEmpty ? null : _gstCtrl.text.trim().toUpperCase(),
+        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', widget.customer.id);
 
@@ -1056,6 +1082,24 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = ref.watch(currentProfileProvider);
+    final canEditName = RecordEditPermissions.canEditField(
+      fieldName: 'name',
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: widget.customer.createdBy,
+      assigneeId: widget.customer.assignedTo,
+    );
+    final canEditPhone = RecordEditPermissions.canEditField(
+      fieldName: 'phone',
+      userRole: profile?.primaryRole,
+      allRoles: profile?.roles ?? [],
+      currentUserId: profile?.id,
+      creatorId: widget.customer.createdBy,
+      assigneeId: widget.customer.assignedTo,
+    );
+
     return Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
       decoration: const BoxDecoration(
@@ -1091,10 +1135,12 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _companyNameCtrl,
-                decoration: const InputDecoration(
+                enabled: canEditName,
+                decoration: InputDecoration(
                   labelText: 'Company / Customer Name *',
-                  prefixIcon: Icon(Icons.business_outlined),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.business_outlined),
+                  border: const OutlineInputBorder(),
+                  helperText: canEditName ? null : 'Only creator or admin can edit name',
                 ),
                 validator: (val) =>
                     val == null || val.trim().isEmpty ? 'Company / Customer name is required' : null,
@@ -1111,10 +1157,12 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
               const SizedBox(height: 14),
               TextFormField(
                 controller: _phoneCtrl,
-                decoration: const InputDecoration(
+                enabled: canEditPhone,
+                decoration: InputDecoration(
                   labelText: 'Phone Number *',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.phone_outlined),
+                  border: const OutlineInputBorder(),
+                  helperText: canEditPhone ? null : 'Only creator or admin can edit phone number',
                 ),
                 keyboardType: TextInputType.phone,
                 validator: (val) {
@@ -1153,6 +1201,16 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                   hintText: 'e.g. 27AAAAA1111A1Z1',
                 ),
                 textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  prefixIcon: Icon(Icons.note_alt_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -1232,28 +1290,17 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
         final rolesList = (r['roles'] is List)
             ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
             : [];
-        if (role == 'sales' ||
-            role == 'admin' ||
-            role == 'manager' ||
-            role == 'sales_head' ||
-            role.contains('sales') ||
-            rolesList.contains('sales') ||
-            rolesList.contains('sales_head') ||
-            rolesList.contains('admin')) {
+        // Sales-only filtering (Task 3.3): exclude admin, manager, coordinator, technician
+        final isSales = role == 'sales' || role == 'sales_head' || role == 'saleshead' ||
+            rolesList.contains('sales') || rolesList.contains('sales_head');
+        final isExcluded = role == 'admin' || role == 'manager' || role == 'technician' || role == 'coordinator' ||
+            rolesList.contains('admin') || rolesList.contains('manager');
+        if (isSales && !isExcluded) {
           list.add(r as Map<String, dynamic>);
         }
       }
 
-      final List<dynamic> rawStaffList = (res is List) ? res : [];
-      final finalList = list.isNotEmpty
-          ? list
-          : rawStaffList
-              .where((r) {
-                final role = (r['primary_role'] as String? ?? '').toLowerCase();
-                return role != 'customer' && role != 'technician';
-              })
-              .map((r) => r as Map<String, dynamic>)
-              .toList();
+      final finalList = list;
 
       if (mounted) {
         setState(() {

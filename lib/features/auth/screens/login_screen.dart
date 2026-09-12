@@ -11,9 +11,6 @@ import '../../customer_app/data/providers/app_providers.dart' hide authStateProv
 import '../providers/auth_provider.dart';
 import '../../../core/providers/supabase_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/models/user_role.dart';
-import '../../../core/router/app_router.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -147,161 +144,158 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final textCol = isDark ? cust_colors.AppColors.textPrimary : cust_colors.AppColors.textPrimaryLight;
     final subtitleCol = isDark ? cust_colors.AppColors.textSecondary : cust_colors.AppColors.textSecondaryLight;
 
+    final isSmallScreen = size.height < 700;
+    final headerHeight = isSmallScreen ? 210.0 : (size.height * 0.32).clamp(220.0, 290.0);
+
     return Scaffold(
       backgroundColor: scaffoldBg,
+      resizeToAvoidBottomInset: true,
       body: SingleChildScrollView(
-        child: Container(
-          constraints: BoxConstraints(minHeight: size.height),
-          child: IntrinsicHeight(
-            child: Column(
-              children: [
-              // Top 38% area: Brand header
-              Container(
-                height: size.height * 0.38,
-                width: double.infinity,
-                clipBehavior: Clip.antiAlias,
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(28),
-                  ),
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          children: [
+            // Top area: Brand header
+            Container(
+              height: headerHeight,
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(28),
                 ),
-                child: Stack(
-                  children: [
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+              ),
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF1E1B4B),
+                          Color(0xFF4C1D95),
+                          Color(0xFF6D28D9),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Radial glow top-right
+                  Positioned(
+                    top: -40,
+                    right: -30,
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
                           colors: [
-                            Color(0xFF1E1B4B),
-                            Color(0xFF4C1D95),
-                            Color(0xFF6D28D9),
+                            cust_colors.AppColors.primary.withOpacity(0.25),
+                            Colors.transparent,
                           ],
                         ),
                       ),
                     ),
-                    // Radial glow top-right
-                    Positioned(
-                      top: -40,
-                      right: -30,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              cust_colors.AppColors.primary.withOpacity(0.25),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Radial glow bottom-left
-                    Positioned(
-                      bottom: -20,
-                      left: -40,
-                      child: Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              const Color(0xFF06B6D4).withOpacity(0.15),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.06),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.12),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.whatshot_rounded,
-                                size: 56,
-                                color: cust_colors.AppColors.accent,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'IZYHEAT',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Premium Heating & HVAC Solutions',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Bottom Form
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-                  child: Column(
-                    children: [
-                      const Spacer(),
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 450),
-                          child: Form(
-                            key: _formKey,
-                            child: GlassCard(
-                              padding: const EdgeInsets.all(24),
-                              borderRadius: 24,
-                              child: _isOfficeLogin 
-                                ? _buildOfficeLoginForm(isDark, textCol, subtitleCol, glassCardBg) 
-                                : _buildCustomerLoginForm(isDark, textCol, subtitleCol, glassCardBg),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const Spacer(flex: 2),
-                      Text(
-                        'By continuing, you agree to our Terms & Privacy Policy',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: subtitleCol,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
                   ),
-                ),
+                  // Radial glow bottom-left
+                  Positioned(
+                    bottom: -20,
+                    left: -40,
+                    child: Container(
+                      width: 160,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            const Color(0xFF06B6D4).withOpacity(0.15),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SafeArea(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.06),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.12),
+                                width: 1,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.whatshot_rounded,
+                              size: isSmallScreen ? 42 : 52,
+                              color: cust_colors.AppColors.accent,
+                            ),
+                          ),
+                          SizedBox(height: isSmallScreen ? 10 : 14),
+                          Text(
+                            'IZYHEAT',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 26 : 32,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Premium Heating & HVAC Solutions',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                              fontSize: isSmallScreen ? 12 : 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
             ),
-          ),
+
+            // Bottom Form
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: Column(
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 450),
+                      child: Form(
+                        key: _formKey,
+                        child: GlassCard(
+                          padding: const EdgeInsets.all(24),
+                          borderRadius: 24,
+                          child: _isOfficeLogin 
+                            ? _buildOfficeLoginForm(isDark, textCol, subtitleCol, glassCardBg) 
+                            : _buildCustomerLoginForm(isDark, textCol, subtitleCol, glassCardBg),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'By continuing, you agree to our Terms & Privacy Policy',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: subtitleCol,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

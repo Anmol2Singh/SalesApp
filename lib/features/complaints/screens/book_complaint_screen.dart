@@ -12,6 +12,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/widgets/searchable_dropdown.dart';
 
 class BookComplaintScreen extends ConsumerStatefulWidget {
   const BookComplaintScreen({super.key});
@@ -226,6 +227,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       title: fullTitle,
       description: fullDescription,
       status: 'assigned',
+      source: (profile?.primaryRole == UserRole.customer) ? 'customer' : 'staff',
       technicianId: _selectedTechnician!.id,
       technicianName: _selectedTechnician!.name,
       tatRemaining: '24h TAT',
@@ -764,23 +766,21 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
                 if (techs.isEmpty) {
                   return const Text('No technicians found. Please add a technician in Technicians section.', style: TextStyle(color: Colors.red, fontSize: 12));
                 }
-                return DropdownButtonFormField<TechnicianInfo>(
+                return SearchableDropdown<TechnicianInfo>(
+                  label: 'Select Technician for Dispatch *',
                   value: _selectedTechnician,
+                  items: techs,
+                  itemLabel: (t) => '${t.name} (${t.status})',
+                  itemSubtitle: (t) => t.phone != null ? 'Phone: ${t.phone}' : null,
+                  onChanged: (val) {
+                    setState(() => _selectedTechnician = val);
+                  },
                   decoration: InputDecoration(
                     labelText: 'Select Technician for Dispatch *',
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  items: techs.map((t) {
-                    return DropdownMenuItem(
-                      value: t,
-                      child: Text('${t.name} (${t.status})'),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    setState(() => _selectedTechnician = val);
-                  },
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
