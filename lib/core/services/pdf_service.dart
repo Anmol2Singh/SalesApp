@@ -643,10 +643,12 @@ class PdfService {
                     .format(factoryOrder.expectedCompletionDate!),
               ),
             ],
-            pw.SizedBox(height: 20),
-            _buildSectionTitle('Production Specifications'),
-            pw.SizedBox(height: 8),
-            _buildExtraFieldsTable(factoryOrder.productionSpecs, product),
+            if (factoryOrder.productionSpecs.isNotEmpty) ...[
+              pw.SizedBox(height: 20),
+              _buildSectionTitle('Production Specifications'),
+              pw.SizedBox(height: 8),
+              _buildExtraFieldsTable(factoryOrder.productionSpecs, product),
+            ],
             if (factoryOrder.factoryNotes != null &&
                 factoryOrder.factoryNotes!.isNotEmpty) ...[
               pw.SizedBox(height: 16),
@@ -1108,7 +1110,7 @@ class PdfService {
                 color: i.isEven ? PdfColors.grey50 : PdfColors.white),
             children: [
               item.itemName,
-              item.qty.toString(),
+              item.qty.toInt().toString(),
             ]
                 .map((v) => pw.Padding(
                       padding: const pw.EdgeInsets.all(5),

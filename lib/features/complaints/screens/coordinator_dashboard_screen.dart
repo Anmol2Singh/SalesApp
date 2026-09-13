@@ -8,7 +8,6 @@ import '../../../core/widgets/shimmer_loader.dart';
 import '../providers/complaints_provider.dart';
 import '../data/models/complaint_model.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../core/models/user_role.dart';
 import '../../../core/router/app_router.dart';
 import 'complaints_leaderboard_screen.dart';
 
@@ -22,11 +21,6 @@ class CoordinatorDashboardScreen extends ConsumerStatefulWidget {
 class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final TextEditingController _searchController = TextEditingController();
-
-  String _searchQuery = '';
-  String _selectedSource = 'all'; // 'all', 'staff', 'customer'
-  String _selectedStatus = 'all'; // 'all', 'pending', 'in_progress', 'closed'
 
   @override
   void initState() {
@@ -37,7 +31,6 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
   @override
   void dispose() {
     _tabController.dispose();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -69,27 +62,33 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
   Widget build(BuildContext context) {
     final complaints = ref.watch(complaintsProvider);
     final isLoading = ref.watch(complaintsLoadingProvider);
-    final profile = ref.watch(currentProfileProvider);
-    final isAdminOrManager =
-        profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        leading: isAdminOrManager
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                tooltip: 'Back to Admin Panel',
-                onPressed: () => context.go(AppRoutes.adminDashboard),
-              )
-            : null,
-        title: const Text(
-          'Service & Complaints Operations',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        titleSpacing: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          tooltip: 'Back to Main Dashboard',
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.adminDashboard);
+            }
+          },
+        ),
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Complaints Dashboard',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ),
         backgroundColor: const Color(0xFF1E1B4B),
@@ -101,9 +100,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
           ),
           IconButton(
-            icon: const Icon(Icons.history_outlined, color: Colors.white),
-            tooltip: 'Service History',
-            onPressed: () => context.push('/complaints/history'),
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            tooltip: 'Error Code Settings',
+            onPressed: () => context.push('/complaints/error-codes'),
           ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -149,32 +148,6 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
     final closedCount = complaints.where((c) => c.status == 'closed' || c.status == 'resolved').length;
     final totalCount = complaints.length;
 
-    final staffIntakeCount = complaints.where((c) => c.source == 'staff').length;
-    final customerIntakeCount = complaints.where((c) => c.source == 'customer').length;
-
-    // Filter complaints based on search query, source, and status
-    final filtered = complaints.where((c) {
-      // Source filter
-      if (_selectedSource == 'staff' && c.source != 'staff') return false;
-      if (_selectedSource == 'customer' && c.source != 'customer') return false;
-
-      // Status filter
-      if (_selectedStatus == 'pending' && c.status != 'pending') return false;
-      if (_selectedStatus == 'in_progress' && (c.status != 'in_progress' && c.status != 'assigned')) return false;
-      if (_selectedStatus == 'closed' && (c.status != 'closed' && c.status != 'resolved')) return false;
-
-      // Search filter
-      if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
-        final matchTicket = c.ticketNumber.toLowerCase().contains(q);
-        final matchName = c.customerName.toLowerCase().contains(q);
-        final matchPhone = c.customerPhone.toLowerCase().contains(q);
-        final matchProduct = (c.productName ?? '').toLowerCase().contains(q);
-        final matchTitle = c.title.toLowerCase().contains(q);
-        return matchTicket || matchName || matchPhone || matchProduct || matchTitle;
-      }
-      return true;
-    }).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 96.0),
@@ -239,132 +212,26 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
 
           const SizedBox(height: 20),
 
-          // Staff vs Customer Intake Filter Chips
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.filter_list, size: 18, color: AppColors.primary),
-                    SizedBox(width: 8),
-                    Text(
-                      'Intake Channel Filter',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildFilterChip(
-                      label: 'All Channels ($totalCount)',
-                      isSelected: _selectedSource == 'all',
-                      onSelected: () => setState(() => _selectedSource = 'all'),
-                    ),
-                    _buildFilterChip(
-                      label: 'Staff Intake ($staffIntakeCount)',
-                      isSelected: _selectedSource == 'staff',
-                      onSelected: () => setState(() => _selectedSource = 'staff'),
-                      icon: Icons.badge_outlined,
-                    ),
-                    _buildFilterChip(
-                      label: 'Customer App ($customerIntakeCount)',
-                      isSelected: _selectedSource == 'customer',
-                      onSelected: () => setState(() => _selectedSource = 'customer'),
-                      icon: Icons.phone_android_outlined,
-                    ),
-                  ],
-                ),
-                const Divider(height: 20),
+          // Product Complaints Frequency Chart
+          _buildProductComplaintsChart(complaints),
 
-                // Status Filter Chips
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildStatusFilterChip('All Statuses', 'all'),
-                    _buildStatusFilterChip('Pending ($pendingCount)', 'pending', color: const Color(0xFFEF4444)),
-                    _buildStatusFilterChip('Active ($inProgressCount)', 'in_progress', color: const Color(0xFF3B82F6)),
-                    _buildStatusFilterChip('Closed ($closedCount)', 'closed', color: const Color(0xFF10B981)),
-                  ],
-                ),
-              ],
+          const SizedBox(height: 20),
+
+          // Recently Added Complaints Header
+          const Text(
+            'Recently Added Complaints',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Search Bar
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search by ticket #, customer, phone, product...',
-              prefixIcon: const Icon(Icons.search, color: AppColors.primary),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-            ),
-            onChanged: (val) => setState(() => _searchQuery = val.trim()),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Service Requests Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Complaints (${filtered.length})',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.manage_accounts_outlined, size: 16),
-                label: const Text('Assign Technicians'),
-                onPressed: () => context.push('/complaints/assign'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           if (isLoading) ...[
             const ShimmerListLoader(),
-          ] else if (filtered.isEmpty) ...[
+          ] else if (complaints.isEmpty) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(36),
@@ -383,9 +250,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _searchQuery.isNotEmpty
-                        ? 'No tickets match your search filters.'
-                        : 'Tap "Book Complaint" below to log a new service ticket.',
+                    'Tap "Book Complaint" below to log a new service ticket.',
                     style: TextStyle(fontFamily: 'Inter', color: Colors.grey.shade600, fontSize: 13),
                   ),
                 ],
@@ -395,10 +260,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: filtered.length,
+              itemCount: complaints.take(5).length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final item = filtered[index];
+                final item = complaints.take(5).toList()[index];
                 return _buildComplaintTile(context, item);
               },
             ),
@@ -408,46 +273,6 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
     );
   }
 
-  Widget _buildFilterChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onSelected,
-    IconData? icon,
-  }) {
-    return ChoiceChip(
-      avatar: icon != null ? Icon(icon, size: 14, color: isSelected ? Colors.white : AppColors.textSecondary) : null,
-      label: Text(label),
-      selected: isSelected,
-      selectedColor: const Color(0xFF1E1B4B),
-      backgroundColor: const Color(0xFFF1F5F9),
-      labelStyle: TextStyle(
-        fontFamily: 'Inter',
-        fontSize: 12,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-        color: isSelected ? Colors.white : AppColors.textSecondary,
-      ),
-      onSelected: (_) => onSelected(),
-    );
-  }
-
-  Widget _buildStatusFilterChip(String label, String statusKey, {Color? color}) {
-    final isSelected = _selectedStatus == statusKey;
-    final chipColor = color ?? const Color(0xFF1E1B4B);
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      selectedColor: chipColor,
-      backgroundColor: const Color(0xFFF1F5F9),
-      labelStyle: TextStyle(
-        fontFamily: 'Inter',
-        fontSize: 12,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-        color: isSelected ? Colors.white : AppColors.textSecondary,
-      ),
-      onSelected: (_) => setState(() => _selectedStatus = statusKey),
-    );
-  }
 
   Widget _buildKpiCard({
     required String title,
@@ -464,7 +289,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -489,7 +314,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.12),
+                  color: badgeColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: badgeColor, size: 18),
@@ -555,7 +380,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -612,7 +437,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
+                    color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -698,6 +523,145 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProductComplaintsChart(List<Complaint> complaints) {
+    if (complaints.isEmpty) return const SizedBox.shrink();
+
+    // Group complaints by product
+    final Map<String, int> productCounts = {};
+    for (var c in complaints) {
+      final p = (c.productName != null && c.productName!.isNotEmpty) ? c.productName! : 'Other Products';
+      productCounts[p] = (productCounts[p] ?? 0) + 1;
+    }
+
+    final sortedEntries = productCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final maxVal = sortedEntries.isNotEmpty ? sortedEntries.first.value : 1;
+
+    final palette = [
+      const Color(0xFF6D28D9),
+      const Color(0xFF3B82F6),
+      const Color(0xFF0D9488),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.bar_chart_rounded, size: 20, color: Color(0xFF6D28D9)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Most Reported Products',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Color(0xFF1E1B4B),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6D28D9).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${sortedEntries.length} Products Tracked',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Distribution of complaints by product line',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 16),
+          ...sortedEntries.take(5).toList().asMap().entries.map((entry) {
+            final idx = entry.key;
+            final pName = entry.value.key;
+            final count = entry.value.value;
+            final pct = (count / complaints.length) * 100;
+            final fill = count / maxVal;
+            final color = palette[idx % palette.length];
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                pName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$count ticket${count > 1 ? "s" : ""} (${pct.toStringAsFixed(1)}%)',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: fill,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.shade100,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

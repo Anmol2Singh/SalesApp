@@ -50,3 +50,9 @@ app.*.map.json
 .env.*
 **/local.properties
 local.properties
+
+# Scratch, debug scripts, dumps & logs
+scratch/
+*.py
+uidump.xml
+logcat.txt

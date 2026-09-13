@@ -39,15 +39,26 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
     try {
       final supabase = ref.read(supabaseClientProvider);
       final response = await supabase.from('complaints').select().order('created_at', ascending: false);
-      if (response.isNotEmpty) {
-        final dbComplaints = (response as List).map((json) => Complaint.fromJson(json)).toList();
-        final existingIds = dbComplaints.map((c) => c.id).toSet();
-        final localOnly = state.where((c) => !existingIds.contains(c.id)).toList();
+      final dbComplaints = (response as List).map((json) => Complaint.fromJson(json)).toList();
+      final existingIds = dbComplaints.map((c) => c.id).toSet();
+      final localOnly = state.where((c) => !existingIds.contains(c.id)).toList();
+
+      if (dbComplaints.isNotEmpty || localOnly.isNotEmpty) {
         final merged = [...localOnly, ...dbComplaints];
         state = merged;
         _saveToLocalCache(merged);
+
+        // Auto-sync any local-only complaints to Supabase database
+        for (final c in localOnly) {
+          try {
+            await supabase.from('complaints').upsert(c.toJson());
+          } catch (e) {
+            print('Syncing local complaint ${c.ticketNumber} to DB failed: $e');
+          }
+        }
       }
-    } catch (_) {
+    } catch (e) {
+      print('Error loading complaints from Supabase: $e');
     } finally {
       ref.read(complaintsLoadingProvider.notifier).state = false;
     }
@@ -91,8 +102,42 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       _saveToLocalCache(state);
 
       await supabase.from('complaints').upsert(updatedComplaint.toJson());
+
+      // Cross-module customer details sync
+      if (updatedComplaint.customerId.isNotEmpty) {
+        try {
+          await supabase.from('customers').update({
+            if (updatedComplaint.customerName.isNotEmpty) 'customer_name': updatedComplaint.customerName,
+            if (updatedComplaint.customerPhone.isNotEmpty) 'phone': updatedComplaint.customerPhone,
+            if (updatedComplaint.customerAddress.isNotEmpty) 'address': updatedComplaint.customerAddress,
+          }).eq('id', updatedComplaint.customerId);
+        } catch (_) {}
+      }
     } catch (e) {
       print('Error saving complaint: $e');
+    }
+  }
+
+  Future<void> updateComplaint(Complaint updatedComplaint) async {
+    state = state.map((c) => c.id == updatedComplaint.id ? updatedComplaint : c).toList();
+    _saveToLocalCache(state);
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('complaints').update(updatedComplaint.toJson()).eq('id', updatedComplaint.id);
+
+      // Also sync customer details across modules
+      if (updatedComplaint.customerId.isNotEmpty) {
+        try {
+          await supabase.from('customers').update({
+            if (updatedComplaint.customerName.isNotEmpty) 'customer_name': updatedComplaint.customerName,
+            if (updatedComplaint.customerPhone.isNotEmpty) 'phone': updatedComplaint.customerPhone,
+            if (updatedComplaint.customerAddress.isNotEmpty) 'address': updatedComplaint.customerAddress,
+          }).eq('id', updatedComplaint.customerId);
+        } catch (_) {}
+      }
+    } catch (e) {
+      print('Error updating complaint in DB: $e');
     }
   }
 
@@ -116,7 +161,7 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
         'status': 'assigned',
         'technician_name': technician.name,
         'technician_avatar_url': technician.avatarUrl,
-        'technician_id': technician.id,
+        'technician_id': (technician.id.trim().isNotEmpty && technician.id.trim() != 'null') ? technician.id.trim() : null,
       }).eq('id', complaintId);
     } catch (e) {
       print('Error assigning technician in DB: $e');
@@ -378,3 +423,89 @@ final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) 
     return allTechs;
   }
 });
+
+class ErrorCodesNotifier extends StateNotifier<List<ErrorCodeItem>> {
+  final Ref ref;
+
+  ErrorCodesNotifier(this.ref) : super([]) {
+    load();
+  }
+
+  Future<void> load() async {
+    final defaultCodes = [
+      ErrorCodeItem(id: '1', code: 'E01', description: 'Compressor Overheating / Thermal Trip'),
+      ErrorCodeItem(id: '2', code: 'E02', description: 'Low Water Flow Rate / Circulation Error'),
+      ErrorCodeItem(id: '3', code: 'E03', description: 'High Refrigerant Pressure Cutoff'),
+      ErrorCodeItem(id: '4', code: 'E04', description: 'Ambient Temperature Sensor Fault'),
+      ErrorCodeItem(id: '5', code: 'E05', description: 'Inverter Communication Error'),
+      ErrorCodeItem(id: '6', code: 'E06', description: 'Water Leakage Detected'),
+      ErrorCodeItem(id: '7', code: 'E07', description: 'Power Voltage Fluctuation / Under-voltage'),
+    ];
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final res = await supabase.from('complaint_error_codes').select().order('code');
+      if (res.isNotEmpty) {
+        state = (res as List).map((j) => ErrorCodeItem.fromJson(j)).toList();
+        return;
+      }
+    } catch (_) {}
+
+    if (state.isEmpty) {
+      state = defaultCodes;
+    }
+  }
+
+  Future<void> addErrorCode(String code, String description) async {
+    final newItem = ErrorCodeItem(
+      id: const Uuid().v4(),
+      code: code.trim().toUpperCase(),
+      description: description.trim(),
+    );
+    state = [...state, newItem];
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('complaint_error_codes').insert(newItem.toJson());
+    } catch (e) {
+      print('Error adding error code: $e');
+    }
+  }
+
+  Future<void> updateErrorCode(String id, String code, String description) async {
+    final cleanCode = code.trim().toUpperCase();
+    final cleanDesc = description.trim();
+    state = state.map((item) {
+      if (item.id == id) {
+        return ErrorCodeItem(id: id, code: cleanCode, description: cleanDesc);
+      }
+      return item;
+    }).toList();
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('complaint_error_codes').update({
+        'code': cleanCode,
+        'description': cleanDesc,
+      }).eq('id', id);
+    } catch (e) {
+      print('Error updating error code: $e');
+    }
+  }
+
+  Future<void> deleteErrorCode(String id) async {
+    state = state.where((item) => item.id != id).toList();
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('complaint_error_codes').delete().eq('id', id);
+    } catch (e) {
+      print('Error deleting error code: $e');
+    }
+  }
+}
+
+final errorCodesProvider = StateNotifierProvider<ErrorCodesNotifier, List<ErrorCodeItem>>((ref) {
+  return ErrorCodesNotifier(ref);
+});
+

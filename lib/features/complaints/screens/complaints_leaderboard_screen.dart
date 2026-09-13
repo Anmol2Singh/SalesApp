@@ -102,27 +102,46 @@ class _ComplaintsLeaderboardScreenState extends ConsumerState<ComplaintsLeaderbo
                   const SizedBox(height: 24),
                 ],
 
-                // Sort Filter Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Sort Filter Section
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'All Technicians (${sorted.length})',
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildSortChip('Resolved', 'resolved', Icons.check_circle_outline),
-                        const SizedBox(width: 8),
-                        _buildSortChip('Fastest TAT', 'tat', Icons.timer_outlined),
-                        const SizedBox(width: 8),
-                        _buildSortChip('Rating', 'rating', Icons.star_outline),
+                        Text(
+                          'All Technicians (${sorted.length})',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Sort by:',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          _buildSortChip('Resolved', 'resolved', Icons.check_circle_outline),
+                          const SizedBox(width: 8),
+                          _buildSortChip('Fastest TAT', 'tat', Icons.timer_outlined),
+                          const SizedBox(width: 8),
+                          _buildSortChip('Highest Rating', 'rating', Icons.star_outline),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -243,7 +262,7 @@ class _ComplaintsLeaderboardScreenState extends ConsumerState<ComplaintsLeaderbo
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -358,7 +377,7 @@ class _ComplaintsLeaderboardScreenState extends ConsumerState<ComplaintsLeaderbo
           children: [
             CircleAvatar(
               radius: rank == 1 ? 30 : 25,
-              backgroundColor: medalColor.withOpacity(0.2),
+              backgroundColor: medalColor.withValues(alpha: 0.2),
               child: Text(
                 entry.name.isNotEmpty ? entry.name[0].toUpperCase() : 'T',
                 style: TextStyle(
@@ -399,9 +418,9 @@ class _ComplaintsLeaderboardScreenState extends ConsumerState<ComplaintsLeaderbo
           width: double.infinity,
           margin: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
-            color: medalColor.withOpacity(0.12),
+            color: medalColor.withValues(alpha: 0.12),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-            border: Border.all(color: medalColor.withOpacity(0.3)),
+            border: Border.all(color: medalColor.withValues(alpha: 0.3)),
           ),
           child: Center(
             child: Text(
@@ -475,7 +494,7 @@ class _ComplaintsLeaderboardScreenState extends ConsumerState<ComplaintsLeaderbo
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.12),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

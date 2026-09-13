@@ -36,7 +36,7 @@ class BookingsListScreen extends ConsumerWidget {
       backgroundColor: scaffoldBg,
       appBar: AppBar(
         title: Text(
-          'My Bookings',
+          'My Complaints',
           style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
         backgroundColor: scaffoldBg,
@@ -66,10 +66,10 @@ class BookingsListScreen extends ConsumerWidget {
                     Center(
                       child: Column(
                         children: [
-                          Icon(Icons.calendar_today_outlined, size: 64, color: subtitleColor),
+                          Icon(Icons.assignment_outlined, size: 64, color: subtitleColor),
                           const SizedBox(height: 16),
                           Text(
-                            'No bookings yet',
+                            'No complaints yet',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -78,7 +78,7 @@ class BookingsListScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Tap + to raise a service request',
+                            'Tap + to register a complaint',
                             style: TextStyle(color: subtitleColor),
                           ),
                         ],

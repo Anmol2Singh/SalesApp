@@ -39,7 +39,10 @@ import '../../features/complaints/screens/technician_dashboard_screen.dart';
 import '../../features/complaints/screens/assign_technician_screen.dart';
 import '../../features/complaints/screens/service_history_screen.dart';
 import '../../features/complaints/screens/complaint_details_screen.dart';
+import '../../features/complaints/screens/complaints_list_screen.dart';
 import '../../features/complaints/screens/technicians_tab_screen.dart';
+import '../../features/complaints/screens/error_codes_configuration_screen.dart';
+import '../../features/complaints/screens/edit_complaint_screen.dart';
 import '../../features/crm/widgets/crm_shell.dart';
 import '../../features/crm/screens/crm_dashboard_screen.dart';
 import '../../features/crm/screens/prospects_list_screen.dart';
@@ -95,6 +98,7 @@ class AppRoutes {
   static const String bookComplaint = '/complaints/book';
   static const String assignTechnician = '/complaints/assign';
   static const String serviceHistory = '/complaints/history';
+  static const String complaintsList = '/complaints';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -322,6 +326,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/complaints/technicians',
             builder: (context, state) => const TechniciansTabScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.complaintsList,
+            builder: (context, state) => const ComplaintsListScreen(),
+          ),
         ],
       ),
       // Detail/Form views (Full screen)
@@ -330,6 +338,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return ComplaintDetailsScreen(complaintId: id);
+        },
+      ),
+      GoRoute(
+        path: '/complaints/error-codes',
+        builder: (context, state) => const ErrorCodesConfigurationScreen(),
+      ),
+      GoRoute(
+        path: '/complaints/edit/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return EditComplaintScreen(complaintId: id);
         },
       ),
       GoRoute(

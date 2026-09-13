@@ -1,6 +1,8 @@
+import os
 import psycopg2
 
-conn_str = "dbname='postgres' user='postgres' host='db.dnhbtkhcjpkthvyhyzmt.supabase.co' password='CHTxPuCOTxh2eD5K' port='5432'"
+db_password = os.environ.get("SUPABASE_DB_PASSWORD", "")
+conn_str = f"dbname='postgres' user='postgres' host='db.dnhbtkhcjpkthvyhyzmt.supabase.co' password='{db_password}' port='5432'"
 
 alter_sql = """
 ALTER TABLE quotations

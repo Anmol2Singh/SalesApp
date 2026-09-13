@@ -162,11 +162,21 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
       
       if (response != null) {
         var profile = Profile.fromJson(response);
-        if (profile.primaryRole == UserRole.customer) {
+        yield profile;
+      } else {
+        // Try customer_profiles table first
+        final custResponse = await supabase
+            .from('customer_profiles')
+            .select()
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (custResponse != null) {
+          String displayName = custResponse['full_name'] ?? 'Customer';
           final prefs = await SharedPreferences.getInstance();
-          final savedCustPhone = user.phone ?? user.userMetadata?['phone'] ?? prefs.getString('customer_session_phone');
-          if (savedCustPhone != null && savedCustPhone.isNotEmpty) {
-            final cleanDigits = savedCustPhone.replaceAll(RegExp(r'\D'), '');
+          final savedCustPhone = custResponse['phone'] ?? user.phone ?? user.userMetadata?['phone'] ?? prefs.getString('customer_session_phone');
+          if (savedCustPhone != null && savedCustPhone.toString().isNotEmpty) {
+            final cleanDigits = savedCustPhone.toString().replaceAll(RegExp(r'\D'), '');
             if (cleanDigits.isNotEmpty) {
               try {
                 final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
@@ -179,15 +189,27 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
                 if (dbCust != null) {
                   final custName = dbCust['customer_name'] ?? dbCust['contact_person'];
                   if (custName != null && custName.toString().isNotEmpty) {
-                    profile = profile.copyWith(fullName: custName.toString());
+                    displayName = custName.toString();
                   }
                 }
               } catch (_) {}
             }
           }
+
+          yield Profile(
+            id: user.id,
+            fullName: displayName,
+            email: custResponse['email'] ?? user.email ?? '',
+            phone: custResponse['phone'] ?? user.phone,
+            roles: [UserRole.customer],
+            isActive: true,
+            themePreference: custResponse['theme_preference'] ?? 'light',
+            createdAt: custResponse['created_at'] != null ? DateTime.tryParse(custResponse['created_at'].toString()) ?? DateTime.now() : DateTime.now(),
+            updatedAt: custResponse['updated_at'] != null ? DateTime.tryParse(custResponse['updated_at'].toString()) ?? DateTime.now() : DateTime.now(),
+          );
+          continue;
         }
-        yield profile;
-      } else {
+
         // Try technicians table
         final techQuery = supabase.from('technicians').select();
         final techResponse = user.email != null && user.email!.isNotEmpty
@@ -205,7 +227,7 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
             updatedAt: DateTime.now(),
           );
         } else {
-          throw Exception('User not found in profiles or technicians');
+          throw Exception('User not found in profiles, customer_profiles or technicians');
         }
       }
     } catch (e) {

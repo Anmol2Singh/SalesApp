@@ -1,6 +1,7 @@
 // lib/features/factory_order/screens/factory_order_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -28,9 +29,6 @@ class FactoryOrderScreen extends ConsumerStatefulWidget {
 class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _notesController = TextEditingController();
-  final Map<String, TextEditingController> _specControllers = {};
-  final Map<String, String?> _specDropdowns = {};
-  final Map<String, bool> _specBooleans = {};
 
   DateTime? _expectedCompletionDate;
   DateTime? _boqDispatchDate;
@@ -51,9 +49,6 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
   @override
   void dispose() {
     _notesController.dispose();
-    for (final c in _specControllers.values) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -74,25 +69,6 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
           .eq('id', widget.pipelineId)
           .single();
       _pipeline = SalesPipeline.fromJson(pipelineData);
-
-      // Initialize spec fields from product
-      final product = _pipeline!.product;
-      if (product != null) {
-        for (final field in [
-          ...product.baseSpecs.quotationFields,
-          ...product.baseSpecs.boqRequiredFields,
-        ]) {
-          if (field.type == 'text' ||
-              field.type == 'number' ||
-              field.type == 'textarea') {
-            _specControllers[field.key] = TextEditingController();
-          } else if (field.type == 'select') {
-            _specDropdowns[field.key] = null;
-          } else if (field.type == 'boolean') {
-            _specBooleans[field.key] = false;
-          }
-        }
-      }
 
       // Fetch BOQ dispatch date
       final boqData = await supabase
@@ -118,41 +94,9 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
         _notesController.text = _existingOrder!.factoryNotes ?? '';
         _expectedCompletionDate = _existingOrder!.expectedCompletionDate;
         _items = List<FactoryOrderItem>.from(_existingOrder!.items);
-
-        _existingOrder!.productionSpecs.forEach((key, value) {
-          if (_specControllers.containsKey(key)) {
-            _specControllers[key]!.text = value?.toString() ?? '';
-          } else if (_specDropdowns.containsKey(key)) {
-            _specDropdowns[key] = value?.toString();
-          } else if (_specBooleans.containsKey(key)) {
-            _specBooleans[key] = value == true || value == 'true';
-          }
-        });
       } else {
         _isEditing = true;
         _items = [];
-        // Pre-fill from BOQ extra_fields if available
-        final boqData = await supabase
-            .from('boqs')
-            .select()
-            .eq('pipeline_id', widget.pipelineId)
-            .maybeSingle();
-
-        if (boqData != null) {
-          final extraFields =
-              (boqData)['extra_fields'] as Map<String, dynamic>?;
-          if (extraFields != null) {
-            extraFields.forEach((key, value) {
-              if (_specControllers.containsKey(key)) {
-                _specControllers[key]!.text = value?.toString() ?? '';
-              } else if (_specDropdowns.containsKey(key)) {
-                _specDropdowns[key] = value?.toString();
-              } else if (_specBooleans.containsKey(key)) {
-                _specBooleans[key] = value == true || value == 'true';
-              }
-            });
-          }
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -196,15 +140,6 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
     }
 
     final specs = <String, dynamic>{};
-    for (final e in _specControllers.entries) {
-      specs[e.key] = e.value.text.trim().isEmpty ? null : e.value.text.trim();
-    }
-    for (final e in _specDropdowns.entries) {
-      specs[e.key] = e.value;
-    }
-    for (final e in _specBooleans.entries) {
-      specs[e.key] = e.value;
-    }
 
     setState(() => _isSaving = true);
 
@@ -344,6 +279,88 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _showChangeQtyDialog(int idx, FactoryOrderItem item) {
+    final currentQty = item.qty.toInt() <= 0 ? 1 : item.qty.toInt();
+    final controller = TextEditingController(text: currentQty.toString());
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.text.length,
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text(
+          'Change Quantity',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: Color(0xFF1E1B4B),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.itemName,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Quantity (units)',
+                hintText: 'Enter quantity',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = int.tryParse(controller.text.trim());
+              if (val != null && val > 0) {
+                setState(() {
+                  _items[idx] = FactoryOrderItem(
+                    itemName: item.itemName,
+                    qty: val.toDouble(),
+                    remarks: item.remarks,
+                  );
+                });
+                Navigator.pop(ctx);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid quantity (minimum 1)'),
+                    backgroundColor: AppColors.error,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddManufacturingItemSheet() {
@@ -684,7 +701,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primarySurface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -781,55 +798,6 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Production specs (all fields)
-            if (_pipeline?.product != null) ...[
-              const Text(
-                'Production Specifications',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...[
-                ..._pipeline!.product!.baseSpecs.quotationFields,
-                ..._pipeline!.product!.baseSpecs.boqRequiredFields,
-              ].map((field) {
-                if (field.type == 'select' && field.options != null) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _specDropdowns[field.key],
-                      decoration: InputDecoration(labelText: field.label),
-                      items: field.options!
-                          .map(
-                              (o) => DropdownMenuItem(value: o, child: Text(o)))
-                          .toList(),
-                      onChanged: !enabled
-                          ? null
-                          : (val) =>
-                              setState(() => _specDropdowns[field.key] = val),
-                    ),
-                  );
-                }
-                final ctrl = _specControllers[field.key];
-                if (ctrl == null) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: ctrl,
-                    enabled: enabled,
-                    keyboardType: field.type == 'number'
-                        ? TextInputType.number
-                        : TextInputType.text,
-                    decoration: InputDecoration(labelText: field.label),
-                  ),
-                );
-              }),
-              const SizedBox(height: 8),
-            ],
-
             // Manufacturing Items Section
             const Text(
               'Items to Manufacture',
@@ -857,6 +825,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
               ..._items.asMap().entries.map((entry) {
                 final idx = entry.key;
                 final item = entry.value;
+                final currentQty = item.qty.toInt() <= 0 ? 1 : item.qty.toInt();
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
@@ -869,47 +839,109 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Text(
+                          item.itemName,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Stepper: [-]  [Qty]  [+]
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              item.itemName,
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                            // Decrement button (-)
+                            InkWell(
+                              borderRadius: const BorderRadius.horizontal(left: Radius.circular(7)),
+                              onTap: !enabled || currentQty <= 1
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _items[idx] = FactoryOrderItem(
+                                          itemName: item.itemName,
+                                          qty: (currentQty - 1).toDouble(),
+                                          remarks: item.remarks,
+                                        );
+                                      });
+                                    },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Icon(
+                                  Icons.remove,
+                                  size: 16,
+                                  color: !enabled || currentQty <= 1
+                                      ? Colors.grey.shade400
+                                      : const Color(0xFF1E1B4B),
+                                ),
+                              ),
+                            ),
+                            // Click to change Qty (strictly integer, no decimals)
+                            InkWell(
+                              onTap: !enabled ? null : () => _showChangeQtyDialog(idx, item),
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 44),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.symmetric(
+                                    vertical: BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                ),
+                                child: Text(
+                                  '$currentQty',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E1B4B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Increment button (+)
+                            InkWell(
+                              borderRadius: const BorderRadius.horizontal(right: Radius.circular(7)),
+                              onTap: !enabled
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _items[idx] = FactoryOrderItem(
+                                          itemName: item.itemName,
+                                          qty: (currentQty + 1).toDouble(),
+                                          remarks: item.remarks,
+                                        );
+                                      });
+                                    },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Icon(
+                                  Icons.add,
+                                  size: 16,
+                                  color: !enabled
+                                      ? Colors.grey.shade400
+                                      : const Color(0xFF1E1B4B),
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 80,
-                        child: TextFormField(
-                          initialValue: item.qty.toString(),
-                          enabled: enabled,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Qty',
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          ),
-                          onChanged: (val) {
-                            final parsed = double.tryParse(val) ?? 1.0;
-                            _items[idx] = FactoryOrderItem(
-                              itemName: item.itemName,
-                              qty: parsed,
-                              remarks: item.remarks,
-                            );
-                          },
-                        ),
-                      ),
                       if (enabled) ...[
                         const SizedBox(width: 8),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                          icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                          tooltip: 'Remove Item',
                           onPressed: () {
                             setState(() {
                               _items.removeAt(idx);

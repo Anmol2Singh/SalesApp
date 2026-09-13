@@ -233,9 +233,42 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _customerNameController.text = leadData['prospect_name'] ?? '';
         _customerPhoneController.text = leadData['contact_phone'] ?? '';
         _shippingNameController.text = _customerNameController.text;
+        _partyContactPersonController.text = leadData['prospect_name'] ?? '';
         _placeOfSupplyController.text = 'Maharashtra';
         if (profile != null) {
           _salesmanController.text = profile.fullName;
+        }
+
+        // Fetch Prospect address for Billing and Shipping Address
+        String prospectAddress = '';
+        if (leadData['prospect_id'] != null) {
+          try {
+            final pRes = await supabase
+                .from('crm_prospects')
+                .select('address')
+                .eq('id', leadData['prospect_id'])
+                .maybeSingle();
+            if (pRes != null && pRes['address'] != null) {
+              prospectAddress = pRes['address'].toString().trim();
+            }
+          } catch (_) {}
+        }
+        if (prospectAddress.isEmpty && leadData['prospect_name'] != null) {
+          try {
+            final pRes = await supabase
+                .from('crm_prospects')
+                .select('address')
+                .eq('name', leadData['prospect_name'])
+                .maybeSingle();
+            if (pRes != null && pRes['address'] != null) {
+              prospectAddress = pRes['address'].toString().trim();
+            }
+          } catch (_) {}
+        }
+
+        if (prospectAddress.isNotEmpty) {
+          _billingAddressController.text = prospectAddress;
+          _shippingAddressController.text = prospectAddress;
         }
 
         // Determine next revision number for this lead

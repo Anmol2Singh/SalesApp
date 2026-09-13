@@ -1,4 +1,7 @@
+import os
 import psycopg2
+
+db_password = os.environ.get("SUPABASE_DB_PASSWORD", "")
 
 sql = """
 CREATE OR REPLACE FUNCTION update_user_roles(
@@ -49,7 +52,7 @@ $$;
 conn = psycopg2.connect(
     dbname='postgres',
     user='postgres',
-    password='CHTxPuCOTxh2eD5K',
+    password=db_password,
     host='db.dnhbtkhcjpkthvyhyzmt.supabase.co',
     port='5432'
 )

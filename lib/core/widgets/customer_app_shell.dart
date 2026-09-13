@@ -55,7 +55,7 @@ class _CustomerAppShellState extends State<CustomerAppShell> {
 
     final items = [
       {'icon': Icons.home_outlined, 'selectedIcon': Icons.home, 'label': 'Home', 'route': '/customer/dashboard'},
-      {'icon': Icons.calendar_today_outlined, 'selectedIcon': Icons.calendar_today, 'label': 'Bookings', 'route': '/bookings'},
+      {'icon': Icons.assignment_outlined, 'selectedIcon': Icons.assignment, 'label': 'Complaints', 'route': '/bookings'},
       {'icon': Icons.location_on_outlined, 'selectedIcon': Icons.location_on, 'label': 'Track', 'route': '/track'},
       {'icon': Icons.receipt_long_outlined, 'selectedIcon': Icons.receipt_long, 'label': 'Invoices', 'route': '/invoices'},
       {'icon': Icons.chat_bubble_outline, 'selectedIcon': Icons.chat_bubble, 'label': 'Support', 'route': '/support'},
@@ -231,9 +231,9 @@ class _CustomerAppShellState extends State<CustomerAppShell> {
                 label: 'Home',
               ),
               BottomNavigationBarItem(
-                icon: const Icon(Icons.calendar_today_outlined),
-                activeIcon: Icon(Icons.calendar_today, color: selectedCol),
-                label: 'Bookings',
+                icon: const Icon(Icons.assignment_outlined),
+                activeIcon: Icon(Icons.assignment, color: selectedCol),
+                label: 'Complaints',
               ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.location_on_outlined),

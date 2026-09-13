@@ -323,7 +323,8 @@ class AppShell extends ConsumerWidget {
     // On mobile, we MUST split the nav items to avoid bottom bar overflow (max 5 items)
     bool hasAdminOrManagerOrServiceHead = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead);
     if (!isWide && hasAdminOrManagerOrServiceHead && isComplaintsRoute) {
-      addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.report_problem_outlined), selectedIcon: Icon(Icons.report_problem)));
+      addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
       addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
       addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
       addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
@@ -341,7 +342,8 @@ class AppShell extends ConsumerWidget {
           addItem(const _NavItem(route: AppRoutes.userManagement, label: 'Admin', icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings)));
           if (isWide) {
             addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
-            addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.report_problem_outlined), selectedIcon: Icon(Icons.report_problem)));
+            addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+            addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
             addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
             addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
             addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
@@ -360,7 +362,8 @@ class AppShell extends ConsumerWidget {
           addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
           break;
         case UserRole.serviceHead:
-          addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.report_problem_outlined), selectedIcon: Icon(Icons.report_problem)));
+          addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+          addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
           addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
           addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
           addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));

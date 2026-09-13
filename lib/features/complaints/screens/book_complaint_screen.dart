@@ -27,8 +27,11 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _addressController = TextEditingController();
+  final _sealNumberBeforeController = TextEditingController();
   String _selectedPriority = 'High Priority';
   String? _selectedReplacementReason;
+  String? _selectedErrorCode;
+  String? _selectedErrorDesc;
   final List<String> _replacementReasons = [
     'Voltage issue',
     'System Warranty over',
@@ -48,6 +51,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
     _titleController.dispose();
     _descController.dispose();
     _addressController.dispose();
+    _sealNumberBeforeController.dispose();
     super.dispose();
   }
 
@@ -188,6 +192,13 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       return;
     }
 
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a Complaint Title (Compulsory)')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     List<String> finalUrls = [];
@@ -203,13 +214,29 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
     final ticketNum = await generateNextTicketNumber(ref);
     final chosenProduct = _selectedProducts.isNotEmpty ? _selectedProducts.first : null;
     final fullTitle = chosenProduct != null
-        ? '$chosenProduct - ${_titleController.text.trim().isEmpty ? "Service Request" : _titleController.text.trim()}'
-        : (_titleController.text.trim().isEmpty ? "Service Request" : _titleController.text.trim());
+        ? '$chosenProduct - ${_titleController.text.trim()}'
+        : _titleController.text.trim();
 
     final baseDesc = _descController.text.trim();
     final fullDescription = _selectedReplacementReason != null
         ? 'Reason for part replacement: $_selectedReplacementReason\n\n$baseDesc'
         : baseDesc;
+
+    final updatedAddress = _addressController.text.trim().isEmpty
+        ? (_selectedCustomer!.address ?? '')
+        : _addressController.text.trim();
+
+    // Cross-sync address to customers table if changed
+    try {
+      if (updatedAddress.isNotEmpty && updatedAddress != _selectedCustomer!.address) {
+        final supabase = ref.read(supabaseClientProvider);
+        await supabase.from('customers').update({
+          'address': updatedAddress,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', _selectedCustomer!.id);
+        ref.invalidate(customersNotifierProvider);
+      }
+    } catch (_) {}
 
     final newComplaint = Complaint(
       id: Uuid().v4(),
@@ -217,9 +244,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       customerId: _selectedCustomer!.id,
       customerName: _selectedCustomer!.companyName,
       customerPhone: _selectedCustomer!.phone ?? '',
-      customerAddress: _addressController.text.trim().isEmpty
-          ? (_selectedCustomer!.address ?? '')
-          : _addressController.text.trim(),
+      customerAddress: updatedAddress,
       productName: chosenProduct,
       hasActiveAmc: true,
       amcExpiry: 'Active Contract',
@@ -232,6 +257,11 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       technicianName: _selectedTechnician!.name,
       tatRemaining: '24h TAT',
       beforeImageUrl: finalUrls.isNotEmpty ? finalUrls.join('|||') : null,
+      errorCode: _selectedErrorCode,
+      errorDescription: _selectedErrorDesc,
+      sealNumberBefore: _sealNumberBeforeController.text.trim().isEmpty
+          ? null
+          : _sealNumberBeforeController.text.trim(),
       createdAt: DateTime.now(),
     );
 
@@ -321,6 +351,12 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
                       if (_currentStep == 0 && _selectedCustomer == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please select a customer from the list')),
+                        );
+                        return;
+                      }
+                      if (_currentStep == 1 && _titleController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Complaint Title is required')),
                         );
                         return;
                       }
@@ -529,11 +565,55 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           TextField(
             controller: _titleController,
             decoration: InputDecoration(
-              labelText: 'Complaint Title / Category',
+              labelText: 'Complaint Title / Category *',
               hintText: 'e.g. Heating failure, Pressure Leak, Inverter Error',
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Searchable Error Code Dropdown
+          Builder(
+            builder: (context) {
+              final errorCodes = ref.watch(errorCodesProvider);
+              return SearchableDropdown<ErrorCodeItem>(
+                label: 'Error Code (Optional)',
+                value: _selectedErrorCode != null
+                    ? errorCodes.cast<ErrorCodeItem?>().firstWhere((e) => e?.code == _selectedErrorCode, orElse: () => null)
+                    : null,
+                items: errorCodes,
+                itemLabel: (e) => '${e.code} - ${e.description}',
+                onChanged: (item) {
+                  setState(() {
+                    _selectedErrorCode = item?.code;
+                    _selectedErrorDesc = item?.description;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Error Code (Optional)',
+                  hintText: 'Search or select error code (e.g. E01)',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.code_rounded, color: Color(0xFF6D28D9)),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+
+          // Seal Number (Before Service)
+          TextField(
+            controller: _sealNumberBeforeController,
+            decoration: InputDecoration(
+              labelText: 'Seal Number (Before Service) - Optional',
+              hintText: 'e.g. SL-9042',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF6D28D9)),
             ),
           ),
           const SizedBox(height: 14),

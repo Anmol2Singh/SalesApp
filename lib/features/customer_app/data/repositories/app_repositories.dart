@@ -622,7 +622,7 @@ class SupabaseAuthRepository implements AuthRepository {
     if (_isMockMode || uid.startsWith('mock-user-')) {
       try {
         final response = await _supabase
-            .from('profiles')
+            .from('customer_profiles')
             .select();
         
         for (final row in response as List) {
@@ -650,18 +650,30 @@ class SupabaseAuthRepository implements AuthRepository {
       };
     }
 
-    final response = await _supabase
-        .from('profiles')
+    var response = await _supabase
+        .from('customer_profiles')
         .select()
         .eq('id', uid)
-        .single();
+        .maybeSingle();
+
+    if (response == null) {
+      response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', uid)
+          .maybeSingle();
+    }
+
+    final fullName = response?['full_name'] ?? 'Customer';
+    final pPhone = response?['phone'] ?? _pendingPhone ?? '';
+    final pEmail = response?['email'] ?? '';
 
     return {
-      'name': response['full_name'] ?? 'Customer',
-      'phone': response['phone'] ?? _pendingPhone ?? '',
-      'email': response['email'] ?? '',
+      'name': fullName,
+      'phone': pPhone,
+      'email': pEmail,
       'avatarUrl':
-          'https://api.dicebear.com/7.x/adventurer/svg?seed=${(response['full_name'] ?? 'Jane').replaceAll(' ', '')}',
+          'https://api.dicebear.com/7.x/adventurer/svg?seed=${fullName.replaceAll(' ', '')}',
       'savedAddresses': [],
       'preferenceSettings': {'push': true, 'sms': true, 'email': false},
     };
@@ -680,10 +692,19 @@ class SupabaseAuthRepository implements AuthRepository {
       return;
     }
 
-    await _supabase
-        .from('profiles')
-        .update({'full_name': name, 'email': email})
-        .eq('id', uid);
+    try {
+      await _supabase
+          .from('customer_profiles')
+          .update({'full_name': name, 'email': email})
+          .eq('id', uid);
+    } catch (_) {
+      try {
+        await _supabase
+            .from('profiles')
+            .update({'full_name': name, 'email': email})
+            .eq('id', uid);
+      } catch (_) {}
+    }
   }
 }
 
@@ -754,12 +775,20 @@ class SupabaseCustomerRepository implements CustomerRepository {
     String fullName = 'Customer (${phone ?? email})';
     if (currentUser?.id != null && !currentUser!.id.startsWith('mock-user-')) {
       try {
-        final profile = await _supabase
-            .from('profiles')
+        var profile = await _supabase
+            .from('customer_profiles')
             .select('full_name, email, phone')
             .eq('id', currentUser.id)
             .limit(1)
             .maybeSingle();
+        if (profile == null) {
+          profile = await _supabase
+              .from('profiles')
+              .select('full_name, email, phone')
+              .eq('id', currentUser.id)
+              .limit(1)
+              .maybeSingle();
+        }
         if (profile != null) {
           fullName = profile['full_name'] ?? fullName;
           final pName = (profile['full_name'] as String? ?? '').trim().toLowerCase();
@@ -826,11 +855,18 @@ class SupabaseCustomerRepository implements CustomerRepository {
       try {
         final currentUid = _supabase.auth.currentUser?.id;
         if (currentUid != null && !currentUid.startsWith('mock-user-')) {
-          final profile = await _supabase
-              .from('profiles')
+          var profile = await _supabase
+              .from('customer_profiles')
               .select('full_name, email, phone')
               .eq('id', currentUid)
               .maybeSingle();
+          if (profile == null) {
+            profile = await _supabase
+                .from('profiles')
+                .select('full_name, email, phone')
+                .eq('id', currentUid)
+                .maybeSingle();
+          }
           if (profile != null) {
             userEmail = (profile['email'] as String?)?.trim().toLowerCase() ?? userEmail;
             userName = (profile['full_name'] as String?)?.trim().toLowerCase();
@@ -1306,33 +1342,42 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
   @override
   Future<List<ServiceRequest>> getServiceRequests() async {
-    final currentUser = _supabase.auth.currentUser;
-    if (currentUser == null) return [];
-
     final list = <ServiceRequest>[];
     final seenIds = <String>{};
 
     try {
       final customerId = await _resolveCustomerId();
+      final prefs = await SharedPreferences.getInstance();
+      final savedPhone = prefs.getString('customer_session_phone') ?? _supabase.auth.currentUser?.phone ?? '';
+      final cleanCustPhone = savedPhone.replaceAll(RegExp(r'\D'), '');
+      final last10CustPhone = cleanCustPhone.length >= 10 ? cleanCustPhone.substring(cleanCustPhone.length - 10) : cleanCustPhone;
 
       // 1. Fetch complaints from public.complaints
       try {
         final complaintsRes = await _supabase
             .from('complaints')
-            .select('''
-              *,
-              profiles!complaints_created_by_fkey (full_name, role)
-            ''')
-            .eq('customer_id', customerId)
+            .select()
             .order('created_at', ascending: false);
 
         for (final item in complaintsRes as List) {
           final id = item['id'] as String;
           if (seenIds.contains(id)) continue;
+
+          final itemCustId = item['customer_id']?.toString() ?? '';
+          final itemCustPhone = (item['customer_phone']?.toString() ?? '').replaceAll(RegExp(r'\D'), '');
+
+          // Check if matches resolved customerId OR customer phone
+          final matchesId = itemCustId.isNotEmpty && itemCustId == customerId;
+          final matchesPhone = cleanCustPhone.isNotEmpty && itemCustPhone.isNotEmpty &&
+              (itemCustPhone == cleanCustPhone || itemCustPhone.endsWith(cleanCustPhone) || cleanCustPhone.endsWith(itemCustPhone) ||
+               (last10CustPhone.isNotEmpty && itemCustPhone.endsWith(last10CustPhone)));
+
+          if (!matchesId && !matchesPhone) continue;
+
           seenIds.add(id);
 
           final ticketNumber = item['ticket_number'] as String? ?? '#CMP';
-          final title = item['title'] as String? ?? item['category'] as String? ?? 'Service Request';
+          final title = item['title'] as String? ?? item['category'] as String? ?? 'Service Complaint';
           final desc = item['description'] as String? ?? '';
           final status = (item['status'] as String? ?? 'pending').toLowerCase();
           final techId = item['assigned_to'] as String? ?? item['technician_id'] as String?;
@@ -1341,17 +1386,6 @@ class SupabaseCustomerRepository implements CustomerRepository {
           final createdAtStr = item['created_at'] as String?;
           final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
           final hasAmc = item['has_active_amc'] == true;
-
-          // Check who registered it
-          String? registeredBy;
-          final createdById = item['created_by'] as String?;
-          final creatorProfile = item['profiles'] as Map<String, dynamic>?;
-          if (creatorProfile?['full_name'] != null && (creatorProfile!['full_name'] as String).isNotEmpty) {
-            final creatorRole = creatorProfile['role'] != null ? ' (${creatorProfile['role'].toString().toUpperCase()})' : '';
-            registeredBy = '${creatorProfile['full_name']}$creatorRole';
-          } else if (createdById != null && createdById != currentUser.id) {
-            registeredBy = 'Admin / Staff';
-          }
 
           final beforeImg = item['before_image_url'] as String?;
           final List<String> photoUrls = [];
@@ -1365,7 +1399,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
           list.add(ServiceRequest(
             requestId: id,
-            customerId: customerId,
+            customerId: customerId.isNotEmpty ? customerId : itemCustId,
             productId: item['product_name'] as String? ?? 'Solar System',
             problemCode: ticketNumber,
             issueCategory: title,
@@ -1376,7 +1410,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
             technicianId: techId,
             technicianName: techName,
             technicianPhone: techPhone,
-            registeredBy: registeredBy,
+            registeredBy: item['source'] == 'customer' ? 'Customer App' : 'Company Staff / Admin',
             status: status,
             warrantyStatus: 'Standard',
             amcStatus: hasAmc ? 'AMC Active' : 'AMC Expired',
@@ -1390,33 +1424,34 @@ class SupabaseCustomerRepository implements CustomerRepository {
       }
 
       // 2. Fetch from bookings table if existing
-      try {
-        final bookingsRes = await _supabase
-            .from('bookings')
-            .select('*, amc_contracts(*, products(*))')
-            .eq('customer_id', currentUser.id)
-            .order('scheduled_date', ascending: false);
+      if (customerId.isNotEmpty) {
+        try {
+          final bookingsRes = await _supabase
+              .from('bookings')
+              .select('*, amc_contracts(*, products(*))')
+              .eq('customer_id', customerId)
+              .order('scheduled_date', ascending: false);
 
-        for (final item in bookingsRes as List) {
-          final bookingId = item['id'] as String;
-          if (seenIds.contains(bookingId)) continue;
-          seenIds.add(bookingId);
+          for (final item in bookingsRes as List) {
+            final bookingId = item['id'] as String;
+            if (seenIds.contains(bookingId)) continue;
+            seenIds.add(bookingId);
 
-          final deviceId = item['device_id'] as String? ?? '';
-          final problemCode = item['problem_code'] as String? ?? '#SRV';
-          final issueCategory = item['issue_category'] as String? ?? 'Service';
-          final issueDescription = item['notes'] as String? ?? '';
-          final photoUrls = List<String>.from(item['photo_urls'] ?? []);
-          final scheduledDate = DateTime.tryParse(item['scheduled_date'] ?? '') ?? DateTime.now();
-          final timeSlot = item['scheduled_slot'] as String? ?? '10:00 AM';
-          final assignedTo = item['assigned_technician_id'] as String?;
-          final status = item['status'] as String? ?? 'pending';
-          final warrantyStatus = (item['warranty_covered'] as bool? ?? false) ? 'Under Warranty' : 'Expired';
-          final contractData = item['amc_contracts'] as Map<String, dynamic>? ?? {};
+            final deviceId = item['device_id'] as String? ?? '';
+            final problemCode = item['problem_code'] as String? ?? '#SRV';
+            final issueCategory = item['issue_category'] as String? ?? 'Service';
+            final issueDescription = item['notes'] as String? ?? '';
+            final photoUrls = List<String>.from(item['photo_urls'] ?? []);
+            final scheduledDate = DateTime.tryParse(item['scheduled_date'] ?? '') ?? DateTime.now();
+            final timeSlot = item['scheduled_slot'] as String? ?? '10:00 AM';
+            final assignedTo = item['assigned_technician_id'] as String?;
+            final status = item['status'] as String? ?? 'pending';
+            final warrantyStatus = (item['warranty_covered'] as bool? ?? false) ? 'Under Warranty' : 'Expired';
+            final contractData = item['amc_contracts'] as Map<String, dynamic>? ?? {};
 
-          list.add(ServiceRequest(
-            requestId: bookingId,
-            customerId: currentUser.id,
+            list.add(ServiceRequest(
+              requestId: bookingId,
+              customerId: customerId,
             productId: deviceId,
             problemCode: problemCode,
             issueCategory: issueCategory,
@@ -1434,8 +1469,8 @@ class SupabaseCustomerRepository implements CustomerRepository {
           ));
         }
       } catch (_) {}
-
-    } catch (e) {
+    }
+  } catch (e) {
       print("Error in getServiceRequests: $e");
     }
 

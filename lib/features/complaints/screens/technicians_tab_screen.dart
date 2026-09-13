@@ -21,6 +21,13 @@ class TechniciansTabScreen extends ConsumerStatefulWidget {
 }
 
 class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
@@ -332,13 +339,17 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
       appBar: widget.isEmbedded
           ? null
           : AppBar(
-              leading: isAdminOrManager
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      tooltip: 'Back to Admin Panel',
-                      onPressed: () => context.go(AppRoutes.adminDashboard),
-                    )
-                  : null,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                tooltip: 'Back to Complaints Dashboard',
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    context.pop();
+                  } else {
+                    context.go('/complaints/dashboard');
+                  }
+                },
+              ),
               title: const Text(
                 'List of Technicians',
                 style: TextStyle(
@@ -379,13 +390,42 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Search technician name, phone, email...',
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => setState(() => _searchController.clear()),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 16),
               techniciansAsync.when(
                 data: (technicians) {
-                  if (technicians.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
+                  final query = _searchController.text.trim().toLowerCase();
+                  final filtered = query.isEmpty
+                      ? technicians
+                      : technicians.where((t) {
+                          return t.name.toLowerCase().contains(query) ||
+                              (t.phone?.toLowerCase().contains(query) ?? false) ||
+                              (t.email?.toLowerCase().contains(query) ?? false);
+                        }).toList();
+
+                  if (filtered.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Center(
-                        child: Text('No technician accounts created yet. Click below to add your first technician.'),
+                        child: Text(technicians.isEmpty
+                            ? 'No technician accounts created yet. Click below to add your first technician.'
+                            : 'No technicians found matching "$query"'),
                       ),
                     );
                   }
@@ -393,9 +433,9 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                   return ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: technicians.length,
+                    itemCount: filtered.length,
                     itemBuilder: (context, index) {
-                      final tech = technicians[index];
+                      final tech = filtered[index];
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

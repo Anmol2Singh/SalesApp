@@ -42,11 +42,6 @@ class AppThemeModeNotifier extends StateNotifier<ThemeMode> {
             .from('customer_profiles')
             .update({'theme_preference': prefString})
             .eq('id', profile.id);
-
-        await supabase
-            .from('profiles')
-            .update({'theme_preference': prefString})
-            .eq('id', profile.id);
       } else {
         await supabase
             .from('profiles')

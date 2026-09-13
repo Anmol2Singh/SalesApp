@@ -22,6 +22,10 @@ class Complaint {
   final String? afterImageUrl;
   final String? customerSignatureUrl;
   final String? technicianSignatureUrl;
+  final String? sealNumberBefore;
+  final String? sealNumberAfter;
+  final String? errorCode;
+  final String? errorDescription;
   final String source; // 'staff' or 'customer'
   final String? notes;
   final DateTime createdAt;
@@ -48,6 +52,10 @@ class Complaint {
     this.afterImageUrl,
     this.customerSignatureUrl,
     this.technicianSignatureUrl,
+    this.sealNumberBefore,
+    this.sealNumberAfter,
+    this.errorCode,
+    this.errorDescription,
     this.source = 'staff',
     this.notes,
     required this.createdAt,
@@ -76,17 +84,28 @@ class Complaint {
       afterImageUrl: json['after_image_url'] ?? json['afterImageUrl'],
       customerSignatureUrl: json['customer_signature_url'] ?? json['customerSignatureUrl'],
       technicianSignatureUrl: json['technician_signature_url'] ?? json['technicianSignatureUrl'],
+      sealNumberBefore: json['seal_number_before'] ?? json['sealNumberBefore'],
+      sealNumberAfter: json['seal_number_after'] ?? json['sealNumberAfter'],
+      errorCode: json['error_code'] ?? json['errorCode'],
+      errorDescription: json['error_description'] ?? json['errorDescription'],
       source: json['source'] as String? ?? 'staff',
       notes: json['notes'] as String?,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
     );
   }
 
+  static bool _isValidUuid(String? str) {
+    if (str == null) return false;
+    final s = str.trim();
+    if (s.isEmpty || s.toLowerCase() == 'null') return false;
+    return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(s);
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'ticket_number': ticketNumber,
-      'customer_id': customerId,
+      'customer_id': _isValidUuid(customerId) ? customerId.trim() : null,
       'customer_name': customerName,
       'customer_phone': customerPhone,
       'customer_address': customerAddress,
@@ -97,7 +116,7 @@ class Complaint {
       'title': title,
       'description': description,
       'status': status,
-      'technician_id': technicianId,
+      'technician_id': _isValidUuid(technicianId) ? technicianId!.trim() : null,
       'technician_name': technicianName,
       'technician_avatar_url': technicianAvatarUrl,
       'tat_remaining': tatRemaining,
@@ -105,6 +124,10 @@ class Complaint {
       'after_image_url': afterImageUrl,
       'customer_signature_url': customerSignatureUrl,
       'technician_signature_url': technicianSignatureUrl,
+      'seal_number_before': sealNumberBefore,
+      'seal_number_after': sealNumberAfter,
+      'error_code': errorCode,
+      'error_description': errorDescription,
       'source': source,
       'notes': notes,
       'created_at': createdAt.toIso8601String(),
@@ -133,6 +156,10 @@ class Complaint {
     String? afterImageUrl,
     String? customerSignatureUrl,
     String? technicianSignatureUrl,
+    String? sealNumberBefore,
+    String? sealNumberAfter,
+    String? errorCode,
+    String? errorDescription,
     String? source,
     String? notes,
     DateTime? createdAt,
@@ -159,11 +186,45 @@ class Complaint {
       afterImageUrl: afterImageUrl ?? this.afterImageUrl,
       customerSignatureUrl: customerSignatureUrl ?? this.customerSignatureUrl,
       technicianSignatureUrl: technicianSignatureUrl ?? this.technicianSignatureUrl,
+      sealNumberBefore: sealNumberBefore ?? this.sealNumberBefore,
+      sealNumberAfter: sealNumberAfter ?? this.sealNumberAfter,
+      errorCode: errorCode ?? this.errorCode,
+      errorDescription: errorDescription ?? this.errorDescription,
       source: source ?? this.source,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
     );
   }
+}
+
+class ErrorCodeItem {
+  final String id;
+  final String code;
+  final String description;
+
+  ErrorCodeItem({required this.id, required this.code, required this.description});
+
+  factory ErrorCodeItem.fromJson(Map<String, dynamic> json) => ErrorCodeItem(
+    id: json['id']?.toString() ?? '',
+    code: json['code']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'code': code,
+    'description': description,
+  };
+
+  String get displayName => '$code - $description';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ErrorCodeItem && runtimeType == other.runtimeType && code == other.code;
+
+  @override
+  int get hashCode => code.hashCode;
 }
 
 class TechnicianInfo {

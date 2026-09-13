@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/complaints_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import 'complaints_leaderboard_screen.dart';
 
 class TechnicianDashboardScreen extends ConsumerWidget {
   const TechnicianDashboardScreen({super.key});
@@ -52,17 +53,19 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Filter assigned complaints ONLY for this technician
+    // Filter assigned complaints for this technician (Robust matching by ID, Name, and Email)
     final assignedComplaints = complaints.where((c) {
       if (profile == null) return true;
       final pName = profile.fullName.trim().toLowerCase();
+      final pEmail = profile.email.trim().toLowerCase();
       final tName = (c.technicianName ?? '').trim().toLowerCase();
-      final tId = c.technicianId ?? '';
+      final tId = (c.technicianId ?? '').trim();
       
-      final matchesId = tId.isNotEmpty && tId == profile.id;
+      final matchesId = tId.isNotEmpty && (tId == profile.id);
       final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
+      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || (c.notes?.toLowerCase().contains(pEmail) ?? false));
       
-      return matchesId || matchesName;
+      return matchesId || matchesName || matchesEmail;
     }).toList();
 
     final myActiveTasks = assignedComplaints.where((c) => c.status == 'assigned' || c.status == 'in_progress').toList();
@@ -87,6 +90,18 @@ class TechnicianDashboardScreen extends ConsumerWidget {
         backgroundColor: const Color(0xFF1E1B4B),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.leaderboard_outlined, color: Colors.white),
+            tooltip: 'Technician Leaderboard',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => const ComplaintsLeaderboardScreen(isEmbedded: false),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh',
@@ -130,6 +145,18 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.leaderboard_outlined),
+                      tooltip: 'Technician Leaderboard',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (ctx) => const ComplaintsLeaderboardScreen(isEmbedded: false),
+                          ),
+                        );
+                      },
+                    ),
                     IconButton(
                       icon: const Icon(Icons.history_outlined),
                       tooltip: 'My Completed Jobs',

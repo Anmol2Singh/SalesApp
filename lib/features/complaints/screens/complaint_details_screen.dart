@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,6 +21,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/widgets/searchable_dropdown.dart';
 
 class ComplaintDetailsScreen extends ConsumerStatefulWidget {
   final String complaintId;
@@ -445,20 +447,40 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
     }
     return trimmed;
   }
-
-  Future<DateTime> _getCustomerPurchaseDate(String customerId) async {
+  Future<DateTime> _getCustomerPurchaseDate(String customerId, [String? productName]) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
-      final wc = await supabase
+      var query = supabase
           .from('warranty_cards')
-          .select('start_date')
+          .select('start_date, product_name, generated_date, created_at')
+          .eq('customer_id', customerId);
+      if (productName != null && productName.isNotEmpty) {
+        query = query.ilike('product_name', '%$productName%');
+      }
+      final wc = await query.order('created_at', ascending: false).limit(1).maybeSingle();
+      if (wc != null) {
+        final dateStr = wc['generated_date'] ?? wc['start_date'] ?? wc['created_at'];
+        if (dateStr != null) {
+          final parsed = DateTime.tryParse(dateStr.toString());
+          if (parsed != null) return parsed;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final wcFallback = await supabase
+          .from('warranty_cards')
+          .select('start_date, generated_date, created_at')
           .eq('customer_id', customerId)
-          .order('start_date', ascending: false)
+          .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
-      if (wc != null && wc['start_date'] != null) {
-        final parsed = DateTime.tryParse(wc['start_date']);
-        if (parsed != null) return parsed;
+      if (wcFallback != null) {
+        final dateStr = wcFallback['generated_date'] ?? wcFallback['start_date'] ?? wcFallback['created_at'];
+        if (dateStr != null) {
+          final parsed = DateTime.tryParse(dateStr.toString());
+          if (parsed != null) return parsed;
+        }
       }
     } catch (_) {}
 
@@ -488,7 +510,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
       return;
     }
 
-    DateTime purchaseDate = await _getCustomerPurchaseDate(complaint.customerId);
+    DateTime purchaseDate = await _getCustomerPurchaseDate(complaint.customerId, complaint.productName);
     final profile = ref.read(currentProfileProvider);
     final String techName = profile?.fullName ?? 'Technician';
 
@@ -498,381 +520,64 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        InventoryItem? selectedItem = inventoryItems.isNotEmpty ? inventoryItems.first : null;
-        int qty = 1;
-        final reasonController = TextEditingController();
-        List<Map<String, dynamic>> orderItems = [];
-        bool isSubmitting = false;
+      builder: (ctx) => _DefectedPartsOrderSheet(
+        complaint: complaint,
+        inventoryItems: inventoryItems,
+        purchaseDate: purchaseDate,
+        techName: techName,
+      ),
+    );
+  }
 
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            double calculateItemPrice(InventoryItem item) {
-              final expiry = purchaseDate.add(Duration(days: item.warrantyMonths * 30));
-              final inWarranty = DateTime.now().isBefore(expiry);
-              return inWarranty ? 0.0 : item.price;
-            }
-
-            bool checkItemWarranty(InventoryItem item) {
-              final expiry = purchaseDate.add(Duration(days: item.warrantyMonths * 30));
-              return DateTime.now().isBefore(expiry);
-            }
-
-            final currentInWarranty = selectedItem != null ? checkItemWarranty(selectedItem!) : false;
-            final currentItemPrice = selectedItem != null ? calculateItemPrice(selectedItem!) : 0.0;
-            final grandTotal = orderItems.fold<double>(0.0, (sum, i) => sum + ((i['total_price'] as num?)?.toDouble() ?? 0.0));
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.88,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  void _promptSealAfter(BuildContext context, WidgetRef ref, Complaint complaint) {
+    final controller = TextEditingController(text: complaint.sealNumberAfter ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_outline, color: Color(0xFF6D28D9)),
+            SizedBox(width: 8),
+            Text('Seal (After Service)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enter security seal number affixed after service completion (Optional):', style: TextStyle(fontSize: 12, color: Colors.black87)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Seal Number (After Service)',
+                hintText: 'e.g. SL-9042',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: const Color(0xFF6D28D9).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                            child: const Icon(Icons.build_circle_outlined, color: Color(0xFF6D28D9), size: 24),
-                          ),
-                          const SizedBox(width: 10),
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Defected Item & Replacement Order', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-                              Text('Order genuine parts from company inventory', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Customer Purchase Date & Warranty Basis Card
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF475569)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Customer Purchase Date: ${DateFormat('dd MMM yyyy').format(purchaseDate)}',
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: purchaseDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now(),
-                            );
-                            if (picked != null) {
-                              setModalState(() => purchaseDate = picked);
-                            }
-                          },
-                          child: const Text('Change', style: TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Item Selection & Warranty Check Box
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Select Defected Item from Inventory', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<InventoryItem>(
-                          isExpanded: true,
-                          value: selectedItem,
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                          items: inventoryItems.map((item) {
-                            return DropdownMenuItem<InventoryItem>(
-                              value: item,
-                              child: Text(item.itemName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                            );
-                          }).toList(),
-                          onChanged: (item) {
-                            if (item != null) setModalState(() => selectedItem = item);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Warranty indicator banner for selected item
-                        if (selectedItem != null) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: currentInWarranty ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: currentInWarranty ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA)),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  currentInWarranty ? Icons.verified_user : Icons.warning_amber_rounded,
-                                  color: currentInWarranty ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        currentInWarranty
-                                            ? 'UNDER WARRANTY (Free Replacement - ₹0)'
-                                            : 'OUT OF WARRANTY (Chargeable to Customer)',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                          color: currentInWarranty ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                                        ),
-                                      ),
-                                      Text(
-                                        'Warranty period: ${selectedItem!.warrantyMonths} months | Catalog price: ₹${selectedItem!.price.toStringAsFixed(2)}',
-                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                        ],
-
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: TextField(
-                                controller: reasonController,
-                                decoration: InputDecoration(
-                                  labelText: 'Defect Reason / Fault',
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline, size: 22),
-                                  onPressed: qty > 1 ? () => setModalState(() => qty--) : null,
-                                ),
-                                Text('$qty', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline, size: 22),
-                                  onPressed: () => setModalState(() => qty++),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 4),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6D28D9),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: selectedItem == null
-                                  ? null
-                                  : () {
-                                      final itemPrice = currentItemPrice;
-                                      final totalPrice = itemPrice * qty;
-                                      setModalState(() {
-                                        orderItems.add({
-                                          'item_name': selectedItem!.itemName,
-                                          'inventory_id': selectedItem!.id,
-                                          'quantity': qty,
-                                          'unit_price': itemPrice,
-                                          'total_price': totalPrice,
-                                          'is_warranty': currentInWarranty,
-                                          'warranty_months': selectedItem!.warrantyMonths,
-                                          'reason': reasonController.text.trim().isEmpty ? 'Defected part replaced' : reasonController.text.trim(),
-                                        });
-                                        qty = 1;
-                                        reasonController.clear();
-                                      });
-                                    },
-                              child: const Text('+ Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Added Items List
-                  const Text('Items to Order:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Expanded(
-                    child: orderItems.isEmpty
-                        ? Center(
-                            child: Text('No defected items added yet.', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                          )
-                        : ListView.separated(
-                            itemCount: orderItems.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 6),
-                            itemBuilder: (context, idx) {
-                              final item = orderItems[idx];
-                              final inWar = item['is_warranty'] as bool;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey.shade300),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(item['item_name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                          Text('Qty: ${item['quantity']} | ${item['reason']}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            inWar ? 'FREE under Warranty' : '₹${(item['total_price'] as num).toStringAsFixed(2)}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: inWar ? const Color(0xFF059669) : const Color(0xFFB91C1C),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                      onPressed: () => setModalState(() => orderItems.removeAt(idx)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-
-                  // Grand Total & Submit Order Button
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Total Cost to Customer:', style: TextStyle(fontSize: 11.5, color: Colors.black54)),
-                            Text(
-                              grandTotal <= 0 ? '₹0.00 (Warranty Covered)' : '₹${grandTotal.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: grandTotal <= 0 ? const Color(0xFF059669) : const Color(0xFF1E293B),
-                              ),
-                            ),
-                          ],
-                        ),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6D28D9),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          icon: isSubmitting
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                          label: const Text('Place Order to Company', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          onPressed: (orderItems.isEmpty || isSubmitting)
-                              ? null
-                              : () async {
-                                  setModalState(() => isSubmitting = true);
-                                  try {
-                                    await ref.read(partOrdersServiceProvider).createPartOrder(
-                                      complaintId: complaint.id,
-                                      customerId: complaint.customerId.isNotEmpty ? complaint.customerId : null,
-                                      customerName: complaint.customerName,
-                                      items: orderItems,
-                                      totalAmount: grandTotal,
-                                      isWarranty: grandTotal <= 0,
-                                      createdBy: techName,
-                                    );
-                                    if (ctx.mounted) {
-                                      Navigator.pop(ctx);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(grandTotal <= 0
-                                              ? 'Defected item order submitted! Covered under warranty.'
-                                              : 'Defected item order submitted! Total: ₹${grandTotal.toStringAsFixed(2)} - Sent to customer for payment.'),
-                                          backgroundColor: const Color(0xFF10B981),
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (ctx.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                                      );
-                                    }
-                                  } finally {
-                                    if (ctx.mounted) setModalState(() => isSubmitting = false);
-                                  }
-                                },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6D28D9)),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final updated = complaint.copyWith(
+                sealNumberAfter: controller.text.trim().isEmpty ? null : controller.text.trim(),
+              );
+              await ref.read(complaintsProvider.notifier).updateComplaint(updated);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Seal number updated successfully!'), backgroundColor: Color(0xFF10B981)),
+                );
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1061,11 +766,17 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
       ),
     );
 
-    final isAdminOrCoordinator = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.serviceHead;
+    final isAdminOrCoordinator = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.serviceHead || profile?.primaryRole == UserRole.manager;
     final isTechnician = profile?.primaryRole == UserRole.technician;
-    final isClosed = complaint.status == 'closed';
+    final isClosed = complaint.status == 'closed' || complaint.status == 'resolved';
     final hasCustomerSignature = complaint.customerSignatureUrl != null && complaint.customerSignatureUrl!.isNotEmpty;
     final hasTechSignature = complaint.technicianSignatureUrl != null && complaint.technicianSignatureUrl!.isNotEmpty;
+    final hasAfterPhoto = complaint.afterImageUrl != null && complaint.afterImageUrl!.isNotEmpty;
+
+    final partOrdersAsync = ref.watch(partOrdersForComplaintProvider(complaint.id));
+    final partOrders = partOrdersAsync.valueOrNull ?? [];
+    final hasPendingPaymentOrders = partOrders.any((o) => o.paymentStatus == 'pending');
+    final allResolutionItemsCaptured = hasCustomerSignature && hasTechSignature && hasAfterPhoto;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -1086,6 +797,12 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
         backgroundColor: const Color(0xFF6D28D9),
         elevation: 0,
         actions: [
+          if (!isClosed)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              tooltip: 'Edit Complaint',
+              onPressed: () => context.push('/complaints/edit/${complaint.id}'),
+            ),
           if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.white),
@@ -1181,6 +898,12 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                   const Divider(),
                   _detailRow('Product Name', _formatProductName(complaint.productName)),
                   _detailRow('Issue Category', complaint.title),
+                  if (complaint.errorCode != null && complaint.errorCode!.isNotEmpty)
+                    _detailRow('Error Code', '${complaint.errorCode}${complaint.errorDescription != null ? " - ${complaint.errorDescription}" : ""}'),
+                  if (complaint.sealNumberBefore != null && complaint.sealNumberBefore!.isNotEmpty)
+                    _detailRow('Seal (Before Service)', complaint.sealNumberBefore!),
+                  if (complaint.sealNumberAfter != null && complaint.sealNumberAfter!.isNotEmpty)
+                    _detailRow('Seal (After Service)', complaint.sealNumberAfter!),
                   _detailRow('Description', complaint.description.isNotEmpty ? complaint.description : 'No additional notes.'),
                   if (complaint.beforeImageUrl != null && complaint.beforeImageUrl!.isNotEmpty) ...[
                     const SizedBox(height: 12),
@@ -1333,19 +1056,44 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Service Resolution Actions', style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
+
+                    if (hasPendingPaymentOrders) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.amber.shade400),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.payment_outlined, color: Colors.amber, size: 22),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Customer payment is pending for replacement parts. Final resolution actions will unlock once payment is completed by customer.',
+                                style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
+                        backgroundColor: hasAfterPhoto ? const Color(0xFF10B981) : const Color(0xFF3B82F6),
                         minimumSize: const Size(double.infinity, 44),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
-                      label: const Text(
-                        'Upload After-Solve Photo(s)',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      icon: Icon(hasAfterPhoto ? Icons.check_circle : Icons.camera_alt, color: Colors.white, size: 18),
+                      label: Text(
+                        hasAfterPhoto ? 'After-Solve Photo(s) Uploaded ✓' : 'Upload After-Solve Photo(s)',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                      onPressed: () => _showAfterPhotoSourceSheet(complaint),
+                      onPressed: hasPendingPaymentOrders ? null : () => _showAfterPhotoSourceSheet(complaint),
                     ),
                     const SizedBox(height: 10),
                     ElevatedButton.icon(
@@ -1359,7 +1107,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                         hasTechSignature ? 'Technician Signature Captured ✓' : 'Take Technician Signature',
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                      onPressed: () => _takeTechnicianSignature(complaint),
+                      onPressed: hasPendingPaymentOrders ? null : () => _takeTechnicianSignature(complaint),
                     ),
                     const SizedBox(height: 10),
                     ElevatedButton.icon(
@@ -1373,20 +1121,54 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                         hasCustomerSignature ? 'Customer Signature Captured ✓' : 'Take Customer Signature',
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                      onPressed: () => _takeSignature(complaint),
+                      onPressed: hasPendingPaymentOrders ? null : () => _takeSignature(complaint),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Optional Seal Number After Service
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF6D28D9),
+                        side: const BorderSide(color: Color(0xFF6D28D9)),
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.lock_outline, size: 18),
+                      label: Text(
+                        complaint.sealNumberAfter != null && complaint.sealNumberAfter!.isNotEmpty
+                            ? 'Seal (After): ${complaint.sealNumberAfter} (Edit)'
+                            : 'Record Seal Number (After Service) - Optional',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: hasPendingPaymentOrders ? null : () => _promptSealAfter(context, ref, complaint),
                     ),
                     const SizedBox(height: 14),
+
+                    if (!allResolutionItemsCaptured && !hasPendingPaymentOrders) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Required to unlock closure:\n${[
+                            if (!hasAfterPhoto) '• After-Solve Photo',
+                            if (!hasTechSignature) '• Technician Signature',
+                            if (!hasCustomerSignature) '• Customer Signature',
+                          ].join('\n')}',
+                          style: const TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: (hasCustomerSignature || hasTechSignature) ? const Color(0xFF10B981) : Colors.grey,
+                          backgroundColor: (allResolutionItemsCaptured && !hasPendingPaymentOrders) ? const Color(0xFF10B981) : Colors.grey.shade400,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         icon: const Icon(Icons.task_alt, color: Colors.white),
                         label: const Text('Mark Resolution Submitted', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                        onPressed: (hasCustomerSignature || hasTechSignature)
+                        onPressed: (allResolutionItemsCaptured && !hasPendingPaymentOrders)
                             ? () async {
                                 await ref.read(complaintsProvider.notifier).completeComplaint(complaint.id);
                                 if (mounted) {
@@ -1551,6 +1333,478 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
           SizedBox(width: 110, child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13))),
           Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
         ],
+      ),
+    );
+  }
+}
+
+class _DefectedPartsOrderSheet extends ConsumerStatefulWidget {
+  final Complaint complaint;
+  final List<InventoryItem> inventoryItems;
+  final DateTime purchaseDate;
+  final String techName;
+
+  const _DefectedPartsOrderSheet({
+    required this.complaint,
+    required this.inventoryItems,
+    required this.purchaseDate,
+    required this.techName,
+  });
+
+  @override
+  ConsumerState<_DefectedPartsOrderSheet> createState() => _DefectedPartsOrderSheetState();
+}
+
+class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderSheet> {
+  final List<Map<String, dynamic>> _orderItems = [];
+  InventoryItem? _selectedItem;
+  int _qty = 1;
+  String _selectedReason = 'Voltage issue';
+  final List<String> _reasonOptions = [
+    'Voltage issue',
+    'System Warranty over',
+    'Other person serviced the system',
+    'Component failure / burnout',
+    'Physical or weather damage',
+    'Aging / Wear & Tear',
+    'Other',
+  ];
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.inventoryItems.isNotEmpty) {
+      _selectedItem = widget.inventoryItems.first;
+    }
+  }
+
+  bool _checkItemWarranty(InventoryItem item) {
+    final expiry = widget.purchaseDate.add(Duration(days: item.warrantyMonths * 30));
+    return DateTime.now().isBefore(expiry);
+  }
+
+  void _addItem() {
+    if (_selectedItem == null) return;
+    final inWarranty = _checkItemWarranty(_selectedItem!);
+    final unitPrice = inWarranty ? 0.0 : _selectedItem!.price;
+    final totalPrice = unitPrice * _qty;
+
+    setState(() {
+      _orderItems.add({
+        'item_name': _selectedItem!.itemName,
+        'inventory_id': _selectedItem!.id,
+        'quantity': _qty,
+        'unit_price': unitPrice,
+        'total_price': totalPrice,
+        'is_warranty': inWarranty,
+        'warranty_months': _selectedItem!.warrantyMonths,
+        'reason': _selectedReason,
+      });
+      _qty = 1;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Added ${_selectedItem!.itemName} to order list'),
+        duration: const Duration(milliseconds: 1200),
+      ),
+    );
+  }
+
+  void _submitOrder() async {
+    if (_orderItems.isEmpty || _isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    final grandTotal = _orderItems.fold<double>(
+      0.0,
+      (sum, i) => sum + ((i['total_price'] as num?)?.toDouble() ?? 0.0),
+    );
+
+    try {
+      await ref.read(partOrdersServiceProvider).createPartOrder(
+        complaintId: widget.complaint.id,
+        customerId: widget.complaint.customerId.isNotEmpty ? widget.complaint.customerId : null,
+        customerName: widget.complaint.customerName,
+        items: _orderItems,
+        totalAmount: grandTotal,
+        isWarranty: grandTotal <= 0,
+        createdBy: widget.techName,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(grandTotal <= 0
+                ? 'Defected item order submitted! Covered under warranty.'
+                : 'Defected item order submitted! Total: ₹${grandTotal.toStringAsFixed(2)} - Sent to customer for payment.'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grandTotal = _orderItems.fold<double>(
+      0.0,
+      (sum, i) => sum + ((i['total_price'] as num?)?.toDouble() ?? 0.0),
+    );
+    final inWarranty = _selectedItem != null ? _checkItemWarranty(_selectedItem!) : false;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.88,
+        color: Colors.white,
+        child: Column(
+          children: [
+            // Fixed Modal Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6D28D9).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.build_circle_outlined, color: Color(0xFF6D28D9), size: 24),
+                      ),
+                      const SizedBox(width: 10),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Defected Item & Parts Order', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
+                          Text('Order genuine parts from company inventory', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            // Scrollable Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Customer Purchase Date (Read-only, locked from warranty card)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.verified_outlined, size: 18, color: Color(0xFF059669)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Customer Purchase Date: ${DateFormat('dd MMM yyyy').format(widget.purchaseDate)}',
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                ),
+                                const Text(
+                                  'Verified from official warranty records (Locked)',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.lock, size: 12, color: Colors.black54),
+                                SizedBox(width: 4),
+                                Text('Locked', style: TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Defect Reason Dropdown (Selected once overall at top)
+                    DropdownButtonFormField<String>(
+                      value: _selectedReason,
+                      decoration: InputDecoration(
+                        labelText: 'Reason for Part Replacement *',
+                        prefixIcon: const Icon(Icons.build_circle_outlined, color: Color(0xFF6D28D9)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                      ),
+                      items: _reasonOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _selectedReason = val);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Searchable Inventory Dropdown
+                    SearchableDropdown<InventoryItem>(
+                      label: 'Select Defected Item from Inventory *',
+                      value: _selectedItem,
+                      items: widget.inventoryItems,
+                      itemLabel: (item) => item.itemName,
+                      itemSubtitle: (item) => 'Price: ₹${item.price.toStringAsFixed(2)} | Warranty: ${item.warrantyMonths}m',
+                      onChanged: (item) {
+                        setState(() => _selectedItem = item);
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Select Defected Item from Inventory *',
+                        hintText: 'Search parts catalog...',
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Warranty Indicator for Selected Item
+                    if (_selectedItem != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: inWarranty ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: inWarranty ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              inWarranty ? Icons.verified_user : Icons.warning_amber_rounded,
+                              color: inWarranty ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    inWarranty
+                                        ? 'UNDER WARRANTY (Free Replacement - ₹0)'
+                                        : 'OUT OF WARRANTY (Chargeable to Customer)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: inWarranty ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Warranty period: ${_selectedItem!.warrantyMonths} months | Catalog price: ₹${_selectedItem!.price.toStringAsFixed(2)}',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Quantity controls and Add to Order List button
+                    Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove, size: 18),
+                                onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
+                              ),
+                              Text('$_qty', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              IconButton(
+                                icon: const Icon(Icons.add, size: 18),
+                                onPressed: () => setState(() => _qty++),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6D28D9),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                            label: const Text('Add to Order List', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            onPressed: _selectedItem == null ? null : _addItem,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Items to Order List
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Items to Order (${_orderItems.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        if (_orderItems.isNotEmpty)
+                          TextButton(
+                            onPressed: () => setState(() => _orderItems.clear()),
+                            child: const Text('Clear All', style: TextStyle(color: Colors.red, fontSize: 12)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (_orderItems.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'No items added yet.\nSelect an item above and tap "Add to Order List".',
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    else
+                      ..._orderItems.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final item = entry.value;
+                        final isWar = item['is_warranty'] as bool;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item['item_name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    const SizedBox(height: 2),
+                                    Text('Qty: ${item['quantity']} | Reason: ${item['reason']}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      isWar ? 'FREE under Warranty' : '₹${(item['total_price'] as num).toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isWar ? const Color(0xFF059669) : const Color(0xFFB91C1C),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                onPressed: () => setState(() => _orderItems.removeAt(idx)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+            ),
+
+            // Fixed Bottom Bar (No overflow!)
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, -4)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Cost to Customer:', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                        Text(
+                          grandTotal <= 0 ? '₹0.00 (Warranty Covered)' : '₹${grandTotal.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: grandTotal <= 0 ? const Color(0xFF059669) : const Color(0xFF1E293B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D28D9),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: _isSubmitting
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                        label: const Text('Place Order to Company', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                        onPressed: (_orderItems.isEmpty || _isSubmitting) ? null : _submitOrder,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
