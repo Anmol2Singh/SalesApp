@@ -438,9 +438,6 @@ class BookingsListScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
-
-                // Customer Defected Parts & Payment Card
-                _buildCustomerPartOrdersCard(context, ref, req, isDark, textColor, subtitleColor),
               ],
             ),
           ),
@@ -711,13 +708,18 @@ class BookingsListScreen extends ConsumerWidget {
                             children: [
                               const Icon(Icons.schedule, color: AppColors.warning, size: 20),
                               const SizedBox(width: 10),
-                              Text(
-                                'Technician will be assigned by company coordinator shortly.',
-                                style: TextStyle(fontSize: 12, color: subtitleColor),
+                              Expanded(
+                                child: Text(
+                                  'Technician will be assigned by company coordinator shortly.',
+                                  style: TextStyle(fontSize: 12, color: subtitleColor),
+                                ),
                               ),
                             ],
                           ),
                   ),
+
+                  // Customer Defected Parts & Payment Card (Displayed after clicking on complaint)
+                  _buildCustomerPartOrdersCard(context, ref, req, isDark, textColor, subtitleColor),
 
                   // Service Completion Report button
                   if (isClosed) ...[
@@ -834,6 +836,30 @@ class BookingsListScreen extends ConsumerWidget {
     }
   }
 
+  List<Map<String, dynamic>> _mergeItemsForDisplay(List<dynamic> rawItems) {
+    final Map<String, Map<String, dynamic>> merged = {};
+    for (final raw in rawItems) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      final name = (item['item_name'] ?? '').toString().trim();
+      final war = (item['is_warranty'] as bool?) ?? false;
+      final key = '${name.toLowerCase()}_$war';
+      if (merged.containsKey(key)) {
+        final cur = merged[key]!;
+        final oldQty = (cur['quantity'] as num?)?.toInt() ?? 1;
+        final addQty = (item['quantity'] as num?)?.toInt() ?? 1;
+        final newQty = oldQty + addQty;
+        final curTotal = (cur['total_price'] as num?)?.toDouble() ?? 0.0;
+        final itemTotal = (item['total_price'] as num?)?.toDouble() ?? 0.0;
+        cur['quantity'] = newQty;
+        cur['total_price'] = curTotal + itemTotal;
+      } else {
+        merged[key] = item;
+      }
+    }
+    return merged.values.toList();
+  }
+
   Widget _buildCustomerPartOrdersCard(
     BuildContext context,
     WidgetRef ref,
@@ -921,7 +947,7 @@ class BookingsListScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ...ord.items.map((item) {
+                    ..._mergeItemsForDisplay(ord.items).map((item) {
                       final inWar = (item['is_warranty'] as bool?) ?? false;
                       final price = (item['total_price'] as num?)?.toDouble() ?? 0.0;
                       return Padding(
@@ -1055,7 +1081,7 @@ class BookingsListScreen extends ConsumerWidget {
                     ),
                     child: Column(
                       children: [
-                        ...order.items.map((item) => Padding(
+                        ..._mergeItemsForDisplay(order.items).map((item) => Padding(
                               padding: const EdgeInsets.symmetric(vertical: 2.0),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

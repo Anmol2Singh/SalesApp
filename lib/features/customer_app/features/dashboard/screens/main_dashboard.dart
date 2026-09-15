@@ -6,6 +6,7 @@ import 'package:salesapp/core/router/app_router.dart';
 import 'package:salesapp/features/auth/providers/auth_provider.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
+import 'package:salesapp/features/customer_app/data/repositories/app_repositories.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/status_chip.dart';
@@ -373,7 +374,27 @@ class MainDashboard extends ConsumerWidget {
                                   ),
                                 )
                               : const SizedBox.shrink(),
-                          orElse: () => const SizedBox.shrink(),
+                          orElse: () {
+                            final cached = SupabaseCustomerRepository.cachedProducts;
+                            if (cached != null && cached.isNotEmpty) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${cached.length}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
                         ),
                       ],
                     ),
@@ -389,94 +410,31 @@ class MainDashboard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 productsAsync.when(
-                  data: (products) {
-                    if (products.isEmpty) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(Icons.inventory_2_outlined, size: 40, color: subtitleColor),
-                            const SizedBox(height: 10),
-                            Text(
-                              'No products registered yet',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                                color: textColor,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Purchased products linked to your account will appear here.',
-                              style: TextStyle(fontSize: 12, color: subtitleColor),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: () => ref.refresh(productsProvider),
-                              icon: const Icon(Icons.refresh, size: 14),
-                              label: const Text('Check for Updates', style: TextStyle(fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                      );
+                  data: (products) => _buildProductsList(context, ref, products, textColor, subtitleColor, isDark),
+                  loading: () {
+                    final cached = SupabaseCustomerRepository.cachedProducts ?? productsAsync.valueOrNull;
+                    if (cached != null && cached.isNotEmpty) {
+                      return _buildProductsList(context, ref, cached, textColor, subtitleColor, isDark);
                     }
-
-                    // If single product, show the prominent Hero card
-                    if (products.length == 1) {
-                      return HeroProductCard(product: products.first);
-                    }
-
-                    // If multiple products, show Hero card for the first and carousel for others
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        HeroProductCard(product: products.first),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Other Systems (${products.length - 1})',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: textColor,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          height: 270,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            clipBehavior: Clip.none,
-                            itemCount: products.length - 1,
-                            separatorBuilder: (context, index) => const SizedBox(width: 14),
-                            itemBuilder: (context, index) {
-                              return ProductCard(product: products[index + 1]);
-                            },
-                          ),
-                        ),
-                      ],
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.0),
+                        child: CircularProgressIndicator(color: AppColors.primary),
+                      ),
                     );
                   },
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24.0),
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  ),
-                  error: (e, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16.0),
-                      child: Text('Error loading products: $e', style: TextStyle(color: textColor)),
-                    ),
-                  ),
+                  error: (e, _) {
+                    final cached = SupabaseCustomerRepository.cachedProducts;
+                    if (cached != null && cached.isNotEmpty) {
+                      return _buildProductsList(context, ref, cached, textColor, subtitleColor, isDark);
+                    }
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        child: Text('Error loading products: $e', style: TextStyle(color: textColor)),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
 
@@ -1111,6 +1069,88 @@ class MainDashboard extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildProductsList(
+    BuildContext context,
+    WidgetRef ref,
+    List<Product> products,
+    Color textColor,
+    Color subtitleColor,
+    bool isDark,
+  ) {
+    if (products.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 40, color: subtitleColor),
+            const SizedBox(height: 10),
+            Text(
+              'No products registered yet',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Purchased products linked to your account will appear here.',
+              style: TextStyle(fontSize: 12, color: subtitleColor),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => ref.refresh(productsProvider),
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('Check for Updates', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (products.length == 1) {
+      return HeroProductCard(product: products.first);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        HeroProductCard(product: products.first),
+        const SizedBox(height: 18),
+        Text(
+          'Other Systems (${products.length - 1})',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 270,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            clipBehavior: Clip.none,
+            itemCount: products.length - 1,
+            separatorBuilder: (context, index) => const SizedBox(width: 14),
+            itemBuilder: (context, index) {
+              return ProductCard(product: products[index + 1]);
+            },
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _TimelineEventTile extends StatelessWidget {
@@ -1222,3 +1262,4 @@ class _TimelineEventTile extends StatelessWidget {
     );
   }
 }
+

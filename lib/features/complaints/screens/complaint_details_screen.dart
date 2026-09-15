@@ -1391,25 +1391,40 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
     if (_selectedItem == null) return;
     final inWarranty = _checkItemWarranty(_selectedItem!);
     final unitPrice = inWarranty ? 0.0 : _selectedItem!.price;
-    final totalPrice = unitPrice * _qty;
 
     setState(() {
-      _orderItems.add({
-        'item_name': _selectedItem!.itemName,
-        'inventory_id': _selectedItem!.id,
-        'quantity': _qty,
-        'unit_price': unitPrice,
-        'total_price': totalPrice,
-        'is_warranty': inWarranty,
-        'warranty_months': _selectedItem!.warrantyMonths,
-        'reason': _selectedReason,
-      });
+      final existingIndex = _orderItems.indexWhere((item) =>
+          (item['inventory_id'] == _selectedItem!.id ||
+              (item['item_name'] as String).trim().toLowerCase() ==
+                  _selectedItem!.itemName.trim().toLowerCase()) &&
+          item['is_warranty'] == inWarranty);
+
+      if (existingIndex != -1) {
+        final existing = _orderItems[existingIndex];
+        final oldQty = (existing['quantity'] as num?)?.toInt() ?? 1;
+        final newQty = oldQty + _qty;
+        existing['quantity'] = newQty;
+        existing['total_price'] = unitPrice * newQty;
+        existing['reason'] = _selectedReason;
+      } else {
+        final totalPrice = unitPrice * _qty;
+        _orderItems.add({
+          'item_name': _selectedItem!.itemName,
+          'inventory_id': _selectedItem!.id,
+          'quantity': _qty,
+          'unit_price': unitPrice,
+          'total_price': totalPrice,
+          'is_warranty': inWarranty,
+          'warranty_months': _selectedItem!.warrantyMonths,
+          'reason': _selectedReason,
+        });
+      }
       _qty = 1;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Added ${_selectedItem!.itemName} to order list'),
+        content: Text('Updated ${_selectedItem!.itemName} in order list'),
         duration: const Duration(milliseconds: 1200),
       ),
     );

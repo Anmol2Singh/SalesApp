@@ -214,6 +214,53 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     await load();
   }
 
+  Future<void> cancelReassignmentRequest({
+    required String prospectId,
+    String? prospectName,
+  }) async {
+    try {
+      await _supabase.from('crm_prospects').update({
+        'reassignment_requested': false,
+        'reassignment_reason': 'Request Cancelled by Salesperson',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', prospectId);
+    } catch (_) {
+      try {
+        final current = await _supabase.from('crm_prospects').select('notes').eq('id', prospectId).maybeSingle();
+        final existingNotes = (current?['notes'] as String? ?? '')
+            .replaceAll(RegExp(r'\[REASSIGNMENT_REQUEST:[^\]]*\]'), '')
+            .trim();
+        final newNotes = '$existingNotes\n[REASSIGNMENT_CANCELLED]'.trim();
+        await _supabase.from('crm_prospects').update({'notes': newNotes}).eq('id', prospectId);
+      } catch (_) {}
+    }
+
+    try {
+      final staffResponse = await _supabase.from('profiles').select('id, role, roles');
+      final adminIds = <String>{};
+      for (final s in (staffResponse as List? ?? [])) {
+        final role = (s['role'] as String? ?? '').toLowerCase();
+        final rolesList = (s['roles'] is List) ? (s['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
+        if (role == 'admin' || role == 'manager' || role == 'sales_head' ||
+            rolesList.contains('admin') || rolesList.contains('manager') || rolesList.contains('sales_head')) {
+          if (s['id'] != null) adminIds.add(s['id'] as String);
+        }
+      }
+
+      for (final aid in adminIds) {
+        await _supabase.from('notifications').insert({
+          'user_id': aid,
+          'title': 'Prospect Reassignment Cancelled ℹ️',
+          'body': 'Sales rep cancelled the reassignment request for prospect "${prospectName ?? 'Prospect'}".',
+          'type': 'prospect_transfer_cancelled',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (_) {}
+
+    await load();
+  }
+
   Future<Prospect?> addProspect({
     required String name,
     required String phone,
@@ -621,6 +668,53 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
           'title': 'Lead Reassignment Requested ⚠️',
           'body': 'Sales rep requested reassignment for lead "${leadName ?? 'Lead'}". Reason: $note',
           'type': 'lead_transfer_request',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (_) {}
+
+    await load();
+  }
+
+  Future<void> cancelTransfer({
+    required String leadId,
+    String? leadName,
+  }) async {
+    try {
+      await _supabase.from('crm_leads').update({
+        'reassignment_requested': false,
+        'reassignment_reason': 'Request Cancelled by Salesperson',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', leadId);
+    } catch (_) {
+      try {
+        final current = await _supabase.from('crm_leads').select('notes').eq('id', leadId).maybeSingle();
+        final existingNotes = (current?['notes'] as String? ?? '')
+            .replaceAll(RegExp(r'\[REASSIGNMENT_REQUEST:[^\]]*\]'), '')
+            .trim();
+        final newNotes = '$existingNotes\n[REASSIGNMENT_CANCELLED]'.trim();
+        await _supabase.from('crm_leads').update({'notes': newNotes}).eq('id', leadId);
+      } catch (_) {}
+    }
+
+    try {
+      final staffResponse = await _supabase.from('profiles').select('id, role, roles');
+      final adminIds = <String>{};
+      for (final s in (staffResponse as List? ?? [])) {
+        final role = (s['role'] as String? ?? '').toLowerCase();
+        final rolesList = (s['roles'] is List) ? (s['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
+        if (role == 'admin' || role == 'manager' || role == 'sales_head' ||
+            rolesList.contains('admin') || rolesList.contains('manager') || rolesList.contains('sales_head')) {
+          if (s['id'] != null) adminIds.add(s['id'] as String);
+        }
+      }
+
+      for (final aid in adminIds) {
+        await _supabase.from('notifications').insert({
+          'user_id': aid,
+          'title': 'Lead Reassignment Cancelled ℹ️',
+          'body': 'Sales rep cancelled the reassignment request for lead "${leadName ?? 'Lead'}".',
+          'type': 'lead_transfer_cancelled',
           'created_at': DateTime.now().toIso8601String(),
         });
       }

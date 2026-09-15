@@ -19,6 +19,26 @@ class PartOrdersService {
   final Ref ref;
   PartOrdersService(this.ref);
 
+  static List<Map<String, dynamic>> mergeDuplicateItems(List<Map<String, dynamic>> rawItems) {
+    final Map<String, Map<String, dynamic>> merged = {};
+    for (final item in rawItems) {
+      final name = (item['item_name'] ?? '').toString().trim().toLowerCase();
+      final key = '${item['inventory_id'] ?? name}_${item['is_warranty']}';
+      if (merged.containsKey(key)) {
+        final cur = merged[key]!;
+        final oldQty = (cur['quantity'] as num?)?.toInt() ?? 1;
+        final addQty = (item['quantity'] as num?)?.toInt() ?? 1;
+        final newQty = oldQty + addQty;
+        final unitPrice = (cur['unit_price'] as num?)?.toDouble() ?? 0.0;
+        cur['quantity'] = newQty;
+        cur['total_price'] = unitPrice * newQty;
+      } else {
+        merged[key] = Map<String, dynamic>.from(item);
+      }
+    }
+    return merged.values.toList();
+  }
+
   Future<void> createPartOrder({
     required String complaintId,
     required String? customerId,
@@ -29,22 +49,27 @@ class PartOrdersService {
     required String? createdBy,
   }) async {
     final supabase = ref.read(supabaseClientProvider);
-    final paymentStatus = totalAmount <= 0 ? 'not_required' : 'pending';
+    final mergedItems = mergeDuplicateItems(items);
+    final finalAmount = mergedItems.fold<double>(
+      0.0,
+      (sum, i) => sum + ((i['total_price'] as num?)?.toDouble() ?? 0.0),
+    );
+    final paymentStatus = finalAmount <= 0 ? 'not_required' : 'pending';
 
     final res = await supabase.from('complaint_part_orders').insert({
       'complaint_id': complaintId,
       'customer_id': customerId,
       'customer_name': customerName,
-      'items': items,
-      'total_amount': totalAmount,
-      'is_warranty': isWarranty,
+      'items': mergedItems,
+      'total_amount': finalAmount,
+      'is_warranty': finalAmount <= 0 || isWarranty,
       'payment_status': paymentStatus,
       'created_by': createdBy,
     }).select().single();
 
     // If free warranty or 0 amount, record as replaced_items immediately
-    if (totalAmount <= 0) {
-      await _recordReplacedItems(complaintId, items);
+    if (finalAmount <= 0) {
+      await _recordReplacedItems(complaintId, mergedItems);
     }
 
     ref.invalidate(partOrdersForComplaintProvider(complaintId));

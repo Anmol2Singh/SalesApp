@@ -4,16 +4,21 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
+import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
 
-ImageProvider _getProductImageProvider(String url) {
+ImageProvider _getProductImageProvider(String url, [String? category]) {
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return NetworkImage(url);
   }
-  if (url.startsWith('assets/')) {
-    return AssetImage(url);
+  final cat = (category ?? '').toLowerCase();
+  if (cat.contains('boiler')) {
+    return const NetworkImage('https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop');
+  }
+  if (cat.contains('thermostat')) {
+    return const NetworkImage('https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop');
   }
   return const NetworkImage(
-    'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=400',
+    'https://images.unsplash.com/photo-1621905252507-b354bc25edac?w=800&auto=format&fit=crop',
   );
 }
 
@@ -168,7 +173,7 @@ class HeroProductCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.08),
                       image: DecorationImage(
-                        image: _getProductImageProvider(product.imageUrl),
+                        image: _getProductImageProvider(product.imageUrl, product.category),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -247,7 +252,14 @@ class HeroProductCard extends StatelessWidget {
                 // Request Service Button
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => context.push('/service-booking?productId=${product.productId}'),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (ctx) => ServiceBookingFlow(preselectedProductId: product.productId),
+                      );
+                    },
                     icon: const Icon(Icons.build_rounded, size: 15),
                     label: const Text(
                       'Request Service',
@@ -316,7 +328,7 @@ class ProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         color: AppColors.primary.withOpacity(0.08),
         image: DecorationImage(
-          image: _getProductImageProvider(product.imageUrl),
+          image: _getProductImageProvider(product.imageUrl, product.category),
           fit: BoxFit.cover,
         ),
         boxShadow: [
@@ -477,7 +489,7 @@ class AdvProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         color: AppColors.primary.withOpacity(0.08),
         image: DecorationImage(
-          image: _getProductImageProvider(product.imageUrl),
+          image: _getProductImageProvider(product.imageUrl, product.category),
           fit: BoxFit.cover,
         ),
         boxShadow: [

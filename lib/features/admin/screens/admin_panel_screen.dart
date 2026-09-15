@@ -13,6 +13,7 @@ import 'product_catalog_screen.dart';
 import 'pdf_template_screen.dart';
 import 'manage_boq_items_screen.dart';
 import 'company_helpline_screen.dart';
+import 'amc_management_screen.dart';
 
 class AdminPanelScreen extends ConsumerWidget {
   final int initialIndex;
@@ -56,8 +57,8 @@ class AdminPanelScreen extends ConsumerWidget {
     }
 
     return DefaultTabController(
-      length: 6,
-      initialIndex: initialIndex.clamp(0, 5),
+      length: 7,
+      initialIndex: initialIndex.clamp(0, 6),
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
@@ -96,6 +97,7 @@ class AdminPanelScreen extends ConsumerWidget {
                   Tab(text: 'PDF Templates', icon: Icon(Icons.picture_as_pdf_outlined)),
                   Tab(text: 'Manage BOQ Items', icon: Icon(Icons.format_list_bulleted_outlined)),
                   Tab(text: 'Company Helpline', icon: Icon(Icons.support_agent_outlined)),
+                  Tab(text: 'AMC Management', icon: Icon(Icons.verified_user_outlined)),
                 ],
               ),
             ),
@@ -109,6 +111,7 @@ class AdminPanelScreen extends ConsumerWidget {
             PdfTemplateScreen(isEmbedded: true),
             ManageBoqItemsScreen(isEmbedded: true),
             CompanyHelplineScreen(isEmbedded: true),
+            AmcManagementScreen(isEmbedded: true),
           ],
         ),
       ),

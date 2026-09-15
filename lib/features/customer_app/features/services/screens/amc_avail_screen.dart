@@ -1,13 +1,14 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:salesapp/core/providers/supabase_provider.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
-import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
-import 'package:salesapp/features/customer_app/data/models/data_models.dart';
+import 'package:salesapp/features/admin/screens/amc_management_screen.dart';
 
 class AmcAvailScreen extends ConsumerStatefulWidget {
   const AmcAvailScreen({super.key});
@@ -20,12 +21,16 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
   String? _selectedProductId;
   String? _selectedProductName;
   int _durationYears = 1;
-  int _visitsPerYear = 2; // 2 or 4
+  int _visitsPerYear = 2; // Default fallback
   DateTime _startDate = DateTime.now();
   late DateTime _endDate;
   final TextEditingController _notesController = TextEditingController();
-  bool _isProcessingPayment = false;
   bool _isSubmitting = false;
+
+  List<AmcPlanItem> _plans = [];
+  AmcPlanItem? _selectedPlan;
+  String? _promoHeadline;
+  String? _promoSubtext;
 
   final List<Map<String, dynamic>> _standardCatalog = [
     {'id': 'prod_solar_200l', 'name': 'IZYHEAT Solar Water Heater 200L', 'model': 'IZY-SWH-200'},
@@ -38,6 +43,93 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
   void initState() {
     super.initState();
     _recalculateEndDate();
+    _loadAmcPlans();
+  }
+
+  Future<void> _loadAmcPlans() async {
+    // 1. Try local cache
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cached_amc_plans');
+      if (cached != null && cached.isNotEmpty) {
+        final list = (jsonDecode(cached) as List)
+            .map((e) => AmcPlanItem.fromJson(Map<String, dynamic>.from(e as Map)))
+            .where((p) => p.isActive)
+            .toList();
+        if (list.isNotEmpty && mounted) {
+          setState(() {
+            _plans = list;
+            _selectedPlan = list.first;
+            _visitsPerYear = _selectedPlan!.visitsPerYear;
+          });
+        }
+      }
+      _promoHeadline = prefs.getString('amc_promo_headline');
+      _promoSubtext = prefs.getString('amc_promo_subtext');
+    } catch (_) {}
+
+    // 2. Fetch from Supabase amc_plans
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final res = await supabase
+          .from('amc_plans')
+          .select()
+          .eq('is_active', true)
+          .order('sort_order', ascending: true);
+
+      if (res.isNotEmpty) {
+        final loaded = (res as List)
+            .map((e) => AmcPlanItem.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        if (mounted && loaded.isNotEmpty) {
+          setState(() {
+            _plans = loaded;
+            if (_selectedPlan == null || !loaded.any((p) => p.id == _selectedPlan!.id)) {
+              _selectedPlan = loaded.first;
+              _visitsPerYear = _selectedPlan!.visitsPerYear;
+            }
+          });
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback defaults if still empty
+    if (_plans.isEmpty) {
+      final defaults = [
+        AmcPlanItem(
+          id: 'std_plan',
+          planCode: 'standard',
+          title: 'Standard',
+          description: 'Essential preventive servicing',
+          visitsPerYear: 2,
+          ratePerYear: 4999.0,
+          sparePartsDiscountEnabled: true,
+          sparePartsDiscountPercentage: 15.0,
+          isActive: true,
+          sortOrder: 1,
+        ),
+        AmcPlanItem(
+          id: 'comp_plan',
+          planCode: 'comprehensive',
+          title: 'Comprehensive',
+          description: 'Quarterly checkups & prioritized breakdown support',
+          visitsPerYear: 4,
+          ratePerYear: 8999.0,
+          sparePartsDiscountEnabled: true,
+          sparePartsDiscountPercentage: 20.0,
+          badge: 'POPULAR',
+          isActive: true,
+          sortOrder: 2,
+        ),
+      ];
+      if (mounted) {
+        setState(() {
+          _plans = defaults;
+          _selectedPlan = defaults.first;
+          _visitsPerYear = _selectedPlan!.visitsPerYear;
+        });
+      }
+    }
   }
 
   @override
@@ -54,9 +146,9 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
     );
   }
 
-  int get _ratePerYear => _visitsPerYear == 2 ? 4999 : 8999;
+  int get _ratePerYear => (_selectedPlan?.ratePerYear ?? (_visitsPerYear == 2 ? 4999 : 8999)).toInt();
   int get _totalAmount => _ratePerYear * _durationYears;
-  int get _totalVisits => _visitsPerYear * _durationYears;
+  int get _totalVisits => (_selectedPlan?.visitsPerYear ?? _visitsPerYear) * _durationYears;
 
   @override
   Widget build(BuildContext context) {
@@ -140,23 +232,23 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
                     child: const Icon(Icons.verified_user, color: Colors.white, size: 32),
                   ),
                   const SizedBox(width: 14),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'IZYHEAT Care Protection',
-                          style: TextStyle(
+                          _promoHeadline ?? 'IZYHEAT Care Protection',
+                          style: const TextStyle(
                             fontFamily: 'Inter',
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Enjoy worry-free performance with certified preventative visits and free complaint servicing.',
-                          style: TextStyle(
+                          _promoSubtext ?? 'Enjoy worry-free performance with certified preventative visits and free complaint servicing.',
+                          style: const TextStyle(
                             fontFamily: 'Inter',
                             color: Colors.white70,
                             fontSize: 12,
@@ -293,48 +385,76 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 3. Maintenance Visits per Year
-            Text(
-              '3. Preventive Visits Frequency',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: textPrimary,
-              ),
+            // 3. Maintenance Visits per Year & AMC Plans
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '3. Preventive Visits & Plan Options',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: textPrimary,
+                  ),
+                ),
+                if (_selectedPlan != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${_selectedPlan!.title} Selected',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildFrequencyCard(
-                    title: 'Standard',
-                    visits: 2,
-                    pricePerYr: 4999,
-                    isSelected: _visitsPerYear == 2,
-                    onTap: () => setState(() => _visitsPerYear = 2),
-                    cardBg: cardBg,
-                    borderCol: borderCol,
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildFrequencyCard(
-                    title: 'Comprehensive',
-                    visits: 4,
-                    pricePerYr: 8999,
-                    isPopular: true,
-                    isSelected: _visitsPerYear == 4,
-                    onTap: () => setState(() => _visitsPerYear = 4),
-                    cardBg: cardBg,
-                    borderCol: borderCol,
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                  ),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 360;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _plans.map((plan) {
+                    final isSelected = _selectedPlan?.id == plan.id;
+                    final cardWidth = isNarrow
+                        ? constraints.maxWidth
+                        : (_plans.length == 1
+                            ? constraints.maxWidth
+                            : (_plans.length == 2
+                                ? (constraints.maxWidth - 10) / 2
+                                : (constraints.maxWidth > 500
+                                    ? (constraints.maxWidth - 20) / 3
+                                    : (constraints.maxWidth - 10) / 2)));
+                    return SizedBox(
+                      width: cardWidth,
+                      child: _buildPlanCard(
+                        plan: plan,
+                        isSelected: isSelected,
+                        onTap: () {
+                          setState(() {
+                            _selectedPlan = plan;
+                            _visitsPerYear = plan.visitsPerYear;
+                          });
+                        },
+                        cardBg: cardBg,
+                        borderCol: borderCol,
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
             ),
             const SizedBox(height: 20),
 
@@ -478,11 +598,24 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
                   const Divider(height: 20),
                   _buildSummaryRow('Base Plan Rate', '₹$_ratePerYear / year', textSecondary, textPrimary),
                   const SizedBox(height: 6),
+                  _buildSummaryRow('Selected Plan', '${_selectedPlan?.title ?? 'Standard'} Plan', textSecondary, textPrimary),
+                  const SizedBox(height: 6),
                   _buildSummaryRow('Contract Term', '$_durationYears ${_durationYears == 1 ? 'Year' : 'Years'}', textSecondary, textPrimary),
                   const SizedBox(height: 6),
                   _buildSummaryRow('Preventive Visits', '$_totalVisits Free Service Visits', textSecondary, textPrimary),
                   const SizedBox(height: 6),
-                  _buildSummaryRow('Spare Parts Discount', '15% Off all replacement parts', textSecondary, Colors.green),
+                  _buildSummaryRow(
+                    'Spare Parts Discount',
+                    _selectedPlan?.sparePartsDiscountEnabled == true
+                        ? '${_selectedPlan!.sparePartsDiscountPercentage.toInt()}% Off all replacement parts'
+                        : 'No discount on spare parts',
+                    textSecondary,
+                    _selectedPlan?.sparePartsDiscountEnabled == true ? Colors.green : textSecondary,
+                  ),
+                  if (_selectedPlan?.offerText != null && _selectedPlan!.offerText!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _buildSummaryRow('Special Offer', _selectedPlan!.offerText!.trim(), textSecondary, AppColors.accent),
+                  ],
                   const Divider(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -556,11 +689,8 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
     );
   }
 
-  Widget _buildFrequencyCard({
-    required String title,
-    required int visits,
-    required int pricePerYr,
-    bool isPopular = false,
+  Widget _buildPlanCard({
+    required AmcPlanItem plan,
     required bool isSelected,
     required VoidCallback onTap,
     required Color cardBg,
@@ -580,6 +710,15 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
             color: isSelected ? AppColors.primary : borderCol,
             width: isSelected ? 2 : 1,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,32 +726,36 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? AppColors.primary : textPrimary,
+                Expanded(
+                  child: Text(
+                    plan.title,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? AppColors.primary : textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (isPopular)
+                if (plan.badge != null && plan.badge!.trim().isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.accent,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      'POPULAR',
-                      style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                    child: Text(
+                      plan.badge!.trim().toUpperCase(),
+                      style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
               ],
             ),
             const SizedBox(height: 6),
             Text(
-              '$visits Visits / Yr',
+              '${plan.visitsPerYear} Visits / Yr',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 12,
@@ -621,7 +764,7 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '₹$pricePerYr/yr',
+              '₹${plan.ratePerYear.toInt()}/yr',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 14,
@@ -629,6 +772,41 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
                 color: textPrimary,
               ),
             ),
+            const SizedBox(height: 6),
+            if (plan.sparePartsDiscountEnabled)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${plan.sparePartsDiscountPercentage.toInt()}% Parts Off',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
+                  ),
+                ),
+              )
+            else
+              Text(
+                'Standard Parts',
+                style: TextStyle(fontSize: 10, color: textSecondary),
+              ),
+            if (plan.offerText != null && plan.offerText!.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '★ ${plan.offerText!.trim()}',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accent,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ],
         ),
       ),
@@ -692,7 +870,7 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
         'end_date': _endDate.toIso8601String().split('T').first,
         'contract_amount': _totalAmount.toDouble(),
         'number_of_visits_included': _totalVisits,
-        'terms_text': 'Avail AMC submitted online by customer. Transaction: $txnId. Duration: $_durationYears yr ($_totalVisits visits).',
+        'terms_text': 'Avail AMC (${_selectedPlan?.title ?? 'Standard'} Plan) submitted online by customer. Transaction: $txnId. Duration: $_durationYears yr ($_totalVisits visits). Parts discount: ${_selectedPlan?.sparePartsDiscountEnabled == true ? '${_selectedPlan!.sparePartsDiscountPercentage.toInt()}%' : 'None'}.',
         'created_by': currentUserId,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
@@ -725,7 +903,7 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
           await supabase.from('notifications').insert({
             'user_id': sid,
             'title': 'New AMC Contract Booking 🛡️',
-            'body': 'Customer booked $_durationYears-Year AMC for $_selectedProductName ($amcNumber) - ₹$_totalAmount. Please review and activate.',
+            'body': 'Customer booked $_durationYears-Year (${_selectedPlan?.title ?? 'Standard'}) AMC for $_selectedProductName ($amcNumber) - ₹$_totalAmount. Please review and activate.',
             'type': 'amc_contract_booking',
             'created_at': DateTime.now().toIso8601String(),
           });
@@ -788,6 +966,7 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                Text('• Plan: ${_selectedPlan?.title ?? 'Standard'} Plan'),
                 Text('• Duration: $_durationYears Year(s) ($_totalVisits visits)'),
                 Text('• Amount Paid: ₹${NumberFormat('#,##,###').format(_totalAmount)}'),
                 Text('• Status: Pending Admin Setup (Will be active shortly)'),

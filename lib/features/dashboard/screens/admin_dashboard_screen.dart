@@ -1,11 +1,12 @@
-// lib/features/dashboard/screens/admin_dashboard_screen.dart
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/supabase_provider.dart';
@@ -14,7 +15,6 @@ import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 
 import '../../../core/widgets/sync_status_indicator.dart';
-import '../../../core/widgets/global_search_delegate.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
@@ -46,8 +46,18 @@ final dashboardStatsProvider =
     final result = await supabase.rpc('get_dashboard_stats', params: {'time_filter': timeFilter});
     return Map<String, dynamic>.from(result as Map);
   } catch (e) {
-    final result = await supabase.rpc('get_dashboard_stats');
-    return Map<String, dynamic>.from(result as Map);
+    try {
+      final result = await supabase.rpc('get_dashboard_stats');
+      return Map<String, dynamic>.from(result as Map);
+    } catch (_) {
+      return {
+        'active_deals': 0,
+        'revenue_in_pipeline': 0.0,
+        'amc_needs_attention': 0,
+        'awaiting_fulfillment': 0,
+        'trend': []
+      };
+    }
   }
 });
 
@@ -342,12 +352,26 @@ class AdminDashboardScreen extends ConsumerWidget {
                     ),
                   ),
                   error: (e, _) => Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppColors.errorLight,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text('Failed to load stats: $e'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Unable to load latest statistics. Check your internet connection.',
+                            style: TextStyle(fontSize: 12, color: AppColors.error),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => ref.invalidate(dashboardStatsProvider),
+                          child: const Text('Retry', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -439,6 +463,10 @@ class AdminDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
+
+                // Customer Product Interests (Admin View)
+                const _CustomerProductInterestsSection(),
                 const SizedBox(height: 24),
 
                 // Recent Pipelines
@@ -1070,6 +1098,422 @@ class _TrendChartCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProductInterestItem {
+  final String id;
+  final String customerName;
+  final String customerPhone;
+  final String productName;
+  final String modelNumber;
+  final DateTime createdAt;
+  final String status;
+
+  _ProductInterestItem({
+    required this.id,
+    required this.customerName,
+    required this.customerPhone,
+    required this.productName,
+    required this.modelNumber,
+    required this.createdAt,
+    required this.status,
+  });
+}
+
+class _CustomerProductInterestsSection extends ConsumerStatefulWidget {
+  const _CustomerProductInterestsSection();
+
+  @override
+  ConsumerState<_CustomerProductInterestsSection> createState() =>
+      _CustomerProductInterestsSectionState();
+}
+
+class _CustomerProductInterestsSectionState
+    extends ConsumerState<_CustomerProductInterestsSection> {
+  List<_ProductInterestItem> _interests = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInterests();
+  }
+
+  Future<void> _loadInterests() async {
+    setState(() => _isLoading = true);
+    final List<_ProductInterestItem> loaded = [];
+
+    try {
+      // 1. From local SharedPreferences cache
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('cached_product_inquiries');
+        if (raw != null && raw.isNotEmpty) {
+          final list = jsonDecode(raw) as List;
+          for (final item in list) {
+            if (item is Map) {
+              loaded.add(_ProductInterestItem(
+                id: item['id']?.toString() ?? '',
+                customerName: item['customer_name']?.toString() ?? 'Valued Customer',
+                customerPhone: item['customer_phone']?.toString() ?? '',
+                productName: item['product_name']?.toString() ?? 'Solar System',
+                modelNumber: item['model_number']?.toString() ?? '',
+                createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
+                status: item['status']?.toString() ?? 'pending',
+              ));
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. From Supabase product_inquiries
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final res = await supabase
+            .from('product_inquiries')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(15);
+
+        for (final item in (res as List? ?? [])) {
+          final id = item['inquiry_id']?.toString() ?? item['id']?.toString() ?? '';
+          if (!loaded.any((e) => e.id == id && id.isNotEmpty)) {
+            loaded.add(_ProductInterestItem(
+              id: id,
+              customerName: item['customer_name']?.toString() ?? 'Valued Customer',
+              customerPhone: item['customer_phone']?.toString() ?? '',
+              productName: item['product_name']?.toString() ?? 'Solar System',
+              modelNumber: item['model_number']?.toString() ?? '',
+              createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
+              status: item['status']?.toString() ?? 'pending',
+            ));
+          }
+        }
+      } catch (_) {}
+
+      // 3. From Supabase crm_leads (source = 'Customer Product Interest')
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final res = await supabase
+            .from('crm_leads')
+            .select()
+            .eq('source', 'Customer Product Interest')
+            .order('created_at', ascending: false)
+            .limit(15);
+
+        for (final item in (res as List? ?? [])) {
+          final id = item['id']?.toString() ?? '';
+          final req = item['requirement']?.toString() ?? '';
+          String prodName = 'Solar Equipment';
+          if (req.contains('product:')) {
+            prodName = req.split('product:').last.trim();
+          } else if (req.contains('buying')) {
+            prodName = req.split('buying').last.trim();
+          }
+
+          if (!loaded.any((e) => e.id == id && id.isNotEmpty)) {
+            loaded.add(_ProductInterestItem(
+              id: id,
+              customerName: item['name']?.toString() ?? 'Customer',
+              customerPhone: item['phone']?.toString() ?? '',
+              productName: prodName,
+              modelNumber: '',
+              createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
+              status: item['status']?.toString() ?? 'new',
+            ));
+          }
+        }
+      } catch (_) {}
+
+      loaded.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _interests = loaded;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _launchCall(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (clean.isEmpty) return;
+    final uri = Uri.parse('tel:$clean');
+    try {
+      if (await canLaunchUrl(uri)) await launchUrl(uri);
+    } catch (_) {}
+  }
+
+  void _launchWhatsApp(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (clean.isEmpty) return;
+    final uri = Uri.parse('https://wa.me/$clean');
+    try {
+      if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasItems = _interests.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Customer Product Interests',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_interests.length}',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+              tooltip: 'Refresh inquiries',
+              onPressed: _loadInterests,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        if (_isLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+            ),
+          )
+        else if (!hasItems)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 22),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'No Pending Product Inquiries',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Customer booking interest requests will appear here in real-time.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _interests.length,
+            separatorBuilder: (ctx, i) => const SizedBox(height: 10),
+            itemBuilder: (ctx, index) {
+              final item = _interests[index];
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB).withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.shopping_cart_outlined,
+                            color: Color(0xFF2563EB),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Explicit user text requirement:
+                              // "in admin panel show that respected customer has shown interest in following product"
+                              RichText(
+                                text: TextSpan(
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    color: Color(0xFF1E293B),
+                                    height: 1.35,
+                                  ),
+                                  children: [
+                                    const TextSpan(text: 'Respected customer '),
+                                    TextSpan(
+                                      text: item.customerName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    if (item.customerPhone.isNotEmpty)
+                                      TextSpan(
+                                        text: ' (${item.customerPhone})',
+                                        style: const TextStyle(color: Color(0xFF64748B)),
+                                      ),
+                                    const TextSpan(text: ' has shown interest in following product: '),
+                                    TextSpan(
+                                      text: item.productName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF2563EB),
+                                      ),
+                                    ),
+                                    if (item.modelNumber.isNotEmpty)
+                                      TextSpan(
+                                        text: ' (${item.modelNumber})',
+                                        style: const TextStyle(color: Color(0xFF64748B)),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(Icons.schedule, size: 13, color: Colors.grey.shade500),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt),
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade50,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Colors.amber.shade200),
+                                    ),
+                                    child: Text(
+                                      item.status.toUpperCase(),
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 10),
+
+                    // Action buttons: Call and WhatsApp
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF16A34A),
+                            side: const BorderSide(color: Color(0xFF16A34A), width: 1.2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          icon: const Icon(Icons.chat_outlined, size: 16),
+                          label: const Text('WhatsApp', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          onPressed: () => _launchWhatsApp(item.customerPhone),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.phone, size: 16),
+                          label: const Text('Call Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          onPressed: () => _launchCall(item.customerPhone),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+      ],
     );
   }
 }

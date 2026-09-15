@@ -174,14 +174,30 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                 children: [
                                   Icon(Icons.person_outline, size: 12, color: Colors.grey.shade600),
                                   const SizedBox(width: 4),
-                                  Expanded(
+                                  Text(
+                                    'Added by: ${prospect.createdByName ?? "Staff"}',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: _getRoleTagColor(prospect.createdByRole).withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: _getRoleTagColor(prospect.createdByRole).withOpacity(0.4)),
+                                    ),
                                     child: Text(
-                                      'Added by: ${prospect.createdByName ?? "Staff"} (${(prospect.createdByRole ?? "STAFF").toUpperCase()})',
+                                      _formatRoleDisplayName(prospect.createdByRole),
                                       style: TextStyle(
                                         fontFamily: 'Inter',
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.grey.shade700,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: _getRoleTagColor(prospect.createdByRole),
                                       ),
                                     ),
                                   ),
@@ -214,6 +230,31 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                     ],
                                   ),
                                 ),
+                              ] else if (!isConverted) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.amber.shade300),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.person_add_alt, size: 11, color: Color(0xFFB45309)),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Needs Assignment to Sales',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                               if (isAdmin && prospect.reassignmentRequested) ...[
                                 const SizedBox(height: 4),
@@ -239,10 +280,35 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                     ],
                                   ),
                                 ),
+                              ] else if (isAdmin && (prospect.reassignmentReason?.contains('Cancelled') == true || (prospect.notes?.contains('[REASSIGNMENT_CANCELLED]') ?? false))) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueGrey.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.blueGrey.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.cancel_outlined, size: 11, color: Colors.blueGrey.shade700),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'Reassign Request Cancelled',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blueGrey.shade800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ],
                           ),
-                          trailing: (isAdmin && prospect.assignedTo == null && !isConverted)
+                          trailing: ((isAdmin || profile?.primaryRole == UserRole.salesHead || profile?.primaryRole == UserRole.manager) && prospect.assignedTo == null && !isConverted)
                               ? ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF6366F1),
@@ -378,6 +444,32 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
         ],
       ),
     );
+  }
+
+  Color _getRoleTagColor(String? role) {
+    if (role == null) return Colors.grey;
+    final r = role.toLowerCase();
+    if (r.contains('admin')) return const Color(0xFF6366F1);
+    if (r.contains('manager')) return Colors.purple;
+    if (r.contains('sales_head')) return Colors.teal;
+    if (r.contains('sales')) return const Color(0xFF0284C7);
+    if (r.contains('boq')) return const Color(0xFFEC4899);
+    if (r.contains('factory')) return const Color(0xFFF59E0B);
+    if (r.contains('purchase')) return const Color(0xFF10B981);
+    return Colors.blueGrey;
+  }
+
+  String _formatRoleDisplayName(String? role) {
+    if (role == null || role.isEmpty) return 'Staff';
+    final r = role.toLowerCase();
+    if (r == 'boq') return 'BOQ Staff';
+    if (r == 'factory') return 'Factory Staff';
+    if (r == 'purchase') return 'Material Requisition Staff';
+    if (r == 'sales') return 'Sales Executive';
+    if (r == 'sales_head') return 'Sales Head';
+    if (r == 'admin') return 'Admin';
+    if (r == 'manager') return 'Manager';
+    return role.toUpperCase();
   }
 
   void _showAddProspectForm(BuildContext context) {

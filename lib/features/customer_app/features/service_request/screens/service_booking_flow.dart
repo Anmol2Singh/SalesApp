@@ -1251,48 +1251,17 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
         const SizedBox(height: 32),
 
-        Row(
-          children: [
-            Expanded(
-              child: GradientButton(
-                label: 'Track Technician',
-                onTap: () {
-                  context.pop();
-                  context.go('/track');
-                },
-                icon: const Icon(
-                  Icons.location_searching,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: borderCol),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: TextButton(
-                  onPressed: () {
-                    context.pop();
-                    context.go('/bookings');
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14.0),
-                    child: Text(
-                      'View My Bookings',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: isDark ? Colors.white : AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        GradientButton(
+          label: 'View My Bookings',
+          onTap: () {
+            context.pop();
+            context.go('/bookings');
+          },
+          icon: const Icon(
+            Icons.assignment_outlined,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
       ],
     );

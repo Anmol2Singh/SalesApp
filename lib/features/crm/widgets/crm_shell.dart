@@ -20,6 +20,13 @@ class CrmShell extends ConsumerWidget {
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
     final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
 
+    // Non-sales roles (BOQ, factory, material staff) must only access Prospects
+    if (!isSalesOrAdmin && currentRoute == '/crm/dashboard') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.go('/crm/prospects');
+      });
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -32,6 +39,11 @@ class CrmShell extends ConsumerWidget {
 
         if (context.canPop()) {
           context.pop();
+          return;
+        }
+
+        if (!isSalesOrAdmin) {
+          context.go('/crm/prospects');
           return;
         }
 
@@ -56,7 +68,7 @@ class CrmShell extends ConsumerWidget {
             Expanded(child: child),
           ],
         ),
-        bottomNavigationBar: isWide ? null : _buildMobileCrmBottomNav(context, isSalesOrAdmin),
+        bottomNavigationBar: (isWide || !isSalesOrAdmin) ? null : _buildMobileCrmBottomNav(context, isSalesOrAdmin),
       ),
     );
   }
@@ -69,12 +81,13 @@ class CrmShell extends ConsumerWidget {
         children: [
           Text('CRM Mode', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(width: 32),
-          _DesktopTab(
-            label: 'Dashboard',
-            icon: Icons.dashboard,
-            isSelected: currentRoute == '/crm/dashboard',
-            onTap: () => context.go('/crm/dashboard'),
-          ),
+          if (isSalesOrAdmin)
+            _DesktopTab(
+              label: 'Dashboard',
+              icon: Icons.dashboard,
+              isSelected: currentRoute == '/crm/dashboard',
+              onTap: () => context.go('/crm/dashboard'),
+            ),
           _DesktopTab(
             label: 'Prospects',
             icon: Icons.person_search,
@@ -124,18 +137,6 @@ class CrmShell extends ConsumerWidget {
       child: NavigationBar(
         selectedIndex: _getSelectedIndex(currentRoute, isSalesOrAdmin),
         onDestinationSelected: (index) {
-          if (!isSalesOrAdmin) {
-            switch (index) {
-              case 0:
-                context.go('/crm/dashboard');
-                break;
-              case 1:
-                context.go('/crm/prospects');
-                break;
-            }
-            return;
-          }
-
           switch (index) {
             case 0:
               context.go('/crm/dashboard');
@@ -151,39 +152,33 @@ class CrmShell extends ConsumerWidget {
               break;
           }
         },
-        destinations: [
-          const NavigationDestination(
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.person_search_outlined),
             selectedIcon: Icon(Icons.person_search),
             label: 'Prospects',
           ),
-          if (isSalesOrAdmin) ...[
-            const NavigationDestination(
-              icon: Icon(Icons.trending_up_outlined),
-              selectedIcon: Icon(Icons.trending_up),
-              label: 'Leads',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.people_outline),
-              selectedIcon: Icon(Icons.people),
-              label: 'Customers',
-            ),
-          ],
+          NavigationDestination(
+            icon: Icon(Icons.trending_up_outlined),
+            selectedIcon: Icon(Icons.trending_up),
+            label: 'Leads',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: 'Customers',
+          ),
         ],
       ),
     );
   }
 
   int _getSelectedIndex(String route, bool isSalesOrAdmin) {
-    if (!isSalesOrAdmin) {
-      if (route.startsWith('/crm/prospects')) return 1;
-      return 0;
-    }
     if (route == '/crm/dashboard') return 0;
     if (route.startsWith('/crm/prospects')) return 1;
     if (route.startsWith('/crm/leads')) return 2;

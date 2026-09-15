@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -114,19 +115,29 @@ class MockAuthRepository implements AuthRepository {
   }
 }
 
+String _getDefaultProductImage(String category) {
+  final cat = category.toLowerCase();
+  if (cat.contains('boiler')) {
+    return 'https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop';
+  }
+  if (cat.contains('thermostat')) {
+    return 'https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop';
+  }
+  return 'https://images.unsplash.com/photo-1621905252507-b354bc25edac?w=800&auto=format&fit=crop';
+}
+
 class MockCustomerRepository implements CustomerRepository {
-  final List<Product> _products = [
+  final List<Product> _mockProducts = [
     Product(
       productId: 'prod_1',
-      productName: 'IZYSmart Eco Boiler',
-      modelNumber: 'IZY-BLR-800X',
-      imageUrl:
-          'assets/images/boiler_placeholder.jpg', // Local fallback or network URL
-      purchasedDate: DateTime.now().subtract(const Duration(days: 365)),
-      sellerName: 'Northern HVAC Distributors Ltd',
-      amountPaid: 1850.00,
+      productName: 'IZYHeat Solar Water Heater (100L)',
+      modelNumber: 'IZY-SWH-100',
+      imageUrl: _getDefaultProductImage('boiler'),
+      purchasedDate: DateTime.now().subtract(const Duration(days: 45)),
+      sellerName: 'Apex Solar Solutions',
+      amountPaid: 1200.00,
       currencyCode: 'USD',
-      warrantyExpiryDate: DateTime.now().add(const Duration(days: 365)),
+      warrantyExpiryDate: DateTime.now().add(const Duration(days: 320)),
       amcStatus: 'active',
       amcExpiryDate: DateTime.now().add(const Duration(days: 120)),
       serialNumber: 'SN-BLR800-98319',
@@ -136,7 +147,7 @@ class MockCustomerRepository implements CustomerRepository {
       productId: 'prod_2',
       productName: 'IZYFlow Heat Pump',
       modelNumber: 'IZY-HP-500e',
-      imageUrl: 'assets/images/heatpump_placeholder.jpg',
+      imageUrl: _getDefaultProductImage('heat_pump'),
       purchasedDate: DateTime.now().subtract(const Duration(days: 800)),
       sellerName: 'Apex Solar Solutions',
       amountPaid: 3200.00,
@@ -151,7 +162,7 @@ class MockCustomerRepository implements CustomerRepository {
       productId: 'prod_3',
       productName: 'IZYTemp Smart Thermostat',
       modelNumber: 'IZY-THR-10',
-      imageUrl: 'assets/images/thermostat_placeholder.jpg',
+      imageUrl: _getDefaultProductImage('thermostat'),
       purchasedDate: DateTime.now().subtract(const Duration(days: 120)),
       sellerName: 'IZYHEAT Store Delhi',
       amountPaid: 249.99,
@@ -296,7 +307,7 @@ class MockCustomerRepository implements CustomerRepository {
   @override
   Future<List<Product>> getProducts() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    return _products;
+    return _mockProducts;
   }
 
   @override
@@ -412,10 +423,10 @@ class MockCustomerRepository implements CustomerRepository {
   @override
   Future<void> renewAmc(String productId) async {
     await Future.delayed(const Duration(milliseconds: 1500));
-    final index = _products.indexWhere((prod) => prod.productId == productId);
+    final index = _mockProducts.indexWhere((prod) => prod.productId == productId);
     if (index != -1) {
-      final p = _products[index];
-      _products[index] = Product(
+      final p = _mockProducts[index];
+      _mockProducts[index] = Product(
         productId: p.productId,
         productName: p.productName,
         modelNumber: p.modelNumber,
@@ -721,6 +732,8 @@ class SupabaseAuthRepository implements AuthRepository {
 
 class SupabaseCustomerRepository implements CustomerRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
+  static List<Product>? _cachedProducts;
+  static List<Product>? get cachedProducts => _cachedProducts;
 
   Future<String> _resolveCustomerId() async {
     // 1. Check customer portal session phone first
@@ -847,6 +860,18 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
   @override
   Future<List<Product>> getProducts() async {
+    // Try restoring from disk cache if memory cache is empty
+    if (_cachedProducts == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedJsonStr = prefs.getString('customer_cached_products_json');
+        if (cachedJsonStr != null && cachedJsonStr.isNotEmpty) {
+          final decoded = jsonDecode(cachedJsonStr) as List;
+          _cachedProducts = decoded.map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+        }
+      } catch (_) {}
+    }
+
     try {
       String? sessionPhone = SupabaseAuthRepository.loggedInPhone;
       try {
@@ -1136,11 +1161,8 @@ class SupabaseCustomerRepository implements CustomerRepository {
           productId: pipelineId,
           productName: productName,
           modelNumber: modelNumber,
-          imageUrl: firstImg.isNotEmpty ? firstImg : (category == 'heat_pump'
-              ? 'assets/images/heatpump_placeholder.jpg'
-              : (category == 'thermostat'
-                    ? 'assets/images/thermostat_placeholder.jpg'
-                    : 'assets/images/boiler_placeholder.jpg')),
+          imageUrl: firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(category),
+          imageUrls: imgList.isNotEmpty ? imgList : [firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(category)],
           purchasedDate: purchasedDate,
           sellerName: sellerName,
           amountPaid: amountPaid,
@@ -1185,7 +1207,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
             productId: qId,
             productName: qProdName,
             modelNumber: 'COMMERCIAL',
-            imageUrl: 'assets/images/heatpump_placeholder.jpg',
+            imageUrl: _getDefaultProductImage('heat_pump'),
             purchasedDate: qCreatedAt,
             sellerName: 'IZYHEAT Industry',
             amountPaid: grandTotal,
@@ -1246,10 +1268,21 @@ class SupabaseCustomerRepository implements CustomerRepository {
         }
       } catch (_) {}
 
+      if (list.isNotEmpty) {
+        _cachedProducts = list;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final jsonList = list.map((p) => p.toJson()).toList();
+          await prefs.setString('customer_cached_products_json', jsonEncode(jsonList));
+        } catch (_) {}
+      } else if (_cachedProducts != null && _cachedProducts!.isNotEmpty) {
+        return _cachedProducts!;
+      }
+
       return list;
     } catch (e) {
       print("Error fetching purchased products: $e");
-      return [];
+      return _cachedProducts ?? [];
     }
   }
 
@@ -1357,11 +1390,8 @@ class SupabaseCustomerRepository implements CustomerRepository {
           productId: prodId,
           productName: p['name'] as String? ?? 'IZYHEAT System',
           modelNumber: p['model_number'] as String? ?? p['category'] as String? ?? 'IZY-01',
-          imageUrl: firstImg.isNotEmpty ? firstImg : (p['category'] == 'heat_pump'
-              ? 'assets/images/heatpump_placeholder.jpg'
-              : (p['category'] == 'thermostat'
-                    ? 'assets/images/thermostat_placeholder.jpg'
-                    : 'assets/images/boiler_placeholder.jpg')),
+          imageUrl: firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(p['category']?.toString() ?? ''),
+          imageUrls: imgList.isNotEmpty ? imgList : [firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(p['category']?.toString() ?? '')],
           purchasedDate: DateTime.now().add(const Duration(days: 3650)), // Far future to mark as NOT purchased
           sellerName: 'IZYHEAT Store',
           amountPaid: (p['base_price'] as num?)?.toDouble() ?? 0.0,
@@ -1542,91 +1572,119 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
   @override
   Future<List<Invoice>> getInvoices() async {
-    final currentUser = _supabase.auth.currentUser;
-    if (currentUser == null) return [];
-
     final List<Invoice> allInvoices = [];
 
-    // 1. Fetch direct invoices from invoices table (service/repair invoices)
+    String? sessionPhone = SupabaseAuthRepository.loggedInPhone;
+    String? sessionEmail = _supabase.auth.currentUser?.email;
+    String? sessionName;
     try {
-      final customerId = await _resolveCustomerId();
-      final ids = {currentUser.id, customerId}.toList();
+      final prefs = await SharedPreferences.getInstance();
+      sessionPhone = prefs.getString('customer_session_phone') ?? sessionPhone;
+      final sessionUid = prefs.getString('customer_session_uid');
+      if ((sessionPhone == null || sessionPhone.isEmpty) && sessionUid != null && sessionUid.startsWith('mock-user-')) {
+        sessionPhone = sessionUid.replaceAll('mock-user-', '');
+      }
+    } catch (_) {}
 
-      final response = await _supabase
-          .from('invoices')
-          .select('*, bookings(*, amc_contracts(*, products(*)))')
-          .inFilter('customer_id', ids)
-          .order('created_at', ascending: false);
+    final currentUser = _supabase.auth.currentUser;
+    if (sessionPhone == null || sessionPhone.isEmpty) {
+      sessionPhone = currentUser?.phone ?? currentUser?.userMetadata?['phone']?.toString();
+    }
 
-      for (final item in (response as List)) {
-        final invoiceId = item['id'] as String;
-        final amount = (item['amount'] as num?)?.toDouble() ?? 0.0;
-        final status = item['status'] as String? ?? 'paid';
-        final createdAt = DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now();
+    try {
+      final currentUid = currentUser?.id;
+      if (currentUid != null && !currentUid.startsWith('mock-user-')) {
+        var profile = await _supabase
+            .from('customer_profiles')
+            .select('full_name, email, phone')
+            .eq('id', currentUid)
+            .maybeSingle();
+        if (profile == null) {
+          profile = await _supabase
+              .from('profiles')
+              .select('full_name, email, phone')
+              .eq('id', currentUid)
+              .maybeSingle();
+        }
+        if (profile != null) {
+          sessionEmail = (profile['email'] as String?)?.trim().toLowerCase() ?? sessionEmail;
+          sessionName = (profile['full_name'] as String?)?.trim();
+          final pPhone = (profile['phone'] as String?)?.replaceAll(RegExp(r'\D'), '');
+          if ((sessionPhone == null || sessionPhone.isEmpty) && pPhone != null && pPhone.isNotEmpty) {
+            sessionPhone = pPhone;
+          }
+        }
+      }
+    } catch (_) {}
 
-        final bookingData = item['bookings'] as Map<String, dynamic>? ?? {};
-        final category = bookingData['issue_category'] as String? ?? 'Service Charge';
+    final cleanDigits = (sessionPhone ?? '').replaceAll(RegExp(r'\D'), '');
+    final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
 
-        allInvoices.add(Invoice(
-          invoiceId: invoiceId,
-          customerId: currentUser.id,
-          requestId: item['related_booking_id'] as String? ?? '',
-          title: 'Invoice for $category',
-          date: createdAt,
-          dueDate: createdAt.add(const Duration(days: 15)),
-          amount: amount,
-          status: status,
-          lineItems: [
-            {'name': 'Service & Repairs', 'qty': 1, 'price': amount},
-          ],
-        ));
+    // 1. Resolve Customer IDs
+    final allCustomerIds = <String>{};
+    if (currentUser?.id != null) allCustomerIds.add(currentUser!.id);
+    try {
+      final resolvedId = await _resolveCustomerId();
+      if (resolvedId.isNotEmpty) allCustomerIds.add(resolvedId);
+    } catch (_) {}
+
+    if (last10.isNotEmpty) {
+      try {
+        final custRows = await _supabase
+            .from('customers')
+            .select('id, phone, customer_name, company_name')
+            .or('phone.eq.$cleanDigits,phone.ilike.%$last10');
+        for (final c in (custRows as List? ?? [])) {
+          allCustomerIds.add(c['id'] as String);
+          if (sessionName == null || sessionName.isEmpty) {
+            sessionName = c['customer_name'] as String? ?? c['company_name'] as String?;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Fetch direct invoices from public.invoices
+    try {
+      if (allCustomerIds.isNotEmpty) {
+        final response = await _supabase
+            .from('invoices')
+            .select('*, bookings(*, amc_contracts(*, products(*)))')
+            .inFilter('customer_id', allCustomerIds.toList())
+            .order('created_at', ascending: false);
+
+        for (final item in (response as List? ?? [])) {
+          final invoiceId = item['id'] as String;
+          final amount = (item['amount'] as num?)?.toDouble() ?? 0.0;
+          final status = item['status'] as String? ?? 'paid';
+          final createdAt = DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now();
+
+          final bookingData = item['bookings'] as Map<String, dynamic>? ?? {};
+          final category = bookingData['issue_category'] as String? ?? 'Service Charge';
+
+          allInvoices.add(Invoice(
+            invoiceId: invoiceId,
+            customerId: allCustomerIds.first,
+            requestId: item['related_booking_id'] as String? ?? '',
+            title: 'Invoice for $category',
+            date: createdAt,
+            dueDate: createdAt.add(const Duration(days: 15)),
+            amount: amount,
+            status: status,
+            lineItems: [
+              {'name': 'Service & Repairs', 'qty': 1, 'price': amount},
+            ],
+          ));
+        }
       }
     } catch (e) {
       debugPrint("Error fetching direct invoices: $e");
     }
 
-    // 2. Fetch finalized quotations for products purchased by customer (Tax Invoices)
+    // 3. Fetch finalized quotations for products purchased by customer (Tax Invoices)
     try {
-      final customerId = await _resolveCustomerId();
-      final allCustomerIds = <String>{currentUser.id, customerId};
-
-      String? userPhone = currentUser.phone;
-      String? userEmail = currentUser.email;
-
-      try {
-        final profileRes = await _supabase
-            .from('profiles')
-            .select('phone, email, full_name')
-            .eq('id', currentUser.id)
-            .maybeSingle();
-        if (profileRes != null) {
-          if (profileRes['phone'] != null && profileRes['phone'].toString().isNotEmpty) {
-            userPhone = profileRes['phone'].toString();
-          }
-          if (profileRes['email'] != null && profileRes['email'].toString().isNotEmpty) {
-            userEmail = profileRes['email'].toString();
-          }
-        }
-      } catch (_) {}
-
-      final cleanDigits = (userPhone ?? '').replaceAll(RegExp(r'\D'), '');
-      final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
-
-      // Find customers matching phone / email
-      if (last10.isNotEmpty) {
-        try {
-          final custRows = await _supabase
-              .from('customers')
-              .select('id, phone')
-              .or('phone.eq.$cleanDigits,phone.ilike.%$last10');
-          for (final c in (custRows as List? ?? [])) {
-            allCustomerIds.add(c['id'] as String);
-          }
-        } catch (_) {}
-      }
-
-      // Query pipelines
       final List<dynamic> quotRows = [];
+
+      // Query by pipelines
       if (allCustomerIds.isNotEmpty) {
         try {
           final pipeRows = await _supabase
@@ -1644,7 +1702,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
         } catch (_) {}
       }
 
-      // Also query directly by phone
+      // Query by phone
       if (last10.isNotEmpty) {
         try {
           final qByPhone = await _supabase
@@ -1659,9 +1717,24 @@ class SupabaseCustomerRepository implements CustomerRepository {
         } catch (_) {}
       }
 
+      // Query by customer name (e.g. Akhilesh)
+      if (sessionName != null && sessionName.trim().isNotEmpty) {
+        try {
+          final qByName = await _supabase
+              .from('quotations')
+              .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final')
+              .ilike('customer_name', '%${sessionName.trim()}%');
+          for (final q in (qByName as List? ?? [])) {
+            if (!quotRows.any((existing) => existing['id'] == q['id'])) {
+              quotRows.add(q);
+            }
+          }
+        } catch (_) {}
+      }
+
       for (final q in quotRows) {
         final status = q['status']?.toString().toLowerCase() ?? '';
-        final isFinal = q['is_final'] == true || status == 'confirmed' || status == 'won' || status == 'approved';
+        final isFinal = q['is_final'] == true || status == 'confirmed' || status == 'won' || status == 'approved' || status == 'completed';
         if (!isFinal) continue;
 
         final qId = q['id'] as String;
@@ -1694,7 +1767,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
         allInvoices.add(Invoice(
           invoiceId: qId,
-          customerId: currentUser.id,
+          customerId: allCustomerIds.isNotEmpty ? allCustomerIds.first : 'customer',
           requestId: q['pipeline_id'] as String? ?? '',
           title: title,
           date: qCreatedAt,

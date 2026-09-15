@@ -122,7 +122,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           location == '/profile' ||
           location.startsWith('/product') ||
           location == '/amc_avail' ||
-          location == '/request_product';
+          location == '/request_product' ||
+          location.startsWith('/service-booking');
 
       if (isCustomerRoute) return null;
 
@@ -206,6 +207,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/request_product',
             builder: (context, state) => const RequestProductScreen(),
+          ),
+          GoRoute(
+            path: '/service-booking',
+            builder: (context, state) {
+              final prodId = state.uri.queryParameters['productId'];
+              return Scaffold(
+                backgroundColor: Colors.transparent,
+                body: ServiceBookingFlow(preselectedProductId: prodId),
+              );
+            },
           ),
         ],
       ),
@@ -502,10 +513,13 @@ String getRoleHome(UserRole role) {
       return AppRoutes.adminDashboard;
     case UserRole.sales:
     case UserRole.salesHead:
-    case UserRole.factory:
-    case UserRole.purchase:
-    case UserRole.boq:
       return AppRoutes.salesDashboard;
+    case UserRole.factory:
+      return AppRoutes.factoryQueue;
+    case UserRole.purchase:
+      return AppRoutes.purchaseQueue;
+    case UserRole.boq:
+      return '/crm/prospects';
     case UserRole.serviceHead:
       return AppRoutes.complaintsDashboard;
     case UserRole.technician:
@@ -513,7 +527,7 @@ String getRoleHome(UserRole role) {
     case UserRole.customer:
       return '/customer/dashboard';
     case UserRole.crmStaff:
-      return '/crm/dashboard';
+      return '/crm/prospects';
   }
 }
 

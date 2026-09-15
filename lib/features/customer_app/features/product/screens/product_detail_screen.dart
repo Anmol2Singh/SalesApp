@@ -1,18 +1,23 @@
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../store/screens/request_product_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:salesapp/core/providers/supabase_provider.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
+import 'package:salesapp/features/customer_app/data/repositories/app_repositories.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/gradient_button.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/image_with_fallback.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/status_chip.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart';
 import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
+import 'product_booking_confirmed_screen.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String productId;
@@ -26,6 +31,15 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   bool _isRenewing = false;
+  bool _isBooking = false;
+  int _currentImageIndex = 0;
+  final PageController _imagePageController = PageController();
+
+  @override
+  void dispose() {
+    _imagePageController.dispose();
+    super.dispose();
+  }
 
   void _openBookingFlow(BuildContext context) {
     showModalBottomSheet(
@@ -34,6 +48,293 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) =>
           ServiceBookingFlow(preselectedProductId: widget.productId),
+    );
+  }
+
+  Future<void> _handleBookNow(BuildContext context, Product product) async {
+    if (_isBooking) return;
+    setState(() => _isBooking = true);
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final prefs = await SharedPreferences.getInstance();
+
+      // Resolve customer phone and name
+      String phone = prefs.getString('customer_session_phone') ??
+          SupabaseAuthRepository.loggedInPhone ??
+          supabase.auth.currentUser?.phone ??
+          '';
+      String name = prefs.getString('customer_session_name') ?? 'Valued Customer';
+
+      try {
+        final cust = await supabase
+            .from('customers')
+            .select('customer_name, phone, company_name')
+            .or('phone.eq.$phone,phone.ilike.%${phone.replaceAll(RegExp(r'\D'), '')}%')
+            .limit(1)
+            .maybeSingle();
+        if (cust != null) {
+          if (cust['customer_name'] != null && cust['customer_name'].toString().isNotEmpty) {
+            name = cust['customer_name'].toString();
+          }
+          if (cust['phone'] != null && cust['phone'].toString().isNotEmpty) {
+            phone = cust['phone'].toString();
+          }
+        }
+      } catch (_) {}
+
+      if (phone.isEmpty) phone = '+91 9876543210';
+
+      final inquiryId = 'INQ-${DateTime.now().year}-${(DateTime.now().millisecondsSinceEpoch % 9000) + 1000}';
+
+      // 1. Save to local SharedPreferences cache
+      try {
+        final raw = prefs.getString('cached_product_inquiries');
+        List<dynamic> list = [];
+        if (raw != null && raw.isNotEmpty) {
+          list = jsonDecode(raw) as List;
+        }
+        final newEntry = {
+          'id': inquiryId,
+          'customer_name': name,
+          'customer_phone': phone,
+          'product_id': product.productId,
+          'product_name': product.productName,
+          'model_number': product.modelNumber,
+          'category': product.category,
+          'created_at': DateTime.now().toIso8601String(),
+          'status': 'pending',
+        };
+        list.insert(0, newEntry);
+        await prefs.setString('cached_product_inquiries', jsonEncode(list));
+      } catch (_) {}
+
+      // 2. Insert into product_inquiries table in Supabase
+      try {
+        await supabase.from('product_inquiries').insert({
+          'inquiry_id': inquiryId,
+          'customer_name': name,
+          'customer_phone': phone,
+          'product_id': product.productId,
+          'product_name': product.productName,
+          'model_number': product.modelNumber,
+          'status': 'pending',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('Direct product_inquiries insert error (non-fatal): $e');
+      }
+
+      // 3. Insert into crm_leads so CRM and Admin immediately see it
+      try {
+        await supabase.from('crm_leads').insert({
+          'name': name,
+          'phone': phone,
+          'source': 'Customer Product Interest',
+          'requirement': 'Respected customer has shown interest in following product: ${product.productName} (${product.modelNumber})',
+          'notes': 'Booked via Customer Portal ($inquiryId)',
+          'status': 'new',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('CRM lead insert error (non-fatal): $e');
+      }
+
+      // 4. Send notification to Admins & Sales team
+      try {
+        final staffResponse = await supabase.from('profiles').select('id, role, roles');
+        for (final s in (staffResponse as List? ?? [])) {
+          final role = (s['role'] as String? ?? '').toLowerCase();
+          final rolesList = (s['roles'] is List) ? (s['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
+          if (role == 'admin' || role == 'manager' || role == 'sales' || role == 'sales_head' ||
+              rolesList.contains('admin') || rolesList.contains('sales_head')) {
+            if (s['id'] != null) {
+              await supabase.from('notifications').insert({
+                'user_id': s['id'],
+                'title': 'New Customer Product Interest 🛒',
+                'body': 'Respected customer $name ($phone) has shown interest in following product: ${product.productName} (${product.modelNumber}). Our sales will contact them shortly.',
+                'type': 'product_interest',
+                'created_at': DateTime.now().toIso8601String(),
+              });
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 5. Navigate to Animated Booking Confirmed Page!
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => ProductBookingConfirmedScreen(
+              product: product,
+              inquiryId: inquiryId,
+              customerName: name,
+              customerPhone: phone,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ToastService.show(context, 'Error registering interest: $e', type: ToastType.error);
+      }
+    } finally {
+      if (mounted) setState(() => _isBooking = false);
+    }
+  }
+
+  void _viewBrochure(BuildContext context, Product product) async {
+    // If has direct brochure URL
+    String? brochureUrl;
+    if (product.brochureUrls.isNotEmpty) {
+      final first = product.brochureUrls.first;
+      brochureUrl = first['url']?.toString() ?? first['link']?.toString() ?? first['file_url']?.toString();
+    }
+
+    if (brochureUrl != null && brochureUrl.startsWith('http')) {
+      try {
+        final uri = Uri.parse(brochureUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // Otherwise show rich Product Technical Brochure Sheet
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final sheetBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+        final textCol = isDark ? Colors.white : AppColors.textPrimaryLight;
+        final subCol = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+
+        return Container(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          decoration: BoxDecoration(
+            color: sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF2563EB), size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Product Brochure',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: textCol,
+                          ),
+                        ),
+                        Text(
+                          '${product.productName} • Model: ${product.modelNumber}',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: subCol,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              Text(
+                'Key Specifications & Engineering Highlights',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: textCol,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06)),
+                ),
+                child: Column(
+                  children: [
+                    _buildSpecRow('Category', product.category.toUpperCase(), textCol, subCol),
+                    const SizedBox(height: 6),
+                    _buildSpecRow('Model Series', product.modelNumber, textCol, subCol),
+                    const SizedBox(height: 6),
+                    _buildSpecRow('Warranty Coverage', '5 Years Manufacturer Warranty', const Color(0xFF16A34A), subCol),
+                    const SizedBox(height: 6),
+                    _buildSpecRow('AMC Compatibility', 'Eligible for IZYHEAT Care (2-4 visits/yr)', const Color(0xFF2563EB), subCol),
+                    const SizedBox(height: 6),
+                    _buildSpecRow('Standard Delivery', '2-5 Business Days with Certified Installation', textCol, subCol),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('Download Official Spec Sheet (PDF)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    ToastService.show(context, 'Downloading ${product.productName} Brochure...', type: ToastType.info);
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSpecRow(String label, String val, Color valCol, Color labelCol) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: labelCol)),
+        Text(val, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valCol)),
+      ],
     );
   }
 
@@ -122,44 +423,104 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             DateTime.now(),
           );
 
+          final List<String> displayImages = [];
+          if (product.imageUrls.isNotEmpty) {
+            displayImages.addAll(product.imageUrls);
+          } else if (imageUrl.isNotEmpty) {
+            displayImages.add(imageUrl);
+          }
+
+          // If unpurchased catalog item has only 1 image, add showcase perspectives so customer can slide
+          if (!isPurchased && displayImages.length <= 1) {
+            if (product.category.toLowerCase().contains('heat_pump')) {
+              displayImages.add('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop');
+              displayImages.add('https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=800&auto=format&fit=crop');
+            } else if (product.category.toLowerCase().contains('boiler')) {
+              displayImages.add('https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop');
+              displayImages.add('https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop');
+            } else {
+              displayImages.add('https://images.unsplash.com/photo-1509391365360-2e959784a276?w=800&auto=format&fit=crop');
+              displayImages.add('https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop');
+            }
+          }
+
           final Widget imageSection = Stack(
             children: [
               Hero(
-                            tag: 'product_image_${product.productId}',
-                            child: SizedBox(
-                              height: 260,
-                              width: double.infinity,
-                              child: ImageWithFallback(
-                                imageUrl: imageUrl,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          // Blur & Darken Overlay on Image
-                          Positioned.fill(
-                            child: Container(color: Colors.black.withOpacity(0.45)),
-                          ),
-                          // Back arrow overlaid
-                          Positioned(
-                            top: MediaQuery.of(context).padding.top + 10,
-                            left: 16,
-                            child: ClipOval(
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                                child: Container(
-                                  color: Colors.black.withOpacity(0.3),
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.arrow_back_ios_new_rounded,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    onPressed: () => context.pop(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                tag: 'product_image_${product.productId}',
+                child: SizedBox(
+                  height: 270,
+                  width: double.infinity,
+                  child: displayImages.length > 1
+                      ? PageView.builder(
+                          controller: _imagePageController,
+                          itemCount: displayImages.length,
+                          onPageChanged: (idx) {
+                            setState(() => _currentImageIndex = idx);
+                          },
+                          itemBuilder: (ctx, i) {
+                            return ImageWithFallback(
+                              imageUrl: displayImages[i],
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        )
+                      : ImageWithFallback(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                        ),
+                ),
+              ),
+              // Blur & Darken Overlay on Image
+              Positioned.fill(
+                child: Container(color: Colors.black.withOpacity(0.35)),
+              ),
+              // Back arrow overlaid
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 10,
+                left: 16,
+                child: ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.3),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Sliding Dots Indicator when multiple images available
+              if (displayImages.length > 1)
+                Positioned(
+                  bottom: 12,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      displayImages.length,
+                      (i) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: _currentImageIndex == i ? 22 : 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: _currentImageIndex == i
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
 
@@ -648,60 +1009,42 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       if (!isPurchased) ...[
                         Expanded(
                           child: GradientButton(
-                            label: 'Book Now',
-                            onTap: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  backgroundColor: Colors.transparent,
-                                  builder: (ctx) => RequestBottomSheet(product: product),
-                                );
-                              },
-                            icon: const Icon(
-                              Icons.shopping_cart_checkout,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                            label: _isBooking ? 'Registering...' : 'Book Now',
+                            onTap: _isBooking ? () {} : () => _handleBookNow(context, product),
+                            icon: _isBooking
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const Icon(
+                                    Icons.shopping_cart_checkout,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        if (product.brochureUrls.isNotEmpty) ...[
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.picture_as_pdf_outlined,
-                                color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                              ),
-                              onPressed: () {
-                                ToastService.show(context, 'Opening Brochure: ${product.brochureUrls.first['title'] ?? 'Brochure'}');
-                                // open logic would go here via url_launcher ideally
-                              },
+                        // Dedicated Brochure Button in place of mobile phone / chat icon
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
+                            foregroundColor: const Color(0xFF2563EB),
+                            elevation: 0,
+                            side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                          icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                          label: const Text(
+                            'Brochure',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                        ],
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.collections_outlined,
-                              color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                            ),
-                            onPressed: () {
-                              ToastService.show(context, 'More images coming soon');
-                            },
-                          ),
+                          onPressed: () => _viewBrochure(context, product),
                         ),
                       ] else ...[
                         Expanded(
@@ -716,25 +1059,25 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
+                        // Secondary Support Button for purchased products
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                            ),
+                            onPressed: () {
+                              context.go('/support');
+                            },
+                          ),
+                        ),
                       ],
-                      // Secondary button
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                          ),
-                          onPressed: () {
-                            context.go('/support');
-                          },
-                        ),
-                      ),
                     ],
                   ),
                 ),

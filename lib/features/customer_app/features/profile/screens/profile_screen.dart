@@ -8,6 +8,8 @@ import 'package:salesapp/features/customer_app/data/providers/app_providers.dart
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart';
 import 'package:salesapp/core/providers/theme_provider.dart';
+import 'package:salesapp/core/providers/supabase_provider.dart';
+import 'package:salesapp/features/customer_app/features/services/screens/amc_avail_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -22,8 +24,54 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _emailAlerts = false;
   int _defaultAddressIndex = 0;
   bool _hasInitializedAddresses = false;
+  bool _hasCheckedDirectAmc = false;
+  bool _directAmcActive = false;
+  String? _directAmcNumber;
+  DateTime? _directAmcEndDate;
 
   final List<String> _addresses = [];
+
+  Future<void> _checkDirectAmc(String? phone, String? email) async {
+    if (_hasCheckedDirectAmc) return;
+    _hasCheckedDirectAmc = true;
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final cleanPhone = (phone ?? '').replaceAll(RegExp(r'\D'), '');
+      final last10 = cleanPhone.length >= 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
+
+      String? custId;
+      if (last10.isNotEmpty) {
+        final cRes = await supabase.from('customers').select('id, phone').limit(50);
+        for (final row in (cRes as List? ?? [])) {
+          final rp = (row['phone'] as String?)?.replaceAll(RegExp(r'\D'), '') ?? '';
+          if (rp.isNotEmpty && (rp == cleanPhone || rp.endsWith(last10) || last10.endsWith(rp))) {
+            custId = row['id'] as String;
+            break;
+          }
+        }
+      }
+
+      var query = supabase.from('amc_contracts').select('amc_number, status, end_date');
+      if (custId != null) {
+        query = query.eq('customer_id', custId);
+      }
+      final contracts = await query.order('created_at', ascending: false).limit(10);
+      for (final c in (contracts as List? ?? [])) {
+        final status = (c['status'] as String? ?? '').toLowerCase();
+        if (status == 'active' || status == 'approved') {
+          if (mounted) {
+            setState(() {
+              _directAmcActive = true;
+              _directAmcNumber = c['amc_number'] as String?;
+              final ed = c['end_date'] as String?;
+              if (ed != null) _directAmcEndDate = DateTime.tryParse(ed);
+            });
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+  }
 
   void _showLogoutDialog() {
     showDialog(
@@ -194,15 +242,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           final name = profile['name'] ?? 'Jane Doe';
           final email = profile['email'] ?? 'jane.doe@example.com';
           final phone = profile['phone'] ?? '+91 99999 99999';
-          final avatarUrl =
-              profile['avatarUrl'] ??
-              'https://api.dicebear.com/7.x/adventurer/svg?seed=Jane';
 
           if (!_hasInitializedAddresses) {
             final saved = (profile['savedAddresses'] as List?)?.whereType<String>().toList() ?? [];
             _addresses.addAll(saved);
             _hasInitializedAddresses = true;
           }
+
+          _checkDirectAmc(phone, email);
 
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
@@ -296,7 +343,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 productsAsync.when(
                   data: (products) {
                     final amcProducts = products.where((p) => p.amcStatus == 'active').toList();
-                    final hasAmc = amcProducts.isNotEmpty;
+                    final hasAmc = amcProducts.isNotEmpty || _directAmcActive;
                     return GlassCard(
                       padding: const EdgeInsets.all(18),
                       borderRadius: 18,
@@ -332,7 +379,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     ),
                                     Text(
                                       hasAmc
-                                          ? 'Contract ${amcProducts.first.serialNumber}'
+                                          ? (amcProducts.isNotEmpty
+                                              ? 'Contract ${amcProducts.first.serialNumber}'
+                                              : (_directAmcNumber != null ? 'Contract $_directAmcNumber' : 'Active Maintenance Contract'))
                                           : 'No active maintenance contract',
                                       style: const TextStyle(
                                         fontSize: 12,
@@ -363,32 +412,87 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(height: 12),
                             const Divider(height: 1),
                             const SizedBox(height: 10),
-                            ...amcProducts.map((p) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            if (amcProducts.isNotEmpty)
+                              ...amcProducts.map((p) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(p.productName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                                    Text(
+                                      p.amcExpiryDate != null ? 'Valid until ${DateFormat('dd MMM yyyy').format(p.amcExpiryDate!)}' : 'Active Contract',
+                                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ))
+                            else if (_directAmcEndDate != null)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Active Protection Plan', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                                    Text(
+                                      'Valid until ${DateFormat('dd MMM yyyy').format(_directAmcEndDate!)}',
+                                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(p.productName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                                  Icon(Icons.check_circle, color: Color(0xFF10B981), size: 18),
+                                  SizedBox(width: 8),
                                   Text(
-                                    p.amcExpiryDate != null ? 'Valid until ${DateFormat('dd MMM yyyy').format(p.amcExpiryDate!)}' : 'Active Contract',
-                                    style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600),
+                                    'AMC Activated',
+                                    style: TextStyle(
+                                      color: Color(0xFF10B981),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ],
                               ),
-                            )),
+                            ),
                           ] else ...[
                             const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.accent,
-                                  side: const BorderSide(color: AppColors.accent),
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.accent,
+                                  foregroundColor: Colors.white,
+                                  elevation: 1,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
-                                icon: const Icon(Icons.security, size: 16),
-                                label: const Text('Avail AMC Contract'),
-                                onPressed: () => context.push('/amc_avail'),
+                                icon: const Icon(Icons.shield_outlined, size: 18),
+                                label: const Text(
+                                  'Avail AMC Contract',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                onPressed: () async {
+                                  await Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const AmcAvailScreen()),
+                                  );
+                                  _hasCheckedDirectAmc = false;
+                                  ref.invalidate(productsProvider);
+                                  final p = ref.read(userProfileProvider).value;
+                                  if (p != null) {
+                                    _checkDirectAmc(p['phone'], p['email']);
+                                  }
+                                },
                               ),
                             ),
                           ],

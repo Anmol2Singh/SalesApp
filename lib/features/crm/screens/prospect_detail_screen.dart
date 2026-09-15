@@ -297,6 +297,48 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                   ],
                 ),
               ),
+            if (isAdmin && (prospect.reassignmentReason?.contains('Cancelled') == true || (prospect.notes?.contains('[REASSIGNMENT_CANCELLED]') ?? false)))
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blueGrey.shade300, width: 1.5),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: Colors.blueGrey.shade700, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ℹ️ REASSIGNMENT REQUEST CANCELLED',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.blueGrey.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Salesperson cancelled their reassignment request for this prospect.',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Colors.blueGrey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             // Header Profile Card
             Card(
@@ -488,6 +530,49 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.person_outline, size: 20, color: AppColors.textSecondary),
+                        const SizedBox(width: 12),
+                        const SizedBox(
+                          width: 110,
+                          child: Text(
+                            'Created By',
+                            style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                prospect.createdByName ?? 'Staff',
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _getRoleTagColor(prospect.createdByRole).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: _getRoleTagColor(prospect.createdByRole).withOpacity(0.4)),
+                                ),
+                                child: Text(
+                                  _formatRoleDisplayName(prospect.createdByRole),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: _getRoleTagColor(prospect.createdByRole),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     _buildDetailRow(
                       Icons.calendar_today_outlined,
                       'Created Date',
@@ -564,17 +649,30 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                 ),
               ] else if (isSalesRole) ...[
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: Colors.orange),
-                    foregroundColor: Colors.orange.shade800,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                if (prospect.reassignmentRequested)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Colors.red),
+                      foregroundColor: Colors.red.shade700,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _confirmCancelReassign(context, ref, prospect),
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Cancel Reassign Request', style: TextStyle(fontWeight: FontWeight.bold)),
+                  )
+                else
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Colors.orange),
+                      foregroundColor: Colors.orange.shade800,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _showRequestReassignDialog(context, ref, prospect),
+                    icon: const Icon(Icons.outgoing_mail),
+                    label: const Text('Request Admin to Reassign Prospect', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
-                  onPressed: () => _showRequestReassignDialog(context, ref, prospect),
-                  icon: const Icon(Icons.outgoing_mail),
-                  label: const Text('Request Admin to Reassign Prospect', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
               ],
             ] else ...[
               Container(
@@ -710,6 +808,67 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
         ],
       ),
     );
+  }
+
+  void _confirmCancelReassign(BuildContext context, WidgetRef ref, Prospect prospect) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Cancel Reassignment Request'),
+        content: const Text('Are you sure you want to cancel your reassignment request for this prospect?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Keep Request'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              await ref.read(prospectsProvider.notifier).cancelReassignmentRequest(
+                prospectId: prospect.id,
+                prospectName: prospect.name,
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Reassignment request cancelled successfully.'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Cancel Request'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getRoleTagColor(String? role) {
+    if (role == null) return Colors.grey;
+    final r = role.toLowerCase();
+    if (r.contains('admin')) return const Color(0xFF6366F1);
+    if (r.contains('manager')) return Colors.purple;
+    if (r.contains('sales_head')) return Colors.teal;
+    if (r.contains('sales')) return const Color(0xFF0284C7);
+    if (r.contains('boq')) return const Color(0xFFEC4899);
+    if (r.contains('factory')) return const Color(0xFFF59E0B);
+    if (r.contains('purchase')) return const Color(0xFF10B981);
+    return Colors.blueGrey;
+  }
+
+  String _formatRoleDisplayName(String? role) {
+    if (role == null || role.isEmpty) return 'Staff';
+    final r = role.toLowerCase();
+    if (r == 'boq') return 'BOQ Staff';
+    if (r == 'factory') return 'Factory Staff';
+    if (r == 'purchase') return 'Material Requisition Staff';
+    if (r == 'sales') return 'Sales Executive';
+    if (r == 'sales_head') return 'Sales Head';
+    if (r == 'admin') return 'Admin';
+    if (r == 'manager') return 'Manager';
+    return role.toUpperCase();
   }
 
   Future<void> _makePhoneCall(String phone) async {

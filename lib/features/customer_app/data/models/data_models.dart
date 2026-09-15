@@ -17,6 +17,7 @@ class Product {
   final String category; // boiler, heat_pump, thermostat, radiator, other
   final int numberOfVisitsIncluded;
   final int numberOfVisitsCompleted;
+  final List<String> imageUrls;
   final List<Map<String, dynamic>> brochureUrls;
   final String? installationAddress;
   final List<Map<String, dynamic>> amcVisits;
@@ -27,6 +28,7 @@ class Product {
     required this.productName,
     required this.modelNumber,
     required this.imageUrl,
+    this.imageUrls = const [],
     required this.purchasedDate,
     required this.sellerName,
     required this.amountPaid,
@@ -68,7 +70,10 @@ class Product {
       category: json['category'] ?? 'other',
       numberOfVisitsIncluded: json['numberOfVisitsIncluded'] ?? 0,
       numberOfVisitsCompleted: json['numberOfVisitsCompleted'] ?? 0,
-      brochureUrls: List<Map<String, dynamic>>.from(json['brochureUrls'] ?? []),
+      imageUrls: (json['imageUrls'] as List?)?.map((e) => e.toString()).toList() ??
+          (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ??
+          [],
+      brochureUrls: List<Map<String, dynamic>>.from(json['brochureUrls'] ?? json['brochure_urls'] ?? []),
       installationAddress: json['installationAddress'] as String?,
       amcVisits: List<Map<String, dynamic>>.from(json['amcVisits'] ?? []),
       requestedServicesCount: json['requestedServicesCount'] ?? 0,
@@ -81,6 +86,7 @@ class Product {
       'productName': productName,
       'modelNumber': modelNumber,
       'imageUrl': imageUrl,
+      'imageUrls': imageUrls,
       'purchasedDate': purchasedDate.toIso8601String(),
       'sellerName': sellerName,
       'amountPaid': amountPaid,
@@ -102,6 +108,7 @@ class Product {
     String? productName,
     String? modelNumber,
     String? imageUrl,
+    List<String>? imageUrls,
     DateTime? purchasedDate,
     String? sellerName,
     double? amountPaid,
@@ -124,6 +131,7 @@ class Product {
       productName: productName ?? this.productName,
       modelNumber: modelNumber ?? this.modelNumber,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
       purchasedDate: purchasedDate ?? this.purchasedDate,
       sellerName: sellerName ?? this.sellerName,
       amountPaid: amountPaid ?? this.amountPaid,
