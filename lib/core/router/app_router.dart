@@ -66,6 +66,7 @@ import '../../features/customer_app/features/profile/screens/profile_screen.dart
 import '../../features/customer_app/features/services/screens/amc_avail_screen.dart';
 import '../../features/customer_app/features/store/screens/request_product_screen.dart';
 import '../../features/customer_app/features/product/screens/product_detail_screen.dart';
+import '../../features/customer_app/features/service_request/screens/service_booking_flow.dart';
 import '../widgets/customer_app_shell.dart';
 
 // Route names

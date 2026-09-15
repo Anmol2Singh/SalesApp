@@ -101,10 +101,41 @@ class CrmShell extends ConsumerWidget {
   }
 
   Widget _buildMobileCrmBottomNav(BuildContext context, bool isSalesOrAdmin) {
-    return NavigationBar(
-      selectedIndex: _getSelectedIndex(currentRoute, isSalesOrAdmin),
-      onDestinationSelected: (index) {
-        if (!isSalesOrAdmin) {
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        height: 64,
+        labelTextStyle: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) {
+            return const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.2,
+              color: AppColors.primary,
+            );
+          }
+          return const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            letterSpacing: -0.2,
+            color: AppColors.textSecondary,
+          );
+        }),
+      ),
+      child: NavigationBar(
+        selectedIndex: _getSelectedIndex(currentRoute, isSalesOrAdmin),
+        onDestinationSelected: (index) {
+          if (!isSalesOrAdmin) {
+            switch (index) {
+              case 0:
+                context.go('/crm/dashboard');
+                break;
+              case 1:
+                context.go('/crm/prospects');
+                break;
+            }
+            return;
+          }
+
           switch (index) {
             case 0:
               context.go('/crm/dashboard');
@@ -112,49 +143,39 @@ class CrmShell extends ConsumerWidget {
             case 1:
               context.go('/crm/prospects');
               break;
+            case 2:
+              context.go('/crm/leads');
+              break;
+            case 3:
+              context.go('/crm/customers');
+              break;
           }
-          return;
-        }
-
-        switch (index) {
-          case 0:
-            context.go('/crm/dashboard');
-            break;
-          case 1:
-            context.go('/crm/prospects');
-            break;
-          case 2:
-            context.go('/crm/leads');
-            break;
-          case 3:
-            context.go('/crm/customers');
-            break;
-        }
-      },
-      destinations: [
-        const NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard),
-          label: 'Dashboard',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.person_search_outlined),
-          selectedIcon: Icon(Icons.person_search),
-          label: 'Prospects',
-        ),
-        if (isSalesOrAdmin) ...[
+        },
+        destinations: [
           const NavigationDestination(
-            icon: Icon(Icons.trending_up_outlined),
-            selectedIcon: Icon(Icons.trending_up),
-            label: 'Leads',
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Customers',
+            icon: Icon(Icons.person_search_outlined),
+            selectedIcon: Icon(Icons.person_search),
+            label: 'Prospects',
           ),
+          if (isSalesOrAdmin) ...[
+            const NavigationDestination(
+              icon: Icon(Icons.trending_up_outlined),
+              selectedIcon: Icon(Icons.trending_up),
+              label: 'Leads',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.people_outline),
+              selectedIcon: Icon(Icons.people),
+              label: 'Customers',
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 

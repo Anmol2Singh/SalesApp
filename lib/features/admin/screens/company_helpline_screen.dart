@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:salesapp/core/providers/supabase_provider.dart';
 import 'package:salesapp/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/features/support/screens/support_screen.dart';
@@ -46,52 +48,77 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
   Future<void> _loadHelplineSettings() async {
     setState(() => _isLoading = true);
     try {
+      // 1. Check local persistent storage first
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final rawJson = prefs.getString('company_helpline_settings');
+        if (rawJson != null && rawJson.isNotEmpty) {
+          final map = jsonDecode(rawJson) as Map<String, dynamic>;
+          if (map['company_name'] != null && map['company_name'].toString().isNotEmpty) {
+            _companyNameCtrl.text = map['company_name'].toString();
+          }
+          if (map['phone'] != null && map['phone'].toString().isNotEmpty) {
+            _phoneCtrl.text = map['phone'].toString();
+          }
+          if (map['whatsapp'] != null && map['whatsapp'].toString().isNotEmpty) {
+            _whatsappCtrl.text = map['whatsapp'].toString();
+          }
+          if (map['email'] != null && map['email'].toString().isNotEmpty) {
+            _emailCtrl.text = map['email'].toString();
+          }
+          if (map['working_hours'] != null && map['working_hours'].toString().isNotEmpty) {
+            _hoursCtrl.text = map['working_hours'].toString();
+          }
+          if (map['address'] != null && map['address'].toString().isNotEmpty) {
+            _addressCtrl.text = map['address'].toString();
+          }
+          if (map['gstin'] != null && map['gstin'].toString().isNotEmpty) {
+            _gstinCtrl.text = map['gstin'].toString();
+          }
+        }
+      } catch (_) {}
+
       final supabase = ref.read(supabaseClientProvider);
-      
-      // 1. Try company_settings
-      final data = await supabase
-          .from('company_settings')
-          .select()
-          .eq('id', 'default')
-          .maybeSingle();
 
-      if (data != null) {
-        _companyNameCtrl.text = data['company_name'] as String? ?? 'Insiya Solar Industry';
-        _phoneCtrl.text = data['phone'] as String? ?? '+91 99999 99999';
-        _whatsappCtrl.text = data['whatsapp'] as String? ?? data['phone'] as String? ?? '+91 99999 99999';
-        _emailCtrl.text = data['email'] as String? ?? 'info@insiyasolar.com';
-        _hoursCtrl.text = data['working_hours'] as String? ?? 'Mon - Sat: 9:00 AM - 7:00 PM';
-        _addressCtrl.text = data['address'] as String? ??
-            'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-        _gstinCtrl.text = data['gstin'] as String? ?? '27AAAAA1111A1Z1';
-      }
-
-      // 2. Also check pdf_templates template_config for address/whatsapp/working_hours
+      // 2. Check pdf_templates template_config
       try {
         final tmplRes = await supabase.from('pdf_templates').select('template_config').limit(1).maybeSingle();
         if (tmplRes != null && tmplRes['template_config'] != null) {
           final cfg = tmplRes['template_config'] as Map<String, dynamic>;
-          if (cfg['company_address'] != null && (data == null || data['address'] == null)) {
+          if (cfg['company_address'] != null && cfg['company_address'].toString().isNotEmpty) {
             _addressCtrl.text = cfg['company_address'] as String;
           }
-          if (cfg['company_whatsapp'] != null && (data == null || data['whatsapp'] == null)) {
+          if (cfg['company_whatsapp'] != null && cfg['company_whatsapp'].toString().isNotEmpty) {
             _whatsappCtrl.text = cfg['company_whatsapp'] as String;
           }
-          if (cfg['working_hours'] != null && (data == null || data['working_hours'] == null)) {
+          if (cfg['working_hours'] != null && cfg['working_hours'].toString().isNotEmpty) {
             _hoursCtrl.text = cfg['working_hours'] as String;
           }
-          if (cfg['company_name'] != null && data == null) {
+          if (cfg['company_name'] != null && cfg['company_name'].toString().isNotEmpty) {
             _companyNameCtrl.text = cfg['company_name'] as String;
           }
-          if (cfg['company_phone'] != null && data == null) {
+          if (cfg['company_phone'] != null && cfg['company_phone'].toString().isNotEmpty) {
             _phoneCtrl.text = cfg['company_phone'] as String;
           }
-          if (cfg['company_email'] != null && data == null) {
+          if (cfg['company_email'] != null && cfg['company_email'].toString().isNotEmpty) {
             _emailCtrl.text = cfg['company_email'] as String;
           }
-          if (cfg['company_gst'] != null && data == null) {
+          if (cfg['company_gst'] != null && cfg['company_gst'].toString().isNotEmpty) {
             _gstinCtrl.text = cfg['company_gst'] as String;
           }
+        }
+      } catch (_) {}
+
+      // 3. Check company_settings
+      try {
+        final data = await supabase
+            .from('company_settings')
+            .select()
+            .eq('id', 'default')
+            .maybeSingle();
+
+        if (data != null) {
+          if (data['company_name'] != null) _companyNameCtrl.text = data['company_name'] as String;
         }
       } catch (_) {}
     } catch (e) {
@@ -106,47 +133,37 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final supabase = ref.read(supabaseClientProvider);
-
-      // 1. Try upserting to company_settings safely
-      final basicData = <String, dynamic>{
-        'id': 'default',
+      final fullSettings = {
         'company_name': _companyNameCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
+        'whatsapp': _whatsappCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
+        'working_hours': _hoursCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
         'gstin': _gstinCtrl.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
+      // 1. Save to local persistent storage for instant and offline availability
       try {
-        final extendedData = {
-          ...basicData,
-          'whatsapp': _whatsappCtrl.text.trim(),
-          'working_hours': _hoursCtrl.text.trim(),
-        };
-        await supabase.from('company_settings').upsert(extendedData);
-      } catch (_) {
-        try {
-          await supabase.from('company_settings').upsert(basicData);
-        } catch (_) {}
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('company_helpline_settings', jsonEncode(fullSettings));
+      } catch (e) {
+        debugPrint('SharedPreferences save error: $e');
       }
 
-      // 2. Sync to pdf_templates template_config so PDF footers and customer support screens match
+      final supabase = ref.read(supabaseClientProvider);
+
+      // 2. Upsert to company_settings safely
       try {
-        final existingTemplates = await supabase.from('pdf_templates').select('id, template_config');
-        for (final tmpl in (existingTemplates as List? ?? [])) {
-          final id = tmpl['id'] as String;
-          final cfg = Map<String, dynamic>.from(tmpl['template_config'] as Map? ?? {});
-          cfg['company_name'] = _companyNameCtrl.text.trim();
-          cfg['company_phone'] = _phoneCtrl.text.trim();
-          cfg['company_email'] = _emailCtrl.text.trim();
-          cfg['company_address'] = _addressCtrl.text.trim();
-          cfg['company_gst'] = _gstinCtrl.text.trim();
-          cfg['company_whatsapp'] = _whatsappCtrl.text.trim();
-          cfg['working_hours'] = _hoursCtrl.text.trim();
-          await supabase.from('pdf_templates').update({'template_config': cfg}).eq('id', id);
-        }
-      } catch (_) {}
+        await supabase.from('company_settings').upsert({
+          'id': 'default',
+          'company_name': _companyNameCtrl.text.trim(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('company_settings upsert error: $e');
+      }
 
       // Invalidate customer support contact provider
       ref.invalidate(companyContactProvider);
@@ -154,7 +171,7 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Company Helpline & Contact Details updated successfully!'),
+            content: Text('✅ Company Helpline & Contact Details saved successfully!'),
             backgroundColor: AppColors.success,
           ),
         );

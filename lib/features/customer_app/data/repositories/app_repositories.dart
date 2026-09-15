@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -566,6 +567,14 @@ class SupabaseAuthRepository implements AuthRepository {
       token: otp,
       type: OtpType.sms,
     );
+    if (response.user != null) {
+      SupabaseAuthRepository.loggedInPhone = _pendingPhone!;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('customer_session_phone', _pendingPhone!);
+        await prefs.setString('customer_session_uid', response.user!.id);
+      } catch (_) {}
+    }
     return response.user != null;
   }
 
@@ -733,7 +742,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
     final currentUser = _supabase.auth.currentUser;
     if (phone == null || phone.isEmpty) {
-      phone = currentUser?.phone;
+      phone = currentUser?.phone ?? currentUser?.userMetadata?['phone']?.toString();
       email = currentUser?.email;
     }
 
@@ -849,6 +858,14 @@ class SupabaseCustomerRepository implements CustomerRepository {
         }
       } catch (_) {}
 
+      if (sessionPhone == null || sessionPhone.isEmpty) {
+        final currentAuthUser = _supabase.auth.currentUser;
+        sessionPhone = currentAuthUser?.phone ?? currentAuthUser?.userMetadata?['phone']?.toString();
+        if (sessionPhone != null && sessionPhone.isNotEmpty) {
+          SupabaseAuthRepository.loggedInPhone = sessionPhone;
+        }
+      }
+
       String cleanDigits = (sessionPhone ?? '').replaceAll(RegExp(r'\D'), '');
       String last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
 
@@ -939,7 +956,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 warranty_cards (start_date, end_date)
               ''')
               .inFilter('customer_id', allCustomerIds.toList())
-              .or('status.eq.completed,current_step.eq.completed');
+              .or('status.eq.completed,current_step.eq.completed,status.eq.won,stage.eq.won');
         } catch (e) {
           print("Primary pipelines query fallback: $e");
           try {
@@ -947,7 +964,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 .from('sales_pipelines')
                 .select('*, products(*), customers(*)')
                 .inFilter('customer_id', allCustomerIds.toList())
-                .or('status.eq.completed,current_step.eq.completed');
+                .or('status.eq.completed,current_step.eq.completed,status.eq.won,stage.eq.won');
           } catch (_) {
             response = [];
           }
@@ -960,7 +977,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           final allPipes = await _supabase
               .from('sales_pipelines')
               .select('id, created_at, customer_id, status, product_id, products(*), customers(*)')
-              .or('status.eq.completed,current_step.eq.completed');
+              .or('status.eq.completed,current_step.eq.completed,status.eq.won,stage.eq.won');
           final matchingPipes = <Map<String, dynamic>>[];
           for (final p in (allPipes as List? ?? [])) {
             final cust = p['customers'] as Map<String, dynamic>?;
@@ -1006,22 +1023,39 @@ class SupabaseCustomerRepository implements CustomerRepository {
         final createdAtStr = item['created_at'] as String;
         final purchasedDate = DateTime.tryParse(createdAtStr) ?? DateTime.now();
 
-        final productData = item['products'] as Map<String, dynamic>? ?? {};
+        final productData = item['products'] is Map
+            ? Map<String, dynamic>.from(item['products'] as Map)
+            : <String, dynamic>{};
 
         // Quote & Sales Order data
-        final quoteList = item['quotations'] as List?;
-        final quoteData = (quoteList != null && quoteList.isNotEmpty) ? quoteList.first as Map<String, dynamic> : (item['quotations'] as Map<String, dynamic>?);
-        final soList = item['sales_orders'] as List?;
-        final soData = (soList != null && soList.isNotEmpty) ? soList.first as Map<String, dynamic> : null;
+        Map<String, dynamic>? quoteData;
+        if (item['quotations'] is List && (item['quotations'] as List).isNotEmpty) {
+          final firstQ = (item['quotations'] as List).first;
+          if (firstQ is Map) quoteData = Map<String, dynamic>.from(firstQ);
+        } else if (item['quotations'] is Map) {
+          quoteData = Map<String, dynamic>.from(item['quotations'] as Map);
+        }
+
+        Map<String, dynamic>? soData;
+        if (item['sales_orders'] is List && (item['sales_orders'] as List).isNotEmpty) {
+          final firstSo = (item['sales_orders'] as List).first;
+          if (firstSo is Map) soData = Map<String, dynamic>.from(firstSo);
+        } else if (item['sales_orders'] is Map) {
+          soData = Map<String, dynamic>.from(item['sales_orders'] as Map);
+        }
 
         String? lineItemDesc;
-        final qItems = (quoteData?['line_items'] as List?);
-        if (qItems != null && qItems.isNotEmpty) {
-          lineItemDesc = (qItems.first as Map)['description'] as String?;
+        if (quoteData != null && quoteData['line_items'] is List && (quoteData['line_items'] as List).isNotEmpty) {
+          final firstLi = (quoteData['line_items'] as List).first;
+          if (firstLi is Map) {
+            lineItemDesc = firstLi['description'] as String?;
+          }
         }
-        final soItems = (soData?['line_items'] as List?);
-        if (lineItemDesc == null && soItems != null && soItems.isNotEmpty) {
-          lineItemDesc = (soItems.first as Map)['description'] as String?;
+        if (lineItemDesc == null && soData != null && soData['line_items'] is List && (soData['line_items'] as List).isNotEmpty) {
+          final firstSoLi = (soData['line_items'] as List).first;
+          if (firstSoLi is Map) {
+            lineItemDesc = firstSoLi['description'] as String?;
+          }
         }
 
         final productName = productData['name'] as String? 
@@ -1029,8 +1063,9 @@ class SupabaseCustomerRepository implements CustomerRepository {
             ?? item['product_name'] as String?
             ?? item['deal_name'] as String?
             ?? 'IZYHEAT System';
-        final category = productData['category'] as String? ?? 'heat_pump';
-        final modelNumber = category.toUpperCase();
+        final rawCat = (productData['category'] as String? ?? 'heat_pump').toLowerCase();
+        final category = (rawCat.contains('heat') || rawCat == 'hvac') ? 'heat_pump' : rawCat;
+        final modelNumber = (productData['model_number'] as String?) ?? (productData['category'] as String?)?.toUpperCase() ?? 'HEAT PUMP';
         
         final imgList = List<String>.from(productData['image_urls'] ?? []);
         final String firstImg = imgList.isNotEmpty ? imgList.first : '';
@@ -1044,8 +1079,11 @@ class SupabaseCustomerRepository implements CustomerRepository {
             ?? 0.0;
 
         // Warranty
-        final warrantyList = item['warranty_cards'] as List?;
-        final warrantyData = (warrantyList != null && warrantyList.isNotEmpty) ? warrantyList.first as Map<String, dynamic> : null;
+        Map<String, dynamic>? warrantyData;
+        if (item['warranty_cards'] is List && (item['warranty_cards'] as List).isNotEmpty) {
+          final firstW = (item['warranty_cards'] as List).first;
+          if (firstW is Map) warrantyData = Map<String, dynamic>.from(firstW);
+        }
         final warrantyStartDateStr = warrantyData?['start_date'] as String?;
         final warrantyEndDateStr = warrantyData?['end_date'] as String?;
         
@@ -1058,7 +1096,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
             : purchasedDate.add(const Duration(days: 365));
 
         // Installation Location
-        final custData = item['customers'] as Map<String, dynamic>?;
+        final custData = item['customers'] is Map ? Map<String, dynamic>.from(item['customers'] as Map) : null;
         final installationAddress = custData?['address'] as String? ?? soData?['shipping_address'] as String?;
 
         // AMC Contract info
@@ -1073,7 +1111,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
         try {
           final amcRes = await _supabase
               .from('amc_contracts')
-              .select('id, status, end_date, amc_number, number_of_visits_included, amc_service_visits (id, visit_number, scheduled_date, completed_date, status, notes)')
+              .select('id, status, end_date, amc_number, number_of_visits_included, amc_service_visits (id, visit_number, scheduled_date, completed_date, status)')
               .or('pipeline_id.eq.$pipelineId${pipeCustId != null ? ',customer_id.eq.$pipeCustId' : ''}')
               .limit(1)
               .maybeSingle();
@@ -1170,7 +1208,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
         if (allCustomerIds.isNotEmpty) {
           final allAmc = await _supabase
               .from('amc_contracts')
-              .select('id, status, end_date, amc_number, number_of_visits_included, pipeline_id, customer_id, amc_service_visits (id, visit_number, scheduled_date, completed_date, status, notes)')
+              .select('id, status, end_date, amc_number, number_of_visits_included, pipeline_id, customer_id, amc_service_visits (id, visit_number, scheduled_date, completed_date, status)')
               .inFilter('customer_id', allCustomerIds.toList());
           for (final amc in (allAmc as List? ?? [])) {
             final amcPipeId = amc['pipeline_id'] as String?;
@@ -1354,6 +1392,24 @@ class SupabaseCustomerRepository implements CustomerRepository {
       final cleanCustPhone = savedPhone.replaceAll(RegExp(r'\D'), '');
       final last10CustPhone = cleanCustPhone.length >= 10 ? cleanCustPhone.substring(cleanCustPhone.length - 10) : cleanCustPhone;
 
+      // Fetch technician phone numbers map
+      final techPhoneMap = <String, String>{};
+      final techNamePhoneMap = <String, String>{};
+      try {
+        final techRows = await _supabase.from('technicians').select('id, name, phone');
+        for (final t in (techRows as List? ?? [])) {
+          final tid = t['id'] as String?;
+          final tname = (t['name'] as String?)?.trim().toLowerCase();
+          final tphone = t['phone'] as String?;
+          if (tid != null && tphone != null && tphone.isNotEmpty) {
+            techPhoneMap[tid] = tphone;
+          }
+          if (tname != null && tphone != null && tphone.isNotEmpty) {
+            techNamePhoneMap[tname] = tphone;
+          }
+        }
+      } catch (_) {}
+
       // 1. Fetch complaints from public.complaints
       try {
         final complaintsRes = await _supabase
@@ -1382,9 +1438,13 @@ class SupabaseCustomerRepository implements CustomerRepository {
           final title = item['title'] as String? ?? item['category'] as String? ?? 'Service Complaint';
           final desc = item['description'] as String? ?? '';
           final status = (item['status'] as String? ?? 'pending').toLowerCase();
-          final techId = item['assigned_to'] as String? ?? item['technician_id'] as String?;
+          final techId = item['technician_id'] as String?;
           final techName = item['technician_name'] as String?;
-          final techPhone = item['technician_phone'] as String?;
+          String? techPhone = item['technician_phone'] as String?;
+          if (techPhone == null || techPhone.isEmpty) {
+            techPhone = (techId != null ? techPhoneMap[techId] : null) ??
+                (techName != null ? techNamePhoneMap[techName.trim().toLowerCase()] : null);
+          }
           final createdAtStr = item['created_at'] as String?;
           final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
           final hasAmc = item['has_active_amc'] == true;
@@ -1485,38 +1545,171 @@ class SupabaseCustomerRepository implements CustomerRepository {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return [];
 
-    final customerId = await _resolveCustomerId();
-    final ids = {currentUser.id, customerId}.toList();
+    final List<Invoice> allInvoices = [];
 
-    final response = await _supabase
-        .from('invoices')
-        .select('*, bookings(*, amc_contracts(*, products(*)))')
-        .inFilter('customer_id', ids)
-        .order('created_at', ascending: false);
+    // 1. Fetch direct invoices from invoices table (service/repair invoices)
+    try {
+      final customerId = await _resolveCustomerId();
+      final ids = {currentUser.id, customerId}.toList();
 
-    return (response as List).map((item) {
-      final invoiceId = item['id'] as String;
-      final amount = (item['amount'] as num?)?.toDouble() ?? 0.0;
-      final status = item['status'] as String;
-      final createdAt = DateTime.parse(item['created_at'] as String);
-      
-      final bookingData = item['bookings'] as Map<String, dynamic>? ?? {};
-      final category = bookingData['issue_category'] as String? ?? 'Service Charge';
+      final response = await _supabase
+          .from('invoices')
+          .select('*, bookings(*, amc_contracts(*, products(*)))')
+          .inFilter('customer_id', ids)
+          .order('created_at', ascending: false);
 
-      return Invoice(
-        invoiceId: invoiceId,
-        customerId: currentUser.id,
-        requestId: item['related_booking_id'] as String? ?? '',
-        title: 'Invoice for $category',
-        date: createdAt,
-        dueDate: createdAt.add(const Duration(days: 15)),
-        amount: amount,
-        status: status,
-        lineItems: [
-          {'name': 'Service & Repairs', 'qty': 1, 'price': amount},
-        ],
-      );
-    }).toList();
+      for (final item in (response as List)) {
+        final invoiceId = item['id'] as String;
+        final amount = (item['amount'] as num?)?.toDouble() ?? 0.0;
+        final status = item['status'] as String? ?? 'paid';
+        final createdAt = DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now();
+
+        final bookingData = item['bookings'] as Map<String, dynamic>? ?? {};
+        final category = bookingData['issue_category'] as String? ?? 'Service Charge';
+
+        allInvoices.add(Invoice(
+          invoiceId: invoiceId,
+          customerId: currentUser.id,
+          requestId: item['related_booking_id'] as String? ?? '',
+          title: 'Invoice for $category',
+          date: createdAt,
+          dueDate: createdAt.add(const Duration(days: 15)),
+          amount: amount,
+          status: status,
+          lineItems: [
+            {'name': 'Service & Repairs', 'qty': 1, 'price': amount},
+          ],
+        ));
+      }
+    } catch (e) {
+      debugPrint("Error fetching direct invoices: $e");
+    }
+
+    // 2. Fetch finalized quotations for products purchased by customer (Tax Invoices)
+    try {
+      final customerId = await _resolveCustomerId();
+      final allCustomerIds = <String>{currentUser.id, customerId};
+
+      String? userPhone = currentUser.phone;
+      String? userEmail = currentUser.email;
+
+      try {
+        final profileRes = await _supabase
+            .from('profiles')
+            .select('phone, email, full_name')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+        if (profileRes != null) {
+          if (profileRes['phone'] != null && profileRes['phone'].toString().isNotEmpty) {
+            userPhone = profileRes['phone'].toString();
+          }
+          if (profileRes['email'] != null && profileRes['email'].toString().isNotEmpty) {
+            userEmail = profileRes['email'].toString();
+          }
+        }
+      } catch (_) {}
+
+      final cleanDigits = (userPhone ?? '').replaceAll(RegExp(r'\D'), '');
+      final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+
+      // Find customers matching phone / email
+      if (last10.isNotEmpty) {
+        try {
+          final custRows = await _supabase
+              .from('customers')
+              .select('id, phone')
+              .or('phone.eq.$cleanDigits,phone.ilike.%$last10');
+          for (final c in (custRows as List? ?? [])) {
+            allCustomerIds.add(c['id'] as String);
+          }
+        } catch (_) {}
+      }
+
+      // Query pipelines
+      final List<dynamic> quotRows = [];
+      if (allCustomerIds.isNotEmpty) {
+        try {
+          final pipeRows = await _supabase
+              .from('sales_pipelines')
+              .select('id, customer_id')
+              .inFilter('customer_id', allCustomerIds.toList());
+          final pipeIds = (pipeRows as List).map((p) => p['id'] as String).toList();
+          if (pipeIds.isNotEmpty) {
+            final qByPipe = await _supabase
+                .from('quotations')
+                .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final')
+                .inFilter('pipeline_id', pipeIds);
+            quotRows.addAll(qByPipe);
+          }
+        } catch (_) {}
+      }
+
+      // Also query directly by phone
+      if (last10.isNotEmpty) {
+        try {
+          final qByPhone = await _supabase
+              .from('quotations')
+              .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final')
+              .or('customer_phone.eq.$cleanDigits,customer_phone.ilike.%$last10');
+          for (final q in (qByPhone as List? ?? [])) {
+            if (!quotRows.any((existing) => existing['id'] == q['id'])) {
+              quotRows.add(q);
+            }
+          }
+        } catch (_) {}
+      }
+
+      for (final q in quotRows) {
+        final status = q['status']?.toString().toLowerCase() ?? '';
+        final isFinal = q['is_final'] == true || status == 'confirmed' || status == 'won' || status == 'approved';
+        if (!isFinal) continue;
+
+        final qId = q['id'] as String;
+        if (allInvoices.any((inv) => inv.invoiceId == qId)) continue;
+
+        final qNum = q['quotation_number'] as String? ?? qId;
+        final invNum = qNum.replaceAll('QT', 'INV');
+        final grandTotal = (q['grand_total'] as num?)?.toDouble() ?? 0.0;
+        final qCreatedAt = DateTime.tryParse(q['order_date']?.toString() ?? q['created_at']?.toString() ?? '') ?? DateTime.now();
+
+        final rawLineItems = (q['line_items'] as List?) ?? [];
+        final List<Map<String, dynamic>> lineItems = [];
+        String mainProductName = '';
+
+        for (final item in rawLineItems) {
+          if (item is Map) {
+            final desc = item['description']?.toString() ?? 'Equipment';
+            if (mainProductName.isEmpty) mainProductName = desc;
+            final qty = (item['qty'] as num?)?.toInt() ?? 1;
+            final price = (item['unit_price'] as num? ?? item['item_rate'] as num? ?? item['total'] as num? ?? 0.0).toDouble();
+            lineItems.add({'name': desc, 'qty': qty, 'price': price});
+          }
+        }
+
+        if (lineItems.isEmpty) {
+          lineItems.add({'name': 'Solar / Heat Pump Equipment', 'qty': 1, 'price': grandTotal});
+        }
+
+        final title = mainProductName.isNotEmpty ? 'Invoice - $mainProductName' : 'Tax Invoice #$invNum';
+
+        allInvoices.add(Invoice(
+          invoiceId: qId,
+          customerId: currentUser.id,
+          requestId: q['pipeline_id'] as String? ?? '',
+          title: title,
+          date: qCreatedAt,
+          dueDate: qCreatedAt.add(const Duration(days: 15)),
+          amount: grandTotal,
+          status: 'paid',
+          lineItems: lineItems,
+        ));
+      }
+    } catch (e) {
+      debugPrint("Error fetching quotation invoices: $e");
+    }
+
+    allInvoices.sort((a, b) => b.date.compareTo(a.date));
+    return allInvoices;
   }
 
   @override

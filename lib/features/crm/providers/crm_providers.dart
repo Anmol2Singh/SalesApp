@@ -119,16 +119,34 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   }
 
   Future<void> assignProspect({required String prospectId, required String salesUserId}) async {
+    String? cleanNotes;
     try {
-      await _supabase.from('crm_prospects').update({
-        'assigned_to': salesUserId,
-        'reassignment_requested': false,
-        'reassignment_reason': null,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', prospectId);
+      final pRow = await _supabase.from('crm_prospects').select('notes').eq('id', prospectId).maybeSingle();
+      if (pRow != null && pRow['notes'] != null) {
+        final rawNotes = pRow['notes'] as String;
+        cleanNotes = rawNotes
+            .replaceAll(RegExp(r'\[REASSIGNMENT_REQUEST:[^\]]*\]'), '')
+            .replaceAll(RegExp(r'\n\s*\n'), '\n')
+            .trim();
+      }
+    } catch (_) {}
+
+    final updateData = <String, dynamic>{
+      'assigned_to': salesUserId,
+      'reassignment_requested': false,
+      'reassignment_reason': null,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (cleanNotes != null) {
+      updateData['notes'] = cleanNotes;
+    }
+
+    try {
+      await _supabase.from('crm_prospects').update(updateData).eq('id', prospectId);
     } catch (_) {
       await _supabase.from('crm_prospects').update({
         'assigned_to': salesUserId,
+        if (cleanNotes != null) 'notes': cleanNotes,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', prospectId);
     }
@@ -516,16 +534,34 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
   }
 
   Future<void> assignLead({required String leadId, required String salesUserId}) async {
+    String? cleanNotes;
     try {
-      await _supabase.from('crm_leads').update({
-        'assigned_to': salesUserId,
-        'reassignment_requested': false,
-        'reassignment_reason': null,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', leadId);
+      final lRow = await _supabase.from('crm_leads').select('notes').eq('id', leadId).maybeSingle();
+      if (lRow != null && lRow['notes'] != null) {
+        final rawNotes = lRow['notes'] as String;
+        cleanNotes = rawNotes
+            .replaceAll(RegExp(r'\[REASSIGNMENT_REQUEST:[^\]]*\]'), '')
+            .replaceAll(RegExp(r'\n\s*\n'), '\n')
+            .trim();
+      }
+    } catch (_) {}
+
+    final updateData = <String, dynamic>{
+      'assigned_to': salesUserId,
+      'reassignment_requested': false,
+      'reassignment_reason': null,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (cleanNotes != null) {
+      updateData['notes'] = cleanNotes;
+    }
+
+    try {
+      await _supabase.from('crm_leads').update(updateData).eq('id', leadId);
     } catch (_) {
       await _supabase.from('crm_leads').update({
         'assigned_to': salesUserId,
+        if (cleanNotes != null) 'notes': cleanNotes,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', leadId);
     }

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:salesapp/core/providers/supabase_provider.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
@@ -9,53 +11,69 @@ import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart
 
 final companyContactProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
+  
+  String name = 'Insiya Solar Industry';
+  String address = 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+  String phone = '+91 9292922992';
+  String whatsapp = '+91 9292922992';
+  String email = 'insiyasolarindustry@gmail.com';
+  String hours = 'Mon - Sat: 10:00 AM - 6:00 PM';
+  String gstin = '27CFTPS5292A1ZY';
+
+  // 1. Try local persistent storage (Company Helpline settings saved by admin)
   try {
-    // 1. Try company_settings first
-    final companyRes = await supabase
-        .from('company_settings')
-        .select()
-        .eq('id', 'default')
-        .maybeSingle();
-
-    if (companyRes != null && companyRes['company_name'] != null) {
-      return {
-        'name': companyRes['company_name'] ?? 'Insiya Solar Industry',
-        'address': companyRes['address'] ??
-            'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
-        'phone': companyRes['phone'] ?? '+91 99999 99999',
-        'email': companyRes['email'] ?? 'info@insiyasolar.com',
-        'gstin': companyRes['gstin'] ?? '27AAAAA1111A1Z1',
-      };
-    }
-
-    // 2. Try pdf_templates template_config
-    final templateRes = await supabase
-        .from('pdf_templates')
-        .select('template_config')
-        .limit(1)
-        .maybeSingle();
-
-    if (templateRes != null && templateRes['template_config'] != null) {
-      final config = templateRes['template_config'] as Map<String, dynamic>;
-      return {
-        'name': config['company_name'] ?? 'Insiya Solar Industry',
-        'address': config['company_address'] ??
-            'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
-        'phone': config['company_phone'] ?? '+91 99999 99999',
-        'email': config['company_email'] ?? 'info@insiyasolar.com',
-        'gstin': config['company_gst'] ?? '27AAAAA1111A1Z1',
-      };
+    final prefs = await SharedPreferences.getInstance();
+    final localJson = prefs.getString('company_helpline_settings');
+    if (localJson != null && localJson.isNotEmpty) {
+      final map = jsonDecode(localJson) as Map<String, dynamic>;
+      if (map['company_name'] != null && map['company_name'].toString().isNotEmpty) name = map['company_name'].toString();
+      if (map['address'] != null && map['address'].toString().isNotEmpty) address = map['address'].toString();
+      if (map['phone'] != null && map['phone'].toString().isNotEmpty) phone = map['phone'].toString();
+      if (map['whatsapp'] != null && map['whatsapp'].toString().isNotEmpty) whatsapp = map['whatsapp'].toString();
+      if (map['email'] != null && map['email'].toString().isNotEmpty) email = map['email'].toString();
+      if (map['working_hours'] != null && map['working_hours'].toString().isNotEmpty) hours = map['working_hours'].toString();
+      if (map['gstin'] != null && map['gstin'].toString().isNotEmpty) gstin = map['gstin'].toString();
     }
   } catch (_) {}
 
-  // Fallback defaults
+  // 2. Try company_settings helpline fields
+  try {
+    final companyRes = await supabase
+        .from('company_settings')
+        .select()
+        .limit(1)
+        .maybeSingle();
+
+    if (companyRes != null) {
+      if (companyRes['company_name'] != null && companyRes['company_name'].toString().isNotEmpty) {
+        name = companyRes['company_name'].toString();
+      }
+      if (companyRes['helpline_phone'] != null && companyRes['helpline_phone'].toString().isNotEmpty) {
+        phone = companyRes['helpline_phone'].toString();
+      }
+      if (companyRes['whatsapp_number'] != null && companyRes['whatsapp_number'].toString().isNotEmpty) {
+        whatsapp = companyRes['whatsapp_number'].toString();
+      }
+      if (companyRes['support_email'] != null && companyRes['support_email'].toString().isNotEmpty) {
+        email = companyRes['support_email'].toString();
+      }
+      if (companyRes['working_hours'] != null && companyRes['working_hours'].toString().isNotEmpty) {
+        hours = companyRes['working_hours'].toString();
+      }
+      if (companyRes['support_address'] != null && companyRes['support_address'].toString().isNotEmpty) {
+        address = companyRes['support_address'].toString();
+      }
+    }
+  } catch (_) {}
+
   return {
-    'name': 'Insiya Solar Industry',
-    'address':
-        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
-    'phone': '+91 99999 99999',
-    'email': 'info@insiyasolar.com',
-    'gstin': '27AAAAA1111A1Z1',
+    'name': name,
+    'address': address,
+    'phone': phone,
+    'whatsapp': whatsapp,
+    'email': email,
+    'working_hours': hours,
+    'gstin': gstin,
   };
 });
 
@@ -106,7 +124,10 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   }
 
   Future<void> _launchWhatsApp(String phone) async {
-    final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+    String cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleanDigits.length == 10) {
+      cleanDigits = '91$cleanDigits';
+    }
     final uri = Uri.parse('https://wa.me/$cleanDigits');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -162,7 +183,9 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
               final companyName = company['name'] as String? ?? 'Insiya Solar Industry';
               final address = company['address'] as String? ?? '';
               final phone = company['phone'] as String? ?? '+91 99999 99999';
+              final whatsapp = company['whatsapp'] as String? ?? phone;
               final email = company['email'] as String? ?? 'info@insiyasolar.com';
+              final workingHours = company['working_hours'] as String? ?? 'Mon - Sat: 9:00 AM - 7:00 PM';
               final gstin = company['gstin'] as String? ?? '27AAAAA1111A1Z1';
 
               return Column(
@@ -263,7 +286,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                           icon: Icons.chat_bubble_outline,
                           label: 'WhatsApp',
                           color: const Color(0xFF25D366),
-                          onTap: () => _launchWhatsApp(phone),
+                          onTap: () => _launchWhatsApp(whatsapp),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -361,9 +384,19 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         ),
                         const Divider(height: 20),
                         _buildContactRow(
+                          icon: Icons.chat_bubble_outline,
+                          title: 'WhatsApp Helpline',
+                          value: whatsapp,
+                          onAction: () => _launchWhatsApp(whatsapp),
+                          actionIcon: Icons.chat,
+                          textColor: textColor,
+                          subtitleColor: subtitleColor,
+                        ),
+                        const Divider(height: 20),
+                        _buildContactRow(
                           icon: Icons.access_time_outlined,
                           title: 'Working Hours',
-                          value: 'Mon – Sat: 9:30 AM – 6:30 PM (Sunday Closed)',
+                          value: workingHours,
                           textColor: textColor,
                           subtitleColor: subtitleColor,
                         ),

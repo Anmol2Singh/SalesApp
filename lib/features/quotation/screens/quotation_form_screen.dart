@@ -2540,47 +2540,42 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_outlined, size: 20, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Payment Terms & Milestones',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
                         ),
-                        child: const Icon(Icons.account_balance_wallet_outlined, size: 20, color: AppColors.primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Payment Terms & Milestones',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Default stages: Advance, Dispatch, Installation, Completion',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                      SizedBox(height: 2),
+                      Text(
+                        'Default stages: Advance, Dispatch, Installation, Completion',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -2588,7 +2583,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 const SizedBox(width: 8),
                 // 100% Status Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: isFull100
                         ? const Color(0xFFECFDF5)
@@ -2596,8 +2591,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isFull100
-                          ? const Color(0xFF10B981).withOpacity(0.4)
-                          : const Color(0xFFF59E0B).withOpacity(0.4),
+                          ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                          : const Color(0xFFF59E0B).withValues(alpha: 0.4),
                     ),
                   ),
                   child: Row(
@@ -2605,17 +2600,17 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     children: [
                       Icon(
                         isFull100 ? Icons.check_circle : Icons.pie_chart_outline,
-                        size: 14,
+                        size: 13,
                         color: isFull100 ? const Color(0xFF059669) : const Color(0xFFD97706),
                       ),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: 4),
                       Text(
                         isFull100
-                            ? '100% Scheduled'
-                            : '${totalPercent.toStringAsFixed(totalPercent == totalPercent.roundToDouble() ? 0 : 1)}% / 100%',
+                            ? '100%'
+                            : '${totalPercent.toStringAsFixed(totalPercent == totalPercent.roundToDouble() ? 0 : 1)}%',
                         style: TextStyle(
                           fontFamily: 'Inter',
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: isFull100 ? const Color(0xFF059669) : const Color(0xFFD97706),
                         ),

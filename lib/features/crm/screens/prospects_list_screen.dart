@@ -165,10 +165,10 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 2),
-                              Text(prospect.phone, style: const TextStyle(color: AppColors.textSecondary)),
-                              if (prospect.company != null && prospect.company!.isNotEmpty)
+                              if (prospect.company != null && prospect.company!.isNotEmpty) ...[
+                                const SizedBox(height: 2),
                                 Text(prospect.company!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                              ],
                               const SizedBox(height: 4),
                               Row(
                                 children: [
@@ -215,7 +215,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                   ),
                                 ),
                               ],
-                              if (prospect.reassignmentRequested) ...[
+                              if (isAdmin && prospect.reassignmentRequested) ...[
                                 const SizedBox(height: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

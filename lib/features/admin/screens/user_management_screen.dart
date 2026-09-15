@@ -519,6 +519,8 @@ class _UserTile extends StatelessWidget {
                   children: [
                     Text(
                       user.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 15,
@@ -528,8 +530,11 @@ class _UserTile extends StatelessWidget {
                             : AppColors.textSecondary,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 12,
@@ -539,78 +544,56 @@ class _UserTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: roleColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      user.primaryRole.displayName,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: roleColor,
-                      ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                onSelected: (val) {
+                  if (val == 'edit') {
+                    onEdit();
+                  } else if (val == 'toggle_active') {
+                    onToggleActive();
+                  } else if (val == 'delete') {
+                    onDelete();
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 16),
+                        SizedBox(width: 8),
+                        Text('Edit User'),
+                      ],
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                    onSelected: (val) {
-                      if (val == 'edit') {
-                        onEdit();
-                      } else if (val == 'toggle_active') {
-                        onToggleActive();
-                      } else if (val == 'delete') {
-                        onDelete();
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 16),
-                            SizedBox(width: 8),
-                            Text('Edit User'),
-                          ],
+                  PopupMenuItem(
+                    value: 'toggle_active',
+                    child: Row(
+                      children: [
+                        Icon(
+                          user.isActive ? Icons.block : Icons.check_circle_outline,
+                          size: 16,
+                          color: user.isActive ? AppColors.error : AppColors.success,
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'toggle_active',
-                        child: Row(
-                          children: [
-                            Icon(
-                              user.isActive ? Icons.block : Icons.check_circle_outline,
-                              size: 16,
-                              color: user.isActive ? AppColors.error : AppColors.success,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              user.isActive ? 'Deactivate Account' : 'Activate Account',
-                              style: TextStyle(
-                                color: user.isActive ? AppColors.error : AppColors.success,
-                              ),
-                            ),
-                          ],
+                        SizedBox(width: 8),
+                        Text(
+                          user.isActive ? 'Deactivate Account' : 'Activate Account',
+                          style: TextStyle(
+                            color: user.isActive ? AppColors.error : AppColors.success,
+                          ),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, size: 16, color: AppColors.error),
-                            SizedBox(width: 8),
-                            Text('Delete User', style: TextStyle(color: AppColors.error)),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                        SizedBox(width: 8),
+                        Text('Delete User', style: TextStyle(color: AppColors.error)),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -618,6 +601,7 @@ class _UserTile extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               OutlinedButton.icon(
                 onPressed: () {
@@ -635,6 +619,23 @@ class _UserTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 6),
                   minimumSize: const Size(0, 32),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: roleColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  user.primaryRole.displayName,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: roleColor,
+                  ),
                 ),
               ),
             ],

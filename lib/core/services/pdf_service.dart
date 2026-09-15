@@ -19,8 +19,50 @@ import '../models/service_visit.dart';
 import '../../features/reports/models/activity_report_data.dart';
 import 'package:flutter/material.dart' show BuildContext;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PdfService {
+  static Future<Map<String, dynamic>> resolveTemplateConfig(Map<String, dynamic>? initialConfig) async {
+    final Map<String, dynamic> resolved = {
+      'company_name': 'INSIYA SOLAR INDUSTRY',
+      'company_address': 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
+      'company_phone': '+91 9292922992',
+      'company_email': 'insiyasolarindustry@gmail.com',
+      'company_gst': '27CFTPS5292A1ZY',
+      'footer_text': 'Thank you for your business.',
+    };
+
+    try {
+      final res = await Supabase.instance.client
+          .from('pdf_templates')
+          .select('template_config')
+          .limit(1)
+          .maybeSingle();
+      if (res != null && res['template_config'] is Map) {
+        final dbCfg = Map<String, dynamic>.from(res['template_config'] as Map);
+        dbCfg.forEach((key, value) {
+          if (value != null && value.toString().trim().isNotEmpty) {
+            resolved[key] = value;
+          }
+        });
+      }
+    } catch (_) {}
+
+    if (initialConfig != null) {
+      initialConfig.forEach((key, value) {
+        if (value != null &&
+            value.toString().trim().isNotEmpty &&
+            value.toString() != 'IZYHEAT' &&
+            value.toString() != 'IZYHEAT Office, India' &&
+            value.toString() != 'info@izyheat.com') {
+          resolved[key] = value;
+        }
+      });
+    }
+
+    return resolved;
+  }
+
   static Future<pw.ImageProvider?> _fetchLogo(String? url) async {
     if (url == null || url.isEmpty) return null;
     try {
@@ -45,20 +87,23 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
     String copyType = 'Original For Recipient',
+    String docTitle = 'QUOTATION',
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
 
-    final companyName = templateConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = templateConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = templateConfig['company_phone'] as String? ?? '+91 9292922992';
-    final companyEmail = templateConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
-    final companyGst = templateConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final companyGst = resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
     final companyStateCode = 27; // Maharashtra
 
     final bool isInterstate = quotation.stateCode != null && quotation.stateCode != companyStateCode;
+    final bool isInvoice = docTitle.toUpperCase().contains('INVOICE');
 
     final pw.ThemeData theme = pw.ThemeData.withFont(
       base: pw.Font.helvetica(),
@@ -76,14 +121,14 @@ class PdfService {
           companyPhone: companyPhone,
           companyEmail: companyEmail,
           companyGst: companyGst,
-          docTitle: 'QUOTATION',
-          docNumber: quotation.quotationNumber,
+          docTitle: docTitle,
+          docNumber: isInvoice ? quotation.quotationNumber.replaceAll('QT', 'INV') : quotation.quotationNumber,
           docDate: quotation.orderDate ?? quotation.createdAt,
           status: quotation.status.displayName,
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          templateConfig['footer_text'] as String? ?? 'Thank you for your business.',
+          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
         ),
@@ -114,7 +159,7 @@ class PdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _metaItem('Quotation No.', quotation.quotationNumber),
+                        _metaItem(isInvoice ? 'Invoice No.' : 'Quotation No.', isInvoice ? quotation.quotationNumber.replaceAll('QT', 'INV') : quotation.quotationNumber),
                         _metaItem('Eway Bill No & Date', ''),
                         _metaItem('Bill Type', quotation.billType ?? 'Credit'),
                         _metaItem('Place of Supply', quotation.placeOfSupply ?? 'Maharashtra'),
@@ -127,7 +172,7 @@ class PdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _metaItem('Quotation Date', quotation.orderDate != null ? DateFormat('dd/MM/yyyy').format(quotation.orderDate!) : DateFormat('dd/MM/yyyy').format(quotation.createdAt)),
+                        _metaItem(isInvoice ? 'Invoice Date' : 'Quotation Date', quotation.orderDate != null ? DateFormat('dd/MM/yyyy').format(quotation.orderDate!) : DateFormat('dd/MM/yyyy').format(quotation.createdAt)),
                         _metaItem('Vehicle No', ''),
                         _metaItem('Distance', quotation.distance != null ? '${quotation.distance!.toStringAsFixed(0)} KM' : null),
                         _metaItem('GR/LR No.', quotation.grLrNo),
@@ -476,7 +521,8 @@ class PdfService {
     required Map<String, dynamic> templateConfig,
     String scopeFilter = 'all', // 'all', 'company', 'customer'
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
@@ -496,11 +542,11 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         header: (context) => _buildHeader(
-          companyName: templateConfig['company_name'] as String? ?? 'IZYHEAT',
-          companyAddress: templateConfig['company_address'] as String? ?? '',
-          companyPhone: templateConfig['company_phone'] as String? ?? '',
-          companyEmail: templateConfig['company_email'] as String? ?? '',
-          companyGst: templateConfig['company_gst'] as String? ?? '',
+          companyName: resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY',
+          companyAddress: resolvedConfig['company_address'] as String? ?? '',
+          companyPhone: resolvedConfig['company_phone'] as String? ?? '',
+          companyEmail: resolvedConfig['company_email'] as String? ?? '',
+          companyGst: resolvedConfig['company_gst'] as String? ?? '',
           docTitle: docTitle,
           docNumber: boq.boqNumber,
           docDate: boq.createdAt,
@@ -508,7 +554,7 @@ class PdfService {
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          templateConfig['footer_text'] as String? ?? '',
+          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
         ),
@@ -596,7 +642,8 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
@@ -610,11 +657,11 @@ class PdfService {
           children: [
             _buildHeader(
               companyName:
-                  templateConfig['company_name'] as String? ?? 'IZYHEAT',
+                  resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY',
               companyAddress:
-                  templateConfig['company_address'] as String? ?? '',
-              companyPhone: templateConfig['company_phone'] as String? ?? '',
-              companyEmail: templateConfig['company_email'] as String? ?? '',
+                  resolvedConfig['company_address'] as String? ?? '',
+              companyPhone: resolvedConfig['company_phone'] as String? ?? '',
+              companyEmail: resolvedConfig['company_email'] as String? ?? '',
               companyGst: '',
               docTitle: 'FACTORY ORDER',
               docNumber: factoryOrder.orderNumber,
@@ -680,7 +727,8 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
@@ -690,11 +738,11 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         header: (context) => _buildHeader(
-          companyName: templateConfig['company_name'] as String? ?? 'IZYHEAT',
-          companyAddress: templateConfig['company_address'] as String? ?? '',
-          companyPhone: templateConfig['company_phone'] as String? ?? '',
-          companyEmail: templateConfig['company_email'] as String? ?? '',
-          companyGst: templateConfig['company_gst'] as String? ?? '',
+          companyName: resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY',
+          companyAddress: resolvedConfig['company_address'] as String? ?? '',
+          companyPhone: resolvedConfig['company_phone'] as String? ?? '',
+          companyEmail: resolvedConfig['company_email'] as String? ?? '',
+          companyGst: resolvedConfig['company_gst'] as String? ?? '',
           docTitle: 'MATERIAL REQUISITION',
           docNumber: purchaseOrder.poNumber,
           docDate: purchaseOrder.createdAt,
@@ -702,7 +750,7 @@ class PdfService {
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          templateConfig['footer_text'] as String? ?? '',
+          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
         ),
@@ -1349,21 +1397,22 @@ class PdfService {
     required String variant,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
 
-    final companyName = templateConfig['company_name'] as String? ??
-        'INSIYA TRADING CORPORATION';
-    final companyAddress = templateConfig['company_address'] as String? ??
+    final companyName = resolvedConfig['company_name'] as String? ??
+        'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
         'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra 411014';
     final companyPhone =
-        templateConfig['company_phone'] as String? ?? '+91 92929 22992';
-    final companyEmail = templateConfig['company_email'] as String? ??
+        resolvedConfig['company_phone'] as String? ?? '+91 92929 22992';
+    final companyEmail = resolvedConfig['company_email'] as String? ??
         'insiyasolarindustry@gmail.com';
     final companyGst =
-        templateConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
+        resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
 
     final cleanCompanyName = _cleanText(companyName);
 
@@ -1386,7 +1435,7 @@ class PdfService {
         footer: (context) => _buildFooter(
           variant == 'production'
               ? ''
-              : (templateConfig['footer_text'] as String? ?? ''),
+              : (resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.'),
           context.pageNumber,
           context.pagesCount,
         ),
@@ -2085,18 +2134,19 @@ class PdfService {
     required AmcContract contract,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
 
-    final companyName = templateConfig['company_name'] as String? ?? 'IZYHEAT';
-    final companyAddress = templateConfig['company_address'] as String? ?? '';
-    final companyPhone = templateConfig['company_phone'] as String? ?? '';
-    final companyEmail = templateConfig['company_email'] as String? ?? '';
-    final companyGst = templateConfig['company_gst'] as String? ?? '';
-    final footerText = templateConfig['footer_text'] as String? ?? '';
-    final termsDefault = templateConfig['terms_default'] as String? ?? '';
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ?? '';
+    final companyPhone = resolvedConfig['company_phone'] as String? ?? '';
+    final companyEmail = resolvedConfig['company_email'] as String? ?? '';
+    final companyGst = resolvedConfig['company_gst'] as String? ?? '';
+    final footerText = resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.';
+    final termsDefault = resolvedConfig['terms_default'] as String? ?? '';
 
     final customer = contract.customer;
     final product = contract.product;
@@ -2257,10 +2307,11 @@ class PdfService {
     required Customer customer,
     required Map<String, dynamic> templateConfig,
   }) async {
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final pdf = pw.Document();
-    final companyName = templateConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = templateConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = templateConfig['company_phone'] as String? ?? '9292922992';
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
 
     pdf.addPage(
       pw.Page(
@@ -2403,12 +2454,13 @@ class PdfService {
     required WarrantyCard card,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final logoUrl = templateConfig['logo_url'] as String?;
+    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final pdf = pw.Document();
-    final companyName = templateConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = templateConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
 
     final wNum = card.warrantyNumber ?? card.invoiceNumber ?? '#WRN/26-27/0001';
 

@@ -61,9 +61,22 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
           ''').isFilter('deleted_at', null);
 
       if (!_isAdmin && _userId != null) {
+        List<String> assignedCustomerIds = [];
         try {
-          query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
-        } catch (_) {
+          final custRes = await _supabase
+              .from('customers')
+              .select('id')
+              .eq('assigned_to', _userId);
+          assignedCustomerIds = (custRes as List)
+              .map((c) => c['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList();
+        } catch (_) {}
+
+        if (assignedCustomerIds.isNotEmpty) {
+          final idList = assignedCustomerIds.join(',');
+          query = query.or('created_by.eq.$_userId,customer_id.in.($idList)');
+        } else {
           query = query.eq('created_by', _userId);
         }
       }

@@ -1,6 +1,13 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:salesapp/core/services/pdf_service.dart';
+import 'package:salesapp/core/widgets/pdf_preview_screen.dart';
+import 'package:salesapp/core/models/quotation.dart' as core_quotation;
+import 'package:salesapp/core/models/customer.dart' as core_customer;
+import 'package:salesapp/core/models/product.dart' as core_product;
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
@@ -408,19 +415,19 @@ class _InvoiceExpandableTileState extends State<_InvoiceExpandableTile> {
             Row(
               children: [
                 Expanded(
-                  child: TextButton.icon(
-                    icon: Icon(Icons.download, size: 18, color: textColor),
-                    label: Text(
-                      'Download Bill',
-                      style: TextStyle(color: textColor),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E3A5F),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    onPressed: () {
-                      ToastService.show(
-                        context,
-                        'Purchase bill downloaded!',
-                        type: ToastType.success,
-                      );
-                    },
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: const Text(
+                      'View / Download Invoice PDF',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                    onPressed: () => _viewInvoicePdf(context, widget.invoice),
                   ),
                 ),
                 if (!isPaid) ...[
@@ -439,6 +446,196 @@ class _InvoiceExpandableTileState extends State<_InvoiceExpandableTile> {
         ],
       ),
     );
+  }
+
+  Future<void> _viewInvoicePdf(BuildContext context, Invoice invoice) async {
+    bool isDialogShowing = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.accent),
+      ),
+    ).then((_) => isDialogShowing = false);
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      // 1. Check if this is a confirmed quotation
+      final qRes = await supabase
+          .from('quotations')
+          .select()
+          .eq('id', invoice.invoiceId)
+          .maybeSingle();
+
+      Uint8List pdfBytes;
+      String fileName;
+
+      if (qRes != null) {
+        final quotation = core_quotation.Quotation.fromJson(qRes);
+        core_customer.Customer customer;
+        if (quotation.pipelineId.isNotEmpty) {
+          final pRes = await supabase
+              .from('sales_pipelines')
+              .select('customer_id, customers(*)')
+              .eq('id', quotation.pipelineId)
+              .maybeSingle();
+          if (pRes != null && pRes['customers'] != null) {
+            customer = core_customer.Customer.fromJson(pRes['customers'] as Map<String, dynamic>);
+          } else {
+            customer = core_customer.Customer(
+              id: pRes?['customer_id']?.toString() ?? 'cust',
+              companyName: quotation.customerName ?? 'Valued Customer',
+              phone: quotation.customerPhone,
+              address: quotation.billingAddress,
+              gstNumber: quotation.customerGstin,
+              createdBy: 'system',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+          }
+        } else {
+          customer = core_customer.Customer(
+            id: 'cust',
+            companyName: quotation.customerName ?? 'Valued Customer',
+            phone: quotation.customerPhone,
+            address: quotation.billingAddress,
+            gstNumber: quotation.customerGstin,
+            createdBy: 'system',
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+        }
+
+        core_product.Product product;
+        try {
+          final prodRes = await supabase
+              .from('products')
+              .select()
+              .eq('id', quotation.productId)
+              .maybeSingle();
+          if (prodRes != null) {
+            product = core_product.Product.fromJson(prodRes);
+          } else {
+            product = core_product.Product(
+              id: quotation.productId,
+              name: quotation.lineItems.isNotEmpty ? quotation.lineItems.first.description : 'Commercial Solar System',
+              baseSpecs: const core_product.ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+              isActive: true,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+          }
+        } catch (_) {
+          product = core_product.Product(
+            id: quotation.productId,
+            name: quotation.lineItems.isNotEmpty ? quotation.lineItems.first.description : 'Commercial Solar System',
+            baseSpecs: const core_product.ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+            isActive: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+        }
+
+        final templateConfig = await PdfService.resolveTemplateConfig(null);
+
+        pdfBytes = await PdfService.generateQuotationPdf(
+          quotation: quotation,
+          customer: customer,
+          product: product,
+          templateConfig: templateConfig,
+          docTitle: 'TAX INVOICE',
+        );
+
+        final invNum = quotation.quotationNumber.replaceAll('QT', 'INV').replaceAll(RegExp(r'[/\\?%*:|<>]'), '_');
+        fileName = 'Tax_Invoice_$invNum.pdf';
+      } else {
+        // Fallback for service invoices: build a tax invoice representation
+        final dummyQuotation = core_quotation.Quotation(
+          id: invoice.invoiceId,
+          pipelineId: invoice.requestId,
+          quotationNumber: 'INV/${invoice.invoiceId.substring(0, invoice.invoiceId.length > 8 ? 8 : invoice.invoiceId.length).toUpperCase()}',
+          productId: 'service_invoice',
+          lineItems: invoice.lineItems.map((li) {
+            final qty = (li['qty'] as num?)?.toDouble() ?? 1.0;
+            final price = (li['price'] as num?)?.toDouble() ?? invoice.amount;
+            return core_quotation.LineItem(
+              description: li['name']?.toString() ?? 'Service / Equipment Charge',
+              qty: qty,
+              unitPrice: price,
+              total: qty * price,
+            );
+          }).toList(),
+          productSpecs: const {},
+          subtotal: invoice.amount / 1.18,
+          cgstRate: 9.0,
+          sgstRate: 9.0,
+          cgstAmount: (invoice.amount - (invoice.amount / 1.18)) / 2,
+          sgstAmount: (invoice.amount - (invoice.amount / 1.18)) / 2,
+          igstAmount: 0.0,
+          grandTotal: invoice.amount,
+          status: core_quotation.QuotationStatus.confirmed,
+          createdAt: invoice.date,
+          updatedAt: invoice.date,
+          orderDate: invoice.date,
+          customerName: 'Valued Customer',
+        );
+
+        final customer = core_customer.Customer(
+          id: invoice.customerId,
+          companyName: 'Valued Customer',
+          createdBy: 'system',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final product = core_product.Product(
+          id: 'service_invoice',
+          name: invoice.title,
+          baseSpecs: const core_product.ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final templateConfig = await PdfService.resolveTemplateConfig(null);
+
+        pdfBytes = await PdfService.generateQuotationPdf(
+          quotation: dummyQuotation,
+          customer: customer,
+          product: product,
+          templateConfig: templateConfig,
+          docTitle: 'TAX INVOICE',
+        );
+
+        fileName = 'Invoice_${invoice.invoiceId.substring(0, invoice.invoiceId.length > 8 ? 8 : invoice.invoiceId.length).toUpperCase()}.pdf';
+      }
+
+      if (isDialogShowing && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogShowing = false;
+      }
+
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: fileName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (isDialogShowing && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogShowing = false;
+      }
+      if (context.mounted) {
+        ToastService.show(context, 'Failed to generate invoice PDF: $e', type: ToastType.error);
+      }
+    }
   }
 }
 

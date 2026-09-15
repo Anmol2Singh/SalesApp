@@ -284,20 +284,41 @@ class AppShell extends ConsumerWidget {
     final items = _getNavItems(roles, isWide);
     final currentIndex = _getCurrentIndex(items);
 
-    return NavigationBar(
-      selectedIndex: currentIndex.clamp(0, items.length - 1),
-      onDestinationSelected: (index) {
-        context.go(items[index].route);
-      },
-      backgroundColor: AppColors.surface,
-      indicatorColor: AppColors.primarySurface,
-      destinations: items.map((item) {
-        return NavigationDestination(
-          icon: item.icon,
-          selectedIcon: item.selectedIcon,
-          label: item.label,
-        );
-      }).toList(),
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        height: 64,
+        labelTextStyle: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) {
+            return const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.2,
+              color: AppColors.primary,
+            );
+          }
+          return const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            letterSpacing: -0.2,
+            color: AppColors.textSecondary,
+          );
+        }),
+      ),
+      child: NavigationBar(
+        selectedIndex: currentIndex.clamp(0, items.length - 1),
+        onDestinationSelected: (index) {
+          context.go(items[index].route);
+        },
+        backgroundColor: AppColors.surface,
+        indicatorColor: AppColors.primarySurface,
+        destinations: items.map((item) {
+          return NavigationDestination(
+            icon: item.icon,
+            selectedIcon: item.selectedIcon,
+            label: item.label,
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -389,11 +410,19 @@ class AppShell extends ConsumerWidget {
           addItem(const _NavItem(route: AppRoutes.technicianDashboard, label: 'My Tasks', icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build)));
           addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
           break;
-        case UserRole.factory:
-        case UserRole.purchase:
         case UserRole.boq:
-          addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
+          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+          addItem(const _NavItem(route: AppRoutes.userManagement, label: 'BOQ Items', icon: Icon(Icons.format_list_bulleted_outlined), selectedIcon: Icon(Icons.format_list_bulleted)));
+          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+          break;
+        case UserRole.factory:
+          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+          addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
+          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+          break;
+        case UserRole.purchase:
+          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+          addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
           addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
           break;
         case UserRole.customer:

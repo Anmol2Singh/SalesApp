@@ -106,11 +106,13 @@ class MainDashboard extends ConsumerWidget {
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
-                icon: const Badge(
-                  smallSize: 8,
-                  backgroundColor: Colors.amberAccent,
-                  child: Icon(Icons.notifications_outlined, color: Colors.white),
-                ),
+                icon: ref.watch(notificationsViewedProvider)
+                    ? const Icon(Icons.notifications_outlined, color: Colors.white)
+                    : const Badge(
+                        smallSize: 8,
+                        backgroundColor: Colors.amberAccent,
+                        child: Icon(Icons.notifications_outlined, color: Colors.white),
+                      ),
                 tooltip: 'Alerts & Notifications',
                 onPressed: () => _showNotificationsSheet(context, ref),
               ),
@@ -338,14 +340,14 @@ class MainDashboard extends ConsumerWidget {
 
                 const SizedBox(height: 24),
 
-                // [B] MY PURCHASED PRODUCTS / MY EQUIPMENT
+                // [B] MY PURCHASED PRODUCTS
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
                         Text(
-                          'My Equipment',
+                          'My Products',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -377,7 +379,7 @@ class MainDashboard extends ConsumerWidget {
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh, size: 18),
-                      tooltip: 'Refresh equipment',
+                      tooltip: 'Refresh products',
                       onPressed: () => ref.refresh(productsProvider),
                       color: subtitleColor,
                       padding: EdgeInsets.zero,
@@ -403,7 +405,7 @@ class MainDashboard extends ConsumerWidget {
                             Icon(Icons.inventory_2_outlined, size: 40, color: subtitleColor),
                             const SizedBox(height: 10),
                             Text(
-                              'No equipment registered yet',
+                              'No products registered yet',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 15,
@@ -412,7 +414,7 @@ class MainDashboard extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Purchased heating systems linked to your account will appear here.',
+                              'Purchased products linked to your account will appear here.',
                               style: TextStyle(fontSize: 12, color: subtitleColor),
                               textAlign: TextAlign.center,
                             ),
@@ -599,6 +601,7 @@ class MainDashboard extends ConsumerWidget {
     }
 
     void _showNotificationsSheet(BuildContext context, WidgetRef ref) {
+      ref.read(notificationsViewedProvider.notifier).state = true;
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final invoices = ref.read(invoicesProvider).value ?? [];
       final requests = ref.read(serviceRequestsProvider).value ?? [];

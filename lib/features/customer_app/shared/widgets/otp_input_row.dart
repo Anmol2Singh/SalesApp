@@ -98,57 +98,64 @@ class _OTPInputRowState extends State<OTPInputRow> with SingleTickerProviderStat
       builder: (context, child) {
         return Transform.translate(
           offset: Offset(_shakeAnimation.value * (1.0 - _shakeController.value), 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(widget.length, (index) {
-              return SizedBox(
-                width: 48,
-                height: 56,
-                child: RawKeyboardListener(
-                  focusNode: FocusNode(),
-                  onKey: (event) => _onKey(event, index),
-                  child: TextField(
-                    controller: _controllers[index],
-                    focusNode: _focusNodes[index],
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    maxLength: 1,
-                    textAlignVertical: TextAlignVertical.center,
-                    style: const TextStyle(
-                          color: Color(0xFF1E3A5F),
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          height: 1.0,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final spacing = 8.0;
+              final maxAvailable = (constraints.maxWidth - (widget.length - 1) * spacing) / widget.length;
+              final boxWidth = maxAvailable.clamp(36.0, 48.0);
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(widget.length, (index) {
+                  return SizedBox(
+                    width: boxWidth,
+                    height: 56,
+                    child: RawKeyboardListener(
+                      focusNode: FocusNode(),
+                      onKey: (event) => _onKey(event, index),
+                      child: TextField(
+                        controller: _controllers[index],
+                        focusNode: _focusNodes[index],
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        maxLength: 1,
+                        textAlignVertical: TextAlignVertical.center,
+                        style: const TextStyle(
+                              color: Color(0xFF1E3A5F),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              height: 1.0,
+                            ),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          contentPadding: EdgeInsets.zero,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: widget.hasError
+                                  ? AppColors.danger
+                                  : const Color(0xFFCBD5E1),
+                              width: 1.5,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: widget.hasError
+                                  ? AppColors.danger
+                                  : const Color(0xFF1E3A5F),
+                              width: 2.5,
+                            ),
+                          ),
+                          fillColor: Colors.white,
+                          filled: true,
                         ),
-                    decoration: InputDecoration(
-                      counterText: '',
-                      contentPadding: EdgeInsets.zero,
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: widget.hasError
-                              ? AppColors.danger
-                              : const Color(0xFFCBD5E1),
-                          width: 1.5,
-                        ),
+                        onChanged: (val) => _onChanged(val, index),
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: widget.hasError
-                              ? AppColors.danger
-                              : const Color(0xFF1E3A5F),
-                          width: 2.5,
-                        ),
-                      ),
-                      fillColor: Colors.white,
-                      filled: true,
                     ),
-                    onChanged: (val) => _onChanged(val, index),
-                  ),
-                ),
+                  );
+                }),
               );
-            }),
+            },
           ),
         );
       },

@@ -57,8 +57,7 @@ class Lead {
     final rawNotes = json['notes'] as String? ?? '';
     String? reason = json['reassignment_reason'] as String?;
     bool req = json['reassignment_requested'] == true;
-    if (reason == null && rawNotes.contains('[REASSIGNMENT_REQUEST:')) {
-      req = true;
+    if (req && reason == null && rawNotes.contains('[REASSIGNMENT_REQUEST:')) {
       final start = rawNotes.indexOf('[REASSIGNMENT_REQUEST:') + '[REASSIGNMENT_REQUEST:'.length;
       final end = rawNotes.indexOf(']', start);
       reason = end > start ? rawNotes.substring(start, end).trim() : rawNotes.substring(start).trim();

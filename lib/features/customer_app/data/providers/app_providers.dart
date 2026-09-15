@@ -68,3 +68,8 @@ final activeTechnicianLocationProvider = StreamProvider.family<Technician, Strin
 final activityLogsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) {
   return ref.watch(customerRepositoryProvider).getActivityLogs();
 });
+
+final notificationsViewedProvider = StateProvider<bool>((ref) {
+  return false;
+});
+

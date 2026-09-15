@@ -240,7 +240,7 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
               child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (prospect.reassignmentRequested)
+            if (isAdmin && prospect.reassignmentRequested)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(14),

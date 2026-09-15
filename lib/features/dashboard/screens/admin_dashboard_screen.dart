@@ -66,10 +66,11 @@ class AdminDashboardScreen extends ConsumerWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: 200,
             pinned: true,
             backgroundColor: const Color(0xFF1E1B4B),
             clipBehavior: Clip.antiAlias,
+            automaticallyImplyLeading: false,
             title: const Text(
               'Dashboard',
               style: TextStyle(

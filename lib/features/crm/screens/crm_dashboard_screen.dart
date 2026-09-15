@@ -867,19 +867,35 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Sales Leaderboard',
-                      style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    const Expanded(
+                      child: Text(
+                        'Sales Leaderboard',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    DropdownButton<String>(
-                      value: _leaderboardSort,
-                      underline: const SizedBox.shrink(),
-                      items: ['Won Deals', 'Revenue', 'Conversion Rate']
-                          .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => _leaderboardSort = val);
-                      },
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySurface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _leaderboardSort,
+                        isDense: true,
+                        underline: const SizedBox.shrink(),
+                        icon: const Icon(Icons.arrow_drop_down, size: 20, color: AppColors.primary),
+                        items: ['Won Deals', 'Revenue', 'Conversion Rate']
+                            .map((m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(m, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _leaderboardSort = val);
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -899,13 +915,14 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                         child: Row(
                           children: const [
-                            SizedBox(width: 32, child: Text('Rank', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
-                            Expanded(child: Text('Sales Representative', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
-                            SizedBox(width: 80, child: Text('Deals Won', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
-                            SizedBox(width: 90, child: Text('Revenue', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+                            SizedBox(width: 28, child: Text('Rank', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+                            SizedBox(width: 12),
+                            Expanded(child: Text('Sales Representative', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+                            SizedBox(width: 55, child: Text('Deals Won', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+                            SizedBox(width: 75, child: Text('Revenue', textAlign: TextAlign.right, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
                           ],
                         ),
                       ),
@@ -924,50 +941,63 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                           if (rank == 2) rankColor = const Color(0xFF6B7280);
                           if (rank == 3) rankColor = const Color(0xFFB45309);
 
-                          return ListTile(
-                            leading: Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: rank <= 3 ? rankColor.withOpacity(0.15) : Colors.transparent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '#$rank',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: rankColor,
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: rank <= 3 ? rankColor.withOpacity(0.15) : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '#$rank',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: rankColor,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            title: Text(
-                              rep.userName,
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary),
-                            ),
-                            subtitle: Text(
-                              '${rep.activeLeads} active leads • ${rep.conversionRate.toStringAsFixed(0)}% conv',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        rep.userName,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${rep.activeLeads} active leads • ${rep.conversionRate.toStringAsFixed(0)}% conv',
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 SizedBox(
-                                  width: 60,
+                                  width: 55,
                                   child: Text(
                                     '${rep.wonDeals}',
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981)),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981)),
                                   ),
                                 ),
                                 SizedBox(
-                                  width: 90,
+                                  width: 75,
                                   child: Text(
                                     '₹${NumberFormat.compactCurrency(locale: 'en_IN', symbol: '').format(rep.totalRevenue)}',
                                     textAlign: TextAlign.right,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
                                   ),
                                 ),
                               ],

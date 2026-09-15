@@ -249,7 +249,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
               child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (lead.reassignmentRequested && !isConverted)
+            if (isAdmin && lead.reassignmentRequested && !isConverted)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(14),

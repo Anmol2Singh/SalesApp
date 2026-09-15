@@ -6,6 +6,7 @@ import '../../../core/services/excel_service.dart';
 import '../../admin/screens/product_catalog_screen.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/widgets/searchable_dropdown.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -25,6 +26,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     final leadsAsync = ref.watch(leadsProvider);
     final prospectsAsync = ref.watch(prospectsProvider);
     final profile = ref.watch(currentProfileProvider);
+    final isAdmin = profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -191,15 +193,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                                 lead.productName,
                                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
                               ),
-                              Row(
-                                children: [
-                                  Text('₹${lead.estimatedValue.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 12)),
-                                  if (displayPhone.isNotEmpty) ...[
-                                    const Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
-                                    Text(displayPhone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                                  ],
-                                ],
-                              ),
+                              Text('₹${lead.estimatedValue.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 12)),
                               if (!isWon && (lead.assignedByName != null || lead.assignedTo != null)) ...[
                                 const SizedBox(height: 4),
                                 Container(
@@ -228,7 +222,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                                   ),
                                 ),
                               ],
-                              if (!isWon && lead.reassignmentRequested) ...[
+                              if (isAdmin && !isWon && lead.reassignmentRequested) ...[
                                 const SizedBox(height: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

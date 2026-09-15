@@ -117,105 +117,108 @@ class _OTPScreenState extends ConsumerState<OTPScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: SingleChildScrollView(
-        child: SizedBox(
-          height: size.height - AppBar().preferredSize.height - MediaQuery.of(context).padding.top,
-          child: Padding(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                GlassCard(
-                  padding: const EdgeInsets.all(24),
-                  borderRadius: 24,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Verify Number',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'We sent a 6-digit code to your mobile number: ${widget.phoneNumber}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: subtitleColor,
-                            ),
-                      ),
-                      const SizedBox(height: 32),
-                      OTPInputRow(
-                        length: 6,
-                        hasError: _hasError,
-                        onCompleted: _verifyOtp,
-                      ),
-                      const SizedBox(height: 24),
-                      if (_isLoading)
-                        const Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
-                          ),
-                        )
-                      else
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _countdown > 0
-                                  ? 'Resend OTP in ${_countdown}s'
-                                  : 'Didn\'t receive OTP? ',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: subtitleColor,
-                                  ),
-                            ),
-                            if (_countdown == 0)
-                              GestureDetector(
-                                onTap: _resendOtp,
-                                child: Text(
-                                  'Resend Code',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: AppColors.accent,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GlassCard(
+                    padding: const EdgeInsets.all(24),
+                    borderRadius: 24,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Verify Number',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
                               ),
-                          ],
                         ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Premium alert helper card
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppColors.primary.withOpacity(0.2),
-                      width: 1,
+                        const SizedBox(height: 8),
+                        Text(
+                          'We sent a 6-digit code to your mobile number: ${widget.phoneNumber}',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: subtitleColor,
+                              ),
+                        ),
+                        const SizedBox(height: 32),
+                        OTPInputRow(
+                          length: 6,
+                          hasError: _hasError,
+                          onCompleted: _verifyOtp,
+                        ),
+                        const SizedBox(height: 24),
+                        if (_isLoading)
+                          const Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
+                            ),
+                          )
+                        else
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _countdown > 0
+                                    ? 'Resend OTP in ${_countdown}s'
+                                    : 'Didn\'t receive OTP? ',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: subtitleColor,
+                                    ),
+                              ),
+                              if (_countdown == 0)
+                                GestureDetector(
+                                  onTap: _resendOtp,
+                                  child: Text(
+                                    'Resend Code',
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          color: AppColors.accent,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, color: AppColors.primary, size: 24),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'DEMO MODE: Enter "123456" or any digit to auto-verify phone number and bypass verification.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: textColor,
-                                fontSize: 13,
-                              ),
-                        ),
+                  const SizedBox(height: 24),
+                  // Premium alert helper card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.2),
+                        width: 1,
                       ),
-                    ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: AppColors.primary, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'DEMO MODE: Enter "123456" or any digit to auto-verify phone number and bypass verification.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: textColor,
+                                  fontSize: 13,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const Spacer(),
-              ],
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),

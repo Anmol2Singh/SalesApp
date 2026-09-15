@@ -30,15 +30,7 @@ class SalesDashboardScreen extends ConsumerWidget {
             pinned: true,
             backgroundColor: const Color(0xFF1E1B4B),
             clipBehavior: Clip.antiAlias,
-            title: const Text(
-              'My Dashboard',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            automaticallyImplyLeading: false,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
                 bottom: Radius.circular(28),

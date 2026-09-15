@@ -357,6 +357,18 @@ class BookingsListScreen extends ConsumerWidget {
                               req.technicianName!,
                               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                             ),
+                            if (req.technicianPhone != null && req.technicianPhone!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  req.technicianPhone!,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -446,13 +458,14 @@ class BookingsListScreen extends ConsumerWidget {
   }
 
   Future<void> _viewCompletionReportPdf(BuildContext context, ServiceRequest req) async {
+    bool isDialogShowing = true;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(
         child: CircularProgressIndicator(color: AppColors.primary),
       ),
-    );
+    ).then((_) => isDialogShowing = false);
 
     try {
       final res = await Supabase.instance.client
@@ -460,8 +473,6 @@ class BookingsListScreen extends ConsumerWidget {
           .select()
           .eq('id', req.requestId)
           .maybeSingle();
-
-      if (context.mounted) Navigator.pop(context);
 
       Complaint complaint;
       if (res != null) {
@@ -487,20 +498,29 @@ class BookingsListScreen extends ConsumerWidget {
       }
 
       final pdfBytes = await ComplaintPdfService.generateCompletionReportPdf(complaint);
+
+      if (isDialogShowing && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogShowing = false;
+      }
+
       if (context.mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => PdfPreviewScreen(
               pdfBytes: pdfBytes,
-              fileName: 'CompletionReport_${complaint.ticketNumber.replaceAll("/", "_")}.pdf',
+              fileName: 'CompletionReport_${complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|<>]'), "_")}.pdf',
             ),
           ),
         );
       }
     } catch (e) {
+      if (isDialogShowing && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogShowing = false;
+      }
       if (context.mounted) {
-        Navigator.pop(context);
         ToastService.show(context, 'Failed to generate PDF: $e', type: ToastType.error);
       }
     }
