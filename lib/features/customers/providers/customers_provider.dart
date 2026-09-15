@@ -70,9 +70,9 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
           query = query.eq('amc_contracts.status', 'active');
         }
 
-        // Non-admins see only their own customers
+        // Non-admins see customers created by them OR assigned to them
         if (!_isAdmin && _userId != null) {
-          query = query.eq('created_by', _userId);
+          query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
         }
 
         if (_searchQuery.isEmpty) {
@@ -88,7 +88,7 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
             .isFilter('deleted_at', null);
         
         if (!_isAdmin && _userId != null) {
-          fallbackQuery = fallbackQuery.eq('created_by', _userId);
+          fallbackQuery = fallbackQuery.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
         }
 
         if (_searchQuery.isEmpty) {
@@ -101,6 +101,14 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
       var customers = (response as List<dynamic>)
           .map((json) => Customer.fromJson(json as Map<String, dynamic>))
           .toList();
+
+      // In-memory filter safety
+      if (_filterBy == 'active_deal') {
+        customers = customers.where((c) {
+          final p = c.pipelines;
+          return p != null && p.isNotEmpty && p.any((pipe) => pipe.status != PipelineStatus.completed);
+        }).toList();
+      }
 
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
@@ -117,6 +125,13 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
         _hasMore = false; // Disable pagination when searching globally
       } else {
         if (customers.length < _pageSize) _hasMore = false;
+      }
+
+      // Sort
+      if (_sortBy == 'alphabetical') {
+        customers.sort((a, b) => a.companyName.toLowerCase().compareTo(b.companyName.toLowerCase()));
+      } else {
+        customers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       }
       
       _page++;
@@ -150,20 +165,109 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     required String customerId,
     required String salesUserId,
     required String salesUserName,
+    String transferDealsMode = 'all', // 'all', 'active_only', 'none'
   }) async {
-    await _supabase.from('customers').update({
-      'assigned_to': salesUserId,
-      'assigned_to_name': salesUserName,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', customerId);
+    try {
+      await _supabase.from('customers').update({
+        'assigned_to': salesUserId,
+        'assigned_to_name': salesUserName,
+        'reassignment_requested': false,
+        'reassignment_reason': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', customerId);
+    } catch (_) {
+      await _supabase.from('customers').update({
+        'assigned_to': salesUserId,
+        'assigned_to_name': salesUserName,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', customerId);
+    }
+
+    // Transfer deals according to chosen mode
+    if (transferDealsMode == 'all') {
+      try {
+        await _supabase.from('sales_pipelines').update({
+          'created_by': salesUserId,
+          'assigned_to': salesUserId,
+        }).eq('customer_id', customerId);
+      } catch (_) {
+        try {
+          await _supabase.from('sales_pipelines').update({
+            'created_by': salesUserId,
+          }).eq('customer_id', customerId);
+        } catch (_) {}
+      }
+    } else if (transferDealsMode == 'active_only') {
+      try {
+        await _supabase.from('sales_pipelines').update({
+          'created_by': salesUserId,
+          'assigned_to': salesUserId,
+        }).eq('customer_id', customerId).eq('status', 'in_progress');
+      } catch (_) {
+        try {
+          await _supabase.from('sales_pipelines').update({
+            'created_by': salesUserId,
+          }).eq('customer_id', customerId).eq('status', 'in_progress');
+        } catch (_) {}
+      }
+    }
 
     try {
       await _supabase.from('notifications').insert({
         'user_id': salesUserId,
-        'title': 'Customer Assigned',
-        'body': 'You have been assigned as the account representative.',
+        'title': 'Customer Assigned 🤝',
+        'body': 'You have been assigned as the account representative (Deals mode: $transferDealsMode).',
         'type': 'task_assigned',
+        'created_at': DateTime.now().toIso8601String(),
       });
+    } catch (_) {}
+
+    await refresh();
+  }
+
+  Future<void> requestCustomerTransfer({
+    required String customerId,
+    required String customerName,
+    required String reason,
+  }) async {
+    // 1. Update customer record
+    try {
+      await _supabase.from('customers').update({
+        'reassignment_requested': true,
+        'reassignment_reason': reason,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', customerId);
+    } catch (_) {
+      try {
+        final current = await _supabase.from('customers').select('notes').eq('id', customerId).maybeSingle();
+        final existingNotes = current?['notes'] as String? ?? '';
+        final newNotes = '$existingNotes\n[REASSIGNMENT_REQUEST: $reason]'.trim();
+        await _supabase.from('customers').update({'notes': newNotes}).eq('id', customerId);
+      } catch (_) {}
+    }
+
+    // 2. Notify Admins
+    try {
+      final staffResponse = await _supabase.from('profiles').select('id, role, roles');
+      final adminIds = <String>{};
+      for (final s in (staffResponse as List? ?? [])) {
+        final role = (s['role'] as String? ?? '').toLowerCase();
+        final rolesList = (s['roles'] is List) ? (s['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
+        if (role == 'admin' || role == 'manager' || role == 'sales_head' ||
+            rolesList.contains('admin') || rolesList.contains('manager') || rolesList.contains('sales_head')) {
+          if (s['id'] != null) adminIds.add(s['id'] as String);
+        }
+      }
+
+      for (final aid in adminIds) {
+        await _supabase.from('notifications').insert({
+          'user_id': aid,
+          'title': 'Customer Reassignment Requested ⚠️',
+          'body': 'Sales rep requested reassignment for customer "$customerName". Reason: $reason',
+          'type': 'reassignment_request',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
     } catch (_) {}
 
     await refresh();

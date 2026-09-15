@@ -59,11 +59,11 @@ enum UserRole {
       case UserRole.salesHead:
         return 'Sales Head';
       case UserRole.serviceHead:
-        return 'Service Coordinator';
+        return 'Complaints Staff';
       case UserRole.factory:
         return 'Factory Staff';
       case UserRole.purchase:
-        return 'Material Acquisition Staff';
+        return 'Material Requisition Staff';
       case UserRole.boq:
         return 'BOQ Staff';
       case UserRole.technician:

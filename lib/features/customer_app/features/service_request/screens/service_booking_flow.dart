@@ -32,7 +32,7 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
   // Step 1 State
   String? _selectedProductId;
-  String _selectedCategory = 'Boiler Not Heating';
+  final _errorCodeController = TextEditingController();
   final _descriptionController = TextEditingController();
   final List<String> _uploadedPhotos = []; // mock file paths
 
@@ -52,16 +52,6 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   final _pincodeController = TextEditingController();
   bool _saveAddressFuture = true;
 
-  final List<String> _categories = [
-    'Boiler Not Heating',
-    'Leak Detected',
-    'Thermostat Error',
-    'Unusual Noise',
-    'No Hot Water',
-    'Annual Service',
-    'Other',
-  ];
-
   final List<String> _timeSlots = ['08–10 AM', '10–12 PM', '12–2 PM', '2–5 PM'];
 
   @override
@@ -75,6 +65,7 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
   @override
   void dispose() {
+    _errorCodeController.dispose();
     _descriptionController.dispose();
     _flatController.dispose();
     _streetController.dispose();
@@ -125,7 +116,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             ? product.productName
             : (product.modelNumber.isNotEmpty ? product.modelNumber : 'IZYHEAT System'),
         problemCode: _generatedProblemCode,
-        issueCategory: _selectedCategory,
+        issueCategory: _errorCodeController.text.trim().isNotEmpty
+            ? _errorCodeController.text.trim()
+            : 'General Issue',
         issueDescription: _descriptionController.text.trim(),
         photoUrls: _uploadedPhotos.isNotEmpty
             ? _uploadedPhotos
@@ -590,44 +583,61 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
           ),
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         Text(
-          'Select Issue Category',
+          'Error / Symptom Code (Optional)',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: textColor,
             fontSize: 16,
           ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _categories.map((cat) {
-            final isSelected = _selectedCategory == cat;
-            return ChoiceChip(
-              label: Text(cat),
-              selected: isSelected,
-              selectedColor: AppColors.accent.withOpacity(0.2),
-              backgroundColor: contentBg,
-              labelStyle: TextStyle(
-                color: isSelected ? AppColors.accent : subtitleColor,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        const SizedBox(height: 8),
+        TextField(
+          controller: _errorCodeController,
+          style: TextStyle(color: textColor),
+          decoration: InputDecoration(
+            hintText: 'e.g. E-01, High Temp Warning, Pressure Drop...',
+            hintStyle: TextStyle(color: subtitleColor),
+            prefixIcon: const Icon(Icons.qr_code_outlined, color: AppColors.accent),
+            fillColor: contentBg,
+            filled: true,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: borderCol),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.accent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              'E01 - Not Heating',
+              'E02 - Leakage Detected',
+              'E03 - Low Pressure',
+              'E04 - Thermostat Error',
+              'E05 - Power Tripping',
+            ].map((code) => Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ActionChip(
+                label: Text(code, style: TextStyle(fontSize: 11, color: textColor)),
+                backgroundColor: contentBg,
+                side: BorderSide(color: borderCol),
+                onPressed: () {
+                  setState(() => _errorCodeController.text = code);
+                },
               ),
-              side: BorderSide(
-                color: isSelected ? AppColors.accent : borderCol,
-              ),
-              onSelected: (selected) {
-                if (selected) {
-                  setState(() => _selectedCategory = cat);
-                }
-              },
-            );
-          }).toList(),
+            )).toList(),
+          ),
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         Text(
           'Issue Details',

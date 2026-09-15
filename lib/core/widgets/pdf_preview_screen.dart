@@ -23,8 +23,11 @@ class PdfPreviewScreen extends StatefulWidget {
 class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   bool _isSaving = false;
 
+  String get _safeFileName => widget.fileName.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
+
   Future<void> _downloadFile() async {
     setState(() => _isSaving = true);
+    final safeName = _safeFileName;
     try {
       Directory? dir;
       if (Platform.isAndroid) {
@@ -36,14 +39,18 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         dir = await getApplicationDocumentsDirectory();
       }
 
-      final filePath = '${dir!.path}/${widget.fileName}';
+      if (dir != null && !dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
+
+      final filePath = '${dir!.path}/$safeName';
       final file = File(filePath);
       await file.writeAsBytes(widget.pdfBytes);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Saved to Downloads: ${widget.fileName}'),
+            content: Text('Saved to Downloads: $safeName'),
             backgroundColor: AppColors.success,
             action: SnackBarAction(
               label: 'View / Open',
@@ -56,15 +63,20 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     } catch (e) {
       try {
         final appDir = await getApplicationDocumentsDirectory();
-        final filePath = '${appDir.path}/${widget.fileName}';
+        final filePath = '${appDir.path}/$safeName';
         final file = File(filePath);
         await file.writeAsBytes(widget.pdfBytes);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Saved to app documents: ${widget.fileName}'),
+              content: Text('Saved to app documents: $safeName'),
               backgroundColor: AppColors.success,
+              action: SnackBarAction(
+                label: 'Share / View',
+                textColor: Colors.white,
+                onPressed: () => _shareFile(),
+              ),
             ),
           );
         }
@@ -79,24 +91,29 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         }
       }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   Future<void> _shareFile() async {
+    final safeName = _safeFileName;
     try {
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/${widget.fileName}');
-      await tempFile.writeAsBytes(widget.pdfBytes);
-      await Share.shareXFiles([XFile(tempFile.path)], text: 'IZYHEAT Document: ${widget.fileName}');
+      await Printing.sharePdf(bytes: widget.pdfBytes, filename: safeName);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to share: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File('${tempDir.path}/$safeName');
+        await tempFile.writeAsBytes(widget.pdfBytes);
+        await Share.shareXFiles([XFile(tempFile.path)], text: 'Document: $safeName');
+      } catch (err) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to share: $err'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
       }
     }
   }

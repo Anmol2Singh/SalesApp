@@ -36,6 +36,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
     _controller.forward();
+
+    // Offline / slow DNS timeout safety fallback (ensures splash never hangs indefinitely)
+    Future.delayed(const Duration(milliseconds: 3500), () {
+      if (mounted && !_navigationStarted) {
+        _navigationStarted = true;
+        final currentProfile = ref.read(currentProfileProvider);
+        if (currentProfile != null) {
+          context.go(_getRoleHome(currentProfile.primaryRole));
+        } else {
+          context.go(AppRoutes.login);
+        }
+      }
+    });
   }
 
   @override

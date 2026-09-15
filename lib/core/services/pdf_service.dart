@@ -89,7 +89,6 @@ class PdfService {
         ),
         build: (context) {
           final totalQty = quotation.lineItems.fold<double>(0, (sum, item) => sum + item.qty);
-          final totalFreeQty = quotation.lineItems.fold<double>(0, (sum, item) => sum + item.freeQty);
           final totalAmount = quotation.lineItems.fold<double>(0, (sum, item) => sum + item.total);
 
           final taxRate = (quotation.cgstRate + quotation.sgstRate);
@@ -204,7 +203,7 @@ class PdfService {
                 1: const pw.FlexColumnWidth(3),   // Description
                 2: const pw.FixedColumnWidth(55),  // HSN/SAC
                 3: const pw.FixedColumnWidth(35),  // Qty
-                4: const pw.FixedColumnWidth(40),  // Free Qty
+                4: const pw.FixedColumnWidth(40),  // GST %
                 5: const pw.FixedColumnWidth(35),  // UOM
                 6: const pw.FixedColumnWidth(55),  // Item Rate
                 7: const pw.FixedColumnWidth(35),  // Disc %
@@ -215,7 +214,7 @@ class PdfService {
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E3A5F)),
                   children: [
-                    'S\nNo', 'Description', 'HSN / SAC', 'Qty', 'Free\nQty', 'UOM', 'Item Rate', 'Disc %', 'Amount\n(INR)'
+                    'S\nNo', 'Description', 'HSN / SAC', 'Qty', 'GST\n%', 'UOM', 'Item Rate', 'Disc %', 'Amount\n(INR)'
                   ].map((h) => pw.Padding(
                     padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 4),
                     child: pw.Text(h, style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: h == 'Description' ? pw.TextAlign.left : pw.TextAlign.center),
@@ -230,8 +229,8 @@ class PdfService {
                             pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${idx + 1}', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center)),
                             pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.description, style: const pw.TextStyle(fontSize: 7.5))),
                             pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.hsnSac ?? '', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.qty.toStringAsFixed(2), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.freeQty.toStringAsFixed(0), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
+                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.qty.toInt().toString(), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
+                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${item.gstPercent.toStringAsFixed(0)}%', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
                             pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.uom, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center)),
                             pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.unitPrice), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
                             pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${item.discPercent.toStringAsFixed(2)}%', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
@@ -246,8 +245,8 @@ class PdfService {
                           pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
                           pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Total', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
                           pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(totalQty.toStringAsFixed(2), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(totalFreeQty.toStringAsFixed(0), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(totalQty.toInt().toString(), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
                           pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
                           pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
                           pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
@@ -696,7 +695,7 @@ class PdfService {
           companyPhone: templateConfig['company_phone'] as String? ?? '',
           companyEmail: templateConfig['company_email'] as String? ?? '',
           companyGst: templateConfig['company_gst'] as String? ?? '',
-          docTitle: 'MATERIAL ACQUISITION',
+          docTitle: 'MATERIAL REQUISITION',
           docNumber: purchaseOrder.poNumber,
           docDate: purchaseOrder.createdAt,
           status: purchaseOrder.status.displayName,
@@ -721,17 +720,20 @@ class PdfService {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(
-                    'Total Amount: $_rupee${_currencyFormat.format(purchaseOrder.totalAmount)}',
-                    style: pw.TextStyle(
-                      fontSize: 13,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: const pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(4)),
+                ),
+                child: pw.Text(
+                  'Total Qty: ${purchaseOrder.items.fold<num>(0, (sum, it) => sum + it.qty).toInt()}',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    color: const PdfColor.fromInt(0xFF1E3A5F),
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -1049,7 +1051,7 @@ class PdfService {
         pw.TableRow(
           decoration:
               const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E3A5F)),
-          children: ['Component', 'Size', 'Qty', 'Unit']
+          children: ['Component', 'Qty', 'Unit']
               .map((h) => pw.Padding(
                     padding: const pw.EdgeInsets.all(5),
                     child: pw.Text(_cleanText(h),
@@ -1068,8 +1070,7 @@ class PdfService {
                 color: i.isEven ? PdfColors.grey50 : PdfColors.white),
             children: [
               item.component,
-              item.spec ?? '',
-              item.qty.toString(),
+              item.qty.toInt().toString(),
               item.unit,
             ]
                 .map((v) => pw.Padding(
@@ -1131,7 +1132,7 @@ class PdfService {
         pw.TableRow(
           decoration:
               const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E3A5F)),
-          children: ['Description', 'Qty', 'Unit', 'Unit Price', 'Total']
+          children: ['Description', 'Qty', 'Unit']
               .map((h) => pw.Padding(
                     padding: const pw.EdgeInsets.all(5),
                     child: pw.Text(_cleanText(h),
@@ -1150,10 +1151,8 @@ class PdfService {
                 color: i.isEven ? PdfColors.grey50 : PdfColors.white),
             children: [
               item.description,
-              item.qty.toString(),
+              item.qty.toInt().toString(),
               item.unit,
-              '$_rupee${_currencyFormat.format(item.unitPrice)}',
-              '$_rupee${_currencyFormat.format(item.total)}',
             ]
                 .map((v) => pw.Padding(
                       padding: const pw.EdgeInsets.all(5),
@@ -1717,7 +1716,7 @@ class PdfService {
             'Description',
             'HSN / SAC',
             'Qty',
-            'Free Qty',
+            'GST %',
             'UOM',
             'Item Rate',
             'Disc %',
@@ -1762,11 +1761,9 @@ class PdfService {
         : 0.18;
 
     double totalQty = 0;
-    double totalFreeQty = 0;
     double totalAmount = 0;
     for (final item in items) {
       totalQty += item.qty;
-      totalFreeQty += item.freeQty;
       final lineTaxable = (item.qty * item.rate) * (1 - item.discPercent / 100);
       final lineAmountIncludingTax = lineTaxable * (1 + gstFraction);
       totalAmount += lineAmountIncludingTax;
@@ -1808,7 +1805,7 @@ class PdfService {
                   item.description,
                   item.hsnSac ?? '',
                   item.qty.toStringAsFixed(2),
-                  item.freeQty.toStringAsFixed(0),
+                  '${item.gstPercent.toStringAsFixed(0)}%',
                   item.uom,
                   _currencyFormat.format(item.rate),
                   '${item.discPercent.toStringAsFixed(2)}%',
@@ -1877,12 +1874,7 @@ class PdfService {
                     textAlign: pw.TextAlign.right),
               ),
               pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(totalFreeQty.toStringAsFixed(0),
-                    style: pw.TextStyle(
-                        fontSize: 8, fontWeight: pw.FontWeight.bold),
-                    textAlign: pw.TextAlign.right),
-              ),
+                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
               pw.Padding(
                   padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
               pw.Padding(
@@ -2567,15 +2559,15 @@ class PdfService {
       );
     }
 
-    pw.Widget buildSectionHeader(String title) {
+    pw.Widget buildSectionHeader(String title, [PdfColor headerColor = PdfColors.blue900]) {
       return pw.Container(
-        margin: const pw.EdgeInsets.only(top: 16, bottom: 8),
+        margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
         padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        decoration: const pw.BoxDecoration(
+        decoration: pw.BoxDecoration(
           color: PdfColors.blue50,
-          border: pw.Border(left: pw.BorderSide(color: PdfColors.blue900, width: 4)),
+          border: pw.Border(left: pw.BorderSide(color: headerColor, width: 4)),
         ),
-        child: pw.Text(title, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+        child: pw.Text(title, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: headerColor)),
       );
     }
 
@@ -2619,7 +2611,7 @@ class PdfService {
         build: (context) {
           return [
             if (data.customers.isNotEmpty) ...[
-              buildSectionHeader('CUSTOMERS ADDED (${data.customers.length})'),
+              buildSectionHeader('CUSTOMERS ADDED (${data.customers.length})', PdfColors.blue900),
               pw.TableHelper.fromTextArray(
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
                 headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
@@ -2635,13 +2627,10 @@ class PdfService {
                 ]).toList(),
               ),
             ],
-            
-            if (data.customers.isEmpty)
-              pw.Text('No customers added during this period.', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
 
             pw.SizedBox(height: 10),
             if (data.pipelines.isNotEmpty) ...[
-              buildSectionHeader('DEALS CREATED (${data.pipelines.length})'),
+              buildSectionHeader('DEALS CREATED (${data.pipelines.length})', PdfColors.teal900),
               pw.TableHelper.fromTextArray(
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
                 headerDecoration: const pw.BoxDecoration(color: PdfColors.teal900),
@@ -2658,12 +2647,97 @@ class PdfService {
               ),
             ],
 
-            if (data.pipelines.isEmpty)
-              pw.Text('No deals created during this period.', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
+            pw.SizedBox(height: 10),
+            if (data.stepAuditLogs.isNotEmpty) ...[
+              buildSectionHeader('DEAL STEPS FINISHED (${data.stepAuditLogs.length})', PdfColors.indigo900),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellPadding: const pw.EdgeInsets.all(6),
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                headers: ['Deal / Customer', 'Step', 'Action', 'Time'],
+                data: data.stepAuditLogs.map((s) {
+                  final pipeline = s['sales_pipelines'] as Map<String, dynamic>?;
+                  final cust = pipeline?['customers'] as Map<String, dynamic>?;
+                  final prod = pipeline?['products'] as Map<String, dynamic>?;
+                  final cName = cust?['customer_name'] ?? '';
+                  final pName = prod?['name'] ?? '';
+                  final dealStr = [cName, pName].where((e) => e.isNotEmpty).join(' - ');
+                  return [
+                    dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-'),
+                    s['step_name']?.toString().toUpperCase() ?? '-',
+                    s['action']?.toString() ?? '-',
+                    s['performed_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(s['performed_at']) ?? DateTime.now()) : '-',
+                  ];
+                }).toList(),
+              ),
+            ],
+
+            pw.SizedBox(height: 10),
+            if (data.communications.isNotEmpty) ...[
+              buildSectionHeader('LEAD COMMUNICATIONS (${data.communications.length})', PdfColors.purple900),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.purple900),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellPadding: const pw.EdgeInsets.all(6),
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                headers: ['Lead / Prospect', 'Type', 'Summary', 'Time'],
+                data: data.communications.map((comm) {
+                  final lead = comm['crm_leads'] as Map<String, dynamic>?;
+                  final leadName = lead?['prospect_name'] ?? '-';
+                  return [
+                    leadName,
+                    comm['type']?.toString() ?? '-',
+                    comm['summary']?.toString() ?? '-',
+                    comm['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(comm['created_at']) ?? DateTime.now()) : '-',
+                  ];
+                }).toList(),
+              ),
+            ],
+
+            pw.SizedBox(height: 10),
+            if (data.leads.isNotEmpty) ...[
+              buildSectionHeader('LEADS ADDED (${data.leads.length})', PdfColors.cyan900),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.cyan900),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellPadding: const pw.EdgeInsets.all(6),
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                headers: ['Prospect', 'Product', 'Est. Value', 'Status'],
+                data: data.leads.map((l) => [
+                  l['prospect_name']?.toString() ?? '-',
+                  l['product_name']?.toString() ?? '-',
+                  '₹${l['estimated_value'] ?? 0}',
+                  l['status']?.toString() ?? 'New',
+                ]).toList(),
+              ),
+            ],
+
+            pw.SizedBox(height: 10),
+            if (data.conversions.isNotEmpty) ...[
+              buildSectionHeader('CONVERSIONS (${data.conversions.length})', PdfColors.green900),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.green900),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellPadding: const pw.EdgeInsets.all(6),
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                headers: ['Type', 'Name', 'Details', 'Time'],
+                data: data.conversions.map((conv) => [
+                  conv['type']?.toString() ?? '-',
+                  conv['name']?.toString() ?? '-',
+                  conv['details']?.toString() ?? '-',
+                  conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
+                ]).toList(),
+              ),
+            ],
 
             pw.SizedBox(height: 10),
             if (data.complaints.isNotEmpty) ...[
-              buildSectionHeader('COMPLAINTS LOGGED/HANDLED (${data.complaints.length})'),
+              buildSectionHeader('COMPLAINTS LOGGED/HANDLED (${data.complaints.length})', PdfColors.orange900),
               pw.TableHelper.fromTextArray(
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
                 headerDecoration: const pw.BoxDecoration(color: PdfColors.orange900),
@@ -2680,12 +2754,287 @@ class PdfService {
               ),
             ],
 
-            if (data.complaints.isEmpty)
-              pw.Text('No complaints recorded during this period.', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
+            if (data.customers.isEmpty &&
+                data.pipelines.isEmpty &&
+                data.stepAuditLogs.isEmpty &&
+                data.communications.isEmpty &&
+                data.leads.isEmpty &&
+                data.conversions.isEmpty &&
+                data.complaints.isEmpty)
+              pw.Text('No activities recorded during this period.', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
           ];
         },
       ),
     );
+
+    return pdf.save();
+  }
+
+  static Future<Uint8List> generateAllUsersActivityReportPdf({
+    required BuildContext context,
+    required List<Map<String, dynamic>> userEntries,
+    required String dateRangeType,
+    DateTime? customStartDate,
+    DateTime? customEndDate,
+  }) async {
+    final pdf = pw.Document();
+
+    final prefs = await SharedPreferences.getInstance();
+    final companyName = prefs.getString('company_name') ?? 'Insiya Solar Industry';
+    final companyAddress = prefs.getString('company_address') ?? 'Default Address';
+    final companyPhone = prefs.getString('company_phone') ?? '+91 0000000000';
+    final companyEmail = prefs.getString('company_email') ?? 'info@insiyasolar.com';
+    final logoUrl = prefs.getString('company_logo_url');
+    final logoImage = await _fetchLogo(logoUrl);
+
+    String dateStr = dateRangeType.toUpperCase();
+    if (dateRangeType == 'custom' && customStartDate != null && customEndDate != null) {
+      dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
+    }
+
+    final pdfTheme = pw.ThemeData.withFont(
+      base: await PdfGoogleFonts.interRegular(),
+      bold: await PdfGoogleFonts.interBold(),
+    );
+
+    pw.Widget buildHeader() {
+      return pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(companyName, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                pw.SizedBox(height: 3),
+                pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Text('Phone: $companyPhone | Email: $companyEmail', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+              ],
+            ),
+          ),
+          if (logoImage != null)
+            pw.Container(
+              height: 45,
+              child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+            ),
+        ],
+      );
+    }
+
+    pw.Widget buildSectionHeader(String title, PdfColor headerColor) {
+      return pw.Container(
+        margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
+        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.grey100,
+          border: pw.Border(left: pw.BorderSide(color: headerColor, width: 4)),
+        ),
+        child: pw.Text(title, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: headerColor)),
+      );
+    }
+
+    for (final entry in userEntries) {
+      final String uName = entry['userName'] as String;
+      final String uRole = entry['userRole'] as String? ?? '';
+      final ActivityReportData uData = entry['data'] as ActivityReportData;
+
+      pdf.addPage(
+        pw.MultiPage(
+          theme: pdfTheme,
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          header: (pageCtx) => pw.Column(
+            children: [
+              buildHeader(),
+              pw.SizedBox(height: 12),
+              pw.Divider(color: PdfColors.grey400),
+              pw.SizedBox(height: 10),
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.5)),
+                    pw.SizedBox(height: 3),
+                    pw.Text('Staff Member: $uName ${uRole.isNotEmpty ? "($uRole)" : ""}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                    pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 14),
+            ],
+          ),
+          footer: (pageCtx) => pw.Column(
+            children: [
+              pw.Divider(color: PdfColors.grey400),
+              pw.SizedBox(height: 6),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                  pw.Text('Page ${pageCtx.pageNumber} of ${pageCtx.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                ],
+              ),
+            ],
+          ),
+          build: (pageCtx) {
+            return [
+              if (uData.customers.isNotEmpty) ...[
+                buildSectionHeader('CUSTOMERS ADDED (${uData.customers.length})', PdfColors.blue900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['ID', 'Name', 'Phone', 'Created At'],
+                  data: uData.customers.map((c) => [
+                    (c['id']?.toString() ?? '').length > 8 ? (c['id']?.toString() ?? '').substring(0, 8) + '...' : (c['id']?.toString() ?? ''),
+                    c['customer_name']?.toString() ?? '-',
+                    c['phone']?.toString() ?? '-',
+                    c['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(c['created_at']) ?? DateTime.now()) : '-',
+                  ]).toList(),
+                ),
+              ],
+              
+              pw.SizedBox(height: 10),
+              if (uData.pipelines.isNotEmpty) ...[
+                buildSectionHeader('DEALS CREATED (${uData.pipelines.length})', PdfColors.teal900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.teal900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Deal ID', 'Customer', 'Product', 'Status'],
+                  data: uData.pipelines.map((p) => [
+                    (p['id']?.toString() ?? '').length > 8 ? (p['id']?.toString() ?? '').substring(0, 8) + '...' : (p['id']?.toString() ?? ''),
+                    p['customers'] != null ? p['customers']['customer_name']?.toString() ?? '-' : '-',
+                    p['products'] != null ? p['products']['name']?.toString() ?? '-' : '-',
+                    p['status']?.toString().toUpperCase() ?? '-',
+                  ]).toList(),
+                ),
+              ],
+
+              pw.SizedBox(height: 10),
+              if (uData.stepAuditLogs.isNotEmpty) ...[
+                buildSectionHeader('DEAL STEPS FINISHED (${uData.stepAuditLogs.length})', PdfColors.indigo900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Deal / Customer', 'Step', 'Action', 'Time'],
+                  data: uData.stepAuditLogs.map((s) {
+                    final pipeline = s['sales_pipelines'] as Map<String, dynamic>?;
+                    final cust = pipeline?['customers'] as Map<String, dynamic>?;
+                    final prod = pipeline?['products'] as Map<String, dynamic>?;
+                    final cName = cust?['customer_name'] ?? '';
+                    final pName = prod?['name'] ?? '';
+                    final dealStr = [cName, pName].where((e) => e.isNotEmpty).join(' - ');
+                    return [
+                      dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-'),
+                      s['step_name']?.toString().toUpperCase() ?? '-',
+                      s['action']?.toString() ?? '-',
+                      s['performed_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(s['performed_at']) ?? DateTime.now()) : '-',
+                    ];
+                  }).toList(),
+                ),
+              ],
+
+              pw.SizedBox(height: 10),
+              if (uData.communications.isNotEmpty) ...[
+                buildSectionHeader('LEAD COMMUNICATIONS (${uData.communications.length})', PdfColors.purple900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.purple900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Lead / Prospect', 'Type', 'Summary', 'Time'],
+                  data: uData.communications.map((comm) {
+                    final lead = comm['crm_leads'] as Map<String, dynamic>?;
+                    final leadName = lead?['prospect_name'] ?? '-';
+                    return [
+                      leadName,
+                      comm['type']?.toString() ?? '-',
+                      comm['summary']?.toString() ?? '-',
+                      comm['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(comm['created_at']) ?? DateTime.now()) : '-',
+                    ];
+                  }).toList(),
+                ),
+              ],
+
+              pw.SizedBox(height: 10),
+              if (uData.leads.isNotEmpty) ...[
+                buildSectionHeader('LEADS ADDED (${uData.leads.length})', PdfColors.cyan900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.cyan900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Prospect', 'Product', 'Est. Value', 'Status'],
+                  data: uData.leads.map((l) => [
+                    l['prospect_name']?.toString() ?? '-',
+                    l['product_name']?.toString() ?? '-',
+                    '₹${l['estimated_value'] ?? 0}',
+                    l['status']?.toString() ?? 'New',
+                  ]).toList(),
+                ),
+              ],
+
+              pw.SizedBox(height: 10),
+              if (uData.conversions.isNotEmpty) ...[
+                buildSectionHeader('CONVERSIONS (${uData.conversions.length})', PdfColors.green900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.green900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Type', 'Name', 'Details', 'Time'],
+                  data: uData.conversions.map((conv) => [
+                    conv['type']?.toString() ?? '-',
+                    conv['name']?.toString() ?? '-',
+                    conv['details']?.toString() ?? '-',
+                    conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
+                  ]).toList(),
+                ),
+              ],
+
+              pw.SizedBox(height: 10),
+              if (uData.complaints.isNotEmpty) ...[
+                buildSectionHeader('COMPLAINTS LOGGED / HANDLED (${uData.complaints.length})', PdfColors.orange900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.orange900),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Ticket ID', 'Title', 'Customer', 'Status'],
+                  data: uData.complaints.map((c) => [
+                    c['ticket_number']?.toString() ?? (c['id'] != null && c['id'].toString().length > 8 ? c['id'].toString().substring(0, 8) + '...' : '-'),
+                    c['title']?.toString() ?? '-',
+                    c['customer_name']?.toString() ?? '-',
+                    c['status']?.toString().toUpperCase() ?? '-',
+                  ]).toList(),
+                ),
+              ],
+
+              if (uData.customers.isEmpty &&
+                  uData.pipelines.isEmpty &&
+                  uData.stepAuditLogs.isEmpty &&
+                  uData.communications.isEmpty &&
+                  uData.leads.isEmpty &&
+                  uData.conversions.isEmpty &&
+                  uData.complaints.isEmpty)
+                pw.Text('No activities recorded for this user during this period.', style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
+            ];
+          },
+        ),
+      );
+    }
 
     return pdf.save();
   }

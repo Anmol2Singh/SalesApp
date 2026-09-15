@@ -11,9 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../providers/inventory_provider.dart';
-import '../providers/inventory_sizes_provider.dart';
 import '../providers/manage_boq_items_provider.dart';
-import 'manage_sizes_screen.dart';
 import 'product_catalog_screen.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
@@ -80,20 +78,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 ),
               ]
             : [
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                  icon: const Icon(Icons.straighten, size: 18, color: Colors.white),
-                  label: const Text('Manage Size', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ManageSizesScreen()),
-                    );
-                  },
-                ),
                 IconButton(
                   icon: const Icon(Icons.upload_file, color: Colors.white),
                   tooltip: 'Import Excel',
@@ -462,32 +446,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       );
                     }).toList(),
                   ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-
-          // Bottom Action: Sub-Systems Button
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    icon: const Icon(Icons.account_tree_outlined, size: 18),
-                    label: const Text(
-                      'Sub-Systems (Items with Product)',
-                      style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                    onPressed: () => _showSubSystemsModal(context, product),
-                  ),
-                ),
               ],
             ),
           ),
@@ -912,7 +870,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   // MANAGE CAPACITY DIALOG
   // ==========================================
   void _showManageCapacityDialog(BuildContext context, Product product) {
+    final initialCapacities = List<String>.from(product.baseSpecs.capacities);
     final currentCapacities = List<String>.from(product.baseSpecs.capacities);
+    final Map<String, String> renamedCapacities = {};
+    final Set<String> deletedCapacities = {};
     final capacityInputController = TextEditingController();
     bool isSaving = false;
 
@@ -942,8 +903,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Define capacities or ratings (e.g. 500 LPD, 1000 LPD, 5 kW, 10 kW).',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textSecondary),
+                    'Define capacities or ratings (e.g. 500 LPD, 1000 LPD, 5 kW, 10 kW).\nEach capacity is automatically linked as an item in the Items tab for price management.',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -1016,7 +977,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     )
                   else
                     Container(
-                      constraints: const BoxConstraints(maxHeight: 220),
+                      constraints: const BoxConstraints(maxHeight: 250),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey.shade200),
                         borderRadius: BorderRadius.circular(10),
@@ -1030,11 +991,68 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           return ListTile(
                             dense: true,
                             title: Text(cap, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close, size: 18, color: AppColors.error),
-                              onPressed: () {
-                                setModalState(() => currentCapacities.removeAt(idx));
-                              },
+                            subtitle: Text(
+                              'Item Name: ${product.name} - $cap',
+                              style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                  tooltip: 'Edit Capacity',
+                                  onPressed: () async {
+                                    final editController = TextEditingController(text: cap);
+                                    final updated = await showDialog<String>(
+                                      context: ctx,
+                                      builder: (editCtx) => AlertDialog(
+                                        title: const Text('Edit Capacity'),
+                                        content: TextField(
+                                          controller: editController,
+                                          autofocus: true,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Capacity / Rating',
+                                            hintText: 'e.g. 500 LPD',
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(editCtx),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              final text = editController.text.trim();
+                                              if (text.isNotEmpty) Navigator.pop(editCtx, text);
+                                            },
+                                            child: const Text('Update'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (updated != null && updated.isNotEmpty && updated != cap) {
+                                      setModalState(() {
+                                        if (initialCapacities.contains(cap)) {
+                                          renamedCapacities[cap] = updated;
+                                        }
+                                        currentCapacities[idx] = updated;
+                                      });
+                                    }
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                                  tooltip: 'Delete Capacity & remove from Items',
+                                  onPressed: () {
+                                    setModalState(() {
+                                      final removed = currentCapacities.removeAt(idx);
+                                      if (initialCapacities.contains(removed)) {
+                                        deletedCapacities.add(removed);
+                                      }
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -1057,6 +1075,35 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       setModalState(() => isSaving = true);
                       try {
                         final supabase = ref.read(supabaseClientProvider);
+
+                        // 1. Process deletions in inventory_items
+                        for (final delCap in deletedCapacities) {
+                          final itemName = '${product.name} - $delCap';
+                          await supabase.from('inventory_items').delete().eq('item_name', itemName);
+                        }
+
+                        // 2. Process renames in inventory_items
+                        for (final entry in renamedCapacities.entries) {
+                          final oldName = '${product.name} - ${entry.key}';
+                          final newName = '${product.name} - ${entry.value}';
+                          await supabase.from('inventory_items').update({'item_name': newName}).eq('item_name', oldName);
+                        }
+
+                        // 3. Process new additions / ensures in inventory_items
+                        for (final cap in currentCapacities) {
+                          final itemName = '${product.name} - $cap';
+                          final existing = await supabase.from('inventory_items').select('id').eq('item_name', itemName).maybeSingle();
+                          if (existing == null) {
+                            await supabase.from('inventory_items').insert({
+                              'item_name': itemName,
+                              'price': 0.0,
+                              'uom': 'NOS',
+                              'created_at': DateTime.now().toIso8601String(),
+                            });
+                          }
+                        }
+
+                        // 4. Update product base_specs
                         final rawSpecs = Map<String, dynamic>.from(product.baseSpecs.raw);
                         rawSpecs['capacities'] = currentCapacities;
 
@@ -1066,10 +1113,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         }).eq('id', product.id);
 
                         ref.invalidate(productsProvider);
+                        ref.invalidate(inventoryProvider);
+
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Capacities updated successfully!'), backgroundColor: AppColors.success),
+                            const SnackBar(
+                              content: Text('Capacities & matching Items synchronized successfully!'),
+                              backgroundColor: AppColors.success,
+                            ),
                           );
                         }
                       } catch (e) {
@@ -1228,14 +1280,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                         Row(
                                           children: [
                                             _buildBadge('Unit: ${item.defaultUnit}'),
-                                            if (item.defaultSize != null && item.defaultSize!.isNotEmpty) ...[
-                                              const SizedBox(width: 6),
-                                              _buildBadge(
-                                                'Size: ${item.defaultSize}',
-                                                color: const Color(0xFFF1F5F9),
-                                                textColor: const Color(0xFF334155),
-                                              ),
-                                            ],
                                           ],
                                         ),
                                       ],
@@ -1305,8 +1349,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   void _showInventorySearchPicker(BuildContext context, String productId) {
     final inventoryAsync = ref.read(inventoryProvider);
     final allItems = inventoryAsync.valueOrNull ?? [];
-    final sizesAsync = ref.read(inventorySizesProvider);
-    final availableSizes = sizesAsync.valueOrNull?.map((s) => s.sizeName).toList() ?? [];
 
     showModalBottomSheet(
       context: context,
@@ -1386,7 +1428,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                       invItem.itemName,
                                       invItem.id,
                                       invItem.uom ?? 'NOS',
-                                      availableSizes,
                                     );
                                   },
                                   child: const Text('Add', style: TextStyle(color: Colors.white)),
@@ -1410,73 +1451,56 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     String itemName,
     String inventoryItemId,
     String defaultUom,
-    List<String> availableSizes,
   ) {
-    String? selectedSize = availableSizes.isNotEmpty ? availableSizes.first : null;
     final unitController = TextEditingController(text: defaultUom);
 
     showDialog(
       context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('Configure "$itemName"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (availableSizes.isNotEmpty) ...[
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Default Size (Optional)'),
-                  value: selectedSize,
-                  items: [
-                    const DropdownMenuItem<String>(value: '', child: Text('None / Standard')),
-                    ...availableSizes.map((s) => DropdownMenuItem(value: s, child: Text(s))),
-                  ],
-                  onChanged: (val) => setDialogState(() => selectedSize = val),
-                ),
-                const SizedBox(height: 12),
-              ],
-              TextField(
-                controller: unitController,
-                decoration: const InputDecoration(labelText: 'Default Unit (e.g. NOS, MTR, SET)'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () async {
-                Navigator.pop(dialogCtx);
-                try {
-                  final supabase = ref.read(supabaseClientProvider);
-                  await supabase.from('product_boq_items').insert({
-                    'product_id': productId,
-                    'item_name': itemName,
-                    'inventory_item_id': inventoryItemId,
-                    'default_size': selectedSize?.isEmpty == true ? null : selectedSize,
-                    'default_unit': unitController.text.trim().isEmpty ? 'NOS' : unitController.text.trim(),
-                  });
-                  ref.invalidate(productBoqItemsProvider(productId));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sub-system added to product!'), backgroundColor: AppColors.success),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error adding sub-system: $e'), backgroundColor: AppColors.error),
-                    );
-                  }
-                }
-              },
-              child: const Text('Add to Product', style: TextStyle(color: Colors.white)),
+      builder: (dialogCtx) => AlertDialog(
+        title: Text('Configure "$itemName"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: unitController,
+              decoration: const InputDecoration(labelText: 'Default Unit (e.g. NOS, MTR, SET)'),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final supabase = ref.read(supabaseClientProvider);
+                await supabase.from('product_boq_items').insert({
+                  'product_id': productId,
+                  'item_name': itemName,
+                  'inventory_item_id': inventoryItemId,
+                  'default_unit': unitController.text.trim().isEmpty ? 'NOS' : unitController.text.trim(),
+                });
+                ref.invalidate(productBoqItemsProvider(productId));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Item added to product!'), backgroundColor: AppColors.success),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error adding item: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            },
+            child: const Text('Add to Product', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

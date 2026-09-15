@@ -21,6 +21,7 @@ import '../../features/purchase_order/screens/purchase_queue_screen.dart';
 import '../../features/notifications/screens/notification_center_screen.dart';
 import '../../features/dashboard/screens/admin_dashboard_screen.dart';
 import '../../features/reports/screens/user_activity_report_screen.dart';
+import '../../features/pdf_search/screens/search_pdf_screen.dart';
 import '../../features/dashboard/screens/sales_dashboard_screen.dart';
 import '../../features/admin/screens/admin_panel_screen.dart';
 import '../../features/admin/screens/product_catalog_screen.dart';
@@ -99,6 +100,7 @@ class AppRoutes {
   static const String assignTechnician = '/complaints/assign';
   static const String serviceHistory = '/complaints/history';
   static const String complaintsList = '/complaints';
+  static const String searchPdf = '/search-pdf';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -249,6 +251,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.inventory,
             builder: (context, state) => const InventoryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.searchPdf,
+            builder: (context, state) => const SearchPdfScreen(),
           ),
           GoRoute(
             path: AppRoutes.amcList,
@@ -488,7 +494,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-String _getRoleHome(UserRole role) {
+String getRoleHome(UserRole role) {
   switch (role) {
     case UserRole.admin:
     case UserRole.manager:
@@ -509,3 +515,5 @@ String _getRoleHome(UserRole role) {
       return '/crm/dashboard';
   }
 }
+
+String _getRoleHome(UserRole role) => getRoleHome(role);

@@ -11,6 +11,9 @@ import '../../customer_app/data/providers/app_providers.dart' hide authStateProv
 import '../providers/auth_provider.dart';
 import '../../../core/providers/supabase_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/models/user_role.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -98,9 +101,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ToastService.show(context, 'Signed in successfully!', type: ToastType.success);
         
         // Invalidate authStateProvider so the router knows about the new session.
-        // The GoRouter's redirect logic will automatically navigate to the correct dashboard
-        // once the authStateProvider yields the new profile.
         ref.invalidate(authStateProvider);
+
+        // Explicitly navigate immediately using resolved session role
+        final prefs = await SharedPreferences.getInstance();
+        final staffRole = prefs.getString('staff_session_role');
+        if (staffRole != null && mounted) {
+          final role = UserRole.fromString(staffRole);
+          context.go(getRoleHome(role));
+          return;
+        }
+
+        final current = ref.read(currentProfileProvider);
+        if (current != null && mounted) {
+          context.go(getRoleHome(current.primaryRole));
+        }
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -478,7 +493,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           decoration: InputDecoration(
             labelText: 'Email Address',
             labelStyle: TextStyle(color: subtitleCol),
-            hintText: 'you@izyheat.com',
+            hintText: 'admin@insiya.com or admin@izyheat.com',
             hintStyle: TextStyle(color: subtitleCol.withOpacity(0.5)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             fillColor: inputBg,
@@ -503,10 +518,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Email is required';
-            }
-            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-              return 'Enter a valid email address';
+              return 'Email or username is required';
             }
             return null;
           },

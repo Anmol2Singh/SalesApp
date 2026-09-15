@@ -71,8 +71,11 @@ class _UserRolesEditorScreenState extends ConsumerState<UserRolesEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show all available roles
-    final availableRoles = UserRole.values.where((r) => r != UserRole.customer).toList();
+    // Show all available roles (excluding customer and technician), sorted A->Z
+    final availableRoles = UserRole.values
+        .where((r) => r != UserRole.customer && r != UserRole.technician)
+        .toList()
+      ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
 
     return Scaffold(
       backgroundColor: AppColors.background,

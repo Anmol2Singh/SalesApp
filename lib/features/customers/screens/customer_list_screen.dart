@@ -75,12 +75,41 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go(AppRoutes.adminDashboard),
+        ),
         title: const Text('Customers'),
         actions: [
           const SyncStatusIndicator(),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterSheet,
+          Consumer(
+            builder: (context, ref, _) {
+              final notifier = ref.watch(customersNotifierProvider.notifier);
+              final hasActive = notifier.filterBy.isNotEmpty || notifier.sortBy != 'recent';
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.filter_list),
+                    tooltip: 'Filter & Sort',
+                    onPressed: _showFilterSheet,
+                  ),
+                  if (hasActive)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -120,61 +149,10 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
       ),
       body: Column(
         children: [
-          // Active filter chips
-          Consumer(
-            builder: (context, ref, _) {
-              final notifier = ref.watch(customersNotifierProvider.notifier);
-              final currentFilter = notifier.filterBy;
-              final currentSort = notifier.sortBy;
-              if (currentFilter.isEmpty && currentSort == 'recent') {
-                return const SizedBox.shrink();
-              }
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                alignment: Alignment.centerLeft,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      if (currentFilter.isNotEmpty) ...[
-                        Chip(
-                          label: Text(
-                            currentFilter == 'active_deal' ? 'Active Deal' : 'Active AMC',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          onDeleted: () {
-                            ref.read(customersNotifierProvider.notifier).setFilterAndSort(
-                              filter: '',
-                              sort: currentSort,
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      if (currentSort != 'recent') ...[
-                        Chip(
-                          label: const Text(
-                            'Alphabetical',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          onDeleted: () {
-                            ref.read(customersNotifierProvider.notifier).setFilterAndSort(
-                              filter: currentFilter,
-                              sort: 'recent',
-                            );
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          // Search bar
+          // Search bar (seamless extension of AppBar)
           Container(
             color: AppColors.primary,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 800),
@@ -216,6 +194,75 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                 ),
               ),
             ),
+          ),
+          // Active filter chips (cleanly placed below search bar)
+          Consumer(
+            builder: (context, ref, _) {
+              final notifier = ref.watch(customersNotifierProvider.notifier);
+              final currentFilter = notifier.filterBy;
+              final currentSort = notifier.sortBy;
+              if (currentFilter.isEmpty && currentSort == 'recent') {
+                return const SizedBox.shrink();
+              }
+              return Container(
+                color: AppColors.surface,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                alignment: Alignment.centerLeft,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      if (currentFilter.isNotEmpty) ...[
+                        Chip(
+                          backgroundColor: const Color(0xFFEFF6FF),
+                          side: const BorderSide(color: Color(0xFF3B82F6), width: 1),
+                          label: Text(
+                            currentFilter == 'active_deal' ? 'Active Deal' : 'Active AMC',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
+                          ),
+                          deleteIcon: const Icon(Icons.close, size: 14, color: Color(0xFF1D4ED8)),
+                          onDeleted: () {
+                            ref.read(customersNotifierProvider.notifier).setFilterAndSort(
+                              filter: '',
+                              sort: currentSort,
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (currentSort != 'recent') ...[
+                        Chip(
+                          backgroundColor: const Color(0xFFEFF6FF),
+                          side: const BorderSide(color: Color(0xFF3B82F6), width: 1),
+                          label: const Text(
+                            'Alphabetical (A-Z)',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
+                          ),
+                          deleteIcon: const Icon(Icons.close, size: 14, color: Color(0xFF1D4ED8)),
+                          onDeleted: () {
+                            ref.read(customersNotifierProvider.notifier).setFilterAndSort(
+                              filter: currentFilter,
+                              sort: 'recent',
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      TextButton.icon(
+                        onPressed: () {
+                          ref.read(customersNotifierProvider.notifier).setFilterAndSort(
+                            filter: '',
+                            sort: 'recent',
+                          );
+                        },
+                        icon: const Icon(Icons.clear_all, size: 16, color: AppColors.textSecondary),
+                        label: const Text('Clear All', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
           // List
           Expanded(
@@ -311,111 +358,246 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
   void _navigateToCreate() => context.push(AppRoutes.createCustomer);
 
   void _showFilterSheet() {
+    final notifier = ref.read(customersNotifierProvider.notifier);
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final notifier = ref.read(customersNotifierProvider.notifier);
-            final currentFilter = notifier.filterBy;
-            final currentSort = notifier.sortBy;
+        return _CustomerFilterSheet(
+          currentFilter: notifier.filterBy,
+          currentSort: notifier.sortBy,
+          onApply: (filter, sort) {
+            notifier.setFilterAndSort(filter: filter, sort: sort);
+          },
+        );
+      },
+    );
+  }
+}
 
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+class _CustomerFilterSheet extends StatefulWidget {
+  final String currentFilter;
+  final String currentSort;
+  final Function(String filter, String sort) onApply;
+
+  const _CustomerFilterSheet({
+    required this.currentFilter,
+    required this.currentSort,
+    required this.onApply,
+  });
+
+  @override
+  State<_CustomerFilterSheet> createState() => _CustomerFilterSheetState();
+}
+
+class _CustomerFilterSheetState extends State<_CustomerFilterSheet> {
+  late String _filter;
+  late String _sort;
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = widget.currentFilter;
+    _sort = widget.currentSort;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        top: 20,
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
                 children: [
-                  const Text(
+                  Icon(Icons.tune, color: AppColors.primary, size: 22),
+                  SizedBox(width: 8),
+                  Text(
                     'Filter & Sort Customers',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Filter By',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      FilterChip(
-                        label: Text('All', style: TextStyle(color: currentFilter == '' ? AppColors.primary : AppColors.textPrimary)),
-                        selected: currentFilter == '',
-                        onSelected: (_) {
-                          notifier.setFilterAndSort(filter: '', sort: currentSort);
-                          Navigator.pop(context);
-                        },
-                      ),
-                      FilterChip(
-                        label: Text('Has Active Deal', style: TextStyle(color: currentFilter == 'active_deal' ? AppColors.primary : AppColors.textPrimary)),
-                        selected: currentFilter == 'active_deal',
-                        onSelected: (_) {
-                          notifier.setFilterAndSort(filter: 'active_deal', sort: currentSort);
-                          Navigator.pop(context);
-                        },
-                      ),
-                      FilterChip(
-                        label: Text('Has Active AMC', style: TextStyle(color: currentFilter == 'active_amc' ? AppColors.primary : AppColors.textPrimary)),
-                        selected: currentFilter == 'active_amc',
-                        onSelected: (_) {
-                          notifier.setFilterAndSort(filter: 'active_amc', sort: currentSort);
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Sort By',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: Text('Recently Added', style: TextStyle(color: currentSort == 'recent' ? AppColors.primary : AppColors.textPrimary)),
-                        selected: currentSort == 'recent',
-                        onSelected: (_) {
-                          notifier.setFilterAndSort(filter: currentFilter, sort: 'recent');
-                          Navigator.pop(context);
-                        },
-                      ),
-                      ChoiceChip(
-                        label: Text('Alphabetical', style: TextStyle(color: currentSort == 'alphabetical' ? AppColors.primary : AppColors.textPrimary)),
-                        selected: currentSort == 'alphabetical',
-                        onSelected: (_) {
-                          notifier.setFilterAndSort(filter: currentFilter, sort: 'alphabetical');
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
                 ],
               ),
-            );
-          },
-        );
-      },
+              IconButton(
+                icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const Divider(height: 20),
+
+          // Filter By
+          const Text(
+            'FILTER BY STATUS / DEALS',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildOption(
+                label: 'All Customers',
+                icon: Icons.people_outline,
+                selected: _filter.isEmpty,
+                onTap: () => setState(() => _filter = ''),
+              ),
+              _buildOption(
+                label: 'Has Active Deal',
+                icon: Icons.trending_up,
+                selected: _filter == 'active_deal',
+                onTap: () => setState(() => _filter = 'active_deal'),
+              ),
+              _buildOption(
+                label: 'Has Active AMC',
+                icon: Icons.verified_user_outlined,
+                selected: _filter == 'active_amc',
+                onTap: () => setState(() => _filter = 'active_amc'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Sort By
+          const Text(
+            'SORT BY',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildOption(
+                label: 'Recently Added',
+                icon: Icons.access_time,
+                selected: _sort == 'recent',
+                onTap: () => setState(() => _sort = 'recent'),
+              ),
+              _buildOption(
+                label: 'Alphabetical (A - Z)',
+                icon: Icons.sort_by_alpha,
+                selected: _sort == 'alphabetical',
+                onTap: () => setState(() => _sort = 'alphabetical'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Action Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _filter = '';
+                      _sort = 'recent';
+                    });
+                    widget.onApply('', 'recent');
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Reset All', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    widget.onApply(_filter, _sort);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOption({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primarySurface : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.primary : Colors.grey.shade300,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: selected ? AppColors.primary : AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected ? AppColors.primary : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -546,6 +728,63 @@ class _CustomerTile extends ConsumerWidget {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                  if (customer.assignedToName != null && customer.assignedToName!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.person_outline, size: 11, color: AppColors.primary),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Assigned: ${customer.assignedToName}',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (customer.reassignmentRequested) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningLight,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.warning.withOpacity(0.4)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 11, color: AppColors.warning),
+                          SizedBox(width: 4),
+                          Text(
+                            'Reassign Requested',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.warning,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ],

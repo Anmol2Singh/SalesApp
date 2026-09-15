@@ -338,6 +338,63 @@ final productsListProvider = FutureProvider<List<String>>((ref) async {
   return ['Heat Pump', 'Boom Barrier', 'Solar Water Heater System'];
 });
 
+final customerPurchasedProductsProvider = FutureProvider.family<List<String>, String>((ref, customerId) async {
+  if (customerId.isEmpty) return [];
+  final Set<String> purchased = {};
+  final supabase = ref.watch(supabaseClientProvider);
+
+  // 1. From sales_pipelines (matching customer_id and joining products)
+  try {
+    final pipelinesRes = await supabase
+        .from('sales_pipelines')
+        .select('products(name)')
+        .eq('customer_id', customerId)
+        .or('status.eq.completed,current_step.eq.completed');
+    for (final row in pipelinesRes as List) {
+      final prod = row['products'] as Map<String, dynamic>?;
+      if (prod != null && prod['name'] != null) {
+        final name = (prod['name'] as String).trim();
+        if (name.isNotEmpty) purchased.add(name);
+      }
+    }
+  } catch (_) {}
+
+  // 2. From amc_contracts (matching customer_id and joining products)
+  try {
+    final amcRes = await supabase
+        .from('amc_contracts')
+        .select('products(name)')
+        .eq('customer_id', customerId);
+    for (final row in amcRes as List) {
+      final prod = row['products'] as Map<String, dynamic>?;
+      if (prod != null && prod['name'] != null) {
+        final name = (prod['name'] as String).trim();
+        if (name.isNotEmpty) purchased.add(name);
+      }
+    }
+  } catch (_) {}
+
+  // 3. From bookings (matching customer_id and joining amc_contracts -> products)
+  try {
+    final bookingsRes = await supabase
+        .from('bookings')
+        .select('amc_contracts(products(name))')
+        .eq('customer_id', customerId);
+    for (final row in bookingsRes as List) {
+      final amc = row['amc_contracts'] as Map<String, dynamic>?;
+      final prod = amc?['products'] as Map<String, dynamic>?;
+      if (prod != null && prod['name'] != null) {
+        final name = (prod['name'] as String).trim();
+        if (name.isNotEmpty) purchased.add(name);
+      }
+    }
+  } catch (_) {}
+
+  final list = purchased.toList()..sort();
+  return list;
+});
+
+
 Future<String> generateNextTicketNumber(dynamic ref) async {
   final now = DateTime.now();
   final yrShort = (now.year % 100).toString();

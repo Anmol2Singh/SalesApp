@@ -7,6 +7,7 @@ import '../../admin/screens/product_catalog_screen.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
 import '../../../core/widgets/searchable_dropdown.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class LeadsListScreen extends ConsumerStatefulWidget {
   const LeadsListScreen({super.key});
@@ -23,6 +24,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
   Widget build(BuildContext context) {
     final leadsAsync = ref.watch(leadsProvider);
     final prospectsAsync = ref.watch(prospectsProvider);
+    final profile = ref.watch(currentProfileProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -131,12 +133,17 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                       if (lead.status == 'Negotiating') statusColor = Colors.purple;
                       if (lead.status == 'In Progress') statusColor = Colors.orange;
 
+                      final isAssignedToMe = !isWon && lead.assignedTo != null && lead.assignedTo == profile?.id;
+
                       return Card(
                         elevation: 0,
-                        color: AppColors.surface,
+                        color: isAssignedToMe ? const Color(0xFFFFFBEB) : AppColors.surface,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: AppColors.border.withOpacity(0.5)),
+                          side: BorderSide(
+                            color: isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withOpacity(0.5),
+                            width: isAssignedToMe ? 2 : 1,
+                          ),
                         ),
                         child: ListTile(
                           onTap: () {
@@ -149,9 +156,33 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                               color: statusColor,
                             ),
                           ),
-                          title: Text(
-                            displayName,
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  displayName,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                ),
+                              ),
+                              if (isAssignedToMe)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFF59E0B)),
+                                  ),
+                                  child: const Text(
+                                    'Assigned to You',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,6 +200,59 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                                   ],
                                 ],
                               ),
+                              if (!isWon && (lead.assignedByName != null || lead.assignedTo != null)) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isAssignedToMe ? Colors.green.withOpacity(0.08) : const Color(0xFF2563EB).withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.person_outline, size: 11, color: isAssignedToMe ? Colors.green : const Color(0xFF2563EB)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        isAssignedToMe
+                                            ? 'Assigned to: You'
+                                            : 'Assigned to: ${lead.assignedByName ?? 'Assigned'}',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          color: isAssignedToMe ? Colors.green : const Color(0xFF2563EB),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              if (!isWon && lead.reassignmentRequested) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warningLight,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded, size: 11, color: AppColors.warning),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Reassign Requested',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.warning,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           trailing: Container(

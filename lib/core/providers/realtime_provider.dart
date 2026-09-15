@@ -8,6 +8,8 @@ import '../../features/pipelines/providers/pipelines_provider.dart';
 import '../../features/customers/providers/customers_provider.dart';
 import '../../features/amc/providers/amc_provider.dart';
 
+import '../../features/crm/providers/crm_providers.dart';
+
 final realtimeSubscriptionProvider = Provider.autoDispose<void>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
 
@@ -89,9 +91,39 @@ final realtimeSubscriptionProvider = Provider.autoDispose<void>((ref) {
       )
       .subscribe();
 
+  // Subscribe to changes on crm_prospects
+  final prospectsChannel = supabase
+      .channel('public:crm_prospects')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'crm_prospects',
+        callback: (payload) {
+          ref.read(prospectsProvider.notifier).load();
+          ref.invalidate(dashboardStatsProvider);
+        },
+      )
+      .subscribe();
+
+  // Subscribe to changes on crm_leads
+  final leadsChannel = supabase
+      .channel('public:crm_leads')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'crm_leads',
+        callback: (payload) {
+          ref.read(leadsProvider.notifier).load();
+          ref.invalidate(dashboardStatsProvider);
+        },
+      )
+      .subscribe();
+
   ref.onDispose(() {
     pipelineChannel.unsubscribe();
     customerChannel.unsubscribe();
     amcChannel.unsubscribe();
+    prospectsChannel.unsubscribe();
+    leadsChannel.unsubscribe();
   });
 });

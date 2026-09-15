@@ -15,6 +15,8 @@ class ShimmerListLoader extends StatelessWidget {
     final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
 
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: itemCount,
       itemBuilder: (context, index) {

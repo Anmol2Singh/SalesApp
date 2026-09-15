@@ -1295,7 +1295,10 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (ctx) => PdfPreviewScreen(pdfBytes: pdfBytes, fileName: 'CompletionReport_${complaint.ticketNumber}.pdf'),
+                                    builder: (ctx) => PdfPreviewScreen(
+                                      pdfBytes: pdfBytes,
+                                      fileName: 'CompletionReport_${complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf',
+                                    ),
                                   ),
                                 );
                               }

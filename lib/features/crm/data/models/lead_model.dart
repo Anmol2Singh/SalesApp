@@ -16,6 +16,8 @@ class Lead {
   final String createdBy;
   final String? assignedTo;
   final String? assignedByName;
+  final bool reassignmentRequested;
+  final String? reassignmentReason;
   final String? capacity;
   final List<dynamic>? components;
   final DateTime? reminderDate;
@@ -40,6 +42,8 @@ class Lead {
     required this.createdBy,
     this.assignedTo,
     this.assignedByName,
+    this.reassignmentRequested = false,
+    this.reassignmentReason,
     this.capacity,
     this.components,
     this.reminderDate,
@@ -50,6 +54,16 @@ class Lead {
   });
 
   factory Lead.fromJson(Map<String, dynamic> json) {
+    final rawNotes = json['notes'] as String? ?? '';
+    String? reason = json['reassignment_reason'] as String?;
+    bool req = json['reassignment_requested'] == true;
+    if (reason == null && rawNotes.contains('[REASSIGNMENT_REQUEST:')) {
+      req = true;
+      final start = rawNotes.indexOf('[REASSIGNMENT_REQUEST:') + '[REASSIGNMENT_REQUEST:'.length;
+      final end = rawNotes.indexOf(']', start);
+      reason = end > start ? rawNotes.substring(start, end).trim() : rawNotes.substring(start).trim();
+    }
+
     return Lead(
       id: json['id'] as String? ?? '',
       prospectId: json['prospect_id'] as String?,
@@ -70,6 +84,8 @@ class Lead {
       createdBy: json['created_by'] as String? ?? '',
       assignedTo: json['assigned_to'] as String?,
       assignedByName: (json['assignee'] as Map<String, dynamic>?)?['full_name'] as String? ?? json['assignee_name'] as String?,
+      reassignmentRequested: req,
+      reassignmentReason: reason,
       capacity: json['capacity'] as String?,
       components: json['components'] as List<dynamic>?,
       reminderDate: json['reminder_date'] != null

@@ -25,6 +25,14 @@ class ProspectDetailScreen extends ConsumerStatefulWidget {
 class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
   bool _isRefreshing = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(prospectsProvider.notifier).load();
+    });
+  }
+
   Future<void> _handleRefresh() async {
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
@@ -232,6 +240,64 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
               child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (prospect.reassignmentRequested)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400, width: 1.5),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '⚠️ REASSIGNMENT REQUESTED',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.brown,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Reason: "${prospect.reassignmentReason ?? 'Salesperson requested reassignment'}"',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isAdmin) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () => _showTransferModal(context, ref, prospect),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber.shade800,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        child: const Text('Reassign', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
             // Header Profile Card
             Card(
               elevation: 0,
@@ -369,10 +435,58 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                       'Added By',
                       '${prospect.createdByName ?? "Staff"} (${(prospect.createdByRole ?? "STAFF").toUpperCase()})',
                     ),
-                    if (prospect.assignedByName != null) ...[
-                      const SizedBox(height: 12),
-                      _buildDetailRow(Icons.assignment_ind_outlined, 'Assigned To', prospect.assignedByName!),
-                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.assignment_ind_outlined, size: 20, color: AppColors.textSecondary),
+                        const SizedBox(width: 12),
+                        const SizedBox(
+                          width: 110,
+                          child: Text(
+                            'Assigned To',
+                            style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  prospect.assignedByName ?? (prospect.assignedTo != null ? 'Assigned' : 'Not Assigned'),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: (prospect.assignedByName != null || prospect.assignedTo != null)
+                                        ? AppColors.textPrimary
+                                        : Colors.grey,
+                                  ),
+                                ),
+                              ),
+                              if (isAdmin)
+                                InkWell(
+                                  onTap: () => _showTransferModal(context, ref, prospect),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      prospect.assignedTo != null ? 'Reassign' : 'Assign',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
                     _buildDetailRow(
                       Icons.calendar_today_outlined,
@@ -579,6 +693,7 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
               Navigator.pop(ctx);
               await ref.read(prospectsProvider.notifier).requestTransfer(
                     prospectId: prospect.id,
+                    prospectName: prospect.name,
                     reason: noteCtrl.text.trim().isNotEmpty ? noteCtrl.text.trim() : null,
                   );
               if (context.mounted) {
@@ -1137,23 +1252,43 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, primary_role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
-        final role = (r['primary_role'] as String? ?? '').toLowerCase();
-        final rolesList = (r['roles'] is List) ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
-        // Sales-only filtering (Task 3.3): exclude admin, manager, coordinator, technician
-        final isSales = role == 'sales' || role == 'sales_head' || role == 'saleshead' ||
-            rolesList.contains('sales') || rolesList.contains('sales_head');
-        final isExcluded = role == 'admin' || role == 'manager' || role == 'technician' || role == 'coordinator' ||
-            rolesList.contains('admin') || rolesList.contains('manager');
-        if (isSales && !isExcluded) {
-          list.add(r as Map<String, dynamic>);
-        }
+        final role = (r['role'] as String? ?? '').toLowerCase();
+        final rolesList = (r['roles'] is List)
+            ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
+            : [];
+        final name = (r['full_name'] as String? ?? '').toLowerCase();
+        final email = (r['email'] as String? ?? '').toLowerCase();
+
+        // 1. Exclude Admin, Managers, and Sales Heads (supervisors who have company-wide access)
+        final isSupervisorOrAdmin = role == 'admin' ||
+            role == 'administrator' ||
+            role == 'manager' ||
+            role == 'sales_head' ||
+            role == 'saleshead' ||
+            rolesList.contains('admin') ||
+            rolesList.contains('administrator') ||
+            rolesList.contains('manager') ||
+            rolesList.contains('sales_head') ||
+            rolesList.contains('saleshead') ||
+            name.contains('admin') ||
+            email.contains('admin');
+        if (isSupervisorOrAdmin) continue;
+
+        // 2. MUST be Sales Executive only (no other department roles)
+        final isSalesExecutive = role == 'sales' ||
+            role == 'sales_executive' ||
+            rolesList.contains('sales') ||
+            rolesList.contains('sales_executive');
+        if (!isSalesExecutive) continue;
+
+        list.add(r as Map<String, dynamic>);
       }
 
       final finalList = list;
@@ -1250,11 +1385,10 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
                 prefixIcon: Icon(Icons.person_pin_outlined),
               ),
               items: _salesStaff.map((s) {
-                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Staff';
-                final role = (s['primary_role'] as String? ?? 'STAFF').toUpperCase();
+                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Sales Executive';
                 return DropdownMenuItem<String>(
                   value: s['id'] as String,
-                  child: Text('$name ($role)'),
+                  child: Text('$name (Sales Executive)'),
                 );
               }).toList(),
               onChanged: (val) => setState(() => _selectedSalesUserId = val),

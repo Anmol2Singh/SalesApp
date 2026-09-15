@@ -504,6 +504,8 @@ class SupabaseAuthRepository implements AuthRepository {
       if (!_isMockMode) {
         controller.add(data.session?.user.id);
       }
+    }, onError: (_) {
+      // Gracefully ignore offline/DNS network errors on auth stream
     });
 
     final mockListener = _mockAuthStateController.stream.listen((uid) {
@@ -937,7 +939,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 warranty_cards (start_date, end_date)
               ''')
               .inFilter('customer_id', allCustomerIds.toList())
-              .neq('status', 'cancelled');
+              .or('status.eq.completed,current_step.eq.completed');
         } catch (e) {
           print("Primary pipelines query fallback: $e");
           try {
@@ -945,7 +947,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 .from('sales_pipelines')
                 .select('*, products(*), customers(*)')
                 .inFilter('customer_id', allCustomerIds.toList())
-                .neq('status', 'cancelled');
+                .or('status.eq.completed,current_step.eq.completed');
           } catch (_) {
             response = [];
           }
@@ -958,7 +960,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           final allPipes = await _supabase
               .from('sales_pipelines')
               .select('id, created_at, customer_id, status, product_id, products(*), customers(*)')
-              .neq('status', 'cancelled');
+              .or('status.eq.completed,current_step.eq.completed');
           final matchingPipes = <Map<String, dynamic>>[];
           for (final p in (allPipes as List? ?? [])) {
             final cust = p['customers'] as Map<String, dynamic>?;

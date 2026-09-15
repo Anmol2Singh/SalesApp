@@ -1,10 +1,10 @@
-// lib/features/sales_order/screens/sales_order_form_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'dart:typed_data';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/sales_order.dart';
@@ -89,7 +89,8 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       (item['description'] as TextEditingController).dispose();
       (item['hsn_sac'] as TextEditingController).dispose();
       (item['qty'] as TextEditingController).dispose();
-      (item['free_qty'] as TextEditingController).dispose();
+      (item['gst_percent'] as TextEditingController?)?.dispose();
+      (item['free_qty'] as TextEditingController?)?.dispose();
       (item['uom'] as TextEditingController).dispose();
       (item['rate'] as TextEditingController).dispose();
       (item['disc_percent'] as TextEditingController).dispose();
@@ -163,9 +164,10 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             'description': TextEditingController(text: item.description),
             'hsn_sac': TextEditingController(text: item.hsnSac ?? ''),
             'qty': TextEditingController(text: item.qty.toString()),
-            'free_qty': TextEditingController(text: item.freeQty.toString()),
+            'gst_percent': TextEditingController(text: item.gstPercent.toString()),
+            'free_qty': TextEditingController(text: '0'),
             'uom': TextEditingController(text: item.uom),
-            'rate': TextEditingController(text: item.rate.toStringAsFixed(2)),
+            'rate': TextEditingController(text: InventoryAutocomplete.formatIndianPrice(item.rate)),
             'disc_percent':
                 TextEditingController(text: item.discPercent.toString()),
           });
@@ -199,10 +201,11 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
               'hsn_sac':
                   TextEditingController(text: item.hsnSac ?? '85308000'), // Default HSN code
               'qty': TextEditingController(text: item.qty.toString()),
-              'free_qty': TextEditingController(text: item.freeQty.toString()),
+              'gst_percent': TextEditingController(text: item.gstPercent.toString()),
+              'free_qty': TextEditingController(text: '0'),
               'uom': TextEditingController(text: item.uom),
               'rate': TextEditingController(
-                  text: item.unitPrice.toStringAsFixed(2)),
+                  text: InventoryAutocomplete.formatIndianPrice(item.unitPrice)),
               'disc_percent': TextEditingController(text: item.discPercent.toString()),
             });
           }
@@ -229,6 +232,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
         'description': TextEditingController(),
         'hsn_sac': TextEditingController(text: '85308000'),
         'qty': TextEditingController(text: '1'),
+        'gst_percent': TextEditingController(text: '18.0'),
         'free_qty': TextEditingController(text: '0'),
         'uom': TextEditingController(text: 'NOS'),
         'rate': TextEditingController(text: '0.00'),
@@ -243,7 +247,8 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       (item['description'] as TextEditingController).dispose();
       (item['hsn_sac'] as TextEditingController).dispose();
       (item['qty'] as TextEditingController).dispose();
-      (item['free_qty'] as TextEditingController).dispose();
+      (item['gst_percent'] as TextEditingController?)?.dispose();
+      (item['free_qty'] as TextEditingController?)?.dispose();
       (item['uom'] as TextEditingController).dispose();
       (item['rate'] as TextEditingController).dispose();
       (item['disc_percent'] as TextEditingController).dispose();
@@ -254,11 +259,11 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     double total = 0;
     for (final item in _lineItems) {
       final qty =
-          double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final rate =
-          double.tryParse((item['rate'] as TextEditingController).text) ?? 0;
+          double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final disc = double.tryParse(
-              (item['disc_percent'] as TextEditingController).text) ??
+              (item['disc_percent'] as TextEditingController).text.replaceAll(',', '').trim()) ??
           0;
       total += (qty * rate) * (1 - disc / 100);
     }
@@ -300,9 +305,9 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     final lineItemsValid = _lineItems.every((item) {
       final desc = (item['description'] as TextEditingController).text.trim();
       final qty =
-          double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final rate =
-          double.tryParse((item['rate'] as TextEditingController).text) ?? -1;
+          double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? -1;
       return desc.isNotEmpty && qty > 0 && rate >= 0;
     });
 
@@ -354,9 +359,9 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     final lineItemsValid = _lineItems.every((item) {
       final desc = (item['description'] as TextEditingController).text.trim();
       final qty =
-          double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final rate =
-          double.tryParse((item['rate'] as TextEditingController).text) ?? -1;
+          double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? -1;
       return desc.isNotEmpty && qty > 0 && rate >= 0;
     });
 
@@ -445,7 +450,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId));
       }
     } catch (e) {
       _showError(e.toString());
@@ -575,14 +580,17 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
 
     final lineItemsJson = _lineItems.map((item) {
       final qty =
-          double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final rate =
-          double.tryParse((item['rate'] as TextEditingController).text) ?? 0;
+          double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
+      final gstPercent = double.tryParse(
+              (item['gst_percent'] as TextEditingController?)?.text.replaceAll(',', '').trim() ?? '18') ??
+          18.0;
       final freeQty =
-          double.tryParse((item['free_qty'] as TextEditingController).text) ??
+          int.tryParse((item['free_qty'] as TextEditingController?)?.text.replaceAll(',', '').trim() ?? '0') ??
               0;
       final disc = double.tryParse(
-              (item['disc_percent'] as TextEditingController).text) ??
+              (item['disc_percent'] as TextEditingController).text.replaceAll(',', '').trim()) ??
           0;
       return {
         'description':
@@ -590,6 +598,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
         'hsn_sac': (item['hsn_sac'] as TextEditingController).text.trim(),
         'qty': qty,
         'free_qty': freeQty,
+        'gst_percent': gstPercent,
         'uom': (item['uom'] as TextEditingController).text.trim().toUpperCase(),
         'rate': rate,
         'disc_percent': disc,
@@ -1022,20 +1031,21 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                                 ? (_cgstRate + _sgstRate)
                                 : null,
                             isDense: true,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               hintText: 'Select GST %',
                             ),
                             items: [
-                              const DropdownMenuItem(value: 18.0, child: Text('18% (Standard 9% + 9%)')),
-                              const DropdownMenuItem(value: 12.0, child: Text('12% (6% + 6%)')),
-                              const DropdownMenuItem(value: 5.0, child: Text('5% (2.5% + 2.5%)')),
-                              const DropdownMenuItem(value: 28.0, child: Text('28% (14% + 14%)')),
-                              const DropdownMenuItem(value: 0.0, child: Text('0% (Exempted)')),
+                              const DropdownMenuItem(value: 18.0, child: Text('18% (Standard 9% + 9%)', overflow: TextOverflow.ellipsis)),
+                              const DropdownMenuItem(value: 12.0, child: Text('12% (6% + 6%)', overflow: TextOverflow.ellipsis)),
+                              const DropdownMenuItem(value: 5.0, child: Text('5% (2.5% + 2.5%)', overflow: TextOverflow.ellipsis)),
+                              const DropdownMenuItem(value: 28.0, child: Text('28% (14% + 14%)', overflow: TextOverflow.ellipsis)),
+                              const DropdownMenuItem(value: 0.0, child: Text('0% (Exempted)', overflow: TextOverflow.ellipsis)),
                               if (![0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate))
                                 DropdownMenuItem(
                                   value: _cgstRate + _sgstRate,
-                                  child: Text('${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}% (Custom)'),
+                                  child: Text('${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}% (Custom)', overflow: TextOverflow.ellipsis),
                                 ),
                             ],
                             onChanged: (val) {
@@ -1259,24 +1269,41 @@ class _SalesOrderLineItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('Item ${index + 1}',
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Item ${index + 1}',
                   style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary)),
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
               const Spacer(),
               if (onRemove != null)
                 IconButton(
@@ -1285,6 +1312,7 @@ class _SalesOrderLineItemRow extends StatelessWidget {
                       color: AppColors.error, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: 'Remove Item',
                 ),
             ],
           ),
@@ -1301,7 +1329,7 @@ class _SalesOrderLineItemRow extends StatelessWidget {
               if (hsnController.text.isEmpty) hsnController.text = selection.hsnSac ?? '';
               if (uomController.text.isEmpty) uomController.text = selection.uom ?? '';
               if (rateController.text.isEmpty || rateController.text == '0.00' || rateController.text == '0') {
-                rateController.text = selection.price.toStringAsFixed(2);
+                rateController.text = InventoryAutocomplete.formatIndianPrice(selection.price);
               }
               onChanged();
             },
@@ -1334,11 +1362,13 @@ class _SalesOrderLineItemRow extends StatelessWidget {
                   controller: item['qty'] as TextEditingController,
                   enabled: enabled,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Qty *'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if ((double.tryParse(v) ?? 0) <= 0) return '> 0';
+                    final val = int.tryParse(v);
+                    if (val == null || val <= 0) return '> 0';
                     return null;
                   },
                 ),
@@ -1346,11 +1376,20 @@ class _SalesOrderLineItemRow extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: TextFormField(
-                  controller: item['free_qty'] as TextEditingController,
+                  controller: item['gst_percent'] as TextEditingController?,
                   enabled: enabled,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => onChanged(),
-                  decoration: const InputDecoration(labelText: 'Free Qty'),
+                  decoration: const InputDecoration(
+                    labelText: 'GST % *',
+                    suffixText: '%',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    final n = double.tryParse(v.replaceAll(',', '').trim());
+                    if (n == null || n < 0 || n > 100) return 'Invalid';
+                    return null;
+                  },
                 ),
               ),
             ],
@@ -1359,17 +1398,28 @@ class _SalesOrderLineItemRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: TextFormField(
-                  controller: item['rate'] as TextEditingController,
-                  enabled: enabled,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => onChanged(),
-                  decoration: const InputDecoration(labelText: 'Rate (₹) *'),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    if ((double.tryParse(v) ?? -1) < 0) return 'Invalid';
-                    return null;
+                child: Focus(
+                  onFocusChange: (hasFocus) {
+                    if (!hasFocus) {
+                      final val = double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim());
+                      if (val != null) {
+                        (item['rate'] as TextEditingController).text = InventoryAutocomplete.formatIndianPrice(val);
+                      }
+                    }
                   },
+                  child: TextFormField(
+                    controller: item['rate'] as TextEditingController,
+                    enabled: enabled,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => onChanged(),
+                    decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Required';
+                      final clean = v.replaceAll(',', '').trim();
+                      if ((double.tryParse(clean) ?? -1) < 0) return 'Invalid';
+                      return null;
+                    },
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

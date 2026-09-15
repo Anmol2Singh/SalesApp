@@ -61,7 +61,11 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
           ''').isFilter('deleted_at', null);
 
       if (!_isAdmin && _userId != null) {
-        query = query.eq('created_by', _userId);
+        try {
+          query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
+        } catch (_) {
+          query = query.eq('created_by', _userId);
+        }
       }
 
       if (_stepFilter.isNotEmpty) {

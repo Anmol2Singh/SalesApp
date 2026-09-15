@@ -395,6 +395,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                           onTap: () => context.go('/complaints/dashboard'),
                         ),
                       ),
+                      const SizedBox(width: 10),
                       SizedBox(
                         width: 140,
                         child: _QuickActionCard(
@@ -422,6 +423,16 @@ class AdminDashboardScreen extends ConsumerWidget {
                           label: "Today's Report",
                           color: AppColors.success,
                           onTap: () => context.push('/reports/activity'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 140,
+                        child: _QuickActionCard(
+                          icon: Icons.picture_as_pdf_outlined,
+                          label: 'Search PDF',
+                          color: Colors.deepOrange,
+                          onTap: () => context.push(AppRoutes.searchPdf),
                         ),
                       ),
                     ],

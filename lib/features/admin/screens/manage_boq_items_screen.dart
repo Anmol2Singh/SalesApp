@@ -5,7 +5,6 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../../core/models/product.dart';
 import '../providers/manage_boq_items_provider.dart';
 import '../providers/inventory_provider.dart';
-import '../providers/inventory_sizes_provider.dart';
 import '../../admin/screens/product_catalog_screen.dart';
 
 class ManageBoqItemsScreen extends ConsumerStatefulWidget {
@@ -43,8 +42,6 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
 
           final currentProduct = products.firstWhere((p) => p.id == _selectedProductId);
           final boqItemsAsync = ref.watch(productBoqItemsProvider(currentProduct.id));
-          final sizesAsync = ref.watch(inventorySizesProvider);
-          final availableSizes = sizesAsync.valueOrNull?.map((s) => s.sizeName).toList() ?? [];
 
           return Column(
             children: [
@@ -215,20 +212,16 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
-                                        if (item.defaultSize != null && item.defaultSize!.isNotEmpty) ...[
-                                          _buildBadge('Size: ${item.defaultSize}'),
-                                          const SizedBox(width: 6),
-                                        ],
                                         _buildBadge('Unit: ${item.defaultUnit}'),
                                       ],
                                     ),
                                   ],
                                 ),
                               ),
-                              IconButton(
+                                IconButton(
                                 icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
                                 tooltip: 'Edit Item',
-                                onPressed: () => _showEditItemDialog(item, availableSizes),
+                                onPressed: () => _showEditItemDialog(item),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
@@ -270,7 +263,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  onPressed: () => _showInventorySearchPicker(currentProduct.id, availableSizes),
+                  onPressed: () => _showInventorySearchPicker(currentProduct.id),
                 ),
               ),
             ],
@@ -297,7 +290,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
     );
   }
 
-  void _showInventorySearchPicker(String productId, List<String> availableSizes) {
+  void _showInventorySearchPicker(String productId) {
     final inventoryAsync = ref.read(inventoryProvider);
     final allItems = inventoryAsync.valueOrNull ?? [];
 
@@ -378,7 +371,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
                                 ),
                                 onPressed: () {
                                   Navigator.pop(ctx);
-                                  _promptAddDetailsAndSave(productId, invItem.itemName, invItem.id, invItem.uom ?? 'NOS', availableSizes);
+                                  _promptAddDetailsAndSave(productId, invItem.itemName, invItem.id, invItem.uom ?? 'NOS');
                                 },
                                 child: const Text('Add', style: TextStyle(color: Colors.white)),
                               ),
@@ -400,9 +393,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
     String itemName,
     String inventoryItemId,
     String defaultUom,
-    List<String> availableSizes,
   ) {
-    String? selectedSize = availableSizes.isNotEmpty ? availableSizes.first : null;
     final unitController = TextEditingController(text: defaultUom);
 
     showDialog(
@@ -413,18 +404,6 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (availableSizes.isNotEmpty) ...[
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Default Size (Optional)'),
-                  value: selectedSize,
-                  items: [
-                    const DropdownMenuItem<String>(value: '', child: Text('None / Standard')),
-                    ...availableSizes.map((s) => DropdownMenuItem(value: s, child: Text(s))),
-                  ],
-                  onChanged: (val) => setDialogState(() => selectedSize = val),
-                ),
-                const SizedBox(height: 12),
-              ],
               TextField(
                 controller: unitController,
                 decoration: const InputDecoration(labelText: 'Default Unit (e.g. NOS, MTR, SET)'),
@@ -446,7 +425,6 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
                     'product_id': productId,
                     'item_name': itemName,
                     'inventory_item_id': inventoryItemId,
-                    'default_size': selectedSize?.isEmpty == true ? null : selectedSize,
                     'default_unit': unitController.text.trim().isEmpty ? 'NOS' : unitController.text.trim(),
                   });
                   ref.invalidate(productBoqItemsProvider(productId));
@@ -471,11 +449,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
     );
   }
 
-  void _showEditItemDialog(ProductBoqItem item, List<String> availableSizes) {
-    String? selectedSize = item.defaultSize;
-    if (selectedSize != null && !availableSizes.contains(selectedSize)) {
-      availableSizes = [selectedSize, ...availableSizes];
-    }
+  void _showEditItemDialog(ProductBoqItem item) {
     final nameController = TextEditingController(text: item.itemName);
     final unitController = TextEditingController(text: item.defaultUnit);
 
@@ -492,18 +466,6 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
                 decoration: const InputDecoration(labelText: 'Item Name'),
               ),
               const SizedBox(height: 12),
-              if (availableSizes.isNotEmpty) ...[
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Default Size'),
-                  value: selectedSize,
-                  items: [
-                    const DropdownMenuItem<String>(value: '', child: Text('None / Standard')),
-                    ...availableSizes.map((s) => DropdownMenuItem(value: s, child: Text(s))),
-                  ],
-                  onChanged: (val) => setDialogState(() => selectedSize = val),
-                ),
-                const SizedBox(height: 12),
-              ],
               TextField(
                 controller: unitController,
                 decoration: const InputDecoration(labelText: 'Default Unit'),
@@ -525,7 +487,6 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
                   final supabase = ref.read(supabaseClientProvider);
                   await supabase.from('product_boq_items').update({
                     'item_name': newName,
-                    'default_size': selectedSize?.isEmpty == true ? null : selectedSize,
                     'default_unit': unitController.text.trim().isEmpty ? 'NOS' : unitController.text.trim(),
                   }).eq('id', item.id);
                   ref.invalidate(productBoqItemsProvider(item.productId));

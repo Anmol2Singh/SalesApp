@@ -1025,7 +1025,7 @@ class _StepActionCard extends ConsumerWidget {
       case PipelineStep.factoryOrder:
         return 'Step 4 — Factory Order';
       case PipelineStep.purchaseOrder:
-        return 'Step 5 — Material Acquisition';
+        return 'Step 5 — Material Requisition';
       case PipelineStep.completed:
         return 'Completed';
     }
@@ -1195,7 +1195,7 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
         templateConfig: templateConfig,
       );
     case PipelineStep.purchaseOrder:
-      if (pipeline.purchaseOrder == null) throw Exception('Material Acquisition data not found');
+      if (pipeline.purchaseOrder == null) throw Exception('Material Requisition data not found');
       final templateConfig = await _fetchTemplateConfig(ref, 'purchase_order');
       return await PdfService.generatePurchaseOrderPdf(
         purchaseOrder: pipeline.purchaseOrder!,

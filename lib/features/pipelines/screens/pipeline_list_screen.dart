@@ -83,6 +83,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => context.go(AppRoutes.adminDashboard),
+              ),
               expandedHeight: 185,
               pinned: true,
               backgroundColor: const Color(0xFF1E1B4B),

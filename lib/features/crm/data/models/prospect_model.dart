@@ -16,6 +16,8 @@ class Prospect {
   final String? createdByRole;
   final String? assignedTo;
   final String? assignedByName;
+  final bool reassignmentRequested;
+  final String? reassignmentReason;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -35,6 +37,8 @@ class Prospect {
     this.createdByRole,
     this.assignedTo,
     this.assignedByName,
+    this.reassignmentRequested = false,
+    this.reassignmentReason,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -42,6 +46,16 @@ class Prospect {
   factory Prospect.fromJson(Map<String, dynamic> json) {
     final creator = json['creator'] as Map<String, dynamic>?;
     final assignee = json['assignee'] as Map<String, dynamic>?;
+
+    final rawNotes = json['notes'] as String? ?? '';
+    String? reason = json['reassignment_reason'] as String?;
+    bool req = json['reassignment_requested'] == true;
+    if (reason == null && rawNotes.contains('[REASSIGNMENT_REQUEST:')) {
+      req = true;
+      final start = rawNotes.indexOf('[REASSIGNMENT_REQUEST:') + '[REASSIGNMENT_REQUEST:'.length;
+      final end = rawNotes.indexOf(']', start);
+      reason = end > start ? rawNotes.substring(start, end).trim() : rawNotes.substring(start).trim();
+    }
 
     return Prospect(
       id: json['id'] as String? ?? '',
@@ -59,6 +73,8 @@ class Prospect {
       createdByRole: (creator?['primary_role'] ?? creator?['role'] ?? json['creator_role']) as String?,
       assignedTo: json['assigned_to'] as String?,
       assignedByName: assignee?['full_name'] as String? ?? json['assignee_name'] as String?,
+      reassignmentRequested: req,
+      reassignmentReason: reason,
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),

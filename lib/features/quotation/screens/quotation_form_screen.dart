@@ -2,10 +2,12 @@
 // Step 1: Dynamic quotation form with line items, CGST/SGST/IGST, confirm gate
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/models/quotation.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
@@ -40,7 +42,6 @@ class QuotationFormScreen extends ConsumerStatefulWidget {
 
 class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _tabController = ValueNotifier<int>(0);
   final _termsController = TextEditingController();
 
   // New document meta controllers
@@ -66,7 +67,6 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   final _shippingAddressController = TextEditingController();
   final _stateCodeController = TextEditingController(text: '27');
   final _salesmanController = TextEditingController();
-  final _customPaymentTermsController = TextEditingController();
 
   // Dynamic product spec fields
   final Map<String, TextEditingController> _specControllers = {};
@@ -82,10 +82,569 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   int _currentRevision = 1;
   final List<Map<String, dynamic>> _paymentTerms = [
     {'term': 'Advance', 'percent': 50.0, 'amount': 0.0},
-    {'term': 'Delivery', 'percent': 40.0, 'amount': 0.0},
+    {'term': 'Dispatch', 'percent': 40.0, 'amount': 0.0},
     {'term': 'Installation', 'percent': 5.0, 'amount': 0.0},
-    {'term': 'Commissioning', 'percent': 5.0, 'amount': 0.0},
+    {'term': 'Completion', 'percent': 5.0, 'amount': 0.0},
   ];
+
+  static final List<Map<String, dynamic>> _defaultPaymentTemplates = [
+    {
+      'name': 'Standard (50 / 40 / 5 / 5)',
+      'terms': [
+        {'term': 'Advance', 'percent': 50.0},
+        {'term': 'Dispatch', 'percent': 40.0},
+        {'term': 'Installation', 'percent': 5.0},
+        {'term': 'Completion', 'percent': 5.0},
+      ],
+    },
+    {
+      'name': 'Milestone (30 / 60 / 10)',
+      'terms': [
+        {'term': 'Advance', 'percent': 30.0},
+        {'term': 'Dispatch', 'percent': 60.0},
+        {'term': 'Completion', 'percent': 10.0},
+      ],
+    },
+    {
+      'name': '100% Full Advance',
+      'terms': [
+        {'term': 'Advance', 'percent': 100.0},
+      ],
+    },
+    {
+      'name': 'Custom (4 Stages)',
+      'terms': [
+        {'term': 'Advance', 'percent': 0.0},
+        {'term': 'Dispatch', 'percent': 0.0},
+        {'term': 'Installation', 'percent': 0.0},
+        {'term': 'Completion', 'percent': 0.0},
+      ],
+    },
+  ];
+
+  static final List<Map<String, dynamic>> _customPaymentTemplates = [];
+  bool _isCustomTermsEditing = false;
+
+  void _applyPaymentTemplate(Map<String, dynamic> template) {
+    final terms = template['terms'] as List<dynamic>;
+    setState(() {
+      _paymentTerms.clear();
+      for (final t in terms) {
+        final pct = (t['percent'] as num).toDouble();
+        _paymentTerms.add({
+          'term': t['term'].toString(),
+          'percent': pct,
+          'amount': _grandTotal * (pct / 100.0),
+        });
+      }
+    });
+  }
+
+  void _showManageTemplatesDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final allTemplates = [..._defaultPaymentTemplates, ..._customPaymentTemplates];
+          return AlertDialog(
+            title: Row(
+              children: const [
+                Icon(Icons.tune, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Manage Payment Templates', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: allTemplates.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, idx) {
+                        final t = allTemplates[idx];
+                        final isDefault = idx < _defaultPaymentTemplates.length;
+                        final terms = (t['terms'] as List<dynamic>)
+                            .map((e) => '${e['term']}: ${(e['percent'] as num).toInt()}%')
+                            .join(', ');
+                        return ListTile(
+                          title: Text(t['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          subtitle: Text(terms, style: const TextStyle(fontSize: 12)),
+                          trailing: isDefault
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(4)),
+                                  child: const Text('Default', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                )
+                              : IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      _customPaymentTemplates.removeAt(idx - _defaultPaymentTemplates.length);
+                                    });
+                                    setState(() {});
+                                  },
+                                ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                      label: const Text('Create New Template', style: TextStyle(color: Colors.white)),
+                      onPressed: () async {
+                        await _showCreateTemplateDialog(ctx, () => setDialogState(() {}));
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showCreateTemplateDialog(BuildContext parentCtx, VoidCallback onAdded) async {
+    final nameCtrl = TextEditingController();
+    final pctCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Template', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Template Name',
+                hintText: 'e.g. [50, 30, 20] or Milestone',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: pctCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Percentages (comma separated)',
+                hintText: '50, 30, 20',
+              ),
+              keyboardType: TextInputType.text,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              final rawPcts = pctCtrl.text.split(',').map((e) => double.tryParse(e.trim()) ?? 0.0).where((p) => p >= 0).toList();
+              if (name.isEmpty || rawPcts.isEmpty) return;
+
+              final sum = rawPcts.fold<double>(0.0, (s, p) => s + p);
+              if (sum > 100.0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Total cannot exceed 100%'), backgroundColor: AppColors.error),
+                );
+                return;
+              }
+
+              final terms = rawPcts.asMap().entries.map((e) {
+                final defaultNames = ['Advance', 'Delivery', 'Installation', 'Commissioning', 'Final Handover'];
+                final sName = e.key < defaultNames.length ? defaultNames[e.key] : 'Stage ${e.key + 1}';
+                return {'term': sName, 'percent': e.value};
+              }).toList();
+
+              _customPaymentTemplates.add({
+                'name': name.startsWith('[') ? name : '[$name]',
+                'terms': terms,
+              });
+              Navigator.pop(ctx);
+              onAdded();
+              setState(() {});
+            },
+            child: const Text('Add Template', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleAmcToggle(bool val) async {
+    if (!val) {
+      setState(() => _amcInterested = false);
+      return;
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 20,
+              offset: Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Pill drag handle
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Header Row
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E3A5F), Color(0xFF2E5490)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF1E3A5F).withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'AMC Finalization',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                              ),
+                              child: const Text(
+                                'ADD-ON',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFB45309),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Annual Maintenance Contract Options',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx, 'cancel'),
+                    icon: const Icon(Icons.close, color: AppColors.textSecondary, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Explanatory banner
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Customer has opted for AMC coverage. Choose when you want to configure the contract parameters:',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Option 1: Finalize Now (Recommended Card)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.pop(ctx, 'now'),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Finalize AMC Now',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF064E3B),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF059669),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'RECOMMENDED',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              const Text(
+                                'Configure tenure, visits, pricing & contract terms immediately.',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11.5,
+                                  color: Color(0xFF047857),
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF059669)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Option 2: Finalize Later Card
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.pop(ctx, 'later'),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Icon(Icons.schedule_rounded, color: Color(0xFF475569), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Mark Interest & Finalize Later',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 3),
+                              Text(
+                                'Save AMC interest with quotation. Configure terms anytime via AMC Quick Action.',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11.5,
+                                  color: AppColors.textSecondary,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Cancel / Dismiss
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'cancel'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text(
+                    'Cancel & Disable AMC',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == 'later') {
+      setState(() => _amcInterested = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Customer marked as interested in AMC. You can finalize it later from AMC actions.'),
+            backgroundColor: AppColors.info,
+          ),
+        );
+      }
+    } else if (choice == 'now') {
+      setState(() => _amcInterested = true);
+      final customerId = _pipeline?.customerId ?? '';
+      final productId = _pipeline?.productId ?? '';
+      final pipelineId = widget.pipelineId ?? '';
+
+      await context.push(
+        '${AppRoutes.amcSetup}?pipelineId=$pipelineId&customerId=$customerId&productId=$productId',
+      );
+
+      // Check if AMC contract was saved; if user hit back without saving, toggle it off!
+      if (mounted && widget.pipelineId != null) {
+        final supabase = ref.read(supabaseClientProvider);
+        final existingAmc = await supabase
+            .from('amc_contracts')
+            .select('id')
+            .eq('pipeline_id', widget.pipelineId!)
+            .maybeSingle();
+        if (existingAmc == null) {
+          setState(() => _amcInterested = false);
+        } else {
+          setState(() => _amcInterested = true);
+        }
+      }
+    } else {
+      // Cancelled
+      setState(() => _amcInterested = false);
+    }
+  }
   Map<String, dynamic>? _leadData;
 
   bool _isLoading = false;
@@ -164,11 +723,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       q.lineItems.map((item) => {
             'description': TextEditingController(text: item.description),
             'hsn_sac': TextEditingController(text: item.hsnSac ?? ''),
-            'qty': TextEditingController(text: item.qty.toString()),
-            'free_qty': TextEditingController(text: item.freeQty.toString()),
+            'qty': TextEditingController(text: item.qty.toInt().toString()),
+            'gst_percent': TextEditingController(
+                text: (item.gstPercent > 0 ? item.gstPercent : 18.0)
+                    .toStringAsFixed(0)),
             'uom': TextEditingController(text: item.uom),
-            'unit_price':
-                TextEditingController(text: item.unitPrice.toStringAsFixed(2)),
+            'unit_price': TextEditingController(
+                text: InventoryAutocomplete.formatIndianPrice(item.unitPrice)),
             'disc_percent':
                 TextEditingController(text: item.discPercent.toString()),
           }),
@@ -295,11 +856,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 _lineItems.add({
                   'description': TextEditingController(text: item['description']?.toString() ?? ''),
                   'hsn_sac': TextEditingController(text: item['hsn_sac']?.toString() ?? '84191920'),
-                  'qty': TextEditingController(text: (item['qty'] as num?)?.toString() ?? '1'),
-                  'free_qty': TextEditingController(text: (item['free_qty'] as num?)?.toString() ?? '0'),
+                  'qty': TextEditingController(text: ((item['qty'] as num?)?.toInt() ?? 1).toString()),
+                  'gst_percent': TextEditingController(
+                      text: ((item['gst_percent'] as num?)?.toDouble() ?? 18.0).toStringAsFixed(0)),
                   'uom': TextEditingController(text: item['uom']?.toString() ?? 'NOS'),
                   'unit_price': TextEditingController(
-                      text: (item['unit_price'] as num?)?.toStringAsFixed(2) ?? '0.00'),
+                      text: InventoryAutocomplete.formatIndianPrice(
+                          (item['unit_price'] as num?)?.toDouble() ?? 0.0)),
                   'disc_percent': TextEditingController(
                       text: (item['disc_percent'] as num?)?.toString() ?? '0.0'),
                 });
@@ -335,10 +898,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               'description': TextEditingController(text: desc),
               'hsn_sac': TextEditingController(text: '84191920'),
               'qty': TextEditingController(text: '1'),
-              'free_qty': TextEditingController(text: '0'),
+              'gst_percent': TextEditingController(text: '18'),
               'uom': TextEditingController(text: 'SET'),
               'unit_price': TextEditingController(
-                  text: unitPrice > 0 ? unitPrice.toStringAsFixed(2) : '0.00'),
+                  text: unitPrice > 0 ? InventoryAutocomplete.formatIndianPrice(unitPrice) : '0'),
               'disc_percent': TextEditingController(text: '0.0'),
             });
           }
@@ -443,9 +1006,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         'description': TextEditingController(),
         'hsn_sac': TextEditingController(),
         'qty': TextEditingController(text: '1'),
-        'free_qty': TextEditingController(text: '0'),
+        'gst_percent': TextEditingController(text: '18'),
         'uom': TextEditingController(text: 'NOS'),
-        'unit_price': TextEditingController(text: '0.00'),
+        'unit_price': TextEditingController(text: '0'),
         'disc_percent': TextEditingController(text: '0.0'),
       });
     });
@@ -457,7 +1020,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       (item['description'] as TextEditingController).dispose();
       (item['hsn_sac'] as TextEditingController).dispose();
       (item['qty'] as TextEditingController).dispose();
-      (item['free_qty'] as TextEditingController).dispose();
+      (item['gst_percent'] as TextEditingController).dispose();
       (item['uom'] as TextEditingController).dispose();
       (item['unit_price'] as TextEditingController).dispose();
       (item['disc_percent'] as TextEditingController).dispose();
@@ -468,9 +1031,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     double total = 0;
     for (final item in _lineItems) {
       final qty =
-          double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+          int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
       final price =
-          double.tryParse((item['unit_price'] as TextEditingController).text) ??
+          double.tryParse((item['unit_price'] as TextEditingController).text.replaceAll(',', '')) ??
               0;
       final disc = double.tryParse(
               (item['disc_percent'] as TextEditingController).text) ??
@@ -486,14 +1049,27 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     return clientStateCode != 27; // Maharashtra is 27
   }
 
+  double get _totalGstAmount {
+    double gstSum = 0;
+    for (final item in _lineItems) {
+      final qty = int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final price = double.tryParse((item['unit_price'] as TextEditingController).text.replaceAll(',', '')) ?? 0;
+      final disc = double.tryParse((item['disc_percent'] as TextEditingController).text) ?? 0;
+      final gst = double.tryParse((item['gst_percent'] as TextEditingController).text) ?? (_cgstRate + _sgstRate);
+      final taxable = (qty * price) * (1 - disc / 100);
+      gstSum += taxable * (gst / 100);
+    }
+    return gstSum;
+  }
+
   double get _cgstAmount =>
-      _isInterstate ? 0.0 : _calcSubtotal() * (_cgstRate / 100);
+      _isInterstate ? 0.0 : _totalGstAmount / 2;
   double get _sgstAmount =>
-      _isInterstate ? 0.0 : _calcSubtotal() * (_sgstRate / 100);
+      _isInterstate ? 0.0 : _totalGstAmount / 2;
   double get _igstAmount =>
-      _isInterstate ? _calcSubtotal() * ((_cgstRate + _sgstRate) / 100) : 0.0;
+      _isInterstate ? _totalGstAmount : 0.0;
   double get _grandTotal =>
-      _calcSubtotal() + _cgstAmount + _sgstAmount + _igstAmount;
+      _calcSubtotal() + _totalGstAmount;
 
   Future<void> _saveDraft() async {
     if (!_formKey.currentState!.validate()) return;
@@ -588,7 +1164,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        if (widget.pipelineId != null) {
+          context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+        } else {
+          context.pop();
+        }
       }
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
@@ -801,7 +1381,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               backgroundColor: AppColors.success,
             ),
           );
-          context.pop();
+          if (widget.pipelineId != null) {
+            context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+          } else {
+            context.pop();
+          }
         }
       } else {
         // Direct approval (Admin / Sales Head)
@@ -844,7 +1428,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               backgroundColor: AppColors.success,
             ),
           );
-          context.pop();
+          if (widget.pipelineId != null) {
+            context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+          } else {
+            context.pop();
+          }
         }
       }
     } catch (e) {
@@ -904,7 +1492,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        if (widget.pipelineId != null) {
+          context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+        } else {
+          context.pop();
+        }
       }
     } catch (e) {
       _showError(e.toString());
@@ -926,15 +1518,24 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       specs[entry.key] = entry.value;
     }
 
+    final totalTermsPct = _paymentTerms.fold<double>(
+      0.0,
+      (sum, item) => sum + ((item['percent'] as num?)?.toDouble() ?? 0.0),
+    );
+    if (totalTermsPct > 100.0) {
+      throw Exception(
+          'Payment terms total percentage cannot exceed 100% (currently ${totalTermsPct.toStringAsFixed(1)}%).');
+    }
+
     // Build line items
     final lineItemsJson = _lineItems.map((item) {
       final qty =
-          double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
-      final freeQty =
-          double.tryParse((item['free_qty'] as TextEditingController).text) ??
-              0;
+          int.tryParse((item['qty'] as TextEditingController).text) ?? 1;
+      final gstPercent =
+          double.tryParse((item['gst_percent'] as TextEditingController).text) ??
+              18.0;
       final price =
-          double.tryParse((item['unit_price'] as TextEditingController).text) ??
+          double.tryParse((item['unit_price'] as TextEditingController).text.replaceAll(',', '')) ??
               0;
       final disc = double.tryParse(
               (item['disc_percent'] as TextEditingController).text) ??
@@ -946,8 +1547,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         'description':
             (item['description'] as TextEditingController).text.trim(),
         'hsn_sac': hsn.isEmpty ? null : hsn,
-        'qty': qty,
-        'free_qty': freeQty,
+        'qty': qty.toDouble(),
+        'free_qty': 0,
+        'gst_percent': gstPercent,
         'uom': uom,
         'unit_price': price,
         'disc_percent': disc,
@@ -1454,6 +2056,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButtonFormField<double>(
+                            isExpanded: true,
                             value: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
                                 ? (_cgstRate + _sgstRate)
                                 : null,
@@ -1463,15 +2066,33 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                               hintText: 'Select GST %',
                             ),
                             items: [
-                              const DropdownMenuItem(value: 18.0, child: Text('18% (Standard 9% + 9%)')),
-                              const DropdownMenuItem(value: 12.0, child: Text('12% (6% + 6%)')),
-                              const DropdownMenuItem(value: 5.0, child: Text('5% (2.5% + 2.5%)')),
-                              const DropdownMenuItem(value: 28.0, child: Text('28% (14% + 14%)')),
-                              const DropdownMenuItem(value: 0.0, child: Text('0% (Exempted)')),
+                              const DropdownMenuItem(
+                                value: 18.0,
+                                child: Text('18% (Standard 9% + 9%)', overflow: TextOverflow.ellipsis),
+                              ),
+                              const DropdownMenuItem(
+                                value: 12.0,
+                                child: Text('12% (6% + 6%)', overflow: TextOverflow.ellipsis),
+                              ),
+                              const DropdownMenuItem(
+                                value: 5.0,
+                                child: Text('5% (2.5% + 2.5%)', overflow: TextOverflow.ellipsis),
+                              ),
+                              const DropdownMenuItem(
+                                value: 28.0,
+                                child: Text('28% (14% + 14%)', overflow: TextOverflow.ellipsis),
+                              ),
+                              const DropdownMenuItem(
+                                value: 0.0,
+                                child: Text('0% (Exempted)', overflow: TextOverflow.ellipsis),
+                              ),
                               if (![0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate))
                                 DropdownMenuItem(
                                   value: _cgstRate + _sgstRate,
-                                  child: Text('${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}% (Custom)'),
+                                  child: Text(
+                                    '${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}% (Custom)',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                             ],
                             onChanged: (val) {
@@ -1576,6 +2197,16 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Payment Terms Section (Shifted upwards above Remarks)
+            _SectionHeader('Payment Terms'),
+            const SizedBox(height: 8),
+            _buildPaymentTermsCard(
+              enabled,
+              isAdmin: profile?.primaryRole == UserRole.admin ||
+                  profile?.primaryRole == UserRole.salesHead,
+            ),
+            const SizedBox(height: 20),
+
             _SectionHeader('Remarks'),
             const SizedBox(height: 8),
             TextFormField(
@@ -1593,28 +2224,42 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.divider),
+                  color: _amcInterested
+                      ? const Color(0xFFF0FDF4)
+                      : AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _amcInterested
+                        ? const Color(0xFF10B981).withValues(alpha: 0.5)
+                        : AppColors.divider,
+                  ),
                 ),
                 child: SwitchListTile(
-                  secondary: const Icon(Icons.shield_outlined,
-                      color: AppColors.primary),
+                  secondary: Icon(
+                    _amcInterested ? Icons.verified_user_rounded : Icons.shield_outlined,
+                    color: _amcInterested ? const Color(0xFF059669) : AppColors.primary,
+                  ),
                   title: const Text(
                     'Is the customer willing to avail AMC for this product?',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  subtitle: const Text(
-                    'If Yes, an AMC interest entry will be created so you can finalize it later.',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 12),
+                  subtitle: Text(
+                    _amcInterested
+                        ? 'AMC coverage opted for this quotation.'
+                        : 'If Yes, you will be prompted to finalize AMC now or finalize it later.',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: _amcInterested ? const Color(0xFF047857) : AppColors.textSecondary,
+                    ),
                   ),
                   value: _amcInterested,
-                  activeThumbColor: AppColors.primary,
-                  onChanged: (val) => setState(() => _amcInterested = val),
+                  activeThumbColor: const Color(0xFF059669),
+                  onChanged: (val) => _handleAmcToggle(val),
                 ),
               ),
               const SizedBox(height: 20),
@@ -1684,12 +2329,6 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               ),
               const SizedBox(height: 20),
             ],
-
-            // Payment Terms Section
-            _SectionHeader('Payment Terms'),
-            const SizedBox(height: 8),
-            _buildPaymentTermsCard(enabled),
-            const SizedBox(height: 20),
 
             // Terms
             _SectionHeader('Terms & Conditions'),
@@ -1871,227 +2510,522 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     }
   }
 
-  Widget _buildPaymentTermsCard(bool enabled) {
+  Widget _buildPaymentTermsCard(bool enabled, {required bool isAdmin}) {
     _syncPaymentTermAmounts();
     final double totalPercent = _paymentTerms.fold<double>(
       0.0,
       (sum, item) => sum + ((item['percent'] as num?)?.toDouble() ?? 0.0),
     );
+    final bool isFull100 = (totalPercent - 100.0).abs() < 0.01;
+
+    final defaultStageNames = ['Advance', 'Dispatch', 'Installation', 'Completion'];
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.payment, size: 18, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text(
-                    'Stages & Payment Schedule',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (totalPercent == 100.0)
-                      ? AppColors.successLight
-                      : Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Total: ${totalPercent.toStringAsFixed(totalPercent == totalPercent.roundToDouble() ? 0 : 1)}%',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: (totalPercent == 100.0)
-                        ? AppColors.success
-                        : Colors.orange.shade800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Table header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E3A5F),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Row(
+          // Header Card
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
               children: [
                 Expanded(
-                  flex: 4,
-                  child: Text(
-                    'Term / Stage',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.account_balance_wallet_outlined, size: 20, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Payment Terms & Milestones',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Default stages: Advance, Dispatch, Installation, Completion',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Percentage (%)',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                const SizedBox(width: 8),
+                // 100% Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isFull100
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isFull100
+                          ? const Color(0xFF10B981).withOpacity(0.4)
+                          : const Color(0xFFF59E0B).withOpacity(0.4),
                     ),
-                    textAlign: TextAlign.center,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isFull100 ? Icons.check_circle : Icons.pie_chart_outline,
+                        size: 14,
+                        color: isFull100 ? const Color(0xFF059669) : const Color(0xFFD97706),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        isFull100
+                            ? '100% Scheduled'
+                            : '${totalPercent.toStringAsFixed(totalPercent == totalPercent.roundToDouble() ? 0 : 1)}% / 100%',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isFull100 ? const Color(0xFF059669) : const Color(0xFFD97706),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Expanded(
-                  flex: 4,
-                  child: Text(
-                    'Amount (₹)',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-                SizedBox(width: 32),
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          // Table rows
-          ..._paymentTerms.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final item = entry.value;
-            final termName = item['term']?.toString() ?? '';
-            final pct = (item['percent'] as num?)?.toDouble() ?? 0.0;
-            final amt = _grandTotal * (pct / 100.0);
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
+          const Divider(height: 1),
+
+          // Template selector row
+          if (enabled) ...[
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              color: AppColors.background.withOpacity(0.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    flex: 4,
-                    child: enabled
-                        ? TextFormField(
-                            initialValue: termName,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                              border: OutlineInputBorder(),
-                            ),
-                            style: const TextStyle(fontSize: 13),
-                            onChanged: (val) {
-                              item['term'] = val;
-                            },
-                          )
-                        : Text(
-                            termName,
-                            style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
+                  Row(
+                    children: const [
+                      Icon(Icons.auto_awesome, size: 14, color: AppColors.primary),
+                      SizedBox(width: 6),
+                      Text(
+                        'Payment Templates:',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 3,
-                    child: enabled
-                        ? TextFormField(
-                            initialValue: pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            textAlign: TextAlign.center,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              suffixText: '%',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                              border: OutlineInputBorder(),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ...[..._defaultPaymentTemplates, ..._customPaymentTemplates].map((t) {
+                          final name = t['name'] as String;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              onTap: () => _applyPaymentTemplate(t),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.02),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.check_circle_outline, size: 13, color: AppColors.primary),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            style: const TextStyle(fontSize: 13),
-                            onChanged: (val) {
-                              final parsed = double.tryParse(val);
-                              if (parsed != null) {
-                                setState(() {
-                                  item['percent'] = parsed;
-                                  _syncPaymentTermAmounts();
-                                });
-                              }
+                          );
+                        }),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isCustomTermsEditing = !_isCustomTermsEditing;
+                              });
                             },
-                          )
-                        : Text(
-                            '${pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1)}%',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontFamily: 'Inter', fontSize: 13),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _isCustomTermsEditing ? Icons.check : Icons.edit_note,
+                                    size: 14,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _isCustomTermsEditing ? 'Done' : 'Custom Edit',
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
+                        ),
+                        if (isAdmin)
+                          InkWell(
+                            onTap: _showManageTemplatesDialog,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6D28D9).withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF6D28D9).withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.tune, size: 14, color: Color(0xFF6D28D9)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Manage Templates',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      color: Color(0xFF6D28D9),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      '₹${NumberFormat('#,##,##0.00', 'en_IN').format(amt)}',
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+
+          // Table Section
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                // Table header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F2744),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      SizedBox(width: 30),
+                      Expanded(
+                        flex: 5,
+                        child: Text(
+                          'Payment Term / Stage',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          'Percentage (%)',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          'Amount (₹)',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      SizedBox(width: 36),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Table rows
+                ..._paymentTerms.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final item = entry.value;
+                  final termName = item['term']?.toString() ?? '';
+                  final pct = (item['percent'] as num?)?.toDouble() ?? 0.0;
+                  final amt = _grandTotal * (pct / 100.0);
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        // Milestone number badge
+                        Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F2744),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${idx + 1}',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 5,
+                          child: enabled
+                              ? TextFormField(
+                                  initialValue: termName,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: idx < defaultStageNames.length ? defaultStageNames[idx] : 'Stage ${idx + 1}',
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                    ),
+                                  ),
+                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
+                                  onChanged: (val) {
+                                    item['term'] = val;
+                                  },
+                                )
+                              : Text(
+                                  termName,
+                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: enabled
+                              ? TextFormField(
+                                  initialValue: pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  textAlign: TextAlign.center,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    suffixText: '%',
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                    ),
+                                  ),
+                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                                  onChanged: (val) {
+                                    final parsed = double.tryParse(val);
+                                    if (parsed != null) {
+                                      final otherTotal = _paymentTerms
+                                          .asMap()
+                                          .entries
+                                          .where((e) => e.key != idx)
+                                          .fold<double>(0.0, (s, e) => s + ((e.value['percent'] as num?)?.toDouble() ?? 0.0));
+                                      final capped = (parsed + otherTotal > 100.0) ? (100.0 - otherTotal) : parsed;
+                                      setState(() {
+                                        item['percent'] = capped < 0 ? 0.0 : capped;
+                                        _syncPaymentTermAmounts();
+                                      });
+                                    }
+                                  },
+                                )
+                              : Text(
+                                  '${pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1)}%',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 4,
+                          child: Text(
+                            '₹${InventoryAutocomplete.formatIndianPrice(amt)}',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        if (enabled) ...[
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.error),
+                            tooltip: 'Remove stage',
+                            onPressed: _paymentTerms.length <= 1
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _paymentTerms.removeAt(idx);
+                                      _syncPaymentTermAmounts();
+                                    });
+                                  },
+                          ),
+                        ] else ...[
+                          const SizedBox(width: 36),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+
+                // Add Stage Button
+                if (enabled && totalPercent < 100.0) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
+                      onPressed: () {
+                        final remaining = (100.0 - totalPercent).clamp(0.0, 100.0);
+                        final nextName = _paymentTerms.length < defaultStageNames.length
+                            ? defaultStageNames[_paymentTerms.length]
+                            : 'Stage ${_paymentTerms.length + 1}';
+                        setState(() {
+                          _paymentTerms.add({
+                            'term': nextName,
+                            'percent': remaining,
+                            'amount': 0.0,
+                          });
+                          _syncPaymentTermAmounts();
+                        });
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 18),
+                      label: Text(
+                        'Add Stage (${_paymentTerms.length < defaultStageNames.length ? defaultStageNames[_paymentTerms.length] : "Stage ${_paymentTerms.length + 1}"}) • ${(100.0 - totalPercent).toStringAsFixed(0)}% Left',
+                        style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
-                  if (enabled) ...[
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline, size: 18, color: AppColors.error),
-                      onPressed: _paymentTerms.length <= 1
-                          ? null
-                          : () {
-                              setState(() {
-                                _paymentTerms.removeAt(idx);
-                                _syncPaymentTermAmounts();
-                              });
-                            },
-                    ),
-                  ] else ...[
-                    const SizedBox(width: 32),
-                  ],
                 ],
-              ),
-            );
-          }),
-          if (enabled) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _paymentTerms.add({'term': 'Custom Stage', 'percent': 0.0, 'amount': 0.0});
-                  });
-                },
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Payment Stage', style: TextStyle(fontSize: 12)),
-              ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -2462,25 +3396,39 @@ class _LineItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Item ${index + 1}',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Item ${index + 1}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -2491,6 +3439,7 @@ class _LineItemRow extends StatelessWidget {
                       color: AppColors.error, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: 'Remove Item',
                 ),
             ],
           ),
@@ -2507,7 +3456,7 @@ class _LineItemRow extends StatelessWidget {
               if (hsnController.text.isEmpty) hsnController.text = selection.hsnSac ?? '';
               if (uomController.text.isEmpty) uomController.text = selection.uom ?? '';
               if (priceController.text.isEmpty || priceController.text == '0.00' || priceController.text == '0') {
-                priceController.text = selection.price.toStringAsFixed(2);
+                priceController.text = InventoryAutocomplete.formatIndianPrice(selection.price);
               }
               onChanged();
             },
@@ -2544,12 +3493,13 @@ class _LineItemRow extends StatelessWidget {
                   controller: item['qty'] as TextEditingController,
                   enabled: enabled,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Qty *'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    final n = double.tryParse(v);
+                    final n = int.tryParse(v);
                     if (n == null || n <= 0) return 'Must be > 0';
                     return null;
                   },
@@ -2558,16 +3508,19 @@ class _LineItemRow extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: TextFormField(
-                  controller: item['free_qty'] as TextEditingController,
+                  controller: item['gst_percent'] as TextEditingController,
                   enabled: enabled,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => onChanged(),
-                  decoration: const InputDecoration(labelText: 'Free Qty'),
+                  decoration: const InputDecoration(
+                    labelText: 'GST % *',
+                    suffixText: '%',
+                  ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return null;
+                    if (v == null || v.isEmpty) return 'Required';
                     final n = double.tryParse(v);
-                    if (n == null || n < 0) return 'Invalid';
+                    if (n == null || n < 0 || n > 100) return 'Invalid';
                     return null;
                   },
                 ),
@@ -2577,7 +3530,7 @@ class _LineItemRow extends StatelessWidget {
                 child: TextFormField(
                   controller: item['disc_percent'] as TextEditingController,
                   enabled: enabled,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Disc %'),
@@ -2595,7 +3548,7 @@ class _LineItemRow extends StatelessWidget {
           TextFormField(
             controller: item['unit_price'] as TextEditingController,
             enabled: enabled,
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textInputAction: TextInputAction.done,
             onChanged: (_) => onChanged(),
             decoration: const InputDecoration(
@@ -2604,7 +3557,8 @@ class _LineItemRow extends StatelessWidget {
             ),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Required';
-              final n = double.tryParse(v);
+              final clean = v.replaceAll(',', '').trim();
+              final n = double.tryParse(clean);
               if (n == null || n < 0) return 'Invalid rate';
               return null;
             },

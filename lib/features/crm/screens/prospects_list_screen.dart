@@ -187,15 +187,56 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                   ),
                                 ],
                               ),
-                              if (prospect.assignedByName != null && !isAssignedToMe) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Assigned to: ${prospect.assignedByName}',
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 11,
-                                    color: Color(0xFF2563EB),
-                                    fontWeight: FontWeight.w600,
+                              if (prospect.assignedByName != null || prospect.assignedTo != null) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isAssignedToMe ? Colors.green.withOpacity(0.08) : const Color(0xFF2563EB).withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.person_outline, size: 11, color: isAssignedToMe ? Colors.green : const Color(0xFF2563EB)),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        isAssignedToMe
+                                            ? 'Assigned to: You'
+                                            : 'Assigned to: ${prospect.assignedByName ?? 'Assigned'}',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          color: isAssignedToMe ? Colors.green : const Color(0xFF2563EB),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              if (prospect.reassignmentRequested) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warningLight,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded, size: 11, color: AppColors.warning),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Reassign Requested',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.warning,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -601,23 +642,43 @@ class _AssignProspectSheetState extends ConsumerState<_AssignProspectSheet> {
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, primary_role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
-        final role = (r['primary_role'] as String? ?? '').toLowerCase();
-        final rolesList = (r['roles'] is List) ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
-        // Sales-only filtering (Task 3.3): exclude admin, manager, coordinator, technician
-        final isSales = role == 'sales' || role == 'sales_head' || role == 'saleshead' ||
-            rolesList.contains('sales') || rolesList.contains('sales_head');
-        final isExcluded = role == 'admin' || role == 'manager' || role == 'technician' || role == 'coordinator' ||
-            rolesList.contains('admin') || rolesList.contains('manager');
-        if (isSales && !isExcluded) {
-          list.add(r as Map<String, dynamic>);
-        }
+        final role = (r['role'] as String? ?? '').toLowerCase();
+        final rolesList = (r['roles'] is List)
+            ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
+            : [];
+        final name = (r['full_name'] as String? ?? '').toLowerCase();
+        final email = (r['email'] as String? ?? '').toLowerCase();
+
+        // 1. Exclude Admin, Managers, and Sales Heads (supervisors who have company-wide access)
+        final isSupervisorOrAdmin = role == 'admin' ||
+            role == 'administrator' ||
+            role == 'manager' ||
+            role == 'sales_head' ||
+            role == 'saleshead' ||
+            rolesList.contains('admin') ||
+            rolesList.contains('administrator') ||
+            rolesList.contains('manager') ||
+            rolesList.contains('sales_head') ||
+            rolesList.contains('saleshead') ||
+            name.contains('admin') ||
+            email.contains('admin');
+        if (isSupervisorOrAdmin) continue;
+
+        // 2. MUST be Sales Executive only (no other department roles)
+        final isSalesExecutive = role == 'sales' ||
+            role == 'sales_executive' ||
+            rolesList.contains('sales') ||
+            rolesList.contains('sales_executive');
+        if (!isSalesExecutive) continue;
+
+        list.add(r as Map<String, dynamic>);
       }
 
       final finalList = list;
@@ -714,11 +775,10 @@ class _AssignProspectSheetState extends ConsumerState<_AssignProspectSheet> {
                 prefixIcon: Icon(Icons.person_pin_outlined),
               ),
               items: _salesStaff.map((s) {
-                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Staff';
-                final role = (s['primary_role'] as String? ?? 'STAFF').toUpperCase();
+                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Sales Executive';
                 return DropdownMenuItem<String>(
                   value: s['id'] as String,
-                  child: Text('$name ($role)'),
+                  child: Text('$name (Sales Executive)'),
                 );
               }).toList(),
               onChanged: (val) => setState(() => _selectedSalesUserId = val),

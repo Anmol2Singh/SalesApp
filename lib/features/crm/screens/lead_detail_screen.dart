@@ -32,6 +32,15 @@ class LeadDetailScreen extends ConsumerStatefulWidget {
 class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
   bool _isRefreshing = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(leadsProvider.notifier).load();
+      ref.read(prospectsProvider.notifier).load();
+    });
+  }
+
   Future<void> _handleRefresh(String leadId) async {
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
@@ -71,6 +80,11 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
     final profile = ref.watch(currentProfileProvider);
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
     final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
+    final isSalesRole = profile?.primaryRole == UserRole.sales ||
+        profile?.roles.contains(UserRole.sales) == true ||
+        (!isAdmin && (lead?.assignedTo == profile?.id || lead?.createdBy == profile?.id));
+    final isConverted = lead != null && (lead.convertedToCustomerId != null || lead.status.toLowerCase() == 'won');
+    final isAssignedToMe = !isConverted && lead != null && lead.assignedTo != null && lead.assignedTo == profile?.id;
 
     if (lead == null) {
       if (leadsAsync.isLoading) {
@@ -163,8 +177,6 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
         : (prospect?.phone ?? '');
     final displayEmail = prospect?.email;
 
-    final isConverted = lead.convertedToCustomerId != null || lead.status == 'Won';
-
     final canEdit = RecordEditPermissions.canEditRecord(
       userRole: profile?.primaryRole,
       allRoles: profile?.roles ?? [],
@@ -237,13 +249,74 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
               child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (lead.reassignmentRequested && !isConverted)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400, width: 1.5),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '⚠️ REASSIGNMENT REQUESTED',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.brown,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Reason: "${lead.reassignmentReason ?? 'Salesperson requested reassignment'}"',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isAdmin) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () => _showAssignLeadSheet(context, ref, lead),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber.shade800,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        child: const Text('Reassign', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
             // 1. Lead Header Card
             Card(
               elevation: 0,
-              color: AppColors.surface,
+              color: isAssignedToMe ? const Color(0xFFFFFBEB) : AppColors.surface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: AppColors.border),
+                side: BorderSide(
+                  color: isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border,
+                  width: isAssignedToMe ? 2 : 1,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -254,11 +327,17 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: isConverted ? AppColors.success.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+                          backgroundColor: isConverted
+                              ? AppColors.success.withOpacity(0.1)
+                              : (isAssignedToMe ? const Color(0xFFFEF3C7) : AppColors.primary.withOpacity(0.1)),
                           child: Icon(
-                            isConverted ? Icons.check_circle : Icons.trending_up,
+                            isConverted
+                                ? Icons.check_circle
+                                : (isAssignedToMe ? Icons.assignment_ind : Icons.trending_up),
                             size: 32,
-                            color: isConverted ? AppColors.success : AppColors.primary,
+                            color: isConverted
+                                ? AppColors.success
+                                : (isAssignedToMe ? const Color(0xFFD97706) : AppColors.primary),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -278,6 +357,33 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                               if (displayPhone.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(displayPhone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                              ],
+                              if (isAssignedToMe) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFF59E0B)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.stars, size: 12, color: Color(0xFFD97706)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        '🎯 Assigned to You',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ],
                           ),
@@ -523,29 +629,49 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  lead.assignedByName ?? 'Not Assigned',
+                                  lead.assignedByName ?? (lead.assignedTo != null ? 'Assigned' : 'Not Assigned'),
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    color: lead.assignedByName != null ? AppColors.textPrimary : Colors.grey,
+                                    color: (lead.assignedByName != null || lead.assignedTo != null)
+                                        ? AppColors.textPrimary
+                                        : Colors.grey,
                                   ),
                                 ),
                               ),
-                              if (isSalesOrAdmin)
-                                InkWell(
-                                  onTap: () => _showAssignLeadSheet(context, ref, lead),
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(4),
+                              if (!isConverted) ...[
+                                if (isAdmin)
+                                  InkWell(
+                                    onTap: () => _showAssignLeadSheet(context, ref, lead),
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        lead.assignedTo != null ? 'Reassign' : 'Assign',
+                                        style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
-                                    child: Text(
-                                      lead.assignedTo != null ? 'Reassign' : 'Assign',
-                                      style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                                  )
+                                else if (isSalesRole && !lead.reassignmentRequested)
+                                  InkWell(
+                                    onTap: () => _showRequestReassignDialog(context, ref, lead),
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Request Reassign',
+                                        style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ),
-                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -607,7 +733,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                 icon: const Icon(Icons.check_circle, color: AppColors.success),
                 label: const Text('Deal Won • View Customer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               )
-            else if (isSalesOrAdmin)
+            else if (isSalesOrAdmin) ...[
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
@@ -619,12 +745,42 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                 icon: const Icon(Icons.star, color: Colors.white),
                 label: const Text('Convert to Customer (Won)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
+              if (!isConverted) ...[
+                if (isAdmin) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFF6366F1)),
+                      foregroundColor: const Color(0xFF6366F1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _showAssignLeadSheet(context, ref, lead),
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Transfer / Reassign to Sales Rep', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ] else if (isSalesRole) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Colors.orange),
+                      foregroundColor: Colors.orange.shade800,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _showRequestReassignDialog(context, ref, lead),
+                    icon: const Icon(Icons.outgoing_mail),
+                    label: const Text('Request Admin to Reassign Lead', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
             ],
-          ),
+          ],
         ),
       ),
-    ],
-  ),
+    ),
+  ],
+),
 );
   }
 
@@ -843,6 +999,55 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showRequestReassignDialog(BuildContext context, WidgetRef ref, Lead lead) {
+    final noteCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request Reassignment'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Request Admin to transfer "${lead.prospectName ?? "this lead"}" to another salesperson.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Reason for reassignment (Optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(leadsProvider.notifier).requestTransfer(
+                    leadId: lead.id,
+                    leadName: lead.prospectName ?? 'Lead #${lead.id.substring(0, 6)}',
+                    reason: noteCtrl.text.trim().isNotEmpty ? noteCtrl.text.trim() : null,
+                  );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Reassignment request sent to Admin successfully.'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Submit Request', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -2106,45 +2311,51 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, primary_role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
-        final role = (r['primary_role'] as String? ?? '').toLowerCase();
+        final role = (r['role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List)
             ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
             : [];
-        if (role == 'sales' ||
-            role == 'admin' ||
+        final name = (r['full_name'] as String? ?? '').toLowerCase();
+        final email = (r['email'] as String? ?? '').toLowerCase();
+
+        // 1. Exclude Admin, Managers, and Sales Heads (supervisors who have company-wide access)
+        final isSupervisorOrAdmin = role == 'admin' ||
+            role == 'administrator' ||
             role == 'manager' ||
             role == 'sales_head' ||
-            role.contains('sales') ||
-            rolesList.contains('sales') ||
+            role == 'saleshead' ||
+            rolesList.contains('admin') ||
+            rolesList.contains('administrator') ||
+            rolesList.contains('manager') ||
             rolesList.contains('sales_head') ||
-            rolesList.contains('admin')) {
-          list.add(r as Map<String, dynamic>);
-        }
-      }
+            rolesList.contains('saleshead') ||
+            name.contains('admin') ||
+            email.contains('admin');
+        if (isSupervisorOrAdmin) continue;
 
-      final List<dynamic> rawStaffList = (res is List) ? res : [];
-      final finalList = list.isNotEmpty
-          ? list
-          : rawStaffList
-              .where((r) {
-                final role = (r['primary_role'] as String? ?? '').toLowerCase();
-                return role != 'customer' && role != 'technician';
-              })
-              .map((r) => r as Map<String, dynamic>)
-              .toList();
+        // 2. MUST be Sales Executive only (no other department roles)
+        final isSalesExecutive = role == 'sales' ||
+            role == 'sales_executive' ||
+            rolesList.contains('sales') ||
+            rolesList.contains('sales_executive');
+        if (!isSalesExecutive) continue;
+
+        list.add(r as Map<String, dynamic>);
+      }
 
       if (mounted) {
         setState(() {
-          _salesStaff = finalList;
-          _selectedSalesUserId = widget.lead.assignedTo ??
-              (_salesStaff.isNotEmpty ? _salesStaff.first['id'] as String? : null);
+          _salesStaff = list;
+          _selectedSalesUserId = widget.lead.assignedTo != null && list.any((s) => s['id'] == widget.lead.assignedTo)
+              ? widget.lead.assignedTo
+              : (_salesStaff.isNotEmpty ? _salesStaff.first['id'] as String? : null);
         });
       }
     } catch (e) {
@@ -2231,11 +2442,10 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
                 prefixIcon: Icon(Icons.person_pin_outlined),
               ),
               items: _salesStaff.map((s) {
-                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Staff';
-                final role = (s['primary_role'] as String? ?? 'STAFF').toUpperCase();
+                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Sales Executive';
                 return DropdownMenuItem<String>(
                   value: s['id'] as String,
-                  child: Text('$name ($role)'),
+                  child: Text('$name (Sales Executive)'),
                 );
               }).toList(),
               onChanged: (val) => setState(() => _selectedSalesUserId = val),

@@ -1,10 +1,12 @@
 // lib/features/boq/screens/boq_form_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/models/boq.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
@@ -15,7 +17,6 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
-import '../../admin/providers/inventory_sizes_provider.dart';
 import '../../admin/providers/manage_boq_items_provider.dart';
 
 class BoqFormScreen extends ConsumerStatefulWidget {
@@ -52,7 +53,6 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
     _remarksController.dispose();
     for (final item in _boqItems) {
       (item['component'] as TextEditingController).dispose();
-      (item['spec'] as TextEditingController).dispose();
       (item['qty'] as TextEditingController).dispose();
       (item['unit'] as TextEditingController).dispose();
     }
@@ -103,8 +103,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
           for (final item in _existingBoq!.items) {
             _boqItems.add({
               'component': TextEditingController(text: item.component),
-              'spec': TextEditingController(text: item.spec ?? ''),
-              'qty': TextEditingController(text: item.qty.toString()),
+              'qty': TextEditingController(text: item.qty.toInt().toString()),
               'unit': TextEditingController(text: item.unit),
               'scope': item.scope,
             });
@@ -125,11 +124,10 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
     }
   }
 
-  void _addBoqItem(String scope, {String? component, String? size, String? unit, String? qty}) {
+  void _addBoqItem(String scope, {String? component, String? unit, String? qty}) {
     setState(() {
       _boqItems.add({
         'component': TextEditingController(text: component ?? ''),
-        'spec': TextEditingController(text: size ?? ''),
         'qty': TextEditingController(text: qty ?? '1'),
         'unit': TextEditingController(text: unit ?? 'NOS'),
         'scope': scope,
@@ -140,11 +138,9 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
   void _removeBoqItem(Map<String, dynamic> item) {
     setState(() {
       final controller1 = item['component'] as TextEditingController?;
-      final controller2 = item['spec'] as TextEditingController?;
       final controller3 = item['qty'] as TextEditingController?;
       final controller4 = item['unit'] as TextEditingController?;
       controller1?.dispose();
-      controller2?.dispose();
       controller3?.dispose();
       controller4?.dispose();
       _boqItems.remove(item);
@@ -166,7 +162,6 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
     for (int i = 0; i < _boqItems.length; i++) {
       final item = _boqItems[i];
       final comp = (item['component'] as TextEditingController).text.trim();
-      final size = (item['spec'] as TextEditingController).text.trim();
       final qty = (item['qty'] as TextEditingController).text.trim();
 
       if (comp.isEmpty) {
@@ -179,30 +174,20 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
         hasAnyError = true;
       }
 
-      if (size.isEmpty) {
-        item['hasSizeError'] = true;
-        hasAnyError = true;
-      } else {
-        item['hasSizeError'] = false;
-      }
-
-      if (qty.isEmpty || double.tryParse(qty) == null || double.parse(qty) <= 0) {
+      final parsedQty = int.tryParse(qty);
+      if (parsedQty == null || parsedQty <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Quantity must be a positive integer for Item ${i + 1}.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
         hasAnyError = true;
       }
     }
 
     setState(() {});
-
-    if (hasAnyError) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Some items are missing size or required fields. Please check highlighted items.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return false;
-    }
-    return true;
+    return !hasAnyError;
   }
 
   Future<void> _submitBoq() async {
@@ -240,8 +225,8 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       final items = _boqItems.map((item) {
         return {
           'component': (item['component'] as TextEditingController).text.trim(),
-          'spec': (item['spec'] as TextEditingController).text.trim(),
-          'qty': double.tryParse((item['qty'] as TextEditingController).text) ?? 1,
+          'spec': '',
+          'qty': (int.tryParse((item['qty'] as TextEditingController).text) ?? 1).toDouble(),
           'unit': (item['unit'] as TextEditingController).text.trim(),
           'scope': item['scope'] ?? 'company',
         };
@@ -298,7 +283,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId));
       }
     } catch (e) {
       if (mounted) {
@@ -520,7 +505,6 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                                   _addBoqItem(
                                     targetScope,
                                     component: m.itemName,
-                                    size: m.defaultSize,
                                     unit: m.defaultUnit,
                                   );
                                 }
@@ -590,10 +574,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                                   ],
                                 ),
                                 subtitle: Text(
-                                  [
-                                    if (m.defaultSize != null && m.defaultSize!.isNotEmpty) 'Default Size: ${m.defaultSize}',
-                                    'Unit: ${m.defaultUnit}',
-                                  ].join(' • '),
+                                  'Unit: ${m.defaultUnit}',
                                   style: const TextStyle(fontSize: 12),
                                 ),
                                 activeColor: AppColors.primary,
@@ -744,10 +725,6 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
 
     final isSubmitted = _existingBoq?.isSubmitted == true;
     final enabled = !isSubmitted || _isEditing;
-
-    // Available sizes
-    final sizesAsync = ref.watch(inventorySizesProvider);
-    final availableSizes = sizesAsync.valueOrNull?.map((s) => s.sizeName).toList() ?? [];
 
     // Previews
     final quotationItemNames = _quotation?.lineItems.map((li) => li.description).where((d) => d.isNotEmpty).join(', ') ?? '';
@@ -917,7 +894,6 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                 return _BoqItemRow(
                   index: globalIndex,
                   item: item,
-                  availableSizes: availableSizes,
                   onRemove: !enabled ? null : () => _removeBoqItem(item),
                   enabled: enabled,
                 );
@@ -980,7 +956,6 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                 return _BoqItemRow(
                   index: globalIndex,
                   item: item,
-                  availableSizes: availableSizes,
                   onRemove: !enabled ? null : () => _removeBoqItem(item),
                   enabled: enabled,
                 );
@@ -1137,167 +1112,106 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
   }
 }
 
-class _BoqItemRow extends StatefulWidget {
+class _BoqItemRow extends StatelessWidget {
   final int index;
   final Map<String, dynamic> item;
-  final List<String> availableSizes;
   final VoidCallback? onRemove;
   final bool enabled;
 
   const _BoqItemRow({
+    super.key,
     required this.index,
     required this.item,
-    required this.availableSizes,
     this.onRemove,
     required this.enabled,
   });
 
   @override
-  State<_BoqItemRow> createState() => _BoqItemRowState();
-}
-
-class _BoqItemRowState extends State<_BoqItemRow> {
-  @override
   Widget build(BuildContext context) {
-    final specController = widget.item['spec'] as TextEditingController;
-    final currentSpecValue = specController.text.trim();
-    final hasSizeError = widget.item['hasSizeError'] == true;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: hasSizeError ? const Color(0xFFFEF2F2) : AppColors.surface,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: hasSizeError ? const Color(0xFFEF4444) : AppColors.border,
-          width: hasSizeError ? 2 : 1,
-        ),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Item ${widget.index + 1}',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Item ${index + 1}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
-              if (hasSizeError) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEE2E2),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFFEF4444)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline, size: 12, color: Color(0xFFEF4444)),
-                      SizedBox(width: 4),
-                      Text(
-                        'Size not selected',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFEF4444),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
               const Spacer(),
-              if (widget.onRemove != null)
+              if (onRemove != null)
                 IconButton(
-                  onPressed: widget.onRemove,
+                  onPressed: onRemove,
                   icon: const Icon(Icons.delete_outline,
                       color: AppColors.error, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: 'Remove item',
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           InventoryAutocomplete(
-            controller: widget.item['component'] as TextEditingController,
-            enabled: widget.enabled,
-            labelText: 'Component *',
+            controller: item['component'] as TextEditingController,
+            enabled: enabled,
+            labelText: 'Component Description *',
             onChanged: () {},
             onItemSelected: (selection) {
-              final unitController = widget.item['unit'] as TextEditingController;
+              final unitController = item['unit'] as TextEditingController;
               if (unitController.text.isEmpty) unitController.text = selection.uom ?? '';
             },
           ),
-          const SizedBox(height: 8),
-          // Size Dropdown (Required)
-          DropdownButtonFormField<String>(
-            value: currentSpecValue.isNotEmpty && widget.availableSizes.contains(currentSpecValue)
-                ? currentSpecValue
-                : (currentSpecValue.isNotEmpty ? currentSpecValue : null),
-            decoration: InputDecoration(
-              labelText: 'Size *',
-              hintText: 'Select size (Required)',
-              errorText: hasSizeError ? 'Size not selected' : null,
-              enabledBorder: hasSizeError
-                  ? const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFEF4444), width: 1.5))
-                  : null,
-            ),
-            isExpanded: true,
-            items: [
-              ...widget.availableSizes.map((s) => DropdownMenuItem(value: s, child: Text(s))),
-              if (currentSpecValue.isNotEmpty && !widget.availableSizes.contains(currentSpecValue))
-                DropdownMenuItem(value: currentSpecValue, child: Text('$currentSpecValue (Custom)')),
-            ],
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) {
-                return 'Size is required *';
-              }
-              return null;
-            },
-            onChanged: widget.enabled
-                ? (val) {
-                    setState(() {
-                      specController.text = val ?? '';
-                      if (val != null && val.trim().isNotEmpty) {
-                        widget.item['hasSizeError'] = false;
-                      }
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
+                flex: 3,
                 child: TextFormField(
-                  controller: widget.item['qty'] as TextEditingController,
-                  enabled: widget.enabled,
+                  controller: item['qty'] as TextEditingController,
+                  enabled: enabled,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Qty *'),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Qty (Integer) *',
+                    hintText: 'e.g. 1, 2, 5',
+                  ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (double.tryParse(v) == null || double.parse(v) <= 0) {
-                      return '> 0';
-                    }
+                    final n = int.tryParse(v);
+                    if (n == null || n <= 0) return 'Must be >= 1';
                     return null;
                   },
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
+                flex: 2,
                 child: TextFormField(
-                  controller: widget.item['unit'] as TextEditingController,
-                  enabled: widget.enabled,
-                  decoration: const InputDecoration(labelText: 'Unit'),
+                  controller: item['unit'] as TextEditingController,
+                  enabled: enabled,
+                  decoration: const InputDecoration(
+                    labelText: 'Unit',
+                    hintText: 'NOS, MTR, SET',
+                  ),
                 ),
               ),
             ],

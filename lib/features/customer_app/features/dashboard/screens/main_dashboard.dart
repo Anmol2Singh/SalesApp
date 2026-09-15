@@ -106,6 +106,15 @@ class MainDashboard extends ConsumerWidget {
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
+                icon: const Badge(
+                  smallSize: 8,
+                  backgroundColor: Colors.amberAccent,
+                  child: Icon(Icons.notifications_outlined, color: Colors.white),
+                ),
+                tooltip: 'Alerts & Notifications',
+                onPressed: () => _showNotificationsSheet(context, ref),
+              ),
+              IconButton(
                 icon: const Icon(Icons.logout_rounded, color: Colors.white),
                 tooltip: 'Logout',
                 onPressed: () => _showLogoutDialog(context, ref),
@@ -467,22 +476,6 @@ class MainDashboard extends ConsumerWidget {
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 28),
-
-                // [C] NEXT ACTION CARD
-                requestsAsync.when(
-                  data: (requests) => _buildNextActionCard(context, requests),
-                  loading: () => const Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
-                    ),
-                  ),
-                  error: (e, _) => Center(child: Text('Error: $e')),
-                ),
-
                 const SizedBox(height: 24),
 
                 // [D] QUICK ACTIONS
@@ -602,6 +595,126 @@ class MainDashboard extends ConsumerWidget {
         ),
         ),
         ),
+      );
+    }
+
+    void _showNotificationsSheet(BuildContext context, WidgetRef ref) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final invoices = ref.read(invoicesProvider).value ?? [];
+      final requests = ref.read(serviceRequestsProvider).value ?? [];
+      final advProducts = ref.read(advertisementProductsProvider).value ?? [];
+      final products = ref.read(productsProvider).value ?? [];
+
+      final List<Map<String, dynamic>> notifications = [];
+
+      // 1. Invoices
+      for (final inv in invoices.take(3)) {
+        notifications.add({
+          'icon': Icons.receipt_long,
+          'color': Colors.teal,
+          'title': 'Invoice Received',
+          'subtitle': 'Invoice #${inv.invoiceId.length > 8 ? inv.invoiceId.substring(0, 8) : inv.invoiceId} for ₹${inv.amount.toStringAsFixed(0)} (${inv.status.toUpperCase()})',
+          'route': '/invoices',
+        });
+      }
+
+      // 2. Complaints
+      for (final req in requests.take(3)) {
+        notifications.add({
+          'icon': Icons.assignment_outlined,
+          'color': const Color(0xFF6D28D9),
+          'title': 'Complaint Update',
+          'subtitle': 'Ticket ${req.problemCode}: ${req.status.toUpperCase()} (${req.productId})',
+          'route': '/bookings',
+        });
+      }
+
+      // 3. New Product Launches
+      for (final adv in advProducts.take(2)) {
+        notifications.add({
+          'icon': Icons.new_releases_outlined,
+          'color': Colors.deepOrange,
+          'title': 'New Product Introduced',
+          'subtitle': '${adv.productName} is now available in catalog. Tap to explore.',
+          'route': '/product/${adv.productId}',
+        });
+      }
+
+      // 4. AMC Approved
+      for (final p in products.where((p) => p.amcStatus == 'active').take(2)) {
+        notifications.add({
+          'icon': Icons.verified_user,
+          'color': Colors.green,
+          'title': 'AMC Contract Active',
+          'subtitle': 'Annual maintenance is active for ${p.productName}. Free service visits included.',
+          'route': '/profile',
+        });
+      }
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Alerts & Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (notifications.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: Text('No new alerts or notifications at this time.')),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: notifications.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, idx) {
+                        final n = notifications[idx];
+                        return ListTile(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          tileColor: isDark ? Colors.white10 : Colors.grey.shade50,
+                          leading: CircleAvatar(
+                            backgroundColor: (n['color'] as Color).withOpacity(0.15),
+                            child: Icon(n['icon'] as IconData, color: n['color'] as Color, size: 20),
+                          ),
+                          title: Text(n['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          subtitle: Text(n['subtitle'] as String, style: const TextStyle(fontSize: 12)),
+                          trailing: const Icon(Icons.chevron_right, size: 18),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            final route = n['route'] as String;
+                            context.push(route);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       );
     }
 

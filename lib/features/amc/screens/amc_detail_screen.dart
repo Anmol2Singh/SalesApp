@@ -208,6 +208,25 @@ class _AmcDetailContent extends ConsumerWidget {
               ),
             ),
 
+          // Approve & Activate button for pending_setup or interested
+          if (contract.status == AmcContractStatus.pendingSetup ||
+              contract.status == AmcContractStatus.interested) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _approveAndActivateAmc(context, ref),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Approve & Activate AMC'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
           // Finalize button for interested/pending_setup
           if (contract.canBeFinalized)
             SizedBox(
@@ -233,6 +252,93 @@ class _AmcDetailContent extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _approveAndActivateAmc(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Approve AMC Contract'),
+        content: Text(
+          'Are you sure you want to approve contract ${contract.amcNumber} for ${contract.customer?.companyName ?? contract.customer?.customerName ?? "Customer"}? This will activate the contract and grant scheduled maintenance visits.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Approve & Activate', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('amc_contracts').update({
+        'status': 'active',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', contract.id);
+
+      // Generate service visits if none exist
+      final numVisits = contract.numberOfVisitsIncluded ?? 2;
+      final visitsRes = await supabase
+          .from('amc_service_visits')
+          .select('id')
+          .eq('amc_contract_id', contract.id);
+
+      if ((visitsRes as List).isEmpty && contract.startDate != null && contract.endDate != null) {
+        final totalDays = contract.endDate!.difference(contract.startDate!).inDays;
+        final interval = totalDays / numVisits;
+        final visits = <Map<String, dynamic>>[];
+        for (int i = 0; i < numVisits; i++) {
+          final visitDate = contract.startDate!.add(Duration(days: (interval * (i + 0.5)).round()));
+          visits.add({
+            'amc_contract_id': contract.id,
+            'visit_number': i + 1,
+            'scheduled_date': visitDate.toIso8601String().split('T').first,
+            'status': 'scheduled',
+          });
+        }
+        try {
+          await supabase.from('amc_service_visits').insert(visits);
+        } catch (_) {}
+      }
+
+      // Customer notification
+      try {
+        await supabase.from('notifications').insert({
+          'user_id': contract.customerId,
+          'title': 'AMC Contract Approved & Active! 🛡️',
+          'body': 'Your AMC Contract ${contract.amcNumber} is now Active with $numVisits scheduled visits included.',
+          'type': 'amc_approved',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (_) {}
+
+      ref.invalidate(amcDetailProvider(amcId));
+      ref.invalidate(amcNotifierProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ AMC Contract Approved and Activated Successfully!'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to approve AMC contract: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _viewPdf(BuildContext context, WidgetRef ref) async {

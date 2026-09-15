@@ -104,12 +104,18 @@ class CustomerDetailScreen extends ConsumerWidget {
         },
       ),
       actions: [
-        if (canEdit)
+        if (canEdit) ...[
           IconButton(
             icon: const Icon(Icons.edit_outlined, color: Colors.white),
             tooltip: 'Edit Customer',
             onPressed: () => _showEditCustomerModal(context, ref, customer),
           ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.white),
+            tooltip: 'Delete or Deactivate Customer',
+            onPressed: () => _showDeleteDeactivateModal(context, ref, customer),
+          ),
+        ],
       ],
       flexibleSpace: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -225,8 +231,11 @@ class CustomerDetailScreen extends ConsumerWidget {
               var pipelines = customer.pipelines ?? [];
               final profile = ref.read(currentProfileProvider);
               if (role == UserRole.sales && profile != null) {
-                pipelines =
-                    pipelines.where((p) => p.createdBy == profile.id).toList();
+                final isCustomerAssignedToMe = customer.assignedTo == profile.id;
+                if (!isCustomerAssignedToMe) {
+                  pipelines =
+                      pipelines.where((p) => p.createdBy == profile.id).toList();
+                }
               }
 
               if (pipelines.isEmpty) {
@@ -524,6 +533,65 @@ class _InfoCard extends ConsumerWidget {
           const SizedBox(height: 8),
           const Divider(height: 1),
           const SizedBox(height: 8),
+          if (customer.reassignmentRequested)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade400, width: 1.5),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '⚠️ REASSIGNMENT REQUESTED',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Colors.brown,
+                          ),
+                        ),
+                        if (customer.reassignmentReason != null && customer.reassignmentReason!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Reason: "${customer.reassignmentReason}"',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (canAssign) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => _showAssignCustomerSheet(context, ref, customer),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber.shade800,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      child: const Text('Reassign', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           if (customer.assignedToName != null || customer.salesmanName != null || canAssign)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -588,6 +656,30 @@ class _InfoCard extends ConsumerWidget {
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (!canAssign && (customer.assignedTo == profile?.id || customer.createdBy == profile?.id))
+                    InkWell(
+                      onTap: () => _showRequestReassignCustomerDialog(context, ref, customer),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.swap_horiz, size: 13, color: Colors.orange),
+                            SizedBox(width: 4),
+                            Text(
+                              'Request Reassign',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange,
                               ),
                             ),
                           ],
@@ -979,6 +1071,278 @@ class _AmcSection extends ConsumerWidget {
   }
 }
 
+void _showDeleteDeactivateModal(BuildContext context, WidgetRef ref, Customer customer) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (modalCtx) {
+      bool isProcessing = false;
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Manage Customer Status',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            customer.companyName,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(modalCtx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (isProcessing)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 30),
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  )
+                else ...[
+                  // Option 1: Deactivate
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.pause_circle_outline, color: Colors.amber.shade800, size: 22),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Deactivate Customer',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Colors.amber.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Hides this customer from active customer lists. All historical sales deals, quotations, and documents remain preserved safely.',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber.shade700,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.archive_outlined, size: 16),
+                            label: const Text('Deactivate (Archive)', style: TextStyle(fontWeight: FontWeight.w600)),
+                            onPressed: () async {
+                              setModalState(() => isProcessing = true);
+                              try {
+                                final supabase = ref.read(supabaseClientProvider);
+                                await supabase.from('customers').update({
+                                  'deleted_at': DateTime.now().toIso8601String(),
+                                  'updated_at': DateTime.now().toIso8601String(),
+                                }).eq('id', customer.id);
+
+                                ref.invalidate(customerDetailProvider(customer.id));
+                                ref.read(customersNotifierProvider.notifier).load(refresh: true);
+
+                                if (modalCtx.mounted) {
+                                  Navigator.pop(modalCtx);
+                                }
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('✓ ${customer.companyName} deactivated and archived.'),
+                                      backgroundColor: Colors.amber.shade800,
+                                    ),
+                                  );
+                                  context.go(AppRoutes.customers);
+                                }
+                              } catch (e) {
+                                setModalState(() => isProcessing = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error deactivating: $e'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Option 2: Permanently Delete
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.delete_forever_outlined, color: Colors.red.shade700, size: 22),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Permanently Delete',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Colors.red.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Permanently deletes this customer record from the database. Warning: This action cannot be undone.',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: Colors.red.shade800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade600,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.delete_forever, size: 16),
+                            label: const Text('Delete Permanently', style: TextStyle(fontWeight: FontWeight.w600)),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: modalCtx,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Confirm Permanent Deletion'),
+                                  content: Text(
+                                    'Are you sure you want to permanently delete "${customer.companyName}"?\n\nIf active deals exist, records might fail or be removed permanently.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Confirm Delete', style: TextStyle(color: Colors.white)),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                setModalState(() => isProcessing = true);
+                                try {
+                                  final supabase = ref.read(supabaseClientProvider);
+                                  await supabase.from('customers').delete().eq('id', customer.id);
+
+                                  ref.invalidate(customerDetailProvider(customer.id));
+                                  ref.read(customersNotifierProvider.notifier).load(refresh: true);
+
+                                  if (modalCtx.mounted) {
+                                    Navigator.pop(modalCtx);
+                                  }
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('✓ ${customer.companyName} permanently deleted.'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                    context.go(AppRoutes.customers);
+                                  }
+                                } catch (e) {
+                                  // In case foreign keys block hard delete, offer deactivation
+                                  setModalState(() => isProcessing = false);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Cannot hard-delete (active records linked). Try "Deactivate" instead. Details: $e'),
+                                        backgroundColor: AppColors.error,
+                                        duration: const Duration(seconds: 5),
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 void _showEditCustomerModal(BuildContext context, WidgetRef ref, Customer customer) {
   showModalBottomSheet(
     context: context,
@@ -1253,6 +1617,63 @@ void _showAssignCustomerSheet(BuildContext context, WidgetRef ref, Customer cust
   );
 }
 
+void _showRequestReassignCustomerDialog(BuildContext context, WidgetRef ref, Customer customer) {
+  final reasonCtrl = TextEditingController();
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Request Customer Reassignment'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Request Admin to reassign "${customer.companyName}" to another salesperson.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: reasonCtrl,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Reason for reassignment *',
+              hintText: 'e.g., Territory change, capacity constraint, client preference...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+          onPressed: () async {
+            if (reasonCtrl.text.trim().isEmpty) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(content: Text('Please provide a reason for reassignment')),
+              );
+              return;
+            }
+            Navigator.pop(ctx);
+            await ref.read(customersNotifierProvider.notifier).requestCustomerTransfer(
+                  customerId: customer.id,
+                  customerName: customer.companyName,
+                  reason: reasonCtrl.text.trim(),
+                );
+            ref.invalidate(customerDetailProvider(customer.id));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Reassignment request submitted to Admin successfully.'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            }
+          },
+          child: const Text('Submit Request', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
 class _AssignCustomerSheet extends ConsumerStatefulWidget {
   final Customer customer;
   const _AssignCustomerSheet({required this.customer});
@@ -1263,6 +1684,7 @@ class _AssignCustomerSheet extends ConsumerStatefulWidget {
 
 class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
   String? _selectedSalesUserId;
+  String _transferDealsMode = 'all';
   bool _isLoading = false;
   bool _fetchingStaff = true;
   List<Map<String, dynamic>> _salesStaff = [];
@@ -1279,25 +1701,43 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, primary_role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
-        final role = (r['primary_role'] as String? ?? '').toLowerCase();
+        final role = (r['role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List)
             ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
             : [];
-        // Sales-only filtering (Task 3.3): exclude admin, manager, coordinator, technician
-        final isSales = role == 'sales' || role == 'sales_head' || role == 'saleshead' ||
-            rolesList.contains('sales') || rolesList.contains('sales_head');
-        final isExcluded = role == 'admin' || role == 'manager' || role == 'technician' || role == 'coordinator' ||
-            rolesList.contains('admin') || rolesList.contains('manager');
-        if (isSales && !isExcluded) {
-          list.add(r as Map<String, dynamic>);
-        }
+        final name = (r['full_name'] as String? ?? '').toLowerCase();
+        final email = (r['email'] as String? ?? '').toLowerCase();
+
+        // 1. Exclude Admin, Managers, and Sales Heads (supervisors who have company-wide access)
+        final isSupervisorOrAdmin = role == 'admin' ||
+            role == 'administrator' ||
+            role == 'manager' ||
+            role == 'sales_head' ||
+            role == 'saleshead' ||
+            rolesList.contains('admin') ||
+            rolesList.contains('administrator') ||
+            rolesList.contains('manager') ||
+            rolesList.contains('sales_head') ||
+            rolesList.contains('saleshead') ||
+            name.contains('admin') ||
+            email.contains('admin');
+        if (isSupervisorOrAdmin) continue;
+
+        // 2. MUST be Sales Executive only (no other department roles)
+        final isSalesExecutive = role == 'sales' ||
+            role == 'sales_executive' ||
+            rolesList.contains('sales') ||
+            rolesList.contains('sales_executive');
+        if (!isSalesExecutive) continue;
+
+        list.add(r as Map<String, dynamic>);
       }
 
       final finalList = list;
@@ -1330,15 +1770,17 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
             customerId: widget.customer.id,
             salesUserId: _selectedSalesUserId!,
             salesUserName: staffName,
+            transferDealsMode: _transferDealsMode,
           );
 
       ref.invalidate(customerDetailProvider(widget.customer.id));
+      ref.invalidate(pipelinesNotifierProvider);
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Salesperson assigned to customer successfully.'),
+            content: Text('✅ Salesperson assigned and deals transferred successfully.'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -1401,7 +1843,7 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Assign Salesperson',
+                      'Assign Salesperson & Deals',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 16,
@@ -1469,8 +1911,7 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                   value: _selectedSalesUserId,
                   hint: const Text('Choose sales staff member'),
                   items: _salesStaff.map((staff) {
-                    final name = staff['full_name'] as String? ?? staff['email'] as String? ?? 'Staff';
-                    final role = staff['primary_role'] as String? ?? 'sales';
+                    final name = staff['full_name'] as String? ?? staff['email'] as String? ?? 'Sales Executive';
                     return DropdownMenuItem<String>(
                       value: staff['id'] as String,
                       child: Row(
@@ -1493,9 +1934,9 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                               color: AppColors.primary.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: Text(
-                              role.replaceAll('_', ' ').toUpperCase(),
-                              style: const TextStyle(
+                            child: const Text(
+                              'SALES EXECUTIVE',
+                              style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary,
@@ -1510,6 +1951,60 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                     if (val != null) setState(() => _selectedSalesUserId = val);
                   },
                 ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Transfer Customer Deals:',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(10),
+                color: AppColors.surface,
+              ),
+              child: Column(
+                children: [
+                  RadioListTile<String>(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    title: const Text('All Deals (Active + Completed)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Assign all past and active pipeline deals to this salesperson', style: TextStyle(fontSize: 11)),
+                    value: 'all',
+                    groupValue: _transferDealsMode,
+                    activeColor: AppColors.primary,
+                    onChanged: (val) => setState(() => _transferDealsMode = val!),
+                  ),
+                  const Divider(height: 1),
+                  RadioListTile<String>(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    title: const Text('Active Deals Only', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Transfer only in-progress deals; completed deals stay intact', style: TextStyle(fontSize: 11)),
+                    value: 'active_only',
+                    groupValue: _transferDealsMode,
+                    activeColor: AppColors.primary,
+                    onChanged: (val) => setState(() => _transferDealsMode = val!),
+                  ),
+                  const Divider(height: 1),
+                  RadioListTile<String>(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    title: const Text('Customer Only', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Assign account representative without transferring existing deals', style: TextStyle(fontSize: 11)),
+                    value: 'none',
+                    groupValue: _transferDealsMode,
+                    activeColor: AppColors.primary,
+                    onChanged: (val) => setState(() => _transferDealsMode = val!),
+                  ),
+                ],
               ),
             ),
           ],

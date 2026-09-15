@@ -51,7 +51,7 @@ class PurchaseQueueScreen extends ConsumerWidget {
               backgroundColor: const Color(0xFF1E1B4B),
               clipBehavior: Clip.antiAlias,
               title: const Text(
-                'Material Acquisition Queue',
+                'Material Requisition Queue',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   color: Colors.white,
@@ -270,7 +270,7 @@ class PurchaseQueueScreen extends ConsumerWidget {
                           ),
                           SizedBox(height: 8),
                           Text(
-                            'All material acquisitions have been completed.',
+                            'All material requisitions have been completed.',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               color: AppColors.textSecondary,

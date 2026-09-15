@@ -18,6 +18,8 @@ class Customer {
   final String? assignedToName;
   final String? convertedBy;
   final String? convertedByName;
+  final bool reassignmentRequested;
+  final String? reassignmentReason;
 
   // Optional: loaded with pipelines for detail view
   final List<SalesPipelineSummary>? pipelines;
@@ -40,6 +42,8 @@ class Customer {
     this.assignedToName,
     this.convertedBy,
     this.convertedByName,
+    this.reassignmentRequested = false,
+    this.reassignmentReason,
     this.pipelines,
   });
 
@@ -55,6 +59,16 @@ class Customer {
         : ((json['company_name'] as String?)?.isNotEmpty == true
             ? json['company_name'] as String
             : (json['contact_person'] as String? ?? 'Valued Customer'));
+
+    final rawNotes = json['notes'] as String? ?? '';
+    String? reason = json['reassignment_reason'] as String?;
+    bool req = json['reassignment_requested'] == true;
+    if (reason == null && rawNotes.contains('[REASSIGNMENT_REQUEST:')) {
+      req = true;
+      final start = rawNotes.indexOf('[REASSIGNMENT_REQUEST:') + '[REASSIGNMENT_REQUEST:'.length;
+      final end = rawNotes.indexOf(']', start);
+      reason = end > start ? rawNotes.substring(start, end).trim() : rawNotes.substring(start).trim();
+    }
 
     return Customer(
       id: json['id'] as String? ?? '',
@@ -84,6 +98,8 @@ class Customer {
       assignedToName: json['assigned_to_name'] as String?,
       convertedBy: json['converted_by'] as String?,
       convertedByName: json['converted_by_name'] as String?,
+      reassignmentRequested: req,
+      reassignmentReason: reason,
       pipelines: pipelines,
     );
   }
@@ -104,6 +120,8 @@ class Customer {
     if (assignedToName != null) 'assigned_to_name': assignedToName,
     if (convertedBy != null) 'converted_by': convertedBy,
     if (convertedByName != null) 'converted_by_name': convertedByName,
+    'reassignment_requested': reassignmentRequested,
+    if (reassignmentReason != null) 'reassignment_reason': reassignmentReason,
   };
 
   Customer copyWith({
@@ -119,6 +137,8 @@ class Customer {
     String? assignedToName,
     String? convertedBy,
     String? convertedByName,
+    bool? reassignmentRequested,
+    String? reassignmentReason,
     List<SalesPipelineSummary>? pipelines,
   }) {
     return Customer(
@@ -139,6 +159,8 @@ class Customer {
       assignedToName: assignedToName ?? this.assignedToName,
       convertedBy: convertedBy ?? this.convertedBy,
       convertedByName: convertedByName ?? this.convertedByName,
+      reassignmentRequested: reassignmentRequested ?? this.reassignmentRequested,
+      reassignmentReason: reassignmentReason ?? this.reassignmentReason,
       pipelines: pipelines ?? this.pipelines,
     );
   }
@@ -241,7 +263,7 @@ enum PipelineStep {
       case PipelineStep.factoryOrder:
         return 'Factory Order';
       case PipelineStep.purchaseOrder:
-        return 'Material Acquisition';
+        return 'Material Requisition';
       case PipelineStep.completed:
         return 'Completed';
     }

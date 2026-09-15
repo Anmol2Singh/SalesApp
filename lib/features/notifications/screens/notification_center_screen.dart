@@ -19,6 +19,10 @@ class NotificationCenterScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => context.go(AppRoutes.adminDashboard),
+        ),
         backgroundColor: AppColors.primary,
         title: const Text('Notifications'),
         actions: [

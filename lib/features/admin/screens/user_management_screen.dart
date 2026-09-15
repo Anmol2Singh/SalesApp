@@ -257,8 +257,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   DropdownButtonFormField<UserRole>(
                     initialValue: selectedRole,
                     decoration: const InputDecoration(labelText: 'Role'),
-                    items: UserRole.values
-                        .where((r) => r != UserRole.customer && r != UserRole.manager)
+                    items: (UserRole.values
+                            .where((r) => r != UserRole.customer && r != UserRole.manager && r != UserRole.technician)
+                            .toList()
+                          ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase())))
                         .map((r) => DropdownMenuItem(
                               value: r,
                               child: Text(r.displayName),
@@ -378,8 +380,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                 DropdownButtonFormField<UserRole>(
                   initialValue: selectedRole,
                   decoration: const InputDecoration(labelText: 'Role'),
-                  items: UserRole.values
-                      .where((r) => r != UserRole.customer && r != UserRole.manager && r != UserRole.technician)
+                  items: (UserRole.values
+                          .where((r) => r != UserRole.customer && r != UserRole.manager && r != UserRole.technician)
+                          .toList()
+                        ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase())))
                       .map((r) => DropdownMenuItem(
                             value: r,
                             child: Text(r.displayName),

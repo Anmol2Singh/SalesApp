@@ -40,6 +40,19 @@ class AppShell extends ConsumerWidget {
           context.pop();
           return;
         }
+
+        // For Customers, Deals, Alerts, and Admin: on back button move to main Admin Dashboard
+        if (currentRoute == AppRoutes.customers ||
+            currentRoute == AppRoutes.pipelines ||
+            currentRoute == AppRoutes.notifications ||
+            currentRoute == AppRoutes.userManagement ||
+            currentRoute.startsWith('/customers') ||
+            currentRoute.startsWith('/pipelines') ||
+            currentRoute.startsWith('/notifications') ||
+            (currentRoute.startsWith('/admin') && currentRoute != AppRoutes.adminDashboard)) {
+          context.go(AppRoutes.adminDashboard);
+          return;
+        }
         
         final shouldExit = await showDialog<bool>(
           context: context,
@@ -342,12 +355,13 @@ class AppShell extends ConsumerWidget {
           addItem(const _NavItem(route: AppRoutes.userManagement, label: 'Admin', icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings)));
           if (isWide) {
             addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
-            addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+            addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints Dashboard', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
             addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
             addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
             addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
             addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
             addItem(const _NavItem(route: AppRoutes.inventory, label: 'Inventory', icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2)));
+            addItem(const _NavItem(route: AppRoutes.searchPdf, label: 'Search PDF', icon: Icon(Icons.picture_as_pdf_outlined), selectedIcon: Icon(Icons.picture_as_pdf)));
           }
           break;
         case UserRole.sales:
@@ -357,6 +371,9 @@ class AppShell extends ConsumerWidget {
           addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
           addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
           addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+          if (isWide) {
+            addItem(const _NavItem(route: AppRoutes.searchPdf, label: 'Search PDF', icon: Icon(Icons.picture_as_pdf_outlined), selectedIcon: Icon(Icons.picture_as_pdf)));
+          }
           break;
         case UserRole.crmStaff:
           addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));

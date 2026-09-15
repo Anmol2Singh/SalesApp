@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
@@ -10,7 +12,10 @@ import 'package:salesapp/features/customer_app/shared/widgets/status_chip.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart';
 import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
 import 'package:salesapp/features/complaints/data/models/complaint_part_order.dart';
+import 'package:salesapp/features/complaints/data/models/complaint_model.dart';
 import 'package:salesapp/features/complaints/providers/part_orders_provider.dart';
+import 'package:salesapp/features/complaints/services/complaint_pdf_service.dart';
+import 'package:salesapp/core/widgets/pdf_preview_screen.dart';
 
 class BookingsListScreen extends ConsumerWidget {
   const BookingsListScreen({super.key});
@@ -43,11 +48,15 @@ class BookingsListScreen extends ConsumerWidget {
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openBookingFlow(context),
         backgroundColor: AppColors.primary,
         elevation: 6,
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
+        icon: const Icon(Icons.add, color: Colors.white, size: 22),
+        label: const Text(
+          'Book Complaint',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
       body: RefreshIndicator(
         color: AppColors.accent,
@@ -78,7 +87,7 @@ class BookingsListScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Tap + to register a complaint',
+                            'Tap + Book Complaint to register a service request',
                             style: TextStyle(color: subtitleColor),
                           ),
                         ],
@@ -88,12 +97,16 @@ class BookingsListScreen extends ConsumerWidget {
                 );
               }
 
-              final upcoming = requests
-                  .where((r) => r.status != 'completed' && r.status != 'cancelled')
-                  .toList();
-              final past = requests
-                  .where((r) => r.status == 'completed' || r.status == 'cancelled')
-                  .toList();
+              // Closed / resolved complaints move to Service History
+              final upcoming = requests.where((r) {
+                final s = r.status.toLowerCase();
+                return s != 'completed' && s != 'cancelled' && s != 'closed' && s != 'resolved';
+              }).toList();
+
+              final past = requests.where((r) {
+                final s = r.status.toLowerCase();
+                return s == 'completed' || s == 'cancelled' || s == 'closed' || s == 'resolved';
+              }).toList();
 
               return DefaultTabController(
                 length: 2,
@@ -112,9 +125,9 @@ class BookingsListScreen extends ConsumerWidget {
                         indicatorColor: isDark ? AppColors.accent : AppColors.primary,
                         labelColor: isDark ? AppColors.accent : AppColors.primary,
                         unselectedLabelColor: subtitleColor,
-                        tabs: const [
-                          Tab(text: 'Upcoming Visits'),
-                          Tab(text: 'Service History'),
+                        tabs: [
+                          Tab(text: 'Active Visits (${upcoming.length})'),
+                          Tab(text: 'Service History (${past.length})'),
                         ],
                       ),
                     ),
@@ -155,7 +168,7 @@ class BookingsListScreen extends ConsumerWidget {
         child: Text(
           isUpcoming
               ? 'No active service appointments.'
-              : 'No completed service requests.',
+              : 'No completed service requests in history.',
           style: TextStyle(color: subtitleColor),
         ),
       );
@@ -167,6 +180,8 @@ class BookingsListScreen extends ConsumerWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final req = list[index];
+        final isClosed = !isUpcoming;
+
         IconData icon = Icons.handyman_outlined;
         Color color = AppColors.accent;
 
@@ -178,246 +193,617 @@ class BookingsListScreen extends ConsumerWidget {
           color = AppColors.warning;
         }
 
-        return GlassCard(
-          padding: const EdgeInsets.all(16),
-          borderRadius: 18,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(icon, color: color, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        req.issueCategory,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  StatusChip(
-                    label: req.status,
-                    status: _getStatusType(req.status),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    req.problemCode,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: subtitleColor,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                  if (req.registeredBy != null && req.registeredBy!.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
-                      ),
+        return InkWell(
+          onTap: () => _showComplaintDetailSheet(context, ref, req),
+          borderRadius: BorderRadius.circular(18),
+          child: GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.person_pin_outlined, size: 12, color: Color(0xFF6366F1)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Registered by ${req.registeredBy}',
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF6366F1),
+                          Icon(icon, color: color, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              req.productId.isNotEmpty ? req.productId : req.issueCategory,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: textColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today_outlined, size: 14, color: subtitleColor),
-                      const SizedBox(width: 6),
-                      Text(
-                        DateFormat('dd MMM yyyy').format(req.scheduledDate),
-                        style: TextStyle(fontSize: 13, color: textColor),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Icon(Icons.access_time, size: 14, color: subtitleColor),
-                      const SizedBox(width: 6),
-                      Text(
-                        req.timeSlot,
-                        style: TextStyle(fontSize: 13, color: textColor),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Divider(
-                color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-                height: 24,
-              ),
-              Row(
-                children: [
-                  Icon(Icons.location_on_outlined, size: 14, color: subtitleColor),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      (req.customerAddress['street'] != null && req.customerAddress['street'].toString().isNotEmpty)
-                          ? req.customerAddress['street'].toString()
-                          : ((req.customerAddress['flat'] != null && req.customerAddress['flat'].toString().isNotEmpty)
-                              ? '${req.customerAddress['flat']}, ${req.customerAddress['street'] ?? ""}'
-                              : (req.customerAddress['address'] ?? 'Installation Site')),
-                      style: TextStyle(fontSize: 12, color: subtitleColor),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Technician contact actions
-              if (isUpcoming && req.technicianId != null && req.technicianId!.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Divider(color: isDark ? AppColors.borderColor : AppColors.borderColorLight, height: 1),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundImage: NetworkImage(
-                        'https://api.dicebear.com/7.x/avataaars/svg?seed=${req.technicianId}',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Assigned Technician', style: TextStyle(fontSize: 10, color: subtitleColor)),
-                          Text(
-                            (req.technicianName != null && req.technicianName!.isNotEmpty)
-                                ? req.technicianName!
-                                : 'Assigned Technician',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(width: 8),
+                    StatusChip(
+                      label: req.status.toUpperCase(),
+                      status: _getStatusType(req.status),
                     ),
                   ],
                 ),
-              ] else if (isUpcoming && req.status != 'cancelled') ...[
-                const SizedBox(height: 12),
-                Divider(color: isDark ? AppColors.borderColor : AppColors.borderColorLight, height: 1),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+
+                // Problem Code and Registered By Chip (Flexible with NO OVERFLOW)
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.schedule, color: AppColors.warning, size: 16),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
+                    Flexible(
                       child: Text(
-                        'Technician will be allotted shortly',
+                        req.problemCode,
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
+                          color: subtitleColor,
+                          fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
-                          color: textColor,
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-
-              // Customer Defected Parts & Payment Card
-              _buildCustomerPartOrdersCard(context, ref, req, isDark, textColor, subtitleColor),
-
-              if (isUpcoming && req.status != 'cancelled' && (req.technicianId == null || req.technicianId!.isEmpty)) ...[
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => _cancelBooking(context, ref, req),
-                      child: const Text(
-                        'Cancel Visit',
-                        style: TextStyle(color: AppColors.danger, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark ? AppColors.bgPrimary : Colors.grey.shade100,
-                        side: BorderSide(
-                          color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    if (req.registeredBy != null && req.registeredBy!.isNotEmpty)
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.person_pin_outlined, size: 12, color: Color(0xFF6366F1)),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  req.registeredBy == 'Customer App' ? 'Self Registered' : 'Company Staff Registered',
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF6366F1),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      onPressed: () {
-                        ToastService.show(
-                          context,
-                          'Visit rescheduled successfully!',
-                          type: ToastType.success,
-                        );
-                      },
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Scheduled Date & Time
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today_outlined, size: 14, color: subtitleColor),
+                        const SizedBox(width: 6),
+                        Text(
+                          DateFormat('dd MMM yyyy').format(req.scheduledDate),
+                          style: TextStyle(fontSize: 13, color: textColor),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: subtitleColor),
+                        const SizedBox(width: 6),
+                        Text(
+                          req.timeSlot,
+                          style: TextStyle(fontSize: 13, color: textColor),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Divider(
+                  color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
+                  height: 24,
+                ),
+
+                // Address Row
+                Row(
+                  children: [
+                    Icon(Icons.location_on_outlined, size: 14, color: subtitleColor),
+                    const SizedBox(width: 6),
+                    Expanded(
                       child: Text(
-                        'Reschedule',
-                        style: TextStyle(color: textColor, fontSize: 13),
+                        (req.customerAddress['street'] != null && req.customerAddress['street'].toString().isNotEmpty)
+                            ? req.customerAddress['street'].toString()
+                            : ((req.customerAddress['flat'] != null && req.customerAddress['flat'].toString().isNotEmpty)
+                                ? '${req.customerAddress['flat']}, ${req.customerAddress['street'] ?? ""}'
+                                : (req.customerAddress['address'] ?? 'Installation Site')),
+                        style: TextStyle(fontSize: 12, color: subtitleColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
+
+                // Technician contact actions
+                if (req.technicianName != null && req.technicianName!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Divider(color: isDark ? AppColors.borderColor : AppColors.borderColorLight, height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppColors.primary.withOpacity(0.15),
+                        child: const Icon(Icons.person, size: 18, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Technician', style: TextStyle(fontSize: 10, color: subtitleColor)),
+                            Text(
+                              req.technicianName!,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (req.technicianPhone != null && req.technicianPhone!.isNotEmpty)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          icon: const Icon(Icons.phone, size: 14),
+                          label: const Text('Call', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          onPressed: () => _launchCaller(req.technicianPhone!),
+                        ),
+                    ],
+                  ),
+                ] else if (isUpcoming && req.status != 'cancelled') ...[
+                  const SizedBox(height: 12),
+                  Divider(color: isDark ? AppColors.borderColor : AppColors.borderColorLight, height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.schedule, color: AppColors.warning, size: 16),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Technician will be allotted shortly',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                // If closed/completed: prominent completion report button
+                if (isClosed) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF6D28D9),
+                        side: const BorderSide(color: Color(0xFF6D28D9), width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                      label: const Text(
+                        'View Completion Report PDF',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      onPressed: () => _viewCompletionReportPdf(context, req),
+                    ),
+                  ),
+                ],
+
+                // Customer Defected Parts & Payment Card
+                _buildCustomerPartOrdersCard(context, ref, req, isDark, textColor, subtitleColor),
               ],
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  void _cancelBooking(
-    BuildContext context,
-    WidgetRef ref,
-    ServiceRequest req,
-  ) async {
-    ToastService.show(
-      context,
-      'Booking cancelled successfully.',
-      type: ToastType.success,
+  void _launchCaller(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri.parse('tel:$clean');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Future<void> _viewCompletionReportPdf(BuildContext context, ServiceRequest req) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
+
+    try {
+      final res = await Supabase.instance.client
+          .from('complaints')
+          .select()
+          .eq('id', req.requestId)
+          .maybeSingle();
+
+      if (context.mounted) Navigator.pop(context);
+
+      Complaint complaint;
+      if (res != null) {
+        complaint = Complaint.fromJson(res);
+      } else {
+        complaint = Complaint(
+          id: req.requestId,
+          ticketNumber: req.problemCode,
+          customerId: req.customerId,
+          customerName: 'Customer',
+          customerPhone: '',
+          customerAddress: req.customerAddress['street']?.toString() ?? 'Site Address',
+          productName: req.productId,
+          hasActiveAmc: req.amcStatus.contains('Active'),
+          priority: 'Standard',
+          title: req.issueCategory,
+          description: req.issueDescription,
+          status: req.status,
+          tatRemaining: '0h',
+          technicianName: req.technicianName,
+          createdAt: req.createdAt,
+        );
+      }
+
+      final pdfBytes = await ComplaintPdfService.generateCompletionReportPdf(complaint);
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: 'CompletionReport_${complaint.ticketNumber.replaceAll("/", "_")}.pdf',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ToastService.show(context, 'Failed to generate PDF: $e', type: ToastType.error);
+      }
+    }
+  }
+
+  void _showComplaintDetailSheet(BuildContext context, WidgetRef ref, ServiceRequest req) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final isClosed = req.status == 'completed' || req.status == 'closed' || req.status == 'resolved' || req.status == 'cancelled';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade400,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              req.problemCode,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Booked on ${DateFormat('dd MMM yyyy, hh:mm a').format(req.createdAt)}',
+                              style: TextStyle(fontSize: 12, color: subtitleColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                      StatusChip(label: req.status.toUpperCase(), status: _getStatusType(req.status)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Divider(color: isDark ? AppColors.borderColor : AppColors.borderColorLight),
+                  const SizedBox(height: 12),
+
+                  // Equipment & Error details
+                  _detailSection(
+                    title: 'PRODUCT & ISSUE DETAILS',
+                    children: [
+                      _detailRow('Product Name', req.productId, textColor, subtitleColor),
+                      _detailRow('Issue Category', req.issueCategory, textColor, subtitleColor),
+                      _detailRow('AMC / Warranty', req.amcStatus, textColor, subtitleColor),
+                      _detailRow('Scheduled Slot', '${DateFormat('dd MMM yyyy').format(req.scheduledDate)} • ${req.timeSlot}', textColor, subtitleColor),
+                      const SizedBox(height: 8),
+                      Text('Issue Description:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: subtitleColor)),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          req.issueDescription.isNotEmpty ? req.issueDescription : 'No description provided.',
+                          style: TextStyle(fontSize: 13, color: textColor),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Photos Section
+                  if (req.photoUrls.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text('ATTACHED PHOTOS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: subtitleColor, letterSpacing: 0.5)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: req.photoUrls.length,
+                        itemBuilder: (context, idx) {
+                          final pUrl = req.photoUrls[idx];
+                          return GestureDetector(
+                            onTap: () => _zoomImage(context, pUrl),
+                            child: Container(
+                              width: 100,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: CachedNetworkImage(
+                                  imageUrl: pUrl,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                  errorWidget: (_, __, ___) => const Icon(Icons.broken_image, size: 32),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+
+                  // Technician Section
+                  const SizedBox(height: 18),
+                  Text('ASSIGNED TECHNICIAN', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: subtitleColor, letterSpacing: 0.5)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: isDark ? AppColors.borderColor : AppColors.borderColorLight),
+                    ),
+                    child: req.technicianName != null && req.technicianName!.isNotEmpty
+                        ? Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: AppColors.primary.withOpacity(0.2),
+                                child: const Icon(Icons.engineering, color: AppColors.primary),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      req.technicianName!,
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                                    ),
+                                    Text(
+                                      (req.technicianPhone != null && req.technicianPhone!.isNotEmpty)
+                                          ? req.technicianPhone!
+                                          : 'Field Engineer',
+                                      style: TextStyle(fontSize: 12, color: subtitleColor),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (req.technicianPhone != null && req.technicianPhone!.isNotEmpty)
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF10B981),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: const Icon(Icons.phone, size: 16),
+                                  label: const Text('Call'),
+                                  onPressed: () => _launchCaller(req.technicianPhone!),
+                                ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              const Icon(Icons.schedule, color: AppColors.warning, size: 20),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Technician will be assigned by company coordinator shortly.',
+                                style: TextStyle(fontSize: 12, color: subtitleColor),
+                              ),
+                            ],
+                          ),
+                  ),
+
+                  // Service Completion Report button
+                  if (isClosed) ...[
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D28D9),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        label: const Text(
+                          'Download Service Completion Report PDF',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _viewCompletionReportPdf(context, req);
+                        },
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 30),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _zoomImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black.withOpacity(0.9),
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailSection({required String title, required List<Widget> children}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary, letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        ...children,
+      ],
+    );
+  }
+
+  Widget _detailRow(String label, String value, Color textColor, Color subtitleColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12.5, color: subtitleColor)),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textColor),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   String _getStatusType(String status) {
     switch (status.toLowerCase()) {
       case 'completed':
+      case 'closed':
+      case 'resolved':
         return 'success';
       case 'in_progress':
+      case 'assigned':
       case 'confirmed':
         return 'warning';
       case 'cancelled':

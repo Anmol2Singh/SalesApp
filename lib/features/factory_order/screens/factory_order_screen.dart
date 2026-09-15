@@ -16,6 +16,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
+import '../../../core/router/app_router.dart';
 
 class FactoryOrderScreen extends ConsumerStatefulWidget {
   final String pipelineId;
@@ -227,9 +228,9 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
         for (final u in (purchaseUsers as List<dynamic>)) {
           await supabase.from('notifications').insert({
             'user_id': (u as Map)['id'],
-            'title': 'New Material Acquisition Assigned',
+            'title': 'New Material Requisition Assigned',
             'body':
-                'Factory order completed. Material Acquisition step is now available.',
+                'Factory order completed. Material Requisition step is now available.',
             'type': 'step_unlocked',
             'related_pipeline_id': widget.pipelineId,
           });
@@ -259,13 +260,13 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
           SnackBar(
             content: Text(
               status == FactoryOrderStatus.completed
-                  ? '✓ Factory Order completed! Material Acquisition step unlocked.'
+                  ? '✓ Factory Order completed! Material Requisition step unlocked.'
                   : '✓ Factory Order updated.',
             ),
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId));
       }
     } catch (e) {
       if (mounted) {
@@ -1007,7 +1008,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                         ? 'Saving...'
                         : (isCompleted
                             ? 'Save Changes & Print'
-                            : 'Mark as Complete & Unlock Material Acquisition')),
+                            : 'Mark as Complete & Unlock Material Requisition')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
@@ -1040,7 +1041,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
-                        'Factory order completed. Material Acquisition step is unlocked.',
+                        'Factory order completed. Material Requisition step is unlocked.',
                         style: TextStyle(
                             fontFamily: 'Inter',
                             color: AppColors.success,

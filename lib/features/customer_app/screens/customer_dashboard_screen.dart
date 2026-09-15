@@ -55,6 +55,7 @@ final customerPurchasedProductsProvider = FutureProvider<List<Map<String, dynami
       .from('sales_pipelines')
       .select('*, products(*), boqs(*), amc_contracts(*)')
       .eq('customer_id', customerId)
+      .or('status.eq.completed,current_step.eq.completed')
       .order('created_at', ascending: false);
 
   return List<Map<String, dynamic>>.from(response as List);

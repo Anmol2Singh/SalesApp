@@ -16,7 +16,7 @@ class GlassCard extends StatelessWidget {
     required this.child,
     this.padding,
     this.borderRadius = 16.0,
-    this.blur = 15.0,
+    this.blur = 0.0,
     this.border,
     this.color,
     this.shadow,
@@ -25,30 +25,40 @@ class GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final cardContent = Container(
+      padding: padding ?? const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: color ?? (isDark ? const Color(0xFF1E293B) : Colors.white),
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: border ?? Border.all(
+          color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
+          width: 1.0,
+        ),
+        boxShadow: shadow ?? [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: child,
+    );
+
+    if (blur > 0) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: cardContent,
+        ),
+      );
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding ?? const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            color: color ?? (isDark ? AppColors.bgGlass : AppColors.bgGlassLight),
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: border ?? Border.all(
-              color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-              width: 1.5,
-            ),
-            boxShadow: shadow ?? [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
-                blurRadius: 10,
-                spreadRadius: 2,
-              )
-            ],
-          ),
-          child: child,
-        ),
-      ),
+      child: cardContent,
     );
   }
 }

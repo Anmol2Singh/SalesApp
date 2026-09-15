@@ -24,9 +24,33 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   final SupabaseClient _supabase;
   final String? _userId;
   final bool _isAdmin;
+  RealtimeChannel? _realtimeChannel;
 
   ProspectsNotifier(this._supabase, this._userId, this._isAdmin) : super(const AsyncValue.loading()) {
     load();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    try {
+      _realtimeChannel = _supabase
+          .channel('crm_prospects_realtime_${DateTime.now().millisecondsSinceEpoch}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'crm_prospects',
+            callback: (payload) {
+              load();
+            },
+          )
+          .subscribe();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> load({bool refresh = false}) async {
@@ -54,12 +78,22 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         try {
           final profiles = await _supabase
               .from('profiles')
-              .select('id, full_name, primary_role, roles')
+              .select('id, full_name, role, roles')
               .inFilter('id', userIds.toList());
           for (final p in (profiles as List)) {
-            profileMap[p['id'] as String] = p as Map<String, dynamic>;
+            profileMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
           }
-        } catch (_) {}
+        } catch (_) {
+          try {
+            final profiles = await _supabase
+                .from('profiles')
+                .select('id, full_name')
+                .inFilter('id', userIds.toList());
+            for (final p in (profiles as List)) {
+              profileMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
+            }
+          } catch (_) {}
+        }
       }
 
       final prospects = rawList.map((json) {
@@ -71,7 +105,10 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         return Prospect.fromJson({
           ...json,
           'creator': creatorProf,
+          'creator_name': creatorProf?['full_name'],
+          'creator_role': creatorProf?['role'],
           'assignee': assigneeProf,
+          'assignee_name': assigneeProf?['full_name'],
         });
       }).toList();
 
@@ -82,16 +119,25 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   }
 
   Future<void> assignProspect({required String prospectId, required String salesUserId}) async {
-    await _supabase.from('crm_prospects').update({
-      'assigned_to': salesUserId,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', prospectId);
+    try {
+      await _supabase.from('crm_prospects').update({
+        'assigned_to': salesUserId,
+        'reassignment_requested': false,
+        'reassignment_reason': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', prospectId);
+    } catch (_) {
+      await _supabase.from('crm_prospects').update({
+        'assigned_to': salesUserId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', prospectId);
+    }
 
     try {
       await _supabase.from('notifications').insert({
         'user_id': salesUserId,
-        'title': 'New Prospect Assigned by Admin 🎯',
-        'body': 'Admin has assigned a new prospect to you. Check CRM to follow up.',
+        'title': 'New Prospect Assigned 🎯',
+        'body': 'A prospect has been assigned to you. Check CRM to follow up.',
         'type': 'prospect_assigned',
         'created_at': DateTime.now().toIso8601String(),
       });
@@ -100,19 +146,54 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     await load();
   }
 
-  Future<void> requestTransfer({required String prospectId, String? reason}) async {
+  Future<void> requestTransfer({
+    required String prospectId,
+    String? reason,
+    String? prospectName,
+  }) async {
+    final note = reason ?? 'Requested by salesperson';
+
+    // 1. Update prospect record
     try {
-      final admins = await _supabase.from('profiles').select('id').eq('primary_role', 'admin');
-      for (final a in (admins as List? ?? [])) {
+      await _supabase.from('crm_prospects').update({
+        'reassignment_requested': true,
+        'reassignment_reason': note,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', prospectId);
+    } catch (_) {
+      try {
+        final current = await _supabase.from('crm_prospects').select('notes').eq('id', prospectId).maybeSingle();
+        final existingNotes = current?['notes'] as String? ?? '';
+        final newNotes = '$existingNotes\n[REASSIGNMENT_REQUEST: $note]'.trim();
+        await _supabase.from('crm_prospects').update({'notes': newNotes}).eq('id', prospectId);
+      } catch (_) {}
+    }
+
+    // 2. Notify Admins
+    try {
+      final staffResponse = await _supabase.from('profiles').select('id, role, roles');
+      final adminIds = <String>{};
+      for (final s in (staffResponse as List? ?? [])) {
+        final role = (s['role'] as String? ?? '').toLowerCase();
+        final rolesList = (s['roles'] is List) ? (s['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
+        if (role == 'admin' || role == 'manager' || role == 'sales_head' ||
+            rolesList.contains('admin') || rolesList.contains('manager') || rolesList.contains('sales_head')) {
+          if (s['id'] != null) adminIds.add(s['id'] as String);
+        }
+      }
+
+      for (final aid in adminIds) {
         await _supabase.from('notifications').insert({
-          'user_id': a['id'],
-          'title': 'Prospect Transfer Requested 🔄',
-          'body': 'A salesperson has requested reassignment of a prospect. ${reason != null ? "Note: $reason" : ""}',
+          'user_id': aid,
+          'title': 'Prospect Reassignment Requested ⚠️',
+          'body': 'Sales rep requested reassignment for prospect "${prospectName ?? 'Prospect'}". Reason: $note',
           'type': 'prospect_transfer_request',
           'created_at': DateTime.now().toIso8601String(),
         });
       }
     } catch (_) {}
+
+    await load();
   }
 
   Future<Prospect?> addProspect({
@@ -218,6 +299,10 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         converterName = p['full_name'] as String?;
       } catch (_) {}
 
+      // Carry forward assigned salesperson from prospect if present
+      final prospectRecord = state.value?.where((p) => p.id == prospectId).firstOrNull;
+      final assignedSalesperson = prospectRecord?.assignedTo;
+
       final leadData = {
         'prospect_id': prospectId,
         'prospect_name': prospectName,
@@ -229,6 +314,7 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         if (capacity != null && capacity.trim().isNotEmpty) 'capacity': capacity.trim(),
         if (components != null && components.isNotEmpty) 'components': components,
+        if (assignedSalesperson != null) 'assigned_to': assignedSalesperson,
         'converted_by': _userId,
         if (converterName != null) 'converted_by_name': converterName,
         'created_by': _userId,
@@ -273,9 +359,33 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
   final SupabaseClient _supabase;
   final String? _userId;
   final bool _isAdmin;
+  RealtimeChannel? _realtimeChannel;
 
   LeadsNotifier(this._supabase, this._userId, this._isAdmin) : super(const AsyncValue.loading()) {
     load();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    try {
+      _realtimeChannel = _supabase
+          .channel('crm_leads_realtime_${DateTime.now().millisecondsSinceEpoch}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'crm_leads',
+            callback: (payload) {
+              load();
+            },
+          )
+          .subscribe();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> load({bool refresh = false}) async {
@@ -301,12 +411,22 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         try {
           final profs = await _supabase
               .from('profiles')
-              .select('id, full_name, primary_role')
-              .filter('id', 'in', '(${userIds.join(',')})');
+              .select('id, full_name, role, roles')
+              .inFilter('id', userIds.toList());
           for (final p in (profs as List? ?? [])) {
-            profilesMap[p['id']] = p as Map<String, dynamic>;
+            profilesMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
           }
-        } catch (_) {}
+        } catch (_) {
+          try {
+            final profs = await _supabase
+                .from('profiles')
+                .select('id, full_name')
+                .inFilter('id', userIds.toList());
+            for (final p in (profs as List? ?? [])) {
+              profilesMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
+            }
+          } catch (_) {}
+        }
       }
 
       final leads = response.map((json) {
@@ -396,10 +516,19 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
   }
 
   Future<void> assignLead({required String leadId, required String salesUserId}) async {
-    await _supabase.from('crm_leads').update({
-      'assigned_to': salesUserId,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', leadId);
+    try {
+      await _supabase.from('crm_leads').update({
+        'assigned_to': salesUserId,
+        'reassignment_requested': false,
+        'reassignment_reason': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', leadId);
+    } catch (_) {
+      await _supabase.from('crm_leads').update({
+        'assigned_to': salesUserId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', leadId);
+    }
 
     try {
       await _supabase.from('notifications').insert({
@@ -409,6 +538,56 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         'type': 'lead_assigned',
         'created_at': DateTime.now().toIso8601String(),
       });
+    } catch (_) {}
+
+    await load();
+  }
+
+  Future<void> requestTransfer({
+    required String leadId,
+    String? reason,
+    String? leadName,
+  }) async {
+    final note = reason ?? 'Requested by salesperson';
+
+    // 1. Update lead record
+    try {
+      await _supabase.from('crm_leads').update({
+        'reassignment_requested': true,
+        'reassignment_reason': note,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', leadId);
+    } catch (_) {
+      try {
+        final current = await _supabase.from('crm_leads').select('notes').eq('id', leadId).maybeSingle();
+        final existingNotes = current?['notes'] as String? ?? '';
+        final newNotes = '$existingNotes\n[REASSIGNMENT_REQUEST: $note]'.trim();
+        await _supabase.from('crm_leads').update({'notes': newNotes}).eq('id', leadId);
+      } catch (_) {}
+    }
+
+    // 2. Notify Admins
+    try {
+      final staffResponse = await _supabase.from('profiles').select('id, role, roles');
+      final adminIds = <String>{};
+      for (final s in (staffResponse as List? ?? [])) {
+        final role = (s['role'] as String? ?? '').toLowerCase();
+        final rolesList = (s['roles'] is List) ? (s['roles'] as List).map((e) => e.toString().toLowerCase()).toList() : [];
+        if (role == 'admin' || role == 'manager' || role == 'sales_head' ||
+            rolesList.contains('admin') || rolesList.contains('manager') || rolesList.contains('sales_head')) {
+          if (s['id'] != null) adminIds.add(s['id'] as String);
+        }
+      }
+
+      for (final aid in adminIds) {
+        await _supabase.from('notifications').insert({
+          'user_id': aid,
+          'title': 'Lead Reassignment Requested ⚠️',
+          'body': 'Sales rep requested reassignment for lead "${leadName ?? 'Lead'}". Reason: $note',
+          'type': 'lead_transfer_request',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
     } catch (_) {}
 
     await load();

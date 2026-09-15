@@ -5,6 +5,7 @@ class SalesOrderLineItem {
   final String? hsnSac;
   final double qty;
   final double freeQty;
+  final double gstPercent;
   final String uom;
   final double rate;
   final double discPercent;
@@ -14,7 +15,8 @@ class SalesOrderLineItem {
     required this.description,
     this.hsnSac,
     required this.qty,
-    required this.freeQty,
+    this.freeQty = 0,
+    this.gstPercent = 18.0,
     required this.uom,
     required this.rate,
     required this.discPercent,
@@ -27,6 +29,7 @@ class SalesOrderLineItem {
       hsnSac: json['hsn_sac'] as String?,
       qty: (json['qty'] as num? ?? 0).toDouble(),
       freeQty: (json['free_qty'] as num? ?? 0).toDouble(),
+      gstPercent: (json['gst_percent'] as num? ?? json['gst_rate'] as num? ?? 18.0).toDouble(),
       uom: json['uom'] as String? ?? 'nos',
       rate: (json['rate'] as num? ?? 0).toDouble(),
       discPercent: (json['disc_percent'] as num? ?? 0).toDouble(),
@@ -39,6 +42,7 @@ class SalesOrderLineItem {
     'hsn_sac': hsnSac,
     'qty': qty,
     'free_qty': freeQty,
+    'gst_percent': gstPercent,
     'uom': uom,
     'rate': rate,
     'disc_percent': discPercent,
@@ -50,6 +54,7 @@ class SalesOrderLineItem {
     String? hsnSac,
     double? qty,
     double? freeQty,
+    double? gstPercent,
     String? uom,
     double? rate,
     double? discPercent,
@@ -63,6 +68,7 @@ class SalesOrderLineItem {
       hsnSac: hsnSac ?? this.hsnSac,
       qty: newQty,
       freeQty: freeQty ?? this.freeQty,
+      gstPercent: gstPercent ?? this.gstPercent,
       uom: uom ?? this.uom,
       rate: newRate,
       discPercent: newDisc,

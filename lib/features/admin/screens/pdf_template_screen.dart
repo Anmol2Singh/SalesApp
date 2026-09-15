@@ -251,7 +251,7 @@ class _TemplateCardState extends State<_TemplateCard> {
       case 'factory_order':
         return 'Factory Order Template';
       case 'purchase_order':
-        return 'Material Acquisition Template';
+        return 'Material Requisition Template';
       case 'amc_contract':
         return 'AMC Contract Template';
       default:

@@ -1,10 +1,10 @@
-// lib/features/purchase_order/screens/purchase_order_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/models/purchase_order.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
@@ -164,15 +164,15 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isPlaced ? 'Save Changes' : 'Place Material Acquisition'),
+        title: Text(isPlaced ? 'Save Changes' : 'Place Material Requisition'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               isPlaced
-                  ? 'Are you sure you want to save changes to this Material Acquisition?'
-                  : 'This will complete the pipeline and generate the Material Acquisition PDF. Continue?',
+                  ? 'Are you sure you want to save changes to this Material Requisition?'
+                  : 'This will complete the pipeline and generate the Material Requisition PDF. Continue?',
               style: const TextStyle(fontFamily: 'Inter'),
             ),
             const SizedBox(height: 12),
@@ -284,7 +284,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
           'user_id': (salesPipeline as Map)['created_by'],
           'title': 'Deal Completed!',
           'body':
-              'Material Acquisition has been completed. Deal for ${_pipeline?.product?.name ?? 'product'} is now complete.',
+              'Material Requisition has been completed. Deal for ${_pipeline?.product?.name ?? 'product'} is now complete.',
           'type': 'step_unlocked',
           'related_pipeline_id': widget.pipelineId,
         });
@@ -303,11 +303,11 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✓ Material Acquisition completed! Deal completed.'),
+            content: Text('✓ Material Requisition completed! Deal completed.'),
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId));
       }
     } catch (e) {
       if (mounted) {
@@ -420,15 +420,14 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
     }
 
     final isPlaced = _existingPO?.status == PurchaseOrderStatus.ordered;
-    final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
     final enabled = _isEditing;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(isPlaced && !_isEditing
-            ? 'Material Acquisition (Completed)'
-            : 'Material Acquisition'),
+            ? 'Material Requisition (Completed)'
+            : 'Material Requisition'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
@@ -562,7 +561,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
 
             // Notes
             const Text(
-              'Material Acquisition Notes',
+              'Material Requisition Notes',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 15,
@@ -598,7 +597,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                       ? 'Processing...'
                       : (isPlaced
                           ? 'Save Changes & Print'
-                          : 'Complete Material Acquisition & Complete Deal')),
+                          : 'Complete Material Requisition & Complete Deal')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
@@ -619,7 +618,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
-                        '🎉 Material Acquisition completed. This pipeline is complete!',
+                        '🎉 Material Requisition completed. This pipeline is complete!',
                         style: TextStyle(
                             fontFamily: 'Inter',
                             color: AppColors.success,
@@ -659,25 +658,39 @@ class _PoItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Item ${index + 1}',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Item ${index + 1}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -688,6 +701,7 @@ class _PoItemRow extends StatelessWidget {
                       color: AppColors.error, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: 'Remove Item',
                 ),
             ],
           ),
@@ -709,12 +723,14 @@ class _PoItemRow extends StatelessWidget {
                   controller: item['qty'] as TextEditingController,
                   enabled: enabled,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Qty *'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (double.tryParse(v) == null || double.parse(v) <= 0) {
-                      return '> 0';
+                    final val = int.tryParse(v);
+                    if (val == null || val <= 0) {
+                      return 'Must be > 0';
                     }
                     return null;
                   },

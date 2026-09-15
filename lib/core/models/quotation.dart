@@ -5,6 +5,7 @@ class LineItem {
   final String? hsnSac;
   final double qty;
   final double freeQty;
+  final double gstPercent;
   final String uom;
   final double unitPrice; // item_rate
   final double discPercent;
@@ -15,6 +16,7 @@ class LineItem {
     this.hsnSac,
     required this.qty,
     this.freeQty = 0,
+    this.gstPercent = 18.0,
     this.uom = 'NOS',
     required this.unitPrice,
     this.discPercent = 0,
@@ -31,6 +33,7 @@ class LineItem {
       hsnSac: json['hsn_sac'] as String?,
       qty: q,
       freeQty: (json['free_qty'] as num? ?? 0).toDouble(),
+      gstPercent: (json['gst_percent'] as num? ?? json['gst_rate'] as num? ?? 18.0).toDouble(),
       uom: json['uom'] as String? ?? 'NOS',
       unitPrice: rate,
       discPercent: disc,
@@ -43,6 +46,7 @@ class LineItem {
     'hsn_sac': hsnSac,
     'qty': qty,
     'free_qty': freeQty,
+    'gst_percent': gstPercent,
     'uom': uom,
     'unit_price': unitPrice,
     'disc_percent': discPercent,
@@ -54,6 +58,7 @@ class LineItem {
     String? hsnSac,
     double? qty,
     double? freeQty,
+    double? gstPercent,
     String? uom,
     double? unitPrice,
     double? discPercent,
@@ -66,6 +71,7 @@ class LineItem {
       hsnSac: hsnSac ?? this.hsnSac,
       qty: newQty,
       freeQty: freeQty ?? this.freeQty,
+      gstPercent: gstPercent ?? this.gstPercent,
       uom: uom ?? this.uom,
       unitPrice: newPrice,
       discPercent: newDisc,
