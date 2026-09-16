@@ -502,12 +502,43 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
   }
 
   void _showAddDefectedPartsDialog(Complaint complaint) async {
-    final inventoryItems = ref.read(inventoryProvider).valueOrNull ?? [];
+    List<InventoryItem> inventoryItems = ref.read(inventoryProvider).valueOrNull ?? [];
+
     if (inventoryItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inventory catalog is loading or empty.'), backgroundColor: Colors.orange),
-      );
-      return;
+      try {
+        inventoryItems = await ref.read(inventoryProvider.future);
+      } catch (e) {
+        debugPrint('Inventory provider future fetch: $e');
+      }
+    }
+
+    if (inventoryItems.isEmpty) {
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final data = await supabase.from('inventory_items').select().order('item_name');
+        inventoryItems = (data as List).map((json) => InventoryItem.fromJson(json)).toList();
+      } catch (e) {
+        debugPrint('Direct inventory query: $e');
+      }
+    }
+
+    // Comprehensive fallback so order sheet opens in one click even on fresh/empty database
+    if (inventoryItems.isEmpty) {
+      final now = DateTime.now();
+      inventoryItems = [
+        InventoryItem(id: 'cat_comp', itemName: 'Compressor Unit', price: 14500, warrantyMonths: 36, createdAt: now),
+        InventoryItem(id: 'cat_pcb', itemName: 'Main PCB Controller Board', price: 4200, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_fan', itemName: 'Axial Fan Motor & Blades', price: 2800, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_exv', itemName: 'Electronic Expansion Valve', price: 2100, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_elem', itemName: 'Titanium Heating Element', price: 2600, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_sensor', itemName: 'Water & Coil Temp Sensor Probe', price: 850, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_prv', itemName: 'Safety Pressure Relief Valve (PRV)', price: 950, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_pump', itemName: 'Circulation Booster Pump', price: 5400, warrantyMonths: 24, createdAt: now),
+        InventoryItem(id: 'cat_anode', itemName: 'Magnesium Anode Rod', price: 1100, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_switch', itemName: 'High / Low Pressure Switch', price: 1350, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_capacitor', itemName: 'Running Capacitor (50uF/60uF)', price: 750, warrantyMonths: 12, createdAt: now),
+        InventoryItem(id: 'cat_gas', itemName: 'Refrigerant R410A / R134a Gas Can', price: 3200, warrantyMonths: 6, createdAt: now),
+      ];
     }
 
     DateTime purchaseDate = await _getCustomerPurchaseDate(complaint.customerId, complaint.productName);
@@ -748,6 +779,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
     final complaints = ref.watch(complaintsProvider);
     final profile = ref.watch(currentProfileProvider);
     final techniciansAsync = ref.watch(availableTechniciansProvider);
+    ref.watch(inventoryProvider);
 
     final complaint = complaints.firstWhere(
       (c) => c.id == widget.complaintId,
@@ -905,10 +937,10 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                   if (complaint.sealNumberAfter != null && complaint.sealNumberAfter!.isNotEmpty)
                     _detailRow('Seal (After Service)', complaint.sealNumberAfter!),
                   _detailRow('Description', complaint.description.isNotEmpty ? complaint.description : 'No additional notes.'),
-                  if (complaint.beforeImageUrl != null && complaint.beforeImageUrl!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                  const SizedBox(height: 12),
+                  if (complaint.beforeImageUrl != null && complaint.beforeImageUrl!.trim().isNotEmpty) ...[
                     Text(
-                      'Issue Photos (${complaint.beforeImageUrl!.split('|||').length}):',
+                      'Issue Photos (${complaint.beforeImageUrl!.split('|||').where((p) => p.trim().isNotEmpty).length}):',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     const SizedBox(height: 8),
@@ -916,9 +948,9 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                       height: 110,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: complaint.beforeImageUrl!.split('|||').length,
+                        itemCount: complaint.beforeImageUrl!.split('|||').where((p) => p.trim().isNotEmpty).length,
                         itemBuilder: (context, idx) {
-                          final photoStr = complaint.beforeImageUrl!.split('|||')[idx].trim();
+                          final photoStr = complaint.beforeImageUrl!.split('|||').where((p) => p.trim().isNotEmpty).toList()[idx].trim();
                           Widget imgWidget;
                           if (photoStr.startsWith('http')) {
                             imgWidget = _buildImage(photoStr, fit: BoxFit.cover);
@@ -947,6 +979,16 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                           );
                         },
                       ),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'Issue Photos:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'No image uploaded',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontStyle: FontStyle.italic),
                     ),
                   ],
                 ],
@@ -1197,10 +1239,15 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (complaint.beforeImageUrl != null && complaint.beforeImageUrl!.isNotEmpty) ...[
+                    if (complaint.beforeImageUrl != null && complaint.beforeImageUrl!.trim().isNotEmpty) ...[
                       const Text('BEFORE ISSUE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFEF4444))),
                       const SizedBox(height: 4),
                       _buildPhotoList(complaint.beforeImageUrl, complaint: complaint),
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      const Text('BEFORE ISSUE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFEF4444))),
+                      const SizedBox(height: 4),
+                      Text('No image uploaded', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontStyle: FontStyle.italic)),
                       const SizedBox(height: 16),
                     ],
                     if (complaint.afterImageUrl != null && complaint.afterImageUrl!.isNotEmpty) ...[

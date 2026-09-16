@@ -87,7 +87,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => context.go(AppRoutes.adminDashboard),
               ),
-              expandedHeight: 185,
+              expandedHeight: 205,
               pinned: true,
               backgroundColor: const Color(0xFF1E1B4B),
               clipBehavior: Clip.antiAlias,
@@ -160,10 +160,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                     ),
                     // Content
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 68, 20, 12),
+                      padding: const EdgeInsets.fromLTRB(20, 56, 20, 10),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Row(
                             children: [
@@ -568,7 +569,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: accentColor != null ? accentColor.withOpacity(0.18) : Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),

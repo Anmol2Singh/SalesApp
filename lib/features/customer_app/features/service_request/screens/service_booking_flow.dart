@@ -120,9 +120,7 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             ? _errorCodeController.text.trim()
             : 'General Issue',
         issueDescription: _descriptionController.text.trim(),
-        photoUrls: _uploadedPhotos.isNotEmpty
-            ? _uploadedPhotos
-            : ['https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=400'],
+        photoUrls: List<String>.from(_uploadedPhotos),
         scheduledDate: _selectedDate ?? DateTime.now(),
         timeSlot: _selectedTimeSlot ?? '10–12 PM',
         technicianId: 'tech_1',
@@ -326,20 +324,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
         ToastService.show(context, 'Photo attached successfully!', type: ToastType.success);
       }
     } catch (e) {
-      // Fallback
-      if (e.toString().contains('403') || e.toString().contains('Unauthorized')) {
-        setState(() {
-          _uploadedPhotos.add('https://images.unsplash.com/photo-1581092921461-eab62e97a780?w=400');
-          _isLoading = false;
-        });
-        if (mounted) {
-          ToastService.show(context, 'Mock mode: using placeholder image', type: ToastType.warning);
-        }
-      } else {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ToastService.show(context, 'Failed to upload photo: $e', type: ToastType.error);
-        }
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ToastService.show(context, 'Failed to upload photo: $e', type: ToastType.error);
       }
     }
   }

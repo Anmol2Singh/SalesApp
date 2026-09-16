@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -12,64 +12,31 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
   final Ref ref;
 
   ComplaintsNotifier(this.ref) : super([]) {
+    _clearStaleCache();
     _loadFromDatabase();
   }
 
-  Future<void> _saveToLocalCache(List<Complaint> list) async {
+  /// Permanently clean up any legacy local cache so deleted complaints are never resurrected
+  Future<void> _clearStaleCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final encoded = jsonEncode(list.map((c) => c.toJson()).toList());
-      await prefs.setString('cached_complaints_v2', encoded);
+      await prefs.remove('cached_complaints_v2');
+      await prefs.remove('cached_complaints');
     } catch (_) {}
   }
 
   Future<void> _loadFromDatabase({bool refresh = false}) async {
     ref.read(complaintsLoadingProvider.notifier).state = true;
 
-    // Load from local cache first if not refreshing
-    if (!refresh && state.isEmpty) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final cachedStr = prefs.getString('cached_complaints_v2');
-        if (cachedStr != null && cachedStr.isNotEmpty) {
-          final List list = jsonDecode(cachedStr);
-          state = list.map((item) => Complaint.fromJson(item as Map<String, dynamic>)).toList();
-        }
-      } catch (_) {}
-    }
-
     try {
       final supabase = ref.read(supabaseClientProvider);
       final response = await supabase.from('complaints').select().order('created_at', ascending: false);
       final dbComplaints = (response as List).map((json) => Complaint.fromJson(json)).toList();
 
-      if (refresh) {
-        state = dbComplaints;
-        _saveToLocalCache(dbComplaints);
-      } else {
-        final existingIds = dbComplaints.map((c) => c.id).toSet();
-        final localOnly = state.where((c) => !existingIds.contains(c.id)).toList();
-
-        if (dbComplaints.isNotEmpty || localOnly.isNotEmpty) {
-          final merged = [...localOnly, ...dbComplaints];
-          state = merged;
-          _saveToLocalCache(merged);
-
-          // Auto-sync any local-only complaints to Supabase database
-          for (final c in localOnly) {
-            try {
-              await supabase.from('complaints').upsert(c.toJson());
-            } catch (e) {
-              print('Syncing local complaint ${c.ticketNumber} to DB failed: $e');
-            }
-          }
-        } else {
-          state = dbComplaints;
-          _saveToLocalCache(dbComplaints);
-        }
-      }
+      // Directly update state from Supabase database - no local cache resurrection
+      state = dbComplaints;
     } catch (e) {
-      print('Error loading complaints from Supabase: $e');
+      debugPrint('Error loading complaints from Supabase: $e');
     } finally {
       ref.read(complaintsLoadingProvider.notifier).state = false;
     }
@@ -110,7 +77,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       );
 
       state = [updatedComplaint, ...state];
-      _saveToLocalCache(state);
 
       await supabase.from('complaints').upsert(updatedComplaint.toJson());
 
@@ -131,7 +97,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
 
   Future<void> updateComplaint(Complaint updatedComplaint) async {
     state = state.map((c) => c.id == updatedComplaint.id ? updatedComplaint : c).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -164,7 +129,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       }
       return c;
     }).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -190,7 +154,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       }
       return c;
     }).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -211,7 +174,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       }
       return c;
     }).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -230,7 +192,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       }
       return c;
     }).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -265,7 +226,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       }
       return c;
     }).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -292,7 +252,6 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
       }
       return c;
     }).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -318,13 +277,18 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
 
   Future<void> deleteComplaint(String complaintId) async {
     state = state.where((c) => c.id != complaintId).toList();
-    _saveToLocalCache(state);
 
     try {
       final supabase = ref.read(supabaseClientProvider);
+      // Cascading clean up any linked part orders first
+      try {
+        await supabase.from('complaint_part_orders').delete().eq('complaint_id', complaintId);
+      } catch (_) {}
+
+      // Delete the complaint from Supabase database
       await supabase.from('complaints').delete().eq('id', complaintId);
     } catch (e) {
-      print('Error deleting complaint: $e');
+      debugPrint('Error deleting complaint from Supabase: $e');
     }
   }
 

@@ -1911,7 +1911,9 @@ class SupabaseCustomerRepository implements CustomerRepository {
       'status': 'pending',
       'source': 'customer',
       'tat_remaining': '24h',
-      'before_image_url': request.photoUrls.isNotEmpty ? request.photoUrls.first : null,
+      'before_image_url': request.photoUrls.where((p) => p.trim().isNotEmpty).isNotEmpty
+          ? request.photoUrls.where((p) => p.trim().isNotEmpty).join('|||')
+          : null,
       'created_at': DateTime.now().toIso8601String(),
     });
 

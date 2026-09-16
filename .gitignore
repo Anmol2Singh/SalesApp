@@ -55,4 +55,10 @@ local.properties
 scratch/
 *.py
 uidump.xml
-logcat.txt
+logcat.txt
+
+# tasklist .md files
+tasklist.md
+recent-releases.md
+tasklist-v2.md
+analyze_output.txt
