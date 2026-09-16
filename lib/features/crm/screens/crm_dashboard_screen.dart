@@ -79,20 +79,46 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
     final profile = ref.watch(currentProfileProvider);
     final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
     final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
-    final canManageSources = isCrmStaff || isAdmin;
+    final canManageSources = !isCrmStaff && isAdmin;
     _initTabController(canManageSources);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'CRM Intelligence & Analytics',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        title: isCrmStaff
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    (profile?.fullName != null && profile!.fullName.trim().isNotEmpty)
+                        ? profile.fullName
+                        : 'CRM Staff',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Text(
+                    'CRM Staff Portal',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              )
+            : const Text(
+                'CRM Intelligence & Analytics',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
         backgroundColor: AppColors.primary,
         elevation: 0,
         leading: isCrmStaff
@@ -121,44 +147,78 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
             tooltip: 'Refresh Analytics',
             onPressed: _isRefreshing ? null : _refreshAll,
           ),
+          if (isCrmStaff)
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              tooltip: 'Logout',
+              onPressed: () => _confirmLogout(context),
+            ),
         ],
-        bottom: TabBar(
-          controller: _tabController!,
-          indicatorColor: AppColors.accent,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: [
-            const Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Overview'),
-            const Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Leaderboard'),
-            if (canManageSources)
-              const Tab(icon: Icon(Icons.tune_outlined, size: 18), text: 'Lead Sources'),
-          ],
-        ),
+        bottom: isCrmStaff
+            ? null
+            : TabBar(
+                controller: _tabController!,
+                indicatorColor: AppColors.accent,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
+                tabs: [
+                  const Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Overview'),
+                  const Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Leaderboard'),
+                  if (canManageSources)
+                    const Tab(icon: Icon(Icons.tune_outlined, size: 18), text: 'Lead Sources'),
+                ],
+              ),
       ),
       body: Column(
         children: [
           if (_isRefreshing) const LinearProgressIndicator(minHeight: 2.5),
           Expanded(
-            child: TabBarView(
-              controller: _tabController!,
-              children: [
-                _buildOverviewTab(),
-                _buildLeaderboardTab(),
-                if (canManageSources) _buildSourcesTab(),
-              ],
-            ),
+            child: isCrmStaff
+                ? _buildOverviewTab(isCrmStaff: true)
+                : TabBarView(
+                    controller: _tabController!,
+                    children: [
+                      _buildOverviewTab(isCrmStaff: false),
+                      _buildLeaderboardTab(),
+                      if (canManageSources) _buildSourcesTab(),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to log out of CRM Staff Portal?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await ref.read(authControllerProvider.notifier).signOut();
+    }
+  }
+
   // ==========================================
   // TAB 1: OVERVIEW (STRUCTURE PER REFERENCE)
   // ==========================================
-  Widget _buildOverviewTab() {
+  Widget _buildOverviewTab({required bool isCrmStaff}) {
     final prospectsAsync = ref.watch(prospectsProvider);
     final leadsAsync = ref.watch(leadsProvider);
 
@@ -174,13 +234,85 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
             _buildDateFilterRow(),
             const SizedBox(height: 16),
 
-            // Top 4 KPI Metrics Bento Grid
-            _buildKpiSection(prospectsAsync, leadsAsync),
+            // Top KPI Metrics Bento Grid
+            _buildKpiSection(prospectsAsync, leadsAsync, isCrmStaff: isCrmStaff),
             const SizedBox(height: 24),
 
-            // Monthly Trend Chart Card
-            _buildTrendChartCard(leadsAsync),
-            const SizedBox(height: 24),
+            if (isCrmStaff) ...[
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1E3A5F), Color(0xFF2563EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB).withOpacity(0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => context.push('/reports/activity'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.assessment_outlined, color: Colors.white, size: 24),
+                          ),
+                          const SizedBox(width: 16),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Today's Activity Report",
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Generate and review daily CRM activity & progress',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // Monthly Trend Chart Card (Hidden for CRM staff)
+            if (!isCrmStaff) ...[
+              _buildTrendChartCard(leadsAsync),
+              const SizedBox(height: 24),
+            ],
 
             // Pipeline & Status Distribution
             _buildDistributionSection(leadsAsync, prospectsAsync),
@@ -251,8 +383,9 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
 
   Widget _buildKpiSection(
     AsyncValue<List<Prospect>> prospectsAsync,
-    AsyncValue<List<Lead>> leadsAsync,
-  ) {
+    AsyncValue<List<Lead>> leadsAsync, {
+    required bool isCrmStaff,
+  }) {
     final currencyFormat = NumberFormat.compactCurrency(locale: 'en_IN', symbol: '₹');
 
     final prospects = (prospectsAsync.value ?? [])
@@ -280,13 +413,13 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 700;
-        final count = isWide ? 4 : 2;
+        final count = isCrmStaff ? 2 : (isWide ? 4 : 2);
 
         return GridView.count(
           crossAxisCount: count,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: isWide ? 1.5 : 1.15,
+          childAspectRatio: (isCrmStaff && isWide) ? 2.2 : (isWide ? 1.5 : 1.15),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
@@ -308,24 +441,26 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
               color: const Color(0xFFF59E0B),
               onTap: () => context.go('/crm/leads'),
             ),
-            _buildKpiCard(
-              title: 'Won Deals',
-              value: '${wonLeads.length}',
-              badge: '$convRate% win rate',
-              isBadgePositive: true,
-              icon: Icons.check_circle_outline,
-              color: const Color(0xFF10B981),
-              onTap: () => context.go('/crm/customers'),
-            ),
-            _buildKpiCard(
-              title: 'Won Revenue',
-              value: currencyFormat.format(wonRevenue),
-              badge: '${wonLeads.length} deals closed',
-              isBadgePositive: true,
-              icon: Icons.currency_rupee,
-              color: const Color(0xFF8B5CF6),
-              onTap: () => context.go('/crm/customers'),
-            ),
+            if (!isCrmStaff) ...[
+              _buildKpiCard(
+                title: 'Won Deals',
+                value: '${wonLeads.length}',
+                badge: '$convRate% win rate',
+                isBadgePositive: true,
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF10B981),
+                onTap: () => context.go('/crm/customers'),
+              ),
+              _buildKpiCard(
+                title: 'Won Revenue',
+                value: currencyFormat.format(wonRevenue),
+                badge: '${wonLeads.length} deals closed',
+                isBadgePositive: true,
+                icon: Icons.currency_rupee,
+                color: const Color(0xFF8B5CF6),
+                onTap: () => context.go('/crm/customers'),
+              ),
+            ],
           ],
         );
       },

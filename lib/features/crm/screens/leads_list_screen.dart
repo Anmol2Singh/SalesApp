@@ -27,6 +27,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     final prospectsAsync = ref.watch(prospectsProvider);
     final profile = ref.watch(currentProfileProvider);
     final isAdmin = profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false);
+    final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -277,12 +278,14 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddLeadForm(context),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Lead', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.primary,
-      ),
+      floatingActionButton: isCrmStaff
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddLeadForm(context),
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('Add Lead', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              backgroundColor: AppColors.primary,
+            ),
     );
   }
 

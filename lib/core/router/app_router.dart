@@ -138,10 +138,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         return AppRoutes.login;
       }
 
-      if (isLoggedIn && isOnAuth) {
+      if (isLoggedIn) {
         final profile = authState.value;
         if (profile != null) {
-          return _getRoleHome(profile.primaryRole);
+          if (isOnAuth) {
+            return _getRoleHome(profile.primaryRole);
+          }
+          // Guard CRM Staff from accessing customer screens
+          if (profile.primaryRole == UserRole.crmStaff) {
+            if (location == AppRoutes.customers ||
+                location.startsWith('/customers') ||
+                location.startsWith('/crm/customers')) {
+              return '/crm/dashboard';
+            }
+          }
         }
       }
 
@@ -527,7 +537,7 @@ String getRoleHome(UserRole role) {
     case UserRole.customer:
       return '/customer/dashboard';
     case UserRole.crmStaff:
-      return '/crm/prospects';
+      return '/crm/dashboard';
   }
 }
 

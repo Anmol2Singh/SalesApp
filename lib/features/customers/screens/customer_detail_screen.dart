@@ -1183,14 +1183,8 @@ void _showDeleteDeactivateModal(BuildContext context, WidgetRef ref, Customer cu
                             onPressed: () async {
                               setModalState(() => isProcessing = true);
                               try {
-                                final supabase = ref.read(supabaseClientProvider);
-                                await supabase.from('customers').update({
-                                  'deleted_at': DateTime.now().toIso8601String(),
-                                  'updated_at': DateTime.now().toIso8601String(),
-                                }).eq('id', customer.id);
-
+                                await ref.read(customersNotifierProvider.notifier).deactivateCustomer(customer.id);
                                 ref.invalidate(customerDetailProvider(customer.id));
-                                ref.read(customersNotifierProvider.notifier).load(refresh: true);
 
                                 if (modalCtx.mounted) {
                                   Navigator.pop(modalCtx);
@@ -1251,7 +1245,7 @@ void _showDeleteDeactivateModal(BuildContext context, WidgetRef ref, Customer cu
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Permanently deletes this customer record from the database. Warning: This action cannot be undone.',
+                          'Permanently deletes this customer record along with any linked deals, quotations, and contracts. Warning: This action cannot be undone.',
                           style: TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 12,
@@ -1276,7 +1270,7 @@ void _showDeleteDeactivateModal(BuildContext context, WidgetRef ref, Customer cu
                                 builder: (ctx) => AlertDialog(
                                   title: const Text('Confirm Permanent Deletion'),
                                   content: Text(
-                                    'Are you sure you want to permanently delete "${customer.companyName}"?\n\nIf active deals exist, records might fail or be removed permanently.',
+                                    'Are you sure you want to permanently delete "${customer.companyName}" and all associated deals, quotations, and contracts?\n\nThis action cannot be undone.',
                                   ),
                                   actions: [
                                     TextButton(
@@ -1295,11 +1289,8 @@ void _showDeleteDeactivateModal(BuildContext context, WidgetRef ref, Customer cu
                               if (confirm == true) {
                                 setModalState(() => isProcessing = true);
                                 try {
-                                  final supabase = ref.read(supabaseClientProvider);
-                                  await supabase.from('customers').delete().eq('id', customer.id);
-
+                                  await ref.read(customersNotifierProvider.notifier).permanentlyDeleteCustomer(customer.id);
                                   ref.invalidate(customerDetailProvider(customer.id));
-                                  ref.read(customersNotifierProvider.notifier).load(refresh: true);
 
                                   if (modalCtx.mounted) {
                                     Navigator.pop(modalCtx);
@@ -1307,19 +1298,18 @@ void _showDeleteDeactivateModal(BuildContext context, WidgetRef ref, Customer cu
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('✓ ${customer.companyName} permanently deleted.'),
+                                        content: Text('✓ ${customer.companyName} and associated records deleted.'),
                                         backgroundColor: AppColors.error,
                                       ),
                                     );
                                     context.go(AppRoutes.customers);
                                   }
                                 } catch (e) {
-                                  // In case foreign keys block hard delete, offer deactivation
                                   setModalState(() => isProcessing = false);
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Cannot hard-delete (active records linked). Try "Deactivate" instead. Details: $e'),
+                                        content: Text('Error deleting customer: $e'),
                                         backgroundColor: AppColors.error,
                                         duration: const Duration(seconds: 5),
                                       ),

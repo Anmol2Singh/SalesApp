@@ -174,7 +174,9 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
     final isCreatedByMe = prospect.createdBy == profile?.id;
     final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
 
-    final canEdit = RecordEditPermissions.canEditRecord(
+    final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
+
+    final canEdit = isCrmStaff || RecordEditPermissions.canEditRecord(
       userRole: profile?.primaryRole,
       allRoles: profile?.roles ?? [],
       currentUserId: profile?.id,
@@ -182,8 +184,8 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
       assigneeId: prospect.assignedTo,
     );
 
-    // Can convert if: isSalesOrAdmin AND (Admin OR Assigned Salesperson OR Creator Salesperson without assignment)
-    final canConvert = !isConverted && isSalesOrAdmin && (isAdmin || isAssignedToMe || (isSalesRole && prospect.assignedTo == null));
+    // Can convert if: CRM Staff OR (isSalesOrAdmin AND (Admin OR Assigned Salesperson OR Creator Salesperson without assignment))
+    final canConvert = !isConverted && (isCrmStaff || (isSalesOrAdmin && (isAdmin || isAssignedToMe || (isSalesRole && prospect.assignedTo == null))));
 
     return Scaffold(
       backgroundColor: AppColors.background,

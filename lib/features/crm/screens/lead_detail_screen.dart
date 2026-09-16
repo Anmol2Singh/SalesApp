@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/theme/app_theme.dart';
@@ -703,7 +704,10 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
             const SizedBox(height: 16),
 
             // 3. Lead Quotations & Revision History
-            _LeadQuotationsSection(lead: lead, isSalesOrAdmin: isSalesOrAdmin),
+            _LeadQuotationsSection(
+              lead: lead,
+              canCreateQuotation: profile?.primaryRole.canCreateQuotation ?? false,
+            ),
             const SizedBox(height: 16),
 
             // 4. Communication History (Only inside Lead)
@@ -723,15 +727,22 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
-                  if (lead.convertedToCustomerId != null) {
-                    context.push('/customers/${lead.convertedToCustomerId}');
-                  } else {
-                    context.go('/crm/customers');
-                  }
-                },
+                onPressed: profile?.primaryRole == UserRole.crmStaff
+                    ? null
+                    : () {
+                        if (lead.convertedToCustomerId != null) {
+                          context.push('/customers/${lead.convertedToCustomerId}');
+                        } else {
+                          context.go('/crm/customers');
+                        }
+                      },
                 icon: const Icon(Icons.check_circle, color: AppColors.success),
-                label: const Text('Deal Won • View Customer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                label: Text(
+                  profile?.primaryRole == UserRole.crmStaff
+                      ? 'Deal Won (Converted)'
+                      : 'Deal Won • View Customer',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               )
             else if (isSalesOrAdmin) ...[
               ElevatedButton.icon(
@@ -2471,11 +2482,11 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
 
 class _LeadQuotationsSection extends ConsumerStatefulWidget {
   final Lead lead;
-  final bool isSalesOrAdmin;
+  final bool canCreateQuotation;
 
   const _LeadQuotationsSection({
     required this.lead,
-    required this.isSalesOrAdmin,
+    required this.canCreateQuotation,
   });
 
   @override
@@ -2522,46 +2533,59 @@ class _LeadQuotationsSectionState
   Future<void> _viewPdf(Quotation quot) async {
     try {
       final supabase = ref.read(supabaseClientProvider);
-      Map<String, dynamic> templateConfig;
-      try {
-        final tData = await supabase
-            .from('pdf_templates')
+      final lead = widget.lead;
+
+      // Fetch prospect for address/contact details
+      Prospect? prospect;
+      final pId = lead.prospectId;
+      if (pId != null && pId.isNotEmpty) {
+        final pRes = await supabase
+            .from('crm_prospects')
             .select()
-            .eq('document_type', 'quotation')
-            .single();
-        templateConfig = tData['template_config'] as Map<String, dynamic>;
-      } catch (_) {
-        templateConfig = {
-          'company_name': 'INSIYA SOLAR INDUSTRY',
-          'company_address':
-              'GAT NO 133/1, LAND AREA 10, KOREGAON BHIMA, SHIRUR, Ratnagiri, Maharashtra - 412216, India',
-          'company_phone': '9292922992',
-          'company_email': 'insiyasolarindustry@gmail.com',
-          'company_gst': '27AAOPI2766H1ZE',
-          'footer_text': 'Thank you for your business.',
-        };
+            .eq('id', pId)
+            .maybeSingle();
+        if (pRes != null) {
+          prospect = Prospect.fromJson(pRes);
+        }
       }
 
+      // Fetch active quotation PDF template config
+      final templateRes = await supabase
+          .from('pdf_templates')
+          .select('template_config')
+          .eq('document_type', 'quotation')
+          .eq('is_active', true)
+          .maybeSingle();
+
+      final templateConfig = (templateRes != null && templateRes['template_config'] is Map)
+          ? Map<String, dynamic>.from(templateRes['template_config'] as Map)
+          : <String, dynamic>{};
+
+      // Construct customer and product models so PdfService can render standard layout
       final customer = Customer(
-        id: widget.lead.id,
-        companyName: quot.customerName ?? widget.lead.prospectName ?? 'Customer',
-        phone: quot.customerPhone ?? widget.lead.contactPhone ?? '',
-        address: quot.billingAddress ?? '',
-        gstNumber: quot.customerGstin,
-        createdBy: widget.lead.assignedTo ?? '',
-        createdAt: quot.createdAt,
-        updatedAt: quot.updatedAt,
+        id: lead.convertedToCustomerId ?? lead.id,
+        companyName: quot.customerName ?? lead.prospectName ?? prospect?.company ?? prospect?.name ?? 'Valued Customer',
+        contactPerson: quot.partyContactPerson ?? prospect?.name ?? '',
+        phone: quot.customerPhone ?? lead.contactPhone ?? prospect?.phone ?? '',
+        email: prospect?.email ?? '',
+        address: quot.billingAddress ?? prospect?.address ?? '',
+        gstNumber: quot.customerGstin ?? prospect?.gst ?? '',
+        createdBy: lead.createdBy,
+        createdAt: lead.createdAt,
+        updatedAt: DateTime.now(),
       );
 
       final product = Product(
-        id: 'prod',
-        name: widget.lead.productName,
+        id: quot.productId.isNotEmpty ? quot.productId : 'general',
+        name: lead.productName.isNotEmpty ? lead.productName : 'Solar Energy Solution',
         category: 'Solar',
         baseSpecs: const ProductBaseSpecs(
-            quotationFields: [], boqRequiredFields: []),
+          quotationFields: [],
+          boqRequiredFields: [],
+        ),
         isActive: true,
-        createdAt: quot.createdAt,
-        updatedAt: quot.updatedAt,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       );
 
       final pdfBytes = await PdfService.generateQuotationPdf(
@@ -2569,18 +2593,14 @@ class _LeadQuotationsSectionState
         customer: customer,
         product: product,
         templateConfig: templateConfig,
+        docTitle: 'QUOTATION',
       );
 
       if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (ctx) => PdfPreviewScreen(
-              pdfBytes: pdfBytes,
-              fileName:
-                  'Quotation_Rev${quot.revision}_${quot.quotationNumber.replaceAll('/', '_')}.pdf',
-            ),
-          ),
+        await Printing.layoutPdf(
+          onLayout: (_) async => pdfBytes,
+          name:
+              'Quotation_Rev${quot.revision}_${quot.quotationNumber.replaceAll('/', '_')}.pdf',
         );
       }
     } catch (e) {
@@ -2596,6 +2616,7 @@ class _LeadQuotationsSectionState
   }
 
   void _openCreateQuotation({Quotation? initialQuotation}) async {
+    if (!widget.canCreateQuotation) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -2667,7 +2688,7 @@ class _LeadQuotationsSectionState
                   ),
                 ),
                 const SizedBox(width: 6),
-                if (widget.isSalesOrAdmin && !isLeadClosed)
+                if (widget.canCreateQuotation && !isLeadClosed)
                   ElevatedButton.icon(
                     onPressed: () => _openCreateQuotation(),
                     icon: const Icon(Icons.add, size: 14, color: Colors.white),
@@ -2737,7 +2758,7 @@ class _LeadQuotationsSectionState
                         'No quotation generated for this lead yet.',
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
-                      if (widget.isSalesOrAdmin && !isLeadClosed) ...[
+                      if (widget.canCreateQuotation && !isLeadClosed) ...[
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           onPressed: () => _openCreateQuotation(),
@@ -2884,7 +2905,7 @@ class _LeadQuotationsSectionState
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                           ),
-                          if (widget.isSalesOrAdmin && !isLeadClosed) ...[
+                          if (widget.canCreateQuotation && !isLeadClosed) ...[
                             const SizedBox(width: 8),
                             ElevatedButton.icon(
                               onPressed: () => _openCreateQuotation(initialQuotation: quot),

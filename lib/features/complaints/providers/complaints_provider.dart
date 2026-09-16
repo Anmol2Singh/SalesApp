@@ -23,38 +23,49 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
     } catch (_) {}
   }
 
-  Future<void> _loadFromDatabase() async {
+  Future<void> _loadFromDatabase({bool refresh = false}) async {
     ref.read(complaintsLoadingProvider.notifier).state = true;
 
-    // Load from local cache first
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedStr = prefs.getString('cached_complaints_v2');
-      if (cachedStr != null && cachedStr.isNotEmpty) {
-        final List list = jsonDecode(cachedStr);
-        state = list.map((item) => Complaint.fromJson(item as Map<String, dynamic>)).toList();
-      }
-    } catch (_) {}
+    // Load from local cache first if not refreshing
+    if (!refresh && state.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedStr = prefs.getString('cached_complaints_v2');
+        if (cachedStr != null && cachedStr.isNotEmpty) {
+          final List list = jsonDecode(cachedStr);
+          state = list.map((item) => Complaint.fromJson(item as Map<String, dynamic>)).toList();
+        }
+      } catch (_) {}
+    }
 
     try {
       final supabase = ref.read(supabaseClientProvider);
       final response = await supabase.from('complaints').select().order('created_at', ascending: false);
       final dbComplaints = (response as List).map((json) => Complaint.fromJson(json)).toList();
-      final existingIds = dbComplaints.map((c) => c.id).toSet();
-      final localOnly = state.where((c) => !existingIds.contains(c.id)).toList();
 
-      if (dbComplaints.isNotEmpty || localOnly.isNotEmpty) {
-        final merged = [...localOnly, ...dbComplaints];
-        state = merged;
-        _saveToLocalCache(merged);
+      if (refresh) {
+        state = dbComplaints;
+        _saveToLocalCache(dbComplaints);
+      } else {
+        final existingIds = dbComplaints.map((c) => c.id).toSet();
+        final localOnly = state.where((c) => !existingIds.contains(c.id)).toList();
 
-        // Auto-sync any local-only complaints to Supabase database
-        for (final c in localOnly) {
-          try {
-            await supabase.from('complaints').upsert(c.toJson());
-          } catch (e) {
-            print('Syncing local complaint ${c.ticketNumber} to DB failed: $e');
+        if (dbComplaints.isNotEmpty || localOnly.isNotEmpty) {
+          final merged = [...localOnly, ...dbComplaints];
+          state = merged;
+          _saveToLocalCache(merged);
+
+          // Auto-sync any local-only complaints to Supabase database
+          for (final c in localOnly) {
+            try {
+              await supabase.from('complaints').upsert(c.toJson());
+            } catch (e) {
+              print('Syncing local complaint ${c.ticketNumber} to DB failed: $e');
+            }
           }
+        } else {
+          state = dbComplaints;
+          _saveToLocalCache(dbComplaints);
         }
       }
     } catch (e) {
@@ -318,7 +329,7 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
   }
 
   Future<void> load({bool refresh = false}) async {
-    await _loadFromDatabase();
+    await _loadFromDatabase(refresh: refresh);
   }
 }
 

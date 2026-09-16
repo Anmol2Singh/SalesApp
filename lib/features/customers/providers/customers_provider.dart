@@ -274,6 +274,197 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     await refresh();
   }
 
+  Future<void> deactivateCustomer(String customerId) async {
+    try {
+      final custData = await _supabase
+          .from('customers')
+          .select('phone, email, customer_name, company_name')
+          .eq('id', customerId)
+          .maybeSingle();
+
+      await _supabase.from('customers').update({
+        'deleted_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', customerId);
+
+      // Synchronously remove or deactivate from customer_profiles
+      try { await _supabase.from('customer_profiles').delete().eq('id', customerId); } catch (_) {}
+      if (custData != null) {
+        final phone = custData['phone']?.toString();
+        final email = custData['email']?.toString();
+        if (phone != null && phone.isNotEmpty) {
+          final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+          try { await _supabase.from('customer_profiles').delete().eq('phone', phone); } catch (_) {}
+          if (cleanDigits.isNotEmpty) {
+            try { await _supabase.from('customer_profiles').delete().eq('phone', cleanDigits); } catch (_) {}
+          }
+        }
+        if (email != null && email.isNotEmpty) {
+          try { await _supabase.from('customer_profiles').delete().eq('email', email); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    await refresh();
+  }
+
+  Future<void> permanentlyDeleteCustomer(String customerId) async {
+    // 1. Fetch customer details for comprehensive cleanup
+    String customerPhone = '';
+    String customerEmail = '';
+    String customerName = '';
+    try {
+      final custData = await _supabase
+          .from('customers')
+          .select('phone, email, company_name, customer_name, contact_person')
+          .eq('id', customerId)
+          .maybeSingle();
+      if (custData != null) {
+        customerPhone = custData['phone']?.toString() ?? '';
+        customerEmail = custData['email']?.toString() ?? '';
+        customerName = custData['company_name']?.toString() ??
+            custData['customer_name']?.toString() ??
+            custData['contact_person']?.toString() ??
+            '';
+      }
+    } catch (_) {}
+
+    // 2. Fetch pipelines for this customer
+    List<String> pipelineIds = [];
+    try {
+      final pipeRes = await _supabase
+          .from('sales_pipelines')
+          .select('id')
+          .eq('customer_id', customerId);
+      pipelineIds = (pipeRes as List).map((e) => e['id'].toString()).toList();
+    } catch (_) {}
+
+    // 3. Fetch any CRM leads converted to this customer
+    List<String> leadIds = [];
+    try {
+      final leadsRes = await _supabase
+          .from('crm_leads')
+          .select('id')
+          .eq('converted_to_customer_id', customerId);
+      leadIds = (leadsRes as List).map((e) => e['id'].toString()).toList();
+    } catch (_) {}
+
+    // 4. Fetch AMC contracts for this customer or its pipelines
+    List<String> amcIds = [];
+    try {
+      final amcRes = await _supabase
+          .from('amc_contracts')
+          .select('id')
+          .eq('customer_id', customerId);
+      amcIds.addAll((amcRes as List).map((e) => e['id'].toString()));
+    } catch (_) {}
+    if (pipelineIds.isNotEmpty) {
+      for (final pid in pipelineIds) {
+        try {
+          final amcPipeRes = await _supabase
+              .from('amc_contracts')
+              .select('id')
+              .eq('pipeline_id', pid);
+          amcIds.addAll((amcPipeRes as List).map((e) => e['id'].toString()));
+        } catch (_) {}
+      }
+    }
+    amcIds = amcIds.toSet().toList();
+
+    // 5. Clean up AMC service visits and AMC audit logs
+    for (final aid in amcIds) {
+      try { await _supabase.from('amc_service_visits').delete().eq('amc_contract_id', aid); } catch (_) {}
+      try { await _supabase.from('step_audit_log').delete().eq('amc_contract_id', aid); } catch (_) {}
+    }
+    try { await _supabase.from('service_visits').delete().eq('customer_id', customerId); } catch (_) {}
+
+    // 6. Delete all quotations linked by pipeline, customer_id, lead_id, or contact info
+    try { await _supabase.from('quotations').delete().eq('customer_id', customerId); } catch (_) {}
+    for (final pid in pipelineIds) {
+      try { await _supabase.from('quotations').delete().eq('pipeline_id', pid); } catch (_) {}
+    }
+    for (final lid in leadIds) {
+      try { await _supabase.from('quotations').delete().eq('lead_id', lid); } catch (_) {}
+    }
+    if (customerPhone.isNotEmpty) {
+      final cleanDigits = customerPhone.replaceAll(RegExp(r'\D'), '');
+      try { await _supabase.from('quotations').delete().eq('customer_phone', customerPhone); } catch (_) {}
+      if (cleanDigits.isNotEmpty && cleanDigits != customerPhone) {
+        try { await _supabase.from('quotations').delete().eq('customer_phone', cleanDigits); } catch (_) {}
+      }
+    }
+    if (customerName.isNotEmpty) {
+      try { await _supabase.from('quotations').delete().eq('customer_name', customerName); } catch (_) {}
+    }
+
+    // 7. Delete child records for all pipelines
+    if (pipelineIds.isNotEmpty) {
+      for (final pid in pipelineIds) {
+        try { await _supabase.from('step_audit_log').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('deal_audit_log').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('stage_signatures').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('proforma_invoices').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('tax_invoices').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('factory_orders').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('purchase_orders').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('sales_orders').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('boqs').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('warranty_cards').delete().eq('pipeline_id', pid); } catch (_) {}
+        try { await _supabase.from('amc_contracts').delete().eq('pipeline_id', pid); } catch (_) {}
+      }
+    }
+
+    // 8. Delete customer-level child records
+    try { await _supabase.from('bookings').delete().eq('customer_id', customerId); } catch (_) {}
+    try { await _supabase.from('complaint_part_orders').delete().eq('customer_id', customerId); } catch (_) {}
+    try { await _supabase.from('complaints').delete().eq('customer_id', customerId); } catch (_) {}
+    try { await _supabase.from('amc_contracts').delete().eq('customer_id', customerId); } catch (_) {}
+    try { await _supabase.from('warranty_cards').delete().eq('customer_id', customerId); } catch (_) {}
+    try { await _supabase.from('product_inquiries').delete().eq('customer_id', customerId); } catch (_) {}
+
+    // 9. Synchronize delete with customer_profiles
+    try { await _supabase.from('customer_profiles').delete().eq('id', customerId); } catch (_) {}
+    if (customerPhone.isNotEmpty) {
+      final cleanDigits = customerPhone.replaceAll(RegExp(r'\D'), '');
+      try { await _supabase.from('customer_profiles').delete().eq('phone', customerPhone); } catch (_) {}
+      if (cleanDigits.isNotEmpty && cleanDigits != customerPhone) {
+        try { await _supabase.from('customer_profiles').delete().eq('phone', cleanDigits); } catch (_) {}
+        try { await _supabase.from('customer_profiles').delete().ilike('phone', '%$cleanDigits%'); } catch (_) {}
+      }
+    }
+    if (customerEmail.isNotEmpty) {
+      try { await _supabase.from('customer_profiles').delete().eq('email', customerEmail); } catch (_) {}
+    }
+    if (customerName.isNotEmpty) {
+      try { await _supabase.from('customer_profiles').delete().eq('full_name', customerName); } catch (_) {}
+    }
+
+    // 10. Delete pipelines
+    if (pipelineIds.isNotEmpty) {
+      try {
+        await _supabase.from('sales_pipelines').delete().eq('customer_id', customerId);
+      } catch (_) {
+        for (final pid in pipelineIds) {
+          try { await _supabase.from('sales_pipelines').delete().eq('id', pid); } catch (_) {}
+        }
+      }
+    }
+
+    // 11. Delete or soft-delete customer record
+    try {
+      await _supabase.from('customers').delete().eq('id', customerId);
+    } catch (_) {
+      // In case any lingering database constraint still prevents hard delete, soft-delete immediately
+      try {
+        await _supabase.from('customers').update({
+          'deleted_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', customerId);
+      } catch (_) {}
+    }
+
+    await refresh();
+  }
+
   bool get hasMore => _hasMore;
   String get filterBy => _filterBy;
   String get sortBy => _sortBy;

@@ -48,6 +48,8 @@ class NotificationsNotifier
     }
   }
 
+  Future<void> refresh() => _load();
+
   void _subscribe() {
     _channel = _supabase
         .channel('notifications_$_userId')

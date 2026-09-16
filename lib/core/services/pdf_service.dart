@@ -79,6 +79,49 @@ class PdfService {
     return text.replaceAll('₹', 'Rs. ');
   }
 
+  static Future<String> resolveCurrentUserName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final staffName = prefs.getString('staff_session_name') ??
+          prefs.getString('technician_session_name');
+      if (staffName != null && staffName.trim().isNotEmpty) {
+        return staffName.trim();
+      }
+
+      final supabase = Supabase.instance.client;
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser != null) {
+        final cached = prefs.getString('cached_profile_name_${currentUser.id}');
+        if (cached != null && cached.trim().isNotEmpty) return cached.trim();
+
+        final metaName = currentUser.userMetadata?['full_name'] as String? ??
+            currentUser.userMetadata?['name'] as String?;
+        if (metaName != null && metaName.trim().isNotEmpty) return metaName.trim();
+
+        try {
+          final res = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', currentUser.id)
+              .maybeSingle();
+          if (res != null &&
+              res['full_name'] != null &&
+              res['full_name'].toString().trim().isNotEmpty) {
+            return res['full_name'].toString().trim();
+          }
+        } catch (_) {}
+
+        if (currentUser.email != null && currentUser.email!.isNotEmpty) {
+          return currentUser.email!.split('@').first;
+        }
+      }
+
+      final custName = prefs.getString('customer_session_name');
+      if (custName != null && custName.trim().isNotEmpty) return custName.trim();
+    } catch (_) {}
+    return 'Staff';
+  }
+
   // ─── QUOTATION PDF ───────────────────────────────────────────────────────────
 
   static Future<Uint8List> generateQuotationPdf({
@@ -92,6 +135,7 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
 
@@ -131,6 +175,7 @@ class PdfService {
           resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
+          generatedBy: generatedByName,
         ),
         build: (context) {
           final totalQty = quotation.lineItems.fold<double>(0, (sum, item) => sum + item.qty);
@@ -524,6 +569,7 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
 
@@ -557,6 +603,7 @@ class PdfService {
           resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
+          generatedBy: generatedByName,
         ),
         build: (context) {
           final quotationItemNames = quotation.lineItems.map((li) => li.description).where((d) => d.isNotEmpty).join(', ');
@@ -645,6 +692,7 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
 
@@ -711,6 +759,13 @@ class PdfService {
               pw.SizedBox(height: 8),
               _buildFactoryItemsTable(factoryOrder.items),
             ],
+            pw.Spacer(),
+            _buildFooter(
+              resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+              1,
+              1,
+              generatedBy: generatedByName,
+            ),
           ],
         ),
       ),
@@ -730,6 +785,7 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
 
@@ -753,6 +809,7 @@ class PdfService {
           resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
+          generatedBy: generatedByName,
         ),
         build: (context) => [
           // Vendor details
@@ -1352,17 +1409,27 @@ class PdfService {
   }
 
   static pw.Widget _buildFooter(
-      String footerText, int pageNumber, int totalPages) {
+      String footerText, int pageNumber, int totalPages, {String? generatedBy}) {
     return pw.Column(
       children: [
         pw.Divider(color: PdfColors.grey300),
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.Text(
-              _cleanText(footerText),
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            pw.Expanded(
+              child: pw.Text(
+                _cleanText(footerText),
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+              ),
             ),
+            if (generatedBy != null && generatedBy.trim().isNotEmpty)
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8),
+                child: pw.Text(
+                  'Generated by: ${_cleanText(generatedBy)}',
+                  style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700),
+                ),
+              ),
             pw.Text(
               'Page $pageNumber of $totalPages',
               style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
@@ -1400,6 +1467,7 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
 
@@ -1438,6 +1506,7 @@ class PdfService {
               : (resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.'),
           context.pageNumber,
           context.pagesCount,
+          generatedBy: generatedByName,
         ),
         build: (context) => [
           // Shipping metadata card
@@ -2137,6 +2206,7 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
 
@@ -2174,7 +2244,7 @@ class PdfService {
           logoImage: logoImage,
         ),
         footer: (context) =>
-            _buildFooter(footerText, context.pageNumber, context.pagesCount),
+            _buildFooter(footerText, context.pageNumber, context.pagesCount, generatedBy: generatedByName),
         build: (context) => [
           _buildBillTo(customer),
           pw.SizedBox(height: 20),
@@ -2308,6 +2378,7 @@ class PdfService {
     required Map<String, dynamic> templateConfig,
   }) async {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final generatedByName = await resolveCurrentUserName();
     final pdf = pw.Document();
     final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
     final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
@@ -2439,6 +2510,11 @@ class PdfService {
                   ),
                 ],
               ),
+              pw.SizedBox(height: 6),
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text('Generated by: ${_cleanText(generatedByName)}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+              ),
             ],
           ),
         ),
@@ -2455,8 +2531,7 @@ class PdfService {
     required Map<String, dynamic> templateConfig,
   }) async {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
-    final logoUrl = resolvedConfig['logo_url'] as String?;
-    final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
     final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
@@ -2539,7 +2614,14 @@ class PdfService {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Ref: $wNum', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Ref: $wNum', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 2),
+                      pw.Text('Generated by: ${_cleanText(generatedByName)}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                    ],
+                  ),
                   pw.Column(
                     children: [
                       pw.Container(width: 120, height: 0.5, color: PdfColors.black),
@@ -2567,6 +2649,7 @@ class PdfService {
     DateTime? customEndDate,
   }) async {
     final pdf = pw.Document();
+    final generatedByName = await resolveCurrentUserName();
 
     final prefs = await SharedPreferences.getInstance();
     final companyName = prefs.getString('company_name') ?? 'Insiya Solar Industry';
@@ -2655,6 +2738,7 @@ class PdfService {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text('Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                pw.Text('Generated by: ${_cleanText(generatedByName)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
                 pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
               ],
             ),
@@ -2830,6 +2914,7 @@ class PdfService {
     DateTime? customEndDate,
   }) async {
     final pdf = pw.Document();
+    final generatedByName = await resolveCurrentUserName();
 
     final prefs = await SharedPreferences.getInstance();
     final companyName = prefs.getString('company_name') ?? 'Insiya Solar Industry';
@@ -2923,6 +3008,7 @@ class PdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text('Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                  pw.Text('Generated by: ${_cleanText(generatedByName)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
                   pw.Text('Page ${pageCtx.pageNumber} of ${pageCtx.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
                 ],
               ),

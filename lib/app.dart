@@ -9,6 +9,7 @@ import 'features/customer_app/core/theme/app_theme.dart' as cust_theme;
 
 import 'core/providers/theme_provider.dart';
 import 'core/providers/connectivity_provider.dart';
+import 'core/providers/realtime_provider.dart';
 import 'core/services/offline_queue_service.dart';
 
 class IzyheatApp extends ConsumerWidget {
@@ -16,6 +17,9 @@ class IzyheatApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Keep app-wide dynamic live updates active across all screens and roles
+    ref.watch(realtimeSubscriptionProvider);
+
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final profile = ref.watch(currentProfileProvider);

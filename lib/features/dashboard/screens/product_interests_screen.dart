@@ -1,32 +1,12 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
-import '../../../core/providers/supabase_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../crm/providers/crm_providers.dart';
+import '../providers/product_inquiries_provider.dart';
 
-class ProductInterestItem {
-  final String id;
-  final String customerName;
-  final String customerPhone;
-  final String productName;
-  final String modelNumber;
-  final DateTime createdAt;
-  final String status;
-
-  ProductInterestItem({
-    required this.id,
-    required this.customerName,
-    required this.customerPhone,
-    required this.productName,
-    required this.modelNumber,
-    required this.createdAt,
-    required this.status,
-  });
-}
+export '../providers/product_inquiries_provider.dart' show ProductInterestItem;
 
 class ProductInterestsScreen extends ConsumerStatefulWidget {
   const ProductInterestsScreen({super.key});
@@ -36,111 +16,7 @@ class ProductInterestsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen> {
-  List<ProductInterestItem> _interests = [];
-  bool _isLoading = true;
   bool _isCreatingDeal = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadInterests();
-  }
-
-  Future<void> _loadInterests() async {
-    setState(() => _isLoading = true);
-    final List<ProductInterestItem> loaded = [];
-
-    try {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('cached_product_inquiries');
-        if (raw != null && raw.isNotEmpty) {
-          final list = jsonDecode(raw) as List;
-          for (final item in list) {
-            if (item is Map) {
-              loaded.add(ProductInterestItem(
-                id: item['id']?.toString() ?? '',
-                customerName: item['customer_name']?.toString() ?? 'Valued Customer',
-                customerPhone: item['customer_phone']?.toString() ?? '',
-                productName: item['product_name']?.toString() ?? 'Solar System',
-                modelNumber: item['model_number']?.toString() ?? '',
-                createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
-                status: item['status']?.toString() ?? 'pending',
-              ));
-            }
-          }
-        }
-      } catch (_) {}
-
-      try {
-        final supabase = ref.read(supabaseClientProvider);
-        final res = await supabase
-            .from('product_inquiries')
-            .select()
-            .order('created_at', ascending: false);
-
-        for (final item in (res as List? ?? [])) {
-          final id = item['inquiry_id']?.toString() ?? item['id']?.toString() ?? '';
-          if (!loaded.any((e) => e.id == id && id.isNotEmpty)) {
-            loaded.add(ProductInterestItem(
-              id: id,
-              customerName: item['customer_name']?.toString() ?? 'Valued Customer',
-              customerPhone: item['customer_phone']?.toString() ?? '',
-              productName: item['product_name']?.toString() ?? 'Solar System',
-              modelNumber: item['model_number']?.toString() ?? '',
-              createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
-              status: item['status']?.toString() ?? 'pending',
-            ));
-          }
-        }
-      } catch (_) {}
-
-      try {
-        final supabase = ref.read(supabaseClientProvider);
-        final res = await supabase
-            .from('crm_leads')
-            .select()
-            .eq('source', 'Customer Product Interest')
-            .order('created_at', ascending: false);
-
-        for (final item in (res as List? ?? [])) {
-          final id = item['id']?.toString() ?? '';
-          final req = item['requirement']?.toString() ?? '';
-          String prodName = 'Solar Equipment';
-          if (req.contains('product:')) {
-            prodName = req.split('product:').last.trim();
-          } else if (req.contains('buying')) {
-            prodName = req.split('buying').last.trim();
-          }
-
-          if (!loaded.any((e) => e.id == id && id.isNotEmpty)) {
-            loaded.add(ProductInterestItem(
-              id: id,
-              customerName: item['name']?.toString() ?? 'Customer',
-              customerPhone: item['phone']?.toString() ?? '',
-              productName: prodName,
-              modelNumber: '',
-              createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
-              status: item['status']?.toString() ?? 'new',
-            ));
-          }
-        }
-      } catch (_) {}
-
-      // Filter out any cancelled requests completely
-      loaded.removeWhere((e) => e.status.toLowerCase() == 'cancelled');
-
-      loaded.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() {
-          _interests = loaded;
-          _isLoading = false;
-        });
-      }
-    }
-  }
 
   void _launchCall(String phone) async {
     final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
@@ -186,52 +62,8 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
     if (confirm != true) return;
 
     try {
-      // 1. Remove completely from local cache
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('cached_product_inquiries');
-        if (raw != null && raw.isNotEmpty) {
-          final list = jsonDecode(raw) as List;
-          list.removeWhere((e) => e is Map && (e['id'] == item.id || e['inquiry_id'] == item.id));
-          await prefs.setString('cached_product_inquiries', jsonEncode(list));
-        }
-      } catch (_) {}
-
-      // 2. Delete / update from Supabase product_inquiries
-      final supabase = ref.read(supabaseClientProvider);
-      try {
-        await supabase
-            .from('product_inquiries')
-            .delete()
-            .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
-      } catch (_) {
-        try {
-          await supabase
-              .from('product_inquiries')
-              .update({'status': 'cancelled'})
-              .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
-        } catch (_) {}
-      }
-
-      // 3. Delete / cancel from Supabase crm_leads if applicable
-      try {
-        await supabase
-            .from('crm_leads')
-            .delete()
-            .eq('id', item.id);
-      } catch (_) {
-        try {
-          await supabase
-              .from('crm_leads')
-              .update({'status': 'cancelled'})
-              .eq('id', item.id);
-        } catch (_) {}
-      }
-
+      await ref.read(productInquiriesServiceProvider).cancelInquiry(item);
       if (mounted) {
-        setState(() {
-          _interests.removeWhere((e) => e.id == item.id);
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Request cancelled successfully'),
@@ -250,54 +82,8 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
 
   Future<void> _acceptRequest(ProductInterestItem item) async {
     try {
-      // 1. Update in SharedPreferences
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('cached_product_inquiries');
-        if (raw != null && raw.isNotEmpty) {
-          final list = jsonDecode(raw) as List;
-          for (final entry in list) {
-            if (entry is Map && (entry['id'] == item.id || entry['inquiry_id'] == item.id)) {
-              entry['status'] = 'accepted';
-            }
-          }
-          await prefs.setString('cached_product_inquiries', jsonEncode(list));
-        }
-      } catch (_) {}
-
-      // 2. Update status in Supabase product_inquiries
-      final supabase = ref.read(supabaseClientProvider);
-      try {
-        await supabase
-            .from('product_inquiries')
-            .update({'status': 'accepted'})
-            .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
-      } catch (_) {}
-
-      // 3. Update status in Supabase crm_leads if applicable
-      try {
-        await supabase
-            .from('crm_leads')
-            .update({'status': 'contacted'})
-            .eq('id', item.id);
-      } catch (_) {}
-
+      await ref.read(productInquiriesServiceProvider).acceptInquiry(item);
       if (mounted) {
-        setState(() {
-          for (int i = 0; i < _interests.length; i++) {
-            if (_interests[i].id == item.id) {
-              _interests[i] = ProductInterestItem(
-                id: item.id,
-                customerName: item.customerName,
-                customerPhone: item.customerPhone,
-                productName: item.productName,
-                modelNumber: item.modelNumber,
-                status: 'accepted',
-                createdAt: item.createdAt,
-              );
-            }
-          }
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Product request accepted successfully!'),
@@ -386,7 +172,7 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.12),
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.person_outline, color: Color(0xFF2563EB), size: 28),
@@ -411,6 +197,7 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                   ),
                   const SizedBox(height: 20),
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isDark ? Colors.white10 : Colors.grey.shade50,
@@ -522,7 +309,7 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasItems = _interests.isNotEmpty;
+    final inquiriesAsync = ref.watch(productInquiriesProvider);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
@@ -531,104 +318,109 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadInterests,
+            onPressed: () => ref.invalidate(productInquiriesProvider),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : !hasItems
-              ? const Center(child: Text('No product interests found.'))
-              : ListView.separated(
+      body: inquiriesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error loading requests: $e')),
+        data: (interests) {
+          if (interests.isEmpty) {
+            return const Center(child: Text('No product interests found.'));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: interests.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final item = interests[index];
+              return InkWell(
+                onTap: () => _showInterestMenu(item),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _interests.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = _interests[index];
-                    return InkWell(
-                      onTap: () => _showInterestMenu(item),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade200),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
                         ),
-                        child: Row(
+                        child: const Icon(
+                          Icons.shopping_cart_outlined,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2563EB).withOpacity(0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.shopping_cart_outlined,
-                                color: Color(0xFF2563EB),
-                              ),
+                            Text(
+                              item.customerName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.customerName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    item.productName,
-                                    style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.w600, fontSize: 14),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt),
-                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: item.status == 'accepted' ? Colors.green.shade50 : Colors.amber.shade50,
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(
-                                            color: item.status == 'accepted' ? Colors.green.shade300 : Colors.amber.shade200,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          item.status.toUpperCase(),
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            color: item.status == 'accepted' ? Colors.green.shade800 : Colors.amber.shade800,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item.productName,
+                              style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.w600, fontSize: 14),
                             ),
-                            const Icon(Icons.chevron_right, color: Colors.grey),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt),
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: item.status == 'accepted' ? Colors.green.shade50 : Colors.amber.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: item.status == 'accepted' ? Colors.green.shade300 : Colors.amber.shade200,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    item.status.toUpperCase(),
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: item.status == 'accepted' ? Colors.green.shade800 : Colors.amber.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                    );
-                  },
+                      const Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
                 ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

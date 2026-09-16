@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/customer_app/core/theme/app_theme.dart';
 import '../../features/customer_app/data/providers/app_providers.dart';
+import '../providers/realtime_provider.dart';
 import 'package:flutter/services.dart';
 
 class CustomerAppShell extends ConsumerStatefulWidget {
@@ -148,6 +149,7 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(realtimeSubscriptionProvider);
     final int selectedIndex = _getSelectedIndex(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 

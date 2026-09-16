@@ -1870,15 +1870,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
   @override
   Future<List<SupportTicket>> getSupportTickets() async {
-    final customerId = await _resolveCustomerId();
-    final response = await _supabase
-        .from('support_tickets')
-        .select()
-        .eq('customer_id', customerId);
-
-    return (response as List).map((json) {
-      return SupportTicket.fromJson(json);
-    }).toList();
+    return [];
   }
 
   @override
@@ -1935,14 +1927,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
   @override
   Future<void> createSupportTicket(SupportTicket ticket) async {
-    final customerId = await _resolveCustomerId();
-    await _supabase.from('support_tickets').insert({
-      'customer_id': customerId,
-      'subject': ticket.subject,
-      'description': ticket.description,
-      'status': ticket.status,
-      'messages': ticket.messages,
-    });
+    // support_tickets unlinked
   }
 
   @override
@@ -1951,25 +1936,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
     String text,
     bool isUser,
   ) async {
-    final response = await _supabase
-        .from('support_tickets')
-        .select('messages')
-        .eq('id', ticketId)
-        .single();
-
-    final messages = List<Map<String, dynamic>>.from(
-      response['messages'] ?? [],
-    );
-    messages.add({
-      'sender': isUser ? 'user' : 'agent',
-      'text': text,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-
-    await _supabase
-        .from('support_tickets')
-        .update({'messages': messages})
-        .eq('id', ticketId);
+    // support_tickets unlinked
   }
 
   @override

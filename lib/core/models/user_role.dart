@@ -75,7 +75,7 @@ enum UserRole {
     }
   }
 
-  bool get canViewAllCustomers => canViewAllPipelines || this == UserRole.technician || this == UserRole.crmStaff;
+  bool get canViewAllCustomers => canViewAllPipelines || this == UserRole.technician;
 
   bool get canViewAllPipelines =>
       this == UserRole.admin ||
@@ -86,7 +86,12 @@ enum UserRole {
       this == UserRole.purchase ||
       this == UserRole.boq;
   bool get canCreateCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.manager || this == UserRole.salesHead;
-  bool get canEditCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.manager || this == UserRole.salesHead || this == UserRole.crmStaff;
+  bool get canEditCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.manager || this == UserRole.salesHead;
+  bool get canCreateQuotation =>
+      this == UserRole.admin ||
+      this == UserRole.manager ||
+      this == UserRole.sales ||
+      this == UserRole.salesHead;
   bool get canConfirmQuotations => this == UserRole.sales || this == UserRole.admin || this == UserRole.manager || this == UserRole.salesHead || this == UserRole.serviceHead;
   bool get canApproveQuotations => this == UserRole.admin || this == UserRole.manager || this == UserRole.serviceHead || this == UserRole.salesHead;
   bool get canManageUsers => this == UserRole.admin || this == UserRole.manager;
@@ -99,8 +104,7 @@ enum UserRole {
       this == UserRole.manager ||
       this == UserRole.sales ||
       this == UserRole.salesHead ||
-      this == UserRole.serviceHead ||
-      this == UserRole.crmStaff;
+      this == UserRole.serviceHead;
   bool get canActivateWarrantyCard =>
       this == UserRole.admin ||
       this == UserRole.manager ||

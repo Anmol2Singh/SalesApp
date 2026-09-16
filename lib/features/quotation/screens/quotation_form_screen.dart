@@ -1272,6 +1272,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   }
 
   Future<void> _confirmQuotation() async {
+    final profile = ref.read(currentProfileProvider);
+    if (profile?.primaryRole == UserRole.crmStaff) {
+      _showError('CRM Staff is not authorized to issue quotations. Quotations must be given by sales personnel or administrators.');
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     final lineItemsValid = _lineItems.every((item) {
@@ -1290,7 +1296,6 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       return;
     }
 
-    final profile = ref.read(currentProfileProvider);
     final isSales = profile?.primaryRole == UserRole.sales;
 
     // Show confirmation dialog
