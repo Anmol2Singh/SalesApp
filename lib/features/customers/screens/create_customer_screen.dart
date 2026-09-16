@@ -334,13 +334,11 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                 controller: _contactPersonController,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'Contact Person *',
+                  labelText: 'Contact Person (Optional)',
                   hintText: 'Primary contact name',
                   prefixIcon: Icon(Icons.person_outline),
                 ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Contact person is required'
-                    : null,
+                validator: (v) => null,
               ),
               const SizedBox(height: 20),
               _SectionHeader(title: 'Contact Information'),
@@ -369,16 +367,16 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'Email Address *',
+                  labelText: 'Email Address (Optional)',
                   hintText: 'contact@company.com',
                   prefixIcon: Icon(Icons.email_outlined),
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) {
-                    return 'Email address is required';
+                    return null;
                   }
                   if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                      .hasMatch(v)) {
+                      .hasMatch(v.trim())) {
                     return 'Enter a valid email address';
                   }
                   return null;

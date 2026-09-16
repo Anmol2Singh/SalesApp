@@ -46,8 +46,43 @@ class ReportFilter {
 // Providers
 final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
-  final response = await supabase.from('profiles').select().order('full_name');
-  final list = (response as List).map((json) => Profile.fromJson(json)).toList();
+  final List<Profile> list = [];
+
+  try {
+    final response = await supabase.from('profiles').select().order('full_name');
+    final profiles = (response as List).map((json) => Profile.fromJson(json)).toList();
+    list.addAll(profiles);
+  } catch (_) {}
+
+  try {
+    // Also include technicians from technicians table if not already in profiles
+    final techsRes = await supabase.from('technicians').select();
+    for (final t in (techsRes as List? ?? [])) {
+      final tId = t['id']?.toString() ?? '';
+      final tName = t['name']?.toString() ?? t['full_name']?.toString() ?? '';
+      final tEmail = t['email']?.toString() ?? '';
+      final tPhone = t['phone']?.toString();
+
+      // Check if already present by ID or email
+      final exists = list.any((p) =>
+          (tId.isNotEmpty && p.id == tId) ||
+          (tEmail.isNotEmpty && p.email.toLowerCase() == tEmail.toLowerCase()));
+
+      if (!exists && tName.isNotEmpty) {
+        list.add(Profile(
+          id: tId,
+          fullName: tName,
+          email: tEmail,
+          phone: tPhone,
+          roles: const [UserRole.technician],
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ));
+      }
+    }
+  } catch (_) {}
+
   list.sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
   return list;
 });
@@ -329,10 +364,22 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
       Uint8List pdfBytes;
       String fileName;
 
+      final isSalesHead = profile.primaryRole == UserRole.salesHead || profile.roles.contains(UserRole.salesHead);
+      final isAdmin = profile.primaryRole == UserRole.admin || profile.roles.contains(UserRole.admin);
+
       if (isAll) {
         final usersAsync = ref.read(allUsersProvider);
-        final users = (usersAsync.valueOrNull ?? [])
+        final rawUsers = (usersAsync.valueOrNull ?? [])
             .where((u) => u.primaryRole != UserRole.customer)
+            .toList();
+
+        final users = (isSalesHead && !isAdmin
+                ? rawUsers.where((u) =>
+                    u.primaryRole == UserRole.sales ||
+                    u.primaryRole == UserRole.salesHead ||
+                    u.roles.contains(UserRole.sales) ||
+                    u.roles.contains(UserRole.salesHead))
+                : rawUsers)
             .toList()
           ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
@@ -369,10 +416,12 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
           customStartDate: filter.customStartDate,
           customEndDate: filter.customEndDate,
         );
-        fileName = 'All_Users_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
+        fileName = isSalesHead
+            ? 'Sales_Executives_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf'
+            : 'All_Users_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
       } else {
         String userName = profile.fullName;
-        if (profile.primaryRole == UserRole.admin && filter.selectedUserId != null) {
+        if ((isAdmin || isSalesHead) && filter.selectedUserId != null) {
           final usersAsync = ref.read(allUsersProvider);
           usersAsync.whenData((users) {
             final u = users.firstWhere((element) => element.id == filter.selectedUserId, orElse: () => profile);
@@ -414,8 +463,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
   void _showUserSearchPicker(
     BuildContext context,
     List<Profile> users,
-    String? currentUserId,
-  ) {
+    String? currentUserId, {
+    bool isSalesHead = false,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -426,12 +476,20 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setPickerState) {
-            final staffUsers = users
-                .where((u) => u.primaryRole != UserRole.customer)
-                .toList()
+            // For sales head: only sales executives and sales head
+            final eligibleUsers = users.where((u) {
+              if (u.primaryRole == UserRole.customer) return false;
+              if (isSalesHead) {
+                return u.primaryRole == UserRole.sales ||
+                    u.primaryRole == UserRole.salesHead ||
+                    u.roles.contains(UserRole.sales) ||
+                    u.roles.contains(UserRole.salesHead);
+              }
+              return true;
+            }).toList()
               ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
-            final filteredUsers = staffUsers.where((u) {
+            final filteredUsers = eligibleUsers.where((u) {
               final query = searchQuery.trim().toLowerCase();
               if (query.isEmpty) return true;
               final nameMatch = u.fullName.toLowerCase().contains(query);
@@ -441,6 +499,10 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             }).toList();
 
             final isAllSelected = currentUserId == 'ALL';
+            final allOptionTitle = isSalesHead ? 'All Sales Executives' : 'All Users (All Staff)';
+            final allOptionSubtitle = isSalesHead
+                ? 'Generate consolidated report for all sales executives'
+                : 'Generate complete report with each user on a new page';
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.75,
@@ -451,9 +513,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Select User for Report',
-                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                      Text(
+                        isSalesHead ? 'Select Sales Person' : 'Select User for Report',
+                        style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -465,7 +527,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                   TextField(
                     autofocus: false,
                     decoration: InputDecoration(
-                      hintText: 'Search user by name or role...',
+                      hintText: isSalesHead ? 'Search sales executive by name...' : 'Search user by name or role...',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: searchQuery.isNotEmpty
                           ? IconButton(
@@ -484,10 +546,10 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                     onChanged: (val) => setPickerState(() => searchQuery = val),
                   ),
                   const SizedBox(height: 12),
-                  // "All Users" Option
+                  // "All Users" / "All Sales Executives" Option
                   if (searchQuery.trim().isEmpty ||
-                      'all users'.contains(searchQuery.trim().toLowerCase()) ||
-                      'all'.contains(searchQuery.trim().toLowerCase())) ...[
+                      'all'.contains(searchQuery.trim().toLowerCase()) ||
+                      allOptionTitle.toLowerCase().contains(searchQuery.trim().toLowerCase())) ...[
                     Container(
                       decoration: BoxDecoration(
                         color: isAllSelected ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
@@ -502,13 +564,13 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                           backgroundColor: isAllSelected ? AppColors.primary : Colors.grey.shade200,
                           child: Icon(Icons.groups_outlined, color: isAllSelected ? Colors.white : AppColors.primary),
                         ),
-                        title: const Text(
-                          'All Users (All Staff)',
-                          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 14),
+                        title: Text(
+                          allOptionTitle,
+                          style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 14),
                         ),
-                        subtitle: const Text(
-                          'Generate complete report with each user on a new page',
-                          style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+                        subtitle: Text(
+                          allOptionSubtitle,
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
                         ),
                         trailing: isAllSelected ? const Icon(Icons.check_circle, color: AppColors.primary) : null,
                         onTap: () {
@@ -586,7 +648,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = profile?.primaryRole == UserRole.admin;
+    final isAdmin = profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false);
+    final isSalesHead = profile?.primaryRole == UserRole.salesHead || (profile?.roles.contains(UserRole.salesHead) ?? false);
+    final canSelectUser = isAdmin || isSalesHead;
     final filter = ref.watch(reportFilterProvider);
     final dataAsync = ref.watch(activityReportProvider);
 
@@ -595,7 +659,15 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppRoutes.adminDashboard),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else if (isAdmin) {
+              context.go(AppRoutes.adminDashboard);
+            } else {
+              context.go(AppRoutes.salesDashboard);
+            }
+          },
         ),
         title: const Text("Today's Report"),
       ),
@@ -606,15 +678,15 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             color: AppColors.surface,
             child: Column(
               children: [
-                if (isAdmin)
+                if (canSelectUser)
                   Consumer(
                     builder: (context, ref, child) {
                       final usersAsync = ref.watch(allUsersProvider);
                       return usersAsync.when(
                         data: (users) {
-                          String selectedUserDisplay = 'Select User';
+                          String selectedUserDisplay = isSalesHead ? 'Select Sales Person' : 'Select User';
                           if (filter.selectedUserId == 'ALL') {
-                            selectedUserDisplay = 'All Users (All Staff)';
+                            selectedUserDisplay = isSalesHead ? 'All Sales Executives' : 'All Users (All Staff)';
                           } else if (filter.selectedUserId != null) {
                             final found = users.where((u) => u.id == filter.selectedUserId).toList();
                             if (found.isNotEmpty) {
@@ -623,7 +695,12 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                           }
 
                           return InkWell(
-                            onTap: () => _showUserSearchPicker(context, users, filter.selectedUserId),
+                            onTap: () => _showUserSearchPicker(
+                              context,
+                              users,
+                              filter.selectedUserId,
+                              isSalesHead: isSalesHead && !isAdmin,
+                            ),
                             borderRadius: BorderRadius.circular(10),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -644,9 +721,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text(
-                                          'Report User',
-                                          style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+                                        Text(
+                                          isSalesHead && !isAdmin ? 'Sales Executive' : 'Report User',
+                                          style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -672,7 +749,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                       );
                     },
                   ),
-                if (isAdmin) const SizedBox(height: 16),
+                if (canSelectUser) const SizedBox(height: 16),
                 
                 Row(
                   children: [

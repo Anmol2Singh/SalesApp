@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../core/models/customer.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -282,10 +283,13 @@ final customersNotifierProvider =
     StateNotifierProvider<CustomersNotifier, AsyncValue<List<Customer>>>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
+  final canViewAll = (profile?.primaryRole.canViewAllCustomers ?? false) ||
+      (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false);
   return CustomersNotifier(
     supabase,
     profile?.id,
-    profile?.primaryRole.canViewAllCustomers ?? false,
+    canViewAll,
   );
 });
 

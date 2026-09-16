@@ -17,6 +17,8 @@ import 'package:salesapp/features/customer_app/shared/widgets/image_with_fallbac
 import 'package:salesapp/features/customer_app/shared/widgets/status_chip.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart';
 import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
+import 'package:http/http.dart' as http;
+import 'package:salesapp/core/widgets/pdf_preview_screen.dart';
 import 'product_booking_confirmed_screen.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
@@ -32,8 +34,57 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   bool _isRenewing = false;
   bool _isBooking = false;
+  String? _bookingStatus; // null, 'requested', 'pending', 'accepted'
   int _currentImageIndex = 0;
   final PageController _imagePageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkRequestStatus();
+  }
+
+  Future<void> _checkRequestStatus() async {
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final prefs = await SharedPreferences.getInstance();
+      String phone = prefs.getString('customer_session_phone') ??
+          SupabaseAuthRepository.loggedInPhone ??
+          supabase.auth.currentUser?.phone ??
+          '';
+
+      // First check local cache
+      final raw = prefs.getString('cached_product_inquiries');
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List;
+        for (final item in list) {
+          if (item is Map && (item['product_id'] == widget.productId || item['id'] == widget.productId)) {
+            final st = (item['status'] as String? ?? '').toLowerCase();
+            if (st == 'accepted' || st == 'requested' || st == 'pending') {
+              if (mounted) setState(() => _bookingStatus = st);
+              return;
+            }
+          }
+        }
+      }
+
+      // Check Supabase product_inquiries
+      final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+      var query = supabase.from('product_inquiries').select('status, product_id, customer_phone');
+      if (widget.productId.isNotEmpty) {
+        query = query.eq('product_id', widget.productId);
+      }
+      final rows = await query.order('created_at', ascending: false).limit(10);
+      for (final r in (rows as List)) {
+        final rPhone = (r['customer_phone']?.toString() ?? '').replaceAll(RegExp(r'\D'), '');
+        if (cleanDigits.isEmpty || rPhone.isEmpty || rPhone == cleanDigits || cleanDigits.endsWith(rPhone) || rPhone.endsWith(cleanDigits)) {
+          final st = (r['status'] as String? ?? '').toLowerCase();
+          if (mounted) setState(() => _bookingStatus = st);
+          break;
+        }
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -66,22 +117,97 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           '';
       String name = prefs.getString('customer_session_name') ?? 'Valued Customer';
 
+      // 1. Try to get user profile from userProfileProvider / customer_profiles
       try {
-        final cust = await supabase
-            .from('customers')
-            .select('customer_name, phone, company_name')
-            .or('phone.eq.$phone,phone.ilike.%${phone.replaceAll(RegExp(r'\D'), '')}%')
-            .limit(1)
-            .maybeSingle();
-        if (cust != null) {
-          if (cust['customer_name'] != null && cust['customer_name'].toString().isNotEmpty) {
-            name = cust['customer_name'].toString();
+        final profile = await ref.read(userProfileProvider.future);
+        if (profile.isNotEmpty) {
+          final pName = profile['name']?.toString().trim();
+          final pPhone = profile['phone']?.toString().trim();
+          if (pName != null && pName.isNotEmpty && pName != 'Customer' && pName != 'Valued Customer') {
+            name = pName;
           }
-          if (cust['phone'] != null && cust['phone'].toString().isNotEmpty) {
-            phone = cust['phone'].toString();
+          if (pPhone != null && pPhone.isNotEmpty) {
+            phone = pPhone;
           }
         }
       } catch (_) {}
+
+      // 2. Fallback check directly in customer_profiles table if name still generic
+      if (name == 'Valued Customer' || name.isEmpty) {
+        try {
+          final uid = supabase.auth.currentUser?.id ?? prefs.getString('customer_session_uid');
+          if (uid != null) {
+            final row = await supabase.from('customer_profiles').select('full_name, phone').eq('id', uid).maybeSingle();
+            if (row != null) {
+              if (row['full_name'] != null && row['full_name'].toString().trim().isNotEmpty) {
+                name = row['full_name'].toString().trim();
+              }
+              if (phone.isEmpty && row['phone'] != null && row['phone'].toString().trim().isNotEmpty) {
+                phone = row['phone'].toString().trim();
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3. Fallback check by phone in customer_profiles
+      if (name == 'Valued Customer' || name.isEmpty) {
+        try {
+          final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+          if (cleanDigits.isNotEmpty) {
+            final allProfiles = await supabase.from('customer_profiles').select('full_name, phone').limit(50);
+            for (final p in (allProfiles as List? ?? [])) {
+              final pDigits = (p['phone']?.toString() ?? '').replaceAll(RegExp(r'\D'), '');
+              if (pDigits.isNotEmpty && (pDigits == cleanDigits || cleanDigits.endsWith(pDigits) || pDigits.endsWith(cleanDigits))) {
+                if (p['full_name'] != null && p['full_name'].toString().trim().isNotEmpty) {
+                  name = p['full_name'].toString().trim();
+                  break;
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 4. Fallback check in customers table
+      if (name == 'Valued Customer' || name.isEmpty) {
+        try {
+          final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+          final cust = await supabase
+              .from('customers')
+              .select('customer_name, phone, company_name, contact_person')
+              .or('phone.eq.$phone,phone.ilike.%$cleanDigits%')
+              .limit(1)
+              .maybeSingle();
+          if (cust != null) {
+            final cName = cust['customer_name']?.toString() ?? cust['contact_person']?.toString() ?? cust['company_name']?.toString();
+            if (cName != null && cName.trim().isNotEmpty) {
+              name = cName.trim();
+            }
+            if (cust['phone'] != null && cust['phone'].toString().isNotEmpty) {
+              phone = cust['phone'].toString();
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 5. Fallback check in profiles table
+      if (name == 'Valued Customer' || name.isEmpty) {
+        try {
+          final uid = supabase.auth.currentUser?.id ?? prefs.getString('customer_session_uid');
+          if (uid != null) {
+            final pRow = await supabase.from('profiles').select('full_name, phone').eq('id', uid).maybeSingle();
+            if (pRow != null && pRow['full_name'] != null && pRow['full_name'].toString().trim().isNotEmpty) {
+              name = pRow['full_name'].toString().trim();
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Persist resolved customer name for next interactions
+      if (name != 'Valued Customer' && name.isNotEmpty) {
+        await prefs.setString('customer_session_name', name);
+      }
 
       if (phone.isEmpty) phone = '+91 9876543210';
 
@@ -103,7 +229,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           'model_number': product.modelNumber,
           'category': product.category,
           'created_at': DateTime.now().toIso8601String(),
-          'status': 'pending',
+          'status': 'requested',
         };
         list.insert(0, newEntry);
         await prefs.setString('cached_product_inquiries', jsonEncode(list));
@@ -118,7 +244,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           'product_id': product.productId,
           'product_name': product.productName,
           'model_number': product.modelNumber,
-          'status': 'pending',
+          'status': 'requested',
           'created_at': DateTime.now().toIso8601String(),
         });
       } catch (e) {
@@ -161,8 +287,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         }
       } catch (_) {}
 
-      // 5. Navigate to Animated Booking Confirmed Page!
-      if (context.mounted) {
+      if (mounted) {
+        setState(() {
+          _bookingStatus = 'requested';
+        });
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -185,14 +313,41 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   void _viewBrochure(BuildContext context, Product product) async {
-    // If has direct brochure URL
+    // 1. Resolve brochure URL if available
     String? brochureUrl;
     if (product.brochureUrls.isNotEmpty) {
-      final first = product.brochureUrls.first;
-      brochureUrl = first['url']?.toString() ?? first['link']?.toString() ?? first['file_url']?.toString();
+      for (final b in product.brochureUrls) {
+        final u = b['url']?.toString() ?? b['link']?.toString() ?? b['file_url']?.toString();
+        if (u != null && u.startsWith('http')) {
+          brochureUrl = u;
+          break;
+        }
+      }
     }
 
-    if (brochureUrl != null && brochureUrl.startsWith('http')) {
+    // 2. If brochure PDF is available, load and display in full PdfPreviewScreen (with download, share, and print)
+    if (brochureUrl != null && brochureUrl.isNotEmpty) {
+      // Show loading indicator
+      ToastService.show(context, 'Loading brochure PDF...', type: ToastType.info);
+      try {
+        final response = await http.get(Uri.parse(brochureUrl)).timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty && context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PdfPreviewScreen(
+                pdfBytes: response.bodyBytes,
+                fileName: '${product.productName.replaceAll(' ', '_')}_Brochure.pdf',
+              ),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('Error fetching brochure bytes: $e');
+      }
+
+      // Fallback: if byte fetch failed or timed out, attempt to launch in browser
       try {
         final uri = Uri.parse(brochureUrl);
         if (await canLaunchUrl(uri)) {
@@ -202,7 +357,79 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       } catch (_) {}
     }
 
-    // Otherwise show rich Product Technical Brochure Sheet
+    // 3. If no brochure is uploaded/available, show the user requested popup
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Brochure Status',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'No PDF brochure is currently uploaded for "${product.productName}".',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : AppColors.textPrimaryLight,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Would you like to view the technical engineering specifications sheet instead?',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppColors.textSecondary : AppColors.textSecondaryLight,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showTechnicalSpecificationsSheet(context, product);
+              },
+              child: const Text('View Specs Sheet'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showTechnicalSpecificationsSheet(BuildContext context, Product product) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -242,7 +469,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       color: const Color(0xFF2563EB).withOpacity(0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF2563EB), size: 26),
+                    child: const Icon(Icons.analytics_outlined, color: Color(0xFF2563EB), size: 26),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -250,7 +477,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Product Brochure',
+                          'Technical Specifications',
                           style: TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 18,
@@ -273,7 +500,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ),
               const Divider(height: 24),
               Text(
-                'Key Specifications & Engineering Highlights',
+                'Engineering & Quality Highlights',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 14,
@@ -313,12 +540,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('Download Official Spec Sheet (PDF)', style: TextStyle(fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    ToastService.show(context, 'Downloading ${product.productName} Brochure...', type: ToastType.info);
-                  },
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Dismiss', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () => Navigator.pop(ctx),
                 ),
               ),
             ],
@@ -331,9 +555,17 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   Widget _buildSpecRow(String label, String val, Color valCol, Color labelCol) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: TextStyle(fontSize: 12, color: labelCol)),
-        Text(val, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valCol)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            val, 
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valCol),
+          ),
+        ),
       ],
     );
   }
@@ -885,8 +1117,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      AppColors.primary.withOpacity(0.1),
-                                      AppColors.accent.withOpacity(0.1),
+                                      AppColors.primary,
+                                      AppColors.accent,
                                     ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
@@ -919,11 +1151,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 8),
-                                    const Text(
+                                    Text(
                                       'Get 24/7 priority support, free annual cleaning, parts replacement discount, and guaranteed service turnaround within 24 hours.',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: AppColors.textSecondary,
+                                        color: Colors.white.withOpacity(0.9),
                                       ),
                                     ),
                                     const SizedBox(height: 16),
@@ -942,8 +1174,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      AppColors.primary.withOpacity(0.1),
-                                      AppColors.accent.withOpacity(0.1),
+                                      AppColors.primary,
+                                      AppColors.accent,
                                     ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
@@ -954,10 +1186,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                     width: 1,
                                   ),
                                 ),
-                                child: const Column(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
+                                    const Row(
                                       children: [
                                         Icon(
                                           Icons.star_rounded,
@@ -980,7 +1212,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                       'Get 24/7 priority support, free annual cleaning, parts replacement discount, and guaranteed service turnaround within 24 hours.',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: AppColors.textSecondary,
+                                        color: Colors.white.withOpacity(0.9),
                                       ),
                                     ),
                                   ],
@@ -990,6 +1222,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           ],
                         ),
           );
+
+          final bool isRequested = _bookingStatus == 'requested' || _bookingStatus == 'pending';
+          final bool isAccepted = _bookingStatus == 'accepted';
 
           final Widget actionButtons = Container(
             padding: const EdgeInsets.all(20),
@@ -1004,80 +1239,144 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 ),
                 child: SafeArea(
                   top: false,
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!isPurchased) ...[
-                        Expanded(
-                          child: GradientButton(
-                            label: _isBooking ? 'Registering...' : 'Book Now',
-                            onTap: _isBooking ? () {} : () => _handleBookNow(context, product),
-                            icon: _isBooking
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                  )
-                                : const Icon(
-                                    Icons.shopping_cart_checkout,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Dedicated Brochure Button in place of mobile phone / chat icon
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
-                            foregroundColor: const Color(0xFF2563EB),
-                            elevation: 0,
-                            side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          ),
-                          icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
-                          label: const Text(
-                            'Brochure',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          onPressed: () => _viewBrochure(context, product),
-                        ),
-                      ] else ...[
-                        Expanded(
-                          child: GradientButton(
-                            label: 'Request Service',
-                            onTap: () => _openBookingFlow(context),
-                            icon: const Icon(
-                              Icons.handyman_outlined,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Secondary Support Button for purchased products
+                      if (!isPurchased && isAccepted) ...[
                         Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.green.shade300, width: 1.2),
                           ),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                            ),
-                            onPressed: () {
-                              context.go('/support');
-                            },
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle_rounded, color: Colors.green.shade700, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Product request accepted! Our sales representative will be in touch.',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else if (!isPurchased && isRequested) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.shade200, width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.hourglass_top_rounded, color: Colors.blue.shade700, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Product request submitted. Awaiting approval.',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
+                      Row(
+                        children: [
+                          if (!isPurchased) ...[
+                            Expanded(
+                              child: GradientButton(
+                                label: _isBooking
+                                    ? 'Registering...'
+                                    : (isAccepted ? 'Book More' : (isRequested ? 'Requested' : 'Book Now')),
+                                onTap: _isBooking ? () {} : () => _handleBookNow(context, product),
+                                icon: _isBooking
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                      )
+                                    : Icon(
+                                        isAccepted
+                                            ? Icons.add_shopping_cart
+                                            : (isRequested ? Icons.check : Icons.shopping_cart_checkout),
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Dedicated Brochure Button in place of mobile phone / chat icon
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
+                                foregroundColor: const Color(0xFF2563EB),
+                                elevation: 0,
+                                side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                              icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                              label: const Text(
+                                'Brochure',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              onPressed: () => _viewBrochure(context, product),
+                            ),
+                          ] else ...[
+                            Expanded(
+                              child: GradientButton(
+                                label: 'Request Service',
+                                onTap: () => _openBookingFlow(context),
+                                icon: const Icon(
+                                  Icons.handyman_outlined,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Secondary Support Button for purchased products
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: isDark ? AppColors.borderColor : AppColors.borderColorLight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                                ),
+                                onPressed: () {
+                                  context.go('/support');
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),

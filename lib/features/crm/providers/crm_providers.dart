@@ -14,10 +14,12 @@ import '../../auth/providers/auth_provider.dart';
 final prospectsProvider = StateNotifierProvider<ProspectsNotifier, AsyncValue<List<Prospect>>>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
-  final isAdmin = profile?.primaryRole == UserRole.admin ||
+  final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
       profile?.primaryRole == UserRole.manager ||
-      (profile?.roles.contains(UserRole.admin) ?? false);
-  return ProspectsNotifier(supabase, profile?.id, isAdmin);
+      profile?.primaryRole == UserRole.salesHead ||
+      (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false);
+  return ProspectsNotifier(supabase, profile?.id, isAdminOrSalesHead);
 });
 
 class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
@@ -414,10 +416,12 @@ final prospectByIdProvider = Provider.family<Prospect?, String>((ref, id) {
 final leadsProvider = StateNotifierProvider<LeadsNotifier, AsyncValue<List<Lead>>>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
-  final isAdmin = profile?.primaryRole == UserRole.admin ||
+  final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
       profile?.primaryRole == UserRole.manager ||
-      (profile?.roles.contains(UserRole.admin) ?? false);
-  return LeadsNotifier(supabase, profile?.id, isAdmin);
+      profile?.primaryRole == UserRole.salesHead ||
+      (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false);
+  return LeadsNotifier(supabase, profile?.id, isAdminOrSalesHead);
 });
 
 class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {

@@ -537,8 +537,11 @@ class _AmcManagementScreenState extends ConsumerState<AmcManagementScreen> {
                     const SizedBox(height: 20),
 
                     // Quick Actions Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         Text(
                           'Available AMC Plans (${_plans.length})',
@@ -548,14 +551,14 @@ class _AmcManagementScreenState extends ConsumerState<AmcManagementScreen> {
                             color: isDark ? Colors.white : AppColors.textPrimary,
                           ),
                         ),
-                        Row(
+                        Wrap(
+                          spacing: 8,
                           children: [
                             OutlinedButton.icon(
                               onPressed: _openPromoConfigDialog,
                               icon: const Icon(Icons.campaign_outlined, size: 16),
                               label: const Text('Promo Banner', style: TextStyle(fontSize: 12)),
                             ),
-                            const SizedBox(width: 8),
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,

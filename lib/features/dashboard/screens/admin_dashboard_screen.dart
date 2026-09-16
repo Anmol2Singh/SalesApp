@@ -13,6 +13,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../../core/models/customer.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
+import 'product_interests_screen.dart';
 
 import '../../../core/widgets/sync_status_indicator.dart';
 
@@ -1227,6 +1228,9 @@ class _CustomerProductInterestsSectionState
         }
       } catch (_) {}
 
+      // Filter out any cancelled requests completely
+      loaded.removeWhere((e) => e.status.toLowerCase() == 'cancelled');
+
       loaded.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (_) {
     } finally {
@@ -1235,6 +1239,161 @@ class _CustomerProductInterestsSectionState
           _interests = loaded;
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _cancelRequest(_ProductInterestItem item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Request?'),
+        content: Text('Are you sure you want to cancel the interest request for "${item.productName}" from ${item.customerName}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // 1. Remove completely from SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('cached_product_inquiries');
+        if (raw != null && raw.isNotEmpty) {
+          final list = jsonDecode(raw) as List;
+          list.removeWhere((e) => e is Map && (e['id'] == item.id || e['inquiry_id'] == item.id));
+          await prefs.setString('cached_product_inquiries', jsonEncode(list));
+        }
+      } catch (_) {}
+
+      // 2. Delete / update status in Supabase product_inquiries
+      final supabase = ref.read(supabaseClientProvider);
+      try {
+        await supabase
+            .from('product_inquiries')
+            .delete()
+            .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+      } catch (_) {
+        try {
+          await supabase
+              .from('product_inquiries')
+              .update({'status': 'cancelled'})
+              .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+        } catch (_) {}
+      }
+
+      // 3. Delete / update status in Supabase crm_leads if applicable
+      try {
+        await supabase
+            .from('crm_leads')
+            .delete()
+            .eq('id', item.id);
+      } catch (_) {
+        try {
+          await supabase
+              .from('crm_leads')
+              .update({'status': 'cancelled'})
+              .eq('id', item.id);
+        } catch (_) {}
+      }
+
+      // 4. Update UI immediately
+      if (mounted) {
+        setState(() {
+          _interests.removeWhere((e) => e.id == item.id);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request cancelled successfully'),
+            backgroundColor: Colors.black87,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error cancelling request: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _acceptRequest(_ProductInterestItem item) async {
+    try {
+      // 1. Update in SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('cached_product_inquiries');
+        if (raw != null && raw.isNotEmpty) {
+          final list = jsonDecode(raw) as List;
+          for (final entry in list) {
+            if (entry is Map && (entry['id'] == item.id || entry['inquiry_id'] == item.id)) {
+              entry['status'] = 'accepted';
+            }
+          }
+          await prefs.setString('cached_product_inquiries', jsonEncode(list));
+        }
+      } catch (_) {}
+
+      // 2. Update status in Supabase product_inquiries
+      final supabase = ref.read(supabaseClientProvider);
+      try {
+        await supabase
+            .from('product_inquiries')
+            .update({'status': 'accepted'})
+            .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+      } catch (_) {}
+
+      // 3. Update status in Supabase crm_leads if applicable
+      try {
+        await supabase
+            .from('crm_leads')
+            .update({'status': 'contacted'})
+            .eq('id', item.id);
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          for (int i = 0; i < _interests.length; i++) {
+            if (_interests[i].id == item.id) {
+              _interests[i] = _ProductInterestItem(
+                id: item.id,
+                customerName: item.customerName,
+                customerPhone: item.customerPhone,
+                productName: item.productName,
+                modelNumber: item.modelNumber,
+                status: 'accepted',
+                createdAt: item.createdAt,
+              );
+            }
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Product request accepted successfully!'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error accepting request: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -1255,6 +1414,158 @@ class _CustomerProductInterestsSectionState
     try {
       if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  void _showInterestMenu(_ProductInterestItem item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final sheetBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.person_outline, color: Color(0xFF2563EB), size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.customerName,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          item.customerPhone,
+                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white10 : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Product of Interest', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(item.productName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    if (item.modelNumber.isNotEmpty)
+                      Text('Model: ${item.modelNumber}', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        foregroundColor: const Color(0xFF16A34A),
+                        side: const BorderSide(color: Color(0xFF16A34A)),
+                      ),
+                      onPressed: () => _launchWhatsApp(item.customerPhone),
+                      icon: const Icon(Icons.chat_outlined),
+                      label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        foregroundColor: const Color(0xFF2563EB),
+                        side: const BorderSide(color: Color(0xFF2563EB)),
+                      ),
+                      onPressed: () => _launchCall(item.customerPhone),
+                      icon: const Icon(Icons.phone_outlined),
+                      label: const Text('Call', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (item.status != 'accepted') ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _acceptRequest(item);
+                    },
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Accept Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red.shade600,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _cancelRequest(item);
+                  },
+                  icon: Icon(Icons.cancel_outlined, color: Colors.red.shade600, size: 18),
+                  label: Text('Cancel Request', style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+              ),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -1353,166 +1664,211 @@ class _CustomerProductInterestsSectionState
             ),
           )
         else
+          // Show ONLY the single latest request on admin dashboard (count stays full)
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _interests.length,
+            itemCount: _interests.isEmpty ? 0 : 1,
             separatorBuilder: (ctx, i) => const SizedBox(height: 10),
             itemBuilder: (ctx, index) {
               final item = _interests[index];
 
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _showInterestMenu(item),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF2563EB).withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2563EB).withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.shopping_cart_outlined,
-                            color: Color(0xFF2563EB),
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Explicit user text requirement:
-                              // "in admin panel show that respected customer has shown interest in following product"
-                              RichText(
-                                text: TextSpan(
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 14,
-                                    color: Color(0xFF1E293B),
-                                    height: 1.35,
-                                  ),
-                                  children: [
-                                    const TextSpan(text: 'Respected customer '),
-                                    TextSpan(
-                                      text: item.customerName,
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    if (item.customerPhone.isNotEmpty)
-                                      TextSpan(
-                                        text: ' (${item.customerPhone})',
-                                        style: const TextStyle(color: Color(0xFF64748B)),
-                                      ),
-                                    const TextSpan(text: ' has shown interest in following product: '),
-                                    TextSpan(
-                                      text: item.productName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF2563EB),
-                                      ),
-                                    ),
-                                    if (item.modelNumber.isNotEmpty)
-                                      TextSpan(
-                                        text: ' (${item.modelNumber})',
-                                        style: const TextStyle(color: Color(0xFF64748B)),
-                                      ),
-                                  ],
-                                ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB).withOpacity(0.12),
+                                shape: BoxShape.circle,
                               ),
-                              const SizedBox(height: 6),
-                              Row(
+                              child: const Icon(
+                                Icons.shopping_cart_outlined,
+                                color: Color(0xFF2563EB),
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.schedule, size: 13, color: Colors.grey.shade500),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt),
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
+                                  RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 14,
+                                        color: Color(0xFF1E293B),
+                                        height: 1.35,
+                                      ),
+                                      children: [
+                                        const TextSpan(text: 'Respected customer '),
+                                        TextSpan(
+                                          text: item.customerName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        if (item.customerPhone.isNotEmpty)
+                                          TextSpan(
+                                            text: ' (${item.customerPhone})',
+                                            style: const TextStyle(color: Color(0xFF64748B)),
+                                          ),
+                                        const TextSpan(text: ' has shown interest in following product: '),
+                                        TextSpan(
+                                          text: item.productName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF2563EB),
+                                          ),
+                                        ),
+                                        if (item.modelNumber.isNotEmpty)
+                                          TextSpan(
+                                            text: ' (${item.modelNumber})',
+                                            style: const TextStyle(color: Color(0xFF64748B)),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.amber.shade50,
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: Colors.amber.shade200),
-                                    ),
-                                    child: Text(
-                                      item.status.toUpperCase(),
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.amber.shade800,
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.schedule, size: 13, color: Colors.grey.shade500),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt),
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          color: Colors.grey.shade600,
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: item.status == 'accepted' ? Colors.green.shade50 : Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: item.status == 'accepted' ? Colors.green.shade300 : Colors.amber.shade200,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          item.status.toUpperCase(),
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: item.status == 'accepted' ? Colors.green.shade800 : Colors.amber.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Divider(height: 1),
-                    const SizedBox(height: 10),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 10),
 
-                    // Action buttons: Call and WhatsApp
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF16A34A),
-                            side: const BorderSide(color: Color(0xFF16A34A), width: 1.2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                          icon: const Icon(Icons.chat_outlined, size: 16),
-                          label: const Text('WhatsApp', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          onPressed: () => _launchWhatsApp(item.customerPhone),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            elevation: 0,
-                          ),
-                          icon: const Icon(Icons.phone, size: 16),
-                          label: const Text('Call Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          onPressed: () => _launchCall(item.customerPhone),
+                        // Action bar: quick WhatsApp / Call and Tap for options
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.touch_app_outlined, size: 15, color: Colors.blue.shade600),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Tap for actions',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF16A34A),
+                                    side: const BorderSide(color: Color(0xFF16A34A), width: 1.2),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: const Icon(Icons.chat_outlined, size: 14),
+                                  label: const Text('WhatsApp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _launchWhatsApp(item.customerPhone),
+                                ),
+                                const SizedBox(width: 6),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    visualDensity: VisualDensity.compact,
+                                    elevation: 0,
+                                  ),
+                                  icon: const Icon(Icons.phone, size: 14),
+                                  label: const Text('Call', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _launchCall(item.customerPhone),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               );
             },
           ),
+        if (hasItems) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProductInterestsScreen()),
+                );
+              },
+              child: const Text('View all Requests'),
+            ),
+          ),
+        ],
       ],
     );
   }
