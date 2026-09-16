@@ -65,60 +65,84 @@ class ExportPreviewDialog extends StatelessWidget {
   }
 
   Future<void> _downloadFile(BuildContext context) async {
+    final safeName = fileName.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
     try {
-      Directory? dir;
-      if (Platform.isAndroid) {
-        dir = Directory('/storage/emulated/0/Download');
-        if (!await dir.exists()) {
-          dir = await getExternalStorageDirectory();
+      File? savedFile;
+      String locationName = 'Downloads';
+
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        Directory? winDownloads;
+        if (userProfile != null) {
+          final candidate = Directory('$userProfile\\Downloads');
+          if (candidate.existsSync()) winDownloads = candidate;
+        }
+        winDownloads ??= await getDownloadsDirectory();
+        if (winDownloads != null) {
+          savedFile = File('${winDownloads.path}/$safeName');
+          await savedFile.writeAsBytes(fileBytes, flush: true);
+          locationName = 'Downloads folder';
+          try {
+            Process.run('explorer.exe', ['/select,', savedFile.path]);
+          } catch (_) {}
+        }
+      } else if (Platform.isAndroid) {
+        bool savedDirectly = false;
+        try {
+          final downloadDir = Directory('/storage/emulated/0/Download');
+          if (downloadDir.existsSync()) {
+            final target = File('${downloadDir.path}/$safeName');
+            await target.writeAsBytes(fileBytes, flush: true);
+            savedFile = target;
+            savedDirectly = true;
+            locationName = 'Downloads folder';
+          }
+        } catch (_) {}
+
+        if (!savedDirectly) {
+          // Save to cache/documents and invoke system save sheet
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/$safeName');
+          await tempFile.writeAsBytes(fileBytes, flush: true);
+          savedFile = tempFile;
+
+          await Share.shareXFiles(
+            [XFile(tempFile.path)],
+            subject: safeName,
+          );
+          locationName = 'Device Storage';
         }
       } else {
-        dir = await getApplicationDocumentsDirectory();
+        final docsDir = await getApplicationDocumentsDirectory();
+        savedFile = File('${docsDir.path}/$safeName');
+        await savedFile.writeAsBytes(fileBytes, flush: true);
+        locationName = 'Documents';
       }
-
-      final saveDir = dir ?? await getApplicationDocumentsDirectory();
-      final savedFile = File('${saveDir.path}/$fileName');
-      await savedFile.writeAsBytes(fileBytes, flush: true);
 
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✓ File saved successfully to ${saveDir.path.contains("Download") ? "Downloads" : "Storage"} ($fileName)'),
+            content: Text('✓ Saved successfully to $locationName ($safeName)'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
               label: 'Share',
               textColor: Colors.white,
               onPressed: () {
-                Share.shareXFiles([XFile(savedFile.path)]);
+                if (savedFile != null) {
+                  Share.shareXFiles([XFile(savedFile.path)]);
+                }
               },
             ),
           ),
         );
       }
     } catch (e) {
-      // Fallback to app documents
-      try {
-        final docsDir = await getApplicationDocumentsDirectory();
-        final savedFile = File('${docsDir.path}/$fileName');
-        await savedFile.writeAsBytes(fileBytes, flush: true);
-
-        if (context.mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✓ Saved to App Documents ($fileName)'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      } catch (err) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error saving file: $err'), backgroundColor: AppColors.error),
-          );
-        }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving file: $e'), backgroundColor: AppColors.error),
+        );
       }
     }
   }

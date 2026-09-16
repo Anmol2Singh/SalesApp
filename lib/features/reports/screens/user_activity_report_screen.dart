@@ -9,6 +9,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/models/profile.dart';
 import '../../../core/services/pdf_service.dart';
+import '../../../core/services/excel_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/router/app_router.dart';
 import '../models/activity_report_data.dart';
@@ -101,28 +102,31 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
     return ActivityReportData(customers: [], pipelines: [], complaints: []);
   }
 
+  final now = DateTime.now();
   DateTime start;
-  DateTime end = DateTime.now();
+  DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
 
   switch (filter.dateRangeType) {
     case 'today':
-      start = DateTime(end.year, end.month, end.day);
+      start = DateTime(now.year, now.month, now.day, 0, 0, 0);
       break;
     case 'week':
-      start = end.subtract(Duration(days: end.weekday - 1));
-      start = DateTime(start.year, start.month, start.day);
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      start = DateTime(monday.year, monday.month, monday.day, 0, 0, 0);
       break;
     case 'month':
-      start = DateTime(end.year, end.month, 1);
+      start = DateTime(now.year, now.month, 1, 0, 0, 0);
       break;
     case 'custom':
-      start = filter.customStartDate ?? DateTime(end.year, end.month, end.day);
+      start = filter.customStartDate != null 
+          ? DateTime(filter.customStartDate!.year, filter.customStartDate!.month, filter.customStartDate!.day, 0, 0, 0)
+          : DateTime(now.year, now.month, now.day, 0, 0, 0);
       end = filter.customEndDate != null 
-          ? DateTime(filter.customEndDate!.year, filter.customEndDate!.month, filter.customEndDate!.day, 23, 59, 59)
+          ? DateTime(filter.customEndDate!.year, filter.customEndDate!.month, filter.customEndDate!.day, 23, 59, 59, 999)
           : end;
       break;
     default:
-      start = DateTime(end.year, end.month, end.day);
+      start = DateTime(now.year, now.month, now.day, 0, 0, 0);
   }
 
   final isAll = userId == 'ALL';
@@ -251,14 +255,20 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
   try {
     var prQuery = supabase
         .from('crm_prospects')
-        .select('id, name, phone, company, source, created_by, created_at, converted_to_lead_id')
-        .gte('created_at', start.toIso8601String())
-        .lte('created_at', end.toIso8601String());
+        .select('id, name, phone, company, source, created_by, assigned_to, created_at, converted_to_lead_id');
     if (!isAll) {
-      prQuery = prQuery.eq('created_by', userId);
+      prQuery = prQuery.or('created_by.eq.$userId,assigned_to.eq.$userId');
     }
     final prRes = await prQuery.order('created_at', ascending: false);
-    prospects = List<Map<String, dynamic>>.from(prRes);
+    final allPr = List<Map<String, dynamic>>.from(prRes);
+    prospects = allPr.where((pr) {
+      final raw = pr['created_at']?.toString();
+      if (raw == null) return false;
+      final dt = DateTime.tryParse(raw)?.toLocal();
+      if (dt == null) return false;
+      return dt.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          dt.isBefore(end.add(const Duration(seconds: 1)));
+    }).toList();
   } catch (e) {
     debugPrint("Error fetching crm_prospects for report: $e");
   }
@@ -390,7 +400,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
           final uStepLogs = data.stepAuditLogs.where((s) => s['performed_by'] == u.id).toList();
           final uComms = data.communications.where((c) => c['logged_by'] == u.id).toList();
           final uLeads = data.leads.where((l) => l['created_by'] == u.id).toList();
-          final uProspects = data.prospects.where((p) => p['created_by'] == u.id).toList();
+          final uProspects = data.prospects.where((p) => p['created_by'] == u.id || p['assigned_to'] == u.id).toList();
           final uConversions = data.conversions.where((c) => c['user_id'] == u.id).toList();
 
           return {
@@ -458,6 +468,35 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         );
       }
     }
+  }
+
+  void _exportReportExcel(BuildContext context, ActivityReportData data) {
+    final filter = ref.read(reportFilterProvider);
+    final profile = ref.read(currentProfileProvider);
+    if (profile == null) return;
+
+    String userName = profile.fullName;
+    if (filter.selectedUserId == 'ALL') {
+      userName = 'All Staff';
+    } else if (filter.selectedUserId != null) {
+      final usersAsync = ref.read(allUsersProvider);
+      usersAsync.whenData((users) {
+        final u = users.firstWhere((e) => e.id == filter.selectedUserId, orElse: () => profile);
+        userName = u.fullName;
+      });
+    }
+
+    String dateStr = filter.dateRangeType.toUpperCase();
+    if (filter.dateRangeType == 'custom' && filter.customStartDate != null && filter.customEndDate != null) {
+      dateStr = '${DateFormat('dd MMM yyyy').format(filter.customStartDate!)} to ${DateFormat('dd MMM yyyy').format(filter.customEndDate!)}';
+    }
+
+    ExcelService.exportActivityReportExcel(
+      context,
+      data: data,
+      userName: userName,
+      dateStr: dateStr,
+    );
   }
 
   void _showUserSearchPicker(
@@ -670,6 +709,15 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
           },
         ),
         title: const Text("Today's Report"),
+        actions: [
+          dataAsync.whenOrNull(
+            data: (data) => IconButton(
+              icon: const Icon(Icons.table_chart_outlined),
+              tooltip: 'Export to Excel',
+              onPressed: () => _exportReportExcel(context, data),
+            ),
+          ) ?? const SizedBox.shrink(),
+        ],
       ),
       body: Column(
         children: [
@@ -892,11 +940,25 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         ],
       ),
       floatingActionButton: dataAsync.whenOrNull(
-        data: (data) => FloatingActionButton.extended(
-          onPressed: () => _downloadReport(context, data),
-          icon: const Icon(Icons.picture_as_pdf),
-          label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: AppColors.primary,
+        data: (data) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: 'export_excel_fab',
+              onPressed: () => _exportReportExcel(context, data),
+              icon: const Icon(Icons.table_chart_outlined, size: 18),
+              label: const Text('Export Excel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              backgroundColor: Colors.teal.shade700,
+            ),
+            const SizedBox(width: 12),
+            FloatingActionButton.extended(
+              heroTag: 'download_pdf_fab',
+              onPressed: () => _downloadReport(context, data),
+              icon: const Icon(Icons.picture_as_pdf, size: 18),
+              label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              backgroundColor: AppColors.primary,
+            ),
+          ],
         ),
       ),
     );

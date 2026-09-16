@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/excel_service.dart';
 import '../providers/complaints_provider.dart';
 import '../data/models/complaint_model.dart';
 
@@ -66,6 +67,19 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen>
         backgroundColor: const Color(0xFF1E1B4B),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined, color: Colors.white),
+            tooltip: 'Export to Excel',
+            onPressed: () {
+              if (complaints.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No complaints to export')),
+                );
+                return;
+              }
+              ExcelService.exportComplaints(context, complaints);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh',

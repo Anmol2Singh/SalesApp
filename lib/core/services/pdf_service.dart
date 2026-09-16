@@ -2706,6 +2706,16 @@ class PdfService {
       );
     }
 
+    pw.Widget buildStatBox(String label, String value, PdfColor color) {
+      return pw.Column(
+        children: [
+          pw.Text(value, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: color)),
+          pw.SizedBox(height: 2),
+          pw.Text(label, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+        ],
+      );
+    }
+
     pdf.addPage(
       pw.MultiPage(
         theme: pdfTheme,
@@ -2746,6 +2756,27 @@ class PdfService {
         ),
         build: (context) {
           return [
+            // Activity Overview Summary Box
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey50,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                border: pw.Border.all(color: PdfColors.grey300),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  buildStatBox('Prospects', data.prospects.length.toString(), PdfColors.indigo800),
+                  buildStatBox('Leads', data.leads.length.toString(), PdfColors.cyan900),
+                  buildStatBox('Comms', data.communications.length.toString(), PdfColors.purple900),
+                  buildStatBox('Deals', data.pipelines.length.toString(), PdfColors.teal900),
+                  buildStatBox('Customers', data.customers.length.toString(), PdfColors.blue900),
+                  buildStatBox('Complaints', data.complaints.length.toString(), PdfColors.orange900),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 6),
             if (data.customers.isNotEmpty) ...[
               buildSectionHeader('CUSTOMERS ADDED (${data.customers.length})', PdfColors.blue900),
               pw.TableHelper.fromTextArray(
@@ -2853,6 +2884,27 @@ class PdfService {
             ],
 
             pw.SizedBox(height: 10),
+            if (data.prospects.isNotEmpty) ...[
+              buildSectionHeader('PROSPECTS ADDED (${data.prospects.length})', PdfColors.indigo800),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo800),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellPadding: const pw.EdgeInsets.all(6),
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                headers: ['Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
+                data: data.prospects.map((pr) => [
+                  pr['name']?.toString() ?? '-',
+                  pr['phone']?.toString() ?? '-',
+                  pr['company']?.toString() ?? '-',
+                  pr['source']?.toString() ?? 'Manual',
+                  pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
+                  pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+                ]).toList(),
+              ),
+            ],
+
+            pw.SizedBox(height: 10),
             if (data.conversions.isNotEmpty) ...[
               buildSectionHeader('CONVERSIONS (${data.conversions.length})', PdfColors.green900),
               pw.TableHelper.fromTextArray(
@@ -2895,6 +2947,7 @@ class PdfService {
                 data.stepAuditLogs.isEmpty &&
                 data.communications.isEmpty &&
                 data.leads.isEmpty &&
+                data.prospects.isEmpty &&
                 data.conversions.isEmpty &&
                 data.complaints.isEmpty)
               pw.Text('No activities recorded during this period.', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
@@ -2971,6 +3024,16 @@ class PdfService {
       );
     }
 
+    pw.Widget buildStatBox(String label, String value, PdfColor color) {
+      return pw.Column(
+        children: [
+          pw.Text(value, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: color)),
+          pw.SizedBox(height: 2),
+          pw.Text(label, style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+        ],
+      );
+    }
+
     for (final entry in userEntries) {
       final String uName = entry['userName'] as String;
       final String uRole = entry['userRole'] as String? ?? '';
@@ -3016,6 +3079,27 @@ class PdfService {
           ),
           build: (pageCtx) {
             return [
+              // Activity Overview Summary Box for this user
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey50,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                  border: pw.Border.all(color: PdfColors.grey300),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                  children: [
+                    buildStatBox('Prospects', uData.prospects.length.toString(), PdfColors.indigo800),
+                    buildStatBox('Leads', uData.leads.length.toString(), PdfColors.cyan900),
+                    buildStatBox('Comms', uData.communications.length.toString(), PdfColors.purple900),
+                    buildStatBox('Deals', uData.pipelines.length.toString(), PdfColors.teal900),
+                    buildStatBox('Customers', uData.customers.length.toString(), PdfColors.blue900),
+                    buildStatBox('Complaints', uData.complaints.length.toString(), PdfColors.orange900),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 6),
               if (uData.customers.isNotEmpty) ...[
                 buildSectionHeader('CUSTOMERS ADDED (${uData.customers.length})', PdfColors.blue900),
                 pw.TableHelper.fromTextArray(
@@ -3123,6 +3207,27 @@ class PdfService {
               ],
 
               pw.SizedBox(height: 10),
+              if (uData.prospects.isNotEmpty) ...[
+                buildSectionHeader('PROSPECTS ADDED (${uData.prospects.length})', PdfColors.indigo800),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo800),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  headers: ['Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
+                  data: uData.prospects.map((pr) => [
+                    pr['name']?.toString() ?? '-',
+                    pr['phone']?.toString() ?? '-',
+                    pr['company']?.toString() ?? '-',
+                    pr['source']?.toString() ?? 'Manual',
+                    pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
+                    pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+                  ]).toList(),
+                ),
+              ],
+
+              pw.SizedBox(height: 10),
               if (uData.conversions.isNotEmpty) ...[
                 buildSectionHeader('CONVERSIONS (${uData.conversions.length})', PdfColors.green900),
                 pw.TableHelper.fromTextArray(
@@ -3165,6 +3270,7 @@ class PdfService {
                   uData.stepAuditLogs.isEmpty &&
                   uData.communications.isEmpty &&
                   uData.leads.isEmpty &&
+                  uData.prospects.isEmpty &&
                   uData.conversions.isEmpty &&
                   uData.complaints.isEmpty)
                 pw.Text('No activities recorded for this user during this period.', style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),

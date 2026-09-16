@@ -14,6 +14,7 @@ class Lead {
   final String? convertedBy;
   final String? convertedByName;
   final String createdBy;
+  final String? createdByName;
   final String? assignedTo;
   final String? assignedByName;
   final bool reassignmentRequested;
@@ -40,6 +41,7 @@ class Lead {
     this.convertedBy,
     this.convertedByName,
     required this.createdBy,
+    this.createdByName,
     this.assignedTo,
     this.assignedByName,
     this.reassignmentRequested = false,
@@ -81,6 +83,7 @@ class Lead {
       convertedBy: json['converted_by'] as String?,
       convertedByName: json['converted_by_name'] as String?,
       createdBy: json['created_by'] as String? ?? '',
+      createdByName: (json['creator'] as Map<String, dynamic>?)?['full_name'] as String? ?? json['creator_name'] as String?,
       assignedTo: json['assigned_to'] as String?,
       assignedByName: (json['assignee'] as Map<String, dynamic>?)?['full_name'] as String? ?? json['assignee_name'] as String?,
       reassignmentRequested: req,

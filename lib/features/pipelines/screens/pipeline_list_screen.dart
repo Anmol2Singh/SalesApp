@@ -73,10 +73,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
     final profile = ref.watch(currentProfileProvider);
     final isAdmin = profile?.primaryRole == UserRole.admin;
 
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
-        color: AppColors.primary,
         onRefresh: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
         child: CustomScrollView(
           controller: _scrollController,
@@ -87,7 +88,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => context.go(AppRoutes.adminDashboard),
               ),
-              expandedHeight: 205,
+              expandedHeight: 195 + topPadding,
               pinned: true,
               backgroundColor: const Color(0xFF1E1B4B),
               clipBehavior: Clip.antiAlias,
@@ -96,17 +97,18 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                 style: const TextStyle(
                   fontFamily: 'Inter',
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(28),
+                  bottom: Radius.circular(24),
                 ),
               ),
               flexibleSpace: FlexibleSpaceBar(
                 background: Stack(
+                  fit: StackFit.expand,
                   children: [
                     // Deep indigo → violet gradient
                     Container(
@@ -158,24 +160,25 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                         ),
                       ),
                     ),
-                    // Content
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 56, 20, 10),
+                    // Content safely positioned below the toolbar
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 12,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Row(
                             children: [
                               Container(
-                                width: 44,
-                                height: 44,
+                                width: 36,
+                                height: 36,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: Colors.white.withOpacity(0.3),
-                                    width: 2,
+                                    width: 1.5,
                                   ),
                                   gradient: LinearGradient(
                                     colors: profile?.primaryRole.gradientColors ??
@@ -187,14 +190,14 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                                     (profile?.fullName ?? 'S')[0].toUpperCase(),
                                     style: const TextStyle(
                                       fontFamily: 'Inter',
-                                      fontSize: 18,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,17 +206,16 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                                       'Good ${_getGreeting()}',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         color: Colors.white.withOpacity(0.6),
                                         letterSpacing: 0.5,
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
                                     Text(
                                       profile?.fullName ?? 'Representative',
                                       style: const TextStyle(
                                         fontFamily: 'Inter',
-                                        fontSize: 20,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
@@ -225,31 +227,35 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          // Mini stat pills row
-                          Row(
-                            children: [
-                              _buildHeaderStat(
-                                'Today',
-                                DateFormat('dd MMM').format(DateTime.now()),
-                                Icons.calendar_today_outlined,
-                              ),
-                              const SizedBox(width: 12),
-                              _buildHeaderStat(
-                                'Role',
-                                profile?.primaryRole.name.toUpperCase() ?? 'STAFF',
-                                Icons.badge_outlined,
-                                iconColor: profile?.primaryRole.roleColor ?? Colors.white,
-                                accentColor: profile?.primaryRole.roleColor,
-                              ),
-                              const SizedBox(width: 12),
-                              _buildHeaderStat(
-                                'Status',
-                                'ONLINE',
-                                Icons.circle,
-                                iconColor: const Color(0xFF10B981),
-                                iconSize: 10,
-                              ),
-                            ],
+                          // Mini stat pills row wrapped in scroll view to prevent overflow on small screens
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: Row(
+                              children: [
+                                _buildHeaderStat(
+                                  'Today',
+                                  DateFormat('dd MMM').format(DateTime.now()),
+                                  Icons.calendar_today_outlined,
+                                ),
+                                const SizedBox(width: 8),
+                                _buildHeaderStat(
+                                  'Role',
+                                  profile?.primaryRole.name.toUpperCase() ?? 'STAFF',
+                                  Icons.badge_outlined,
+                                  iconColor: profile?.primaryRole.roleColor ?? Colors.white,
+                                  accentColor: profile?.primaryRole.roleColor,
+                                ),
+                                const SizedBox(width: 8),
+                                _buildHeaderStat(
+                                  'Status',
+                                  'ONLINE',
+                                  Icons.circle,
+                                  iconColor: const Color(0xFF10B981),
+                                  iconSize: 8,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -260,46 +266,74 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               actions: [
                 const SyncStatusIndicator(),
                 IconButton(
-                  icon: const Icon(Icons.filter_list, color: Colors.white),
+                  icon: const Icon(Icons.filter_list, color: Colors.white, size: 20),
+                  tooltip: 'Filter Deals',
                   onPressed: _showFilterSheet,
                 ),
-                if (isAdmin)
-                  IconButton(
-                    icon: const Icon(Icons.download_outlined, color: Colors.white),
-                    onPressed: () => _exportExcel(context, ref),
-                  ),
                 IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                  tooltip: 'Refresh',
                   onPressed: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                  tooltip: 'Logout',
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Logout'),
-                        content: const Text('Are you sure you want to sign out?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.error),
-                            child: const Text('Logout',
-                                style: TextStyle(color: Colors.white)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      await ref.read(authControllerProvider.notifier).signOut();
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                  tooltip: 'More options',
+                  onSelected: (val) async {
+                    if (val == 'export') {
+                      _exportExcel(context, ref);
+                    } else if (val == 'logout') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Logout'),
+                          content: const Text('Are you sure you want to sign out?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.error,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Logout'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await ref.read(authControllerProvider.notifier).signOut();
+                        if (context.mounted) {
+                          context.go(AppRoutes.login);
+                        }
+                      }
                     }
                   },
+                  itemBuilder: (ctx) => [
+                    if (isAdmin)
+                      const PopupMenuItem(
+                        value: 'export',
+                        child: Row(
+                          children: [
+                            Icon(Icons.download_outlined, color: AppColors.primary, size: 18),
+                            SizedBox(width: 10),
+                            Text('Export to Excel'),
+                          ],
+                        ),
+                      ),
+                    const PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout, color: AppColors.error, size: 18),
+                          SizedBox(width: 10),
+                          Text('Logout', style: TextStyle(color: AppColors.error)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

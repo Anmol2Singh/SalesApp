@@ -29,31 +29,91 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     setState(() => _isSaving = true);
     final safeName = _safeFileName;
     try {
-      Directory? dir;
-      if (Platform.isAndroid) {
-        dir = Directory('/storage/emulated/0/Download');
-        if (!dir.existsSync()) {
-          dir = await getExternalStorageDirectory();
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        Directory? winDownloads;
+        if (userProfile != null) {
+          final candidate = Directory('$userProfile\\Downloads');
+          if (candidate.existsSync()) winDownloads = candidate;
         }
-      } else {
-        dir = await getApplicationDocumentsDirectory();
+        winDownloads ??= await getDownloadsDirectory();
+        if (winDownloads != null) {
+          final file = File('${winDownloads.path}/$safeName');
+          await file.writeAsBytes(widget.pdfBytes, flush: true);
+          try {
+            Process.run('explorer.exe', ['/select,', file.path]);
+          } catch (_) {}
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✓ Downloaded to Downloads folder: $safeName'),
+                backgroundColor: AppColors.success,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+          return;
+        }
       }
 
-      if (dir != null && !dir.existsSync()) {
-        dir.createSync(recursive: true);
+      if (Platform.isAndroid) {
+        bool savedDirectly = false;
+        try {
+          final downloadDir = Directory('/storage/emulated/0/Download');
+          if (downloadDir.existsSync()) {
+            final target = File('${downloadDir.path}/$safeName');
+            await target.writeAsBytes(widget.pdfBytes, flush: true);
+            savedDirectly = true;
+          }
+        } catch (_) {}
+
+        if (savedDirectly) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✓ Downloaded to device storage: $safeName'),
+                backgroundColor: AppColors.success,
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: 'Share',
+                  textColor: Colors.white,
+                  onPressed: () => _shareFile(),
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        // On Android Scoped Storage: use Printing.sharePdf to open native system Save/Print sheet
+        await Printing.sharePdf(
+          bytes: widget.pdfBytes,
+          filename: safeName,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✓ Choose "Save to Downloads" or viewer for $safeName'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
       }
 
-      final filePath = '${dir!.path}/$safeName';
-      final file = File(filePath);
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$safeName');
       await file.writeAsBytes(widget.pdfBytes);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Saved to Downloads: $safeName'),
+            content: Text('✓ Saved: $safeName'),
             backgroundColor: AppColors.success,
             action: SnackBarAction(
-              label: 'View / Open',
+              label: 'Share',
               textColor: Colors.white,
               onPressed: () => _shareFile(),
             ),
@@ -61,34 +121,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         );
       }
     } catch (e) {
-      try {
-        final appDir = await getApplicationDocumentsDirectory();
-        final filePath = '${appDir.path}/$safeName';
-        final file = File(filePath);
-        await file.writeAsBytes(widget.pdfBytes);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Saved to app documents: $safeName'),
-              backgroundColor: AppColors.success,
-              action: SnackBarAction(
-                label: 'Share / View',
-                textColor: Colors.white,
-                onPressed: () => _shareFile(),
-              ),
-            ),
-          );
-        }
-      } catch (err) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to save file: $err'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save file: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

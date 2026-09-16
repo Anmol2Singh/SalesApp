@@ -9,6 +9,8 @@ import '../models/customer.dart';
 import '../models/amc_contract.dart';
 import '../../features/crm/data/models/prospect_model.dart';
 import '../../features/crm/data/models/lead_model.dart';
+import '../../features/complaints/data/models/complaint_model.dart';
+import '../../features/reports/models/activity_report_data.dart';
 import '../widgets/export_preview_dialog.dart';
 
 class ExcelService {
@@ -28,7 +30,7 @@ class ExcelService {
       'Product',
       'Current Step',
       'Status',
-      'Salesperson',
+      'Salesperson (Created By)',
       'Created Date',
       'Last Updated',
     ];
@@ -99,12 +101,14 @@ class ExcelService {
     final sheet = excel['Customers'];
 
     final headers = [
-      'Company Name',
+      'Company / Customer Name',
       'Contact Person',
       'Phone',
       'Email',
       'Address',
       'GST Number',
+      'Created By (User)',
+      'Assigned Salesperson',
       'Created Date',
     ];
 
@@ -131,6 +135,8 @@ class ExcelService {
         c.email ?? '',
         c.address ?? '',
         c.gstNumber ?? '',
+        c.salesmanName ?? c.createdBy,
+        c.assignedToName ?? '-',
         _dateFormat.format(c.createdAt),
       ];
 
@@ -173,6 +179,8 @@ class ExcelService {
       'Address',
       'GST Number',
       'Lead Source',
+      'Created By (User)',
+      'Assigned To',
       'Created Date',
       'Converted to Lead',
     ];
@@ -200,6 +208,8 @@ class ExcelService {
         p.address ?? '',
         p.gst ?? '',
         p.source,
+        p.createdByName ?? p.createdBy,
+        p.assignedByName ?? p.assignedTo ?? '-',
         _dateFormat.format(p.createdAt),
         p.convertedToLeadId != null ? 'Yes' : 'No',
       ];
@@ -239,6 +249,8 @@ class ExcelService {
       'Product Name',
       'Status',
       'Estimated Value',
+      'Created By (User)',
+      'Assigned To',
       'Expected Date',
       'Created Date',
       'Notes',
@@ -274,6 +286,8 @@ class ExcelService {
         l.productName,
         l.status,
         _currencyFormat.format(l.estimatedValue),
+        l.createdByName ?? l.createdBy,
+        l.assignedByName ?? l.assignedTo ?? '-',
         l.expectedDate != null ? _dateFormat.format(l.expectedDate!) : '',
         _dateFormat.format(l.createdAt),
         l.notes ?? '',
@@ -317,6 +331,8 @@ class ExcelService {
       'Address',
       'GST',
       'Deal Value',
+      'Created By (User)',
+      'Assigned To',
       'Won Date',
     ];
 
@@ -351,6 +367,8 @@ class ExcelService {
         p?.address ?? '',
         p?.gst ?? '',
         _currencyFormat.format(l.estimatedValue),
+        l.createdByName ?? l.createdBy,
+        l.assignedByName ?? l.assignedTo ?? '-',
         _dateFormat.format(l.updatedAt),
       ];
 
@@ -374,6 +392,189 @@ class ExcelService {
         fileName: fileName,
         headers: headers,
         rows: previewRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
+  static Future<void> exportComplaints(BuildContext context, List<Complaint> complaints) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Complaints'];
+
+    final headers = [
+      'Ticket Number',
+      'Title',
+      'Customer Name',
+      'Phone',
+      'Address',
+      'Product',
+      'Priority',
+      'Status',
+      'Technician / Handled By',
+      'Source / Logged By',
+      'TAT Remaining',
+      'Date Logged',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final List<List<String>> previewRows = [];
+
+    for (int rowIdx = 0; rowIdx < complaints.length; rowIdx++) {
+      final c = complaints[rowIdx];
+      final row = rowIdx + 1;
+      final data = [
+        c.ticketNumber,
+        c.title,
+        c.customerName,
+        c.customerPhone,
+        c.customerAddress,
+        c.productName ?? '-',
+        c.priority,
+        c.status.toUpperCase(),
+        c.technicianName ?? 'Unassigned',
+        c.source,
+        c.tatRemaining,
+        _dateFormat.format(c.createdAt),
+      ];
+
+      previewRows.add(data);
+
+      for (int colIdx = 0; colIdx < data.length; colIdx++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: colIdx, rowIndex: row));
+        cell.value = TextCellValue(data[colIdx]);
+      }
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate Excel file');
+
+    final fileName = 'Complaints_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx';
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Export Preview — Complaints',
+        fileName: fileName,
+        headers: headers,
+        rows: previewRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
+  static Future<void> exportActivityReportExcel(
+    BuildContext context, {
+    required ActivityReportData data,
+    required String userName,
+    required String dateStr,
+  }) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Activity Summary'];
+
+    final headers = [
+      'Activity Category',
+      'Count',
+      'Staff Member',
+      'Period',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final summaryRows = [
+      ['Prospects Added', data.prospects.length.toString(), userName, dateStr],
+      ['Leads Added', data.leads.length.toString(), userName, dateStr],
+      ['Lead Communications Logged', data.communications.length.toString(), userName, dateStr],
+      ['Deals Created', data.pipelines.length.toString(), userName, dateStr],
+      ['Customers Added', data.customers.length.toString(), userName, dateStr],
+      ['Complaints Handled', data.complaints.length.toString(), userName, dateStr],
+      ['Deal Steps Completed', data.stepAuditLogs.length.toString(), userName, dateStr],
+    ];
+
+    for (int r = 0; r < summaryRows.length; r++) {
+      for (int c = 0; c < summaryRows[r].length; c++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1));
+        cell.value = TextCellValue(summaryRows[r][c]);
+      }
+    }
+
+    // Prospects Sheet
+    if (data.prospects.isNotEmpty) {
+      final pSheet = excel['Prospects'];
+      final pHeaders = ['Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Created At'];
+      for (int i = 0; i < pHeaders.length; i++) {
+        final cell = pSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = TextCellValue(pHeaders[i]);
+        cell.cellStyle = CellStyle(bold: true, backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'), fontColorHex: ExcelColor.fromHexString('#FFFFFF'));
+      }
+      for (int r = 0; r < data.prospects.length; r++) {
+        final pr = data.prospects[r];
+        final rowData = [
+          pr['name']?.toString() ?? '-',
+          pr['phone']?.toString() ?? '-',
+          pr['company']?.toString() ?? '-',
+          pr['source']?.toString() ?? 'Manual',
+          pr['converted_to_lead_id'] != null ? 'Yes' : 'No',
+          pr['created_at'] != null ? _dateFormat.format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+        ];
+        for (int c = 0; c < rowData.length; c++) {
+          pSheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1)).value = TextCellValue(rowData[c]);
+        }
+      }
+    }
+
+    // Leads Sheet
+    if (data.leads.isNotEmpty) {
+      final lSheet = excel['Leads'];
+      final lHeaders = ['Lead / Prospect', 'Product Name', 'Estimated Value', 'Status', 'Created At'];
+      for (int i = 0; i < lHeaders.length; i++) {
+        final cell = lSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = TextCellValue(lHeaders[i]);
+        cell.cellStyle = CellStyle(bold: true, backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'), fontColorHex: ExcelColor.fromHexString('#FFFFFF'));
+      }
+      for (int r = 0; r < data.leads.length; r++) {
+        final l = data.leads[r];
+        final rowData = [
+          l['prospect_name']?.toString() ?? '-',
+          l['product_name']?.toString() ?? '-',
+          '₹${l['estimated_value'] ?? 0}',
+          l['status']?.toString() ?? 'New',
+          l['created_at'] != null ? _dateFormat.format(DateTime.tryParse(l['created_at']) ?? DateTime.now()) : '-',
+        ];
+        for (int c = 0; c < rowData.length; c++) {
+          lSheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1)).value = TextCellValue(rowData[c]);
+        }
+      }
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate Excel file');
+
+    final fileName = 'Activity_Report_${userName.replaceAll(" ", "_")}_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx';
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Export Preview — Activity Report ($userName)',
+        fileName: fileName,
+        headers: headers,
+        rows: summaryRows,
         fileBytes: fileBytes,
       );
     }

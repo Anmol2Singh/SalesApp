@@ -11,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/customers_provider.dart';
 import '../../../core/models/customer.dart';
+import '../../../core/services/excel_service.dart';
 
 class CustomerListScreen extends ConsumerStatefulWidget {
   final String initialSearch;
@@ -109,6 +110,20 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                     ),
                 ],
               );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Export to Excel',
+            onPressed: () {
+              final customers = customersAsync.valueOrNull ?? [];
+              if (customers.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No customers to export')),
+                );
+                return;
+              }
+              ExcelService.exportCustomers(context, customers);
             },
           ),
           IconButton(
