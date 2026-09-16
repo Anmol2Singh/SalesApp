@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/customer.dart';
@@ -73,270 +72,130 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
     final profile = ref.watch(currentProfileProvider);
     final isAdmin = profile?.primaryRole == UserRole.admin;
 
-    final topPadding = MediaQuery.of(context).padding.top;
-
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go(AppRoutes.adminDashboard);
+            }
+          },
+        ),
+        title: Text(isAdmin ? 'All Deals' : 'My Deals'),
+        actions: [
+          const SyncStatusIndicator(),
+          Consumer(
+            builder: (context, ref, _) {
+              final hasActive = _selectedStep.isNotEmpty || _selectedStatus.isNotEmpty;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.filter_list),
+                    tooltip: 'Filter Deals',
+                    onPressed: _showFilterSheet,
+                  ),
+                  if (hasActive)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.download_outlined),
+              tooltip: 'Export to Excel',
+              onPressed: () => _exportExcel(context, ref),
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'More options',
+            onSelected: (val) async {
+              if (val == 'export') {
+                _exportExcel(context, ref);
+              } else if (val == 'logout') {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to sign out?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Logout'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await ref.read(authControllerProvider.notifier).signOut();
+                  if (context.mounted) {
+                    context.go(AppRoutes.login);
+                  }
+                }
+              }
+            },
+            itemBuilder: (ctx) => [
+              if (isAdmin)
+                const PopupMenuItem(
+                  value: 'export',
+                  child: Row(
+                    children: [
+                      Icon(Icons.download_outlined, color: AppColors.primary, size: 18),
+                      SizedBox(width: 10),
+                      Text('Export to Excel'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: AppColors.error, size: 18),
+                    SizedBox(width: 10),
+                    Text('Logout', style: TextStyle(color: AppColors.error)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverAppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.go(AppRoutes.adminDashboard),
-              ),
-              expandedHeight: 195 + topPadding,
-              pinned: true,
-              backgroundColor: const Color(0xFF1E1B4B),
-              clipBehavior: Clip.antiAlias,
-              title: Text(
-                isAdmin ? 'All Deals' : 'My Deals',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(24),
-                ),
-              ),
-              flexibleSpace: FlexibleSpaceBar(
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Deep indigo → violet gradient
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF1E1B4B),
-                            Color(0xFF4C1D95),
-                            Color(0xFF6D28D9),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Radial glow top-right
-                    Positioned(
-                      top: -40,
-                      right: -30,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.primary.withOpacity(0.25),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Radial glow bottom-left
-                    Positioned(
-                      bottom: -20,
-                      left: -40,
-                      child: Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              const Color(0xFF06B6D4).withOpacity(0.15),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Content safely positioned below the toolbar
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 12,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
-                                    width: 1.5,
-                                  ),
-                                  gradient: LinearGradient(
-                                    colors: profile?.primaryRole.gradientColors ??
-                                        [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)],
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    (profile?.fullName ?? 'S')[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Good ${_getGreeting()}',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 11,
-                                        color: Colors.white.withOpacity(0.6),
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    Text(
-                                      profile?.fullName ?? 'Representative',
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          // Mini stat pills row wrapped in scroll view to prevent overflow on small screens
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            child: Row(
-                              children: [
-                                _buildHeaderStat(
-                                  'Today',
-                                  DateFormat('dd MMM').format(DateTime.now()),
-                                  Icons.calendar_today_outlined,
-                                ),
-                                const SizedBox(width: 8),
-                                _buildHeaderStat(
-                                  'Role',
-                                  profile?.primaryRole.name.toUpperCase() ?? 'STAFF',
-                                  Icons.badge_outlined,
-                                  iconColor: profile?.primaryRole.roleColor ?? Colors.white,
-                                  accentColor: profile?.primaryRole.roleColor,
-                                ),
-                                const SizedBox(width: 8),
-                                _buildHeaderStat(
-                                  'Status',
-                                  'ONLINE',
-                                  Icons.circle,
-                                  iconColor: const Color(0xFF10B981),
-                                  iconSize: 8,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                const SyncStatusIndicator(),
-                IconButton(
-                  icon: const Icon(Icons.filter_list, color: Colors.white, size: 20),
-                  tooltip: 'Filter Deals',
-                  onPressed: _showFilterSheet,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-                  tooltip: 'Refresh',
-                  onPressed: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
-                  tooltip: 'More options',
-                  onSelected: (val) async {
-                    if (val == 'export') {
-                      _exportExcel(context, ref);
-                    } else if (val == 'logout') {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Logout'),
-                          content: const Text('Are you sure you want to sign out?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel'),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.error,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Logout'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        await ref.read(authControllerProvider.notifier).signOut();
-                        if (context.mounted) {
-                          context.go(AppRoutes.login);
-                        }
-                      }
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    if (isAdmin)
-                      const PopupMenuItem(
-                        value: 'export',
-                        child: Row(
-                          children: [
-                            Icon(Icons.download_outlined, color: AppColors.primary, size: 18),
-                            SizedBox(width: 10),
-                            Text('Export to Excel'),
-                          ],
-                        ),
-                      ),
-                    const PopupMenuItem(
-                      value: 'logout',
-                      child: Row(
-                        children: [
-                          Icon(Icons.logout, color: AppColors.error, size: 18),
-                          SizedBox(width: 10),
-                          Text('Logout', style: TextStyle(color: AppColors.error)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
 
             // Toggle Bar: Active Deals vs Completed Deals
             SliverToBoxAdapter(
@@ -584,67 +443,6 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         );
       }
     }
-  }
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    return 'Evening';
-  }
-
-  static Widget _buildHeaderStat(
-    String label,
-    String value,
-    IconData icon, {
-    Color iconColor = Colors.white,
-    double iconSize = 14,
-    Color? accentColor,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: accentColor != null ? accentColor.withOpacity(0.18) : Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: accentColor != null ? accentColor.withOpacity(0.45) : Colors.white.withOpacity(0.1),
-            width: accentColor != null ? 1.2 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor, size: iconSize),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
