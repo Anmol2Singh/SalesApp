@@ -10,6 +10,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../../core/models/factory_order.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/widgets/sync_status_indicator.dart';
+import '../../reports/widgets/daily_report_modal.dart';
 
 final factoryQueueProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -45,19 +46,11 @@ class FactoryQueueScreen extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-              expandedHeight: 220,
+              expandedHeight: 180,
               pinned: true,
               backgroundColor: const Color(0xFF1E1B4B),
               clipBehavior: Clip.antiAlias,
-              title: const Text(
-                'Factory Queue',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              automaticallyImplyLeading: false,
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(
                   bottom: Radius.circular(28),
@@ -91,7 +84,7 @@ class FactoryQueueScreen extends ConsumerWidget {
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              AppColors.primary.withOpacity(0.25),
+                              AppColors.primary.withValues(alpha: 0.25),
                               Colors.transparent,
                             ],
                           ),
@@ -109,7 +102,7 @@ class FactoryQueueScreen extends ConsumerWidget {
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              const Color(0xFF06B6D4).withOpacity(0.15),
+                              const Color(0xFF06B6D4).withValues(alpha: 0.15),
                               Colors.transparent,
                             ],
                           ),
@@ -118,7 +111,7 @@ class FactoryQueueScreen extends ConsumerWidget {
                     ),
                     // Content
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 70, 20, 16),
+                      padding: const EdgeInsets.fromLTRB(20, 42, 20, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -131,7 +124,7 @@ class FactoryQueueScreen extends ConsumerWidget {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
+                                    color: Colors.white.withValues(alpha: 0.3),
                                     width: 2,
                                   ),
                                   gradient: const LinearGradient(
@@ -160,7 +153,7 @@ class FactoryQueueScreen extends ConsumerWidget {
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: 12,
-                                        color: Colors.white.withOpacity(0.6),
+                                        color: Colors.white.withValues(alpha: 0.6),
                                         letterSpacing: 0.5,
                                       ),
                                     ),
@@ -180,28 +173,28 @@ class FactoryQueueScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          // Mini stat pills row
-                          Row(
+                          const SizedBox(height: 12),
+                          // Responsive stat pills wrap
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
                             children: [
                               _buildHeaderStat(
                                 'Today',
                                 DateFormat('dd MMM').format(DateTime.now()),
                                 Icons.calendar_today_outlined,
                               ),
-                              const SizedBox(width: 12),
                               _buildHeaderStat(
                                 'Role',
                                 profile?.primaryRole.name.toUpperCase() ?? 'FACTORY',
                                 Icons.badge_outlined,
                               ),
-                              const SizedBox(width: 12),
                               _buildHeaderStat(
                                 'Status',
                                 'ONLINE',
                                 Icons.circle,
                                 iconColor: const Color(0xFF10B981),
-                                iconSize: 10,
+                                iconSize: 8,
                               ),
                             ],
                           ),
@@ -214,7 +207,13 @@ class FactoryQueueScreen extends ConsumerWidget {
               actions: [
                 const SyncStatusIndicator(),
                 IconButton(
+                  icon: const Icon(Icons.summarize_outlined, color: Colors.white),
+                  tooltip: 'Daily Report',
+                  onPressed: () => DailyReportModal.show(context, ref),
+                ),
+                IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white),
+                  tooltip: 'Refresh',
                   onPressed: () => ref.invalidate(factoryQueueProvider),
                 ),
                 IconButton(
@@ -247,6 +246,90 @@ class FactoryQueueScreen extends ConsumerWidget {
                   },
                 ),
               ],
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: InkWell(
+                  onTap: () => DailyReportModal.show(context, ref),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.25)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.summarize_outlined, color: Color(0xFF6366F1), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Download Daily Report',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Export or download your activities for today (PDF / Excel)',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.download, size: 14, color: Color(0xFF6366F1)),
+                              SizedBox(width: 4),
+                              Text(
+                                'Report',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF6366F1),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
             queueAsync.when(
               data: (orders) {
@@ -454,47 +537,39 @@ class FactoryQueueScreen extends ConsumerWidget {
     String value,
     IconData icon, {
     Color iconColor = Colors.white,
-    double iconSize = 14,
+    double iconSize = 13,
   }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor, size: iconSize),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: iconColor, size: iconSize),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 10,
+              color: Colors.white.withValues(alpha: 0.7),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

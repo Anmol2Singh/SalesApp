@@ -41,16 +41,9 @@ class AppShell extends ConsumerWidget {
           return;
         }
 
-        // For Customers, Deals, Alerts, and Admin: on back button move to main Admin Dashboard
-        if (currentRoute == AppRoutes.customers ||
-            currentRoute == AppRoutes.pipelines ||
-            currentRoute == AppRoutes.notifications ||
-            currentRoute == AppRoutes.userManagement ||
-            currentRoute.startsWith('/customers') ||
-            currentRoute.startsWith('/pipelines') ||
-            currentRoute.startsWith('/notifications') ||
-            (currentRoute.startsWith('/admin') && currentRoute != AppRoutes.adminDashboard)) {
-          context.go(AppRoutes.adminDashboard);
+        final home = getRoleHome(profile.primaryRole);
+        if (currentRoute != home) {
+          context.go(home);
           return;
         }
         
@@ -95,7 +88,12 @@ class AppShell extends ConsumerWidget {
             return child;
           },
         ),
-        bottomNavigationBar: MediaQuery.of(context).size.width < 800 && profile.primaryRole != UserRole.customer && !currentRoute.startsWith('/crm')
+        bottomNavigationBar: MediaQuery.of(context).size.width < 800 &&
+                profile.primaryRole != UserRole.customer &&
+                (!currentRoute.startsWith('/crm') ||
+                    profile.primaryRole == UserRole.boq ||
+                    profile.primaryRole == UserRole.factory ||
+                    profile.primaryRole == UserRole.purchase)
             ? _buildNavBar(context, profile.roles, unreadCount, false)
             : null,
       ),
@@ -415,18 +413,19 @@ class AppShell extends ConsumerWidget {
           addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
           break;
         case UserRole.boq:
+          addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+          addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
           addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: AppRoutes.userManagement, label: 'BOQ Items', icon: Icon(Icons.format_list_bulleted_outlined), selectedIcon: Icon(Icons.format_list_bulleted)));
           addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
           break;
         case UserRole.factory:
+          addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
           addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
           addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
           break;
         case UserRole.purchase:
+          addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
           addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
           addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
           break;
         case UserRole.customer:

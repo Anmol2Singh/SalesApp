@@ -34,7 +34,7 @@ class AdminPanelScreen extends ConsumerWidget {
               if (context.canPop()) {
                 context.pop();
               } else {
-                context.go('/crm/prospects');
+                context.go(AppRoutes.boqDashboard);
               }
             },
           ),

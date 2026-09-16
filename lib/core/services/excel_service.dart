@@ -1,6 +1,5 @@
 // lib/core/services/excel_service.dart
 
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +10,8 @@ import '../../features/crm/data/models/prospect_model.dart';
 import '../../features/crm/data/models/lead_model.dart';
 import '../../features/complaints/data/models/complaint_model.dart';
 import '../../features/reports/models/activity_report_data.dart';
+import '../models/inventory_item.dart';
+import '../models/product.dart';
 import '../widgets/export_preview_dialog.dart';
 
 class ExcelService {
@@ -652,6 +653,161 @@ class ExcelService {
       ExportPreviewDialog.show(
         context,
         title: 'Export Preview — AMC Contracts',
+        fileName: fileName,
+        headers: headers,
+        rows: previewRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
+  static Future<void> exportInventoryItems(BuildContext context, List<InventoryItem> items) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Inventory_Items'];
+    excel.setDefaultSheet('Inventory_Items');
+
+    final headers = [
+      '#',
+      'Item Name',
+      'HSN / SAC Code',
+      'Unit (UOM)',
+      'Default Price (₹)',
+      'Warranty (Months)',
+      'Created Date',
+      'Item ID',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final List<List<String>> previewRows = [];
+
+    for (int rowIdx = 0; rowIdx < items.length; rowIdx++) {
+      final item = items[rowIdx];
+      final row = rowIdx + 1;
+
+      final data = [
+        (rowIdx + 1).toString(),
+        item.itemName,
+        item.hsnSac != null && item.hsnSac!.isNotEmpty ? item.hsnSac! : '-',
+        item.uom != null && item.uom!.isNotEmpty ? item.uom! : 'NOS',
+        '₹${_currencyFormat.format(item.price)}',
+        '${item.warrantyMonths}m',
+        _dateFormat.format(item.createdAt.toLocal()),
+        item.id,
+      ];
+
+      previewRows.add(data);
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = IntCellValue(rowIdx + 1);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(item.itemName);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(item.hsnSac ?? '');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(item.uom ?? 'NOS');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = DoubleCellValue(item.price);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = IntCellValue(item.warrantyMonths);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = TextCellValue(_dateFormat.format(item.createdAt.toLocal()));
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = TextCellValue(item.id);
+
+      if (row.isEven) {
+        for (int c = 0; c < headers.length; c++) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row)).cellStyle =
+              CellStyle(backgroundColorHex: ExcelColor.fromHexString('#F8FAFC'));
+        }
+      }
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate Excel file');
+
+    final fileName = 'Inventory_Items_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx';
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Export Preview — Inventory Items (${items.length})',
+        fileName: fileName,
+        headers: headers,
+        rows: previewRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
+  static Future<void> exportProducts(BuildContext context, List<Product> products) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Products'];
+    excel.setDefaultSheet('Products');
+
+    final headers = [
+      '#',
+      'Product Name',
+      'Category',
+      'Capacities',
+      'Status',
+      'Created Date',
+      'Product ID',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final List<List<String>> previewRows = [];
+
+    for (int rowIdx = 0; rowIdx < products.length; rowIdx++) {
+      final p = products[rowIdx];
+      final row = rowIdx + 1;
+
+      final data = [
+        (rowIdx + 1).toString(),
+        p.name,
+        p.category ?? '-',
+        p.baseSpecs.capacities.isNotEmpty ? p.baseSpecs.capacities.join(', ') : '-',
+        p.isActive ? 'Active' : 'Inactive',
+        _dateFormat.format(p.createdAt.toLocal()),
+        p.id,
+      ];
+
+      previewRows.add(data);
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = IntCellValue(rowIdx + 1);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(p.name);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(p.category ?? '');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(p.baseSpecs.capacities.join(', '));
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = TextCellValue(p.isActive ? 'Active' : 'Inactive');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = TextCellValue(_dateFormat.format(p.createdAt.toLocal()));
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = TextCellValue(p.id);
+
+      if (row.isEven) {
+        for (int c = 0; c < headers.length; c++) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row)).cellStyle =
+              CellStyle(backgroundColorHex: ExcelColor.fromHexString('#F8FAFC'));
+        }
+      }
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate Excel file');
+
+    final fileName = 'Product_Catalog_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx';
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Export Preview — Products (${products.length})',
         fileName: fileName,
         headers: headers,
         rows: previewRows,

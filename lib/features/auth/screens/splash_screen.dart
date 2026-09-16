@@ -176,10 +176,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return AppRoutes.adminDashboard;
       case UserRole.sales:
       case UserRole.salesHead:
-      case UserRole.factory:
-      case UserRole.purchase:
-      case UserRole.boq:
         return AppRoutes.salesDashboard;
+      case UserRole.factory:
+        return AppRoutes.factoryQueue;
+      case UserRole.purchase:
+        return AppRoutes.purchaseQueue;
+      case UserRole.boq:
+        return AppRoutes.boqDashboard;
       case UserRole.serviceHead:
         return AppRoutes.complaintsDashboard;
       case UserRole.technician:

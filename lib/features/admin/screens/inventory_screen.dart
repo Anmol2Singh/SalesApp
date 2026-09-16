@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +11,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/manage_boq_items_provider.dart';
 import 'product_catalog_screen.dart';
+import '../../../core/services/excel_service.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
@@ -70,6 +69,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         ),
         actions: isProductsTab
             ? [
+                IconButton(
+                  icon: const Icon(Icons.download, color: Colors.white),
+                  tooltip: 'Export Products',
+                  onPressed: () {
+                    final products = ref.read(productsProvider).valueOrNull ?? [];
+                    if (products.isNotEmpty) {
+                      ExcelService.exportProducts(context, products);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('No products to export.')),
+                      );
+                    }
+                  },
+                ),
                 TextButton.icon(
                   style: TextButton.styleFrom(foregroundColor: Colors.white),
                   icon: const Icon(Icons.add_circle_outline, size: 18, color: Colors.white),
@@ -87,9 +100,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   icon: const Icon(Icons.download, color: Colors.white),
                   tooltip: 'Export Excel',
                   onPressed: () {
-                    final items = inventoryAsync.valueOrNull;
-                    if (items != null && items.isNotEmpty) {
-                      _exportExcel(context, ref, items);
+                    final items = inventoryAsync.valueOrNull ?? [];
+                    if (items.isNotEmpty) {
+                      ExcelService.exportInventoryItems(context, items);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('No items to export.')),
@@ -1778,44 +1791,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     );
   }
 
-  Future<void> _exportExcel(BuildContext context, WidgetRef ref, List<dynamic> items) async {
-    try {
-      var excel = Excel.createExcel();
-      var sheetObject = excel['Inventory'];
-      excel.setDefaultSheet('Inventory');
-
-      List<String> dataList = ['Item Name', 'HSN / SAC Code', 'Unit (UOM)', 'Price (₹)'];
-      sheetObject.appendRow(dataList.map((e) => TextCellValue(e)).toList());
-
-      for (var item in items) {
-        sheetObject.appendRow([
-          TextCellValue(item.itemName),
-          TextCellValue(item.hsnSac ?? ''),
-          TextCellValue(item.uom ?? ''),
-          DoubleCellValue(item.price),
-        ]);
-      }
-
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Failed to encode Excel file.');
-
-      final directory = await getTemporaryDirectory();
-      final path = '${directory.path}/InventoryExport.xlsx';
-      final file = File(path);
-      await file.writeAsBytes(bytes);
-
-      if (context.mounted) {
-        await Share.shareXFiles([XFile(path)], text: 'Inventory Export');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export Error: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
   Future<void> _importExcel(BuildContext context, WidgetRef ref) async {
     try {
       final files = await FilePicker.pickFiles(
@@ -1842,19 +1817,41 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         final sheet = excel.tables[table];
         if (sheet == null) continue;
 
+        int nameCol = 0;
+        int hsnCol = 1;
+        int unitCol = 2;
+        int priceCol = 3;
+        int warrantyCol = 4;
+
         bool isFirstRow = true;
         for (var row in sheet.rows) {
           if (isFirstRow) {
             isFirstRow = false;
+            // Parse headers to locate columns dynamically if headers exist
+            for (int i = 0; i < row.length; i++) {
+              final header = row[i]?.value?.toString().toLowerCase().trim() ?? '';
+              if (header.contains('item') || header.contains('name')) {
+                nameCol = i;
+              } else if (header.contains('hsn') || header.contains('sac')) {
+                hsnCol = i;
+              } else if (header.contains('unit') || header.contains('uom')) {
+                unitCol = i;
+              } else if (header.contains('price') || header.contains('cost') || header.contains('₹')) {
+                priceCol = i;
+              } else if (header.contains('warranty')) {
+                warrantyCol = i;
+              }
+            }
             continue;
           }
 
           if (row.isEmpty) continue;
 
-          final itemNameCell = row.isNotEmpty ? row[0]?.value : null;
-          final hsnCell = row.length > 1 ? row[1]?.value : null;
-          final unitCell = row.length > 2 ? row[2]?.value : null;
-          final priceCell = row.length > 3 ? row[3]?.value : null;
+          final itemNameCell = row.length > nameCol ? row[nameCol]?.value : null;
+          final hsnCell = row.length > hsnCol ? row[hsnCol]?.value : null;
+          final unitCell = row.length > unitCol ? row[unitCol]?.value : null;
+          final priceCell = row.length > priceCol ? row[priceCol]?.value : null;
+          final warrantyCell = row.length > warrantyCol ? row[warrantyCol]?.value : null;
 
           final itemName = itemNameCell?.toString().trim();
           if (itemName == null || itemName.isEmpty) continue;
@@ -1874,7 +1871,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             } else if (priceCell is IntCellValue) {
               price = priceCell.value.toDouble();
             } else {
-              price = double.tryParse(priceCell.toString()) ?? 0.0;
+              price = double.tryParse(priceCell.toString().replaceAll('₹', '').replaceAll(',', '').trim()) ?? 0.0;
+            }
+          }
+
+          int warranty = 12;
+          if (warrantyCell != null) {
+            if (warrantyCell is IntCellValue) {
+              warranty = warrantyCell.value;
+            } else if (warrantyCell is DoubleCellValue) {
+              warranty = warrantyCell.value.toInt();
+            } else {
+              warranty = int.tryParse(warrantyCell.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 12;
             }
           }
 
@@ -1883,6 +1891,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             'hsn_sac': hsn,
             'uom': unit,
             'price': price,
+            'warranty_months': warranty,
           });
 
           existingNames.add(itemName.toLowerCase());

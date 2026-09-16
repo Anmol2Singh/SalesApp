@@ -54,7 +54,12 @@ class CrmShell extends ConsumerWidget {
         }
 
         if (!canAccessCrmDashboard) {
-          context.go('/crm/prospects');
+          final role = profile?.primaryRole;
+          if (role != null) {
+            context.go(getRoleHome(role));
+            return;
+          }
+          context.go(AppRoutes.login);
           return;
         }
 

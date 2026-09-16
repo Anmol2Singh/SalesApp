@@ -14,6 +14,8 @@ import '../../features/pipelines/screens/pipeline_detail_screen.dart';
 import '../../features/quotation/screens/quotation_form_screen.dart';
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
 import '../../features/boq/screens/boq_form_screen.dart';
+import '../../features/boq/screens/boq_dashboard_screen.dart';
+import '../../features/admin/screens/manage_boq_items_screen.dart';
 import '../../features/factory_order/screens/factory_order_screen.dart';
 import '../../features/factory_order/screens/factory_queue_screen.dart';
 import '../../features/purchase_order/screens/purchase_order_screen.dart';
@@ -53,6 +55,7 @@ import '../../features/crm/screens/crm_customers_list_screen.dart';
 import '../../features/crm/screens/crm_customer_detail_screen.dart';
 import '../../features/crm/screens/prospect_detail_screen.dart';
 import '../models/user_role.dart';
+import '../theme/app_theme.dart';
 import '../widgets/app_shell.dart';
 
 // Customer app imports
@@ -102,6 +105,8 @@ class AppRoutes {
   static const String serviceHistory = '/complaints/history';
   static const String complaintsList = '/complaints';
   static const String searchPdf = '/search-pdf';
+  static const String boqDashboard = '/boq/dashboard';
+  static const String manageBoqItems = '/boq/manage-items';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -265,6 +270,39 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.notifications,
             builder: (context, state) => const NotificationCenterScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.boqDashboard,
+            builder: (context, state) => const BoqDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.manageBoqItems,
+            builder: (context, state) => Scaffold(
+              backgroundColor: AppColors.background,
+              appBar: AppBar(
+                title: const Text(
+                  'Manage BOQ Items',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                backgroundColor: const Color(0xFF1E1B4B),
+                foregroundColor: Colors.white,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(AppRoutes.boqDashboard);
+                    }
+                  },
+                ),
+              ),
+              body: const ManageBoqItemsScreen(isEmbedded: true),
+            ),
           ),
           GoRoute(
             path: AppRoutes.userManagement,
@@ -529,7 +567,7 @@ String getRoleHome(UserRole role) {
     case UserRole.purchase:
       return AppRoutes.purchaseQueue;
     case UserRole.boq:
-      return '/crm/prospects';
+      return AppRoutes.boqDashboard;
     case UserRole.serviceHead:
       return AppRoutes.complaintsDashboard;
     case UserRole.technician:
