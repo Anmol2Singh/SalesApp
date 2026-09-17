@@ -517,33 +517,60 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
   }
 
   Future<Lead?> addDirectLead({
+    String? prospectId,
     required String prospectName,
     String? contactPhone,
     required String productName,
     required double estimatedValue,
     DateTime? expectedDate,
     String? notes,
+    String? capacity,
+    List<Map<String, dynamic>>? components,
   }) async {
     if (_userId == null) return null;
     try {
-      // 1. Optionally create a prospect record or direct lead
-      String? prospectId;
-      if (contactPhone != null && contactPhone.trim().isNotEmpty) {
+      // 1. Carry forward or create prospect record
+      String? finalProspectId = prospectId;
+      String? assignedSalesperson;
+
+      if (finalProspectId != null && finalProspectId.trim().isNotEmpty) {
         try {
-          final prospectRes = await _supabase.from('crm_prospects').insert({
-            'name': prospectName.trim(),
-            'phone': contactPhone.trim(),
-            'source': 'Manual',
-            'created_by': _userId,
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          }).select().single();
-          prospectId = prospectRes['id'] as String;
+          final pRec = await _supabase
+              .from('crm_prospects')
+              .select('assigned_to')
+              .eq('id', finalProspectId)
+              .maybeSingle();
+          if (pRec != null && pRec['assigned_to'] != null) {
+            assignedSalesperson = pRec['assigned_to'] as String?;
+          }
+        } catch (_) {}
+      } else if (contactPhone != null && contactPhone.trim().isNotEmpty) {
+        try {
+          // Check if prospect exists with this phone first
+          final existingP = await _supabase
+              .from('crm_prospects')
+              .select('id, assigned_to')
+              .eq('phone', contactPhone.trim())
+              .limit(1);
+          if (existingP.isNotEmpty) {
+            finalProspectId = existingP.first['id'] as String;
+            assignedSalesperson = existingP.first['assigned_to'] as String?;
+          } else {
+            final prospectRes = await _supabase.from('crm_prospects').insert({
+              'name': prospectName.trim(),
+              'phone': contactPhone.trim(),
+              'source': 'Manual',
+              'created_by': _userId,
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            }).select().single();
+            finalProspectId = prospectRes['id'] as String;
+          }
         } catch (_) {}
       }
 
       final leadData = {
-        if (prospectId != null) 'prospect_id': prospectId,
+        if (finalProspectId != null) 'prospect_id': finalProspectId,
         'prospect_name': prospectName.trim(),
         if (contactPhone != null) 'contact_phone': contactPhone.trim(),
         'product_name': productName.trim(),
@@ -551,6 +578,9 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         if (expectedDate != null) 'expected_date': expectedDate.toIso8601String(),
         'status': 'New',
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        if (capacity != null && capacity.trim().isNotEmpty) 'capacity': capacity.trim(),
+        if (components != null && components.isNotEmpty) 'components': components,
+        if (assignedSalesperson != null) 'assigned_to': assignedSalesperson,
         'created_by': _userId,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
@@ -559,10 +589,11 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       final leadRes = await _supabase.from('crm_leads').insert(leadData).select().single();
       final newLead = Lead.fromJson(leadRes);
 
-      if (prospectId != null) {
+      if (finalProspectId != null) {
         await _supabase.from('crm_prospects').update({
           'converted_to_lead_id': newLead.id,
-        }).eq('id', prospectId);
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', finalProspectId);
       }
 
       await load();
@@ -902,41 +933,146 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       // Find current lead for assignee
       final currentLead = (state.value ?? []).where((l) => l.id == leadId).firstOrNull;
 
-      // 1. Insert into customers table
-      final customerData = {
-        'customer_name': customerName.trim(),
-        'company_name': customerName.trim(),
-        'contact_person': customerName.trim(),
-        'phone': phone.trim(),
-        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
-        if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
-        if (gstNumber != null && gstNumber.trim().isNotEmpty) 'gst_number': gstNumber.trim(),
-        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
-        'created_by': _userId,
-        if (currentLead?.assignedTo != null) 'assigned_to': currentLead!.assignedTo,
-        'converted_by': _userId,
-        'converted_by_name': staffName ?? 'Staff',
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+      // 1. Check if customer already exists by phone to avoid duplicates
+      String customerId;
+      final existingCustRes = await _supabase
+          .from('customers')
+          .select('id, address, email, gst_number, notes')
+          .eq('phone', phone.trim())
+          .limit(1);
 
-      final custRes = await _supabase.from('customers').insert(customerData).select().single();
-      final customerId = custRes['id'] as String;
+      if (existingCustRes.isNotEmpty) {
+        final existing = existingCustRes.first;
+        customerId = existing['id'] as String;
 
-      // 2. Lookup product_id
-      String? productId;
-      if (currentLead?.productName != null && currentLead!.productName.isNotEmpty) {
+        // Backfill any newly provided fields if empty on existing customer
+        final updates = <String, dynamic>{
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+        if ((existing['address'] == null || (existing['address'] as String).isEmpty) &&
+            address != null && address.trim().isNotEmpty) {
+          updates['address'] = address.trim();
+        }
+        if ((existing['email'] == null || (existing['email'] as String).isEmpty) &&
+            email != null && email.trim().isNotEmpty) {
+          updates['email'] = email.trim();
+        }
+        if ((existing['gst_number'] == null || (existing['gst_number'] as String).isEmpty) &&
+            gstNumber != null && gstNumber.trim().isNotEmpty) {
+          updates['gst_number'] = gstNumber.trim();
+        }
+        if (updates.length > 1) {
+          try {
+            await _supabase.from('customers').update(updates).eq('id', customerId);
+          } catch (_) {}
+        }
+      } else {
+        final customerData = {
+          'customer_name': customerName.trim(),
+          'company_name': customerName.trim(),
+          'contact_person': customerName.trim(),
+          'phone': phone.trim(),
+          if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
+          if (gstNumber != null && gstNumber.trim().isNotEmpty) 'gst_number': gstNumber.trim(),
+          if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+          'created_by': _userId,
+          if (currentLead?.assignedTo != null) 'assigned_to': currentLead!.assignedTo,
+          'converted_by': _userId,
+          'converted_by_name': staffName ?? 'Staff',
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+
+        final custRes = await _supabase.from('customers').insert(customerData).select().single();
+        customerId = custRes['id'] as String;
+
+        // Ensure customer_profiles does not store synthetic/random emails when email is omitted
         try {
-          final prodRes = await _supabase
-              .from('products')
-              .select('id')
-              .ilike('name', '%${currentLead.productName.trim()}%')
-              .limit(1);
-          if (prodRes.isNotEmpty) {
-            productId = prodRes.first['id'] as String;
+          final cleanEmail = (email != null && email.trim().isNotEmpty) ? email.trim() : null;
+          await _supabase
+              .from('customer_profiles')
+              .update({'email': cleanEmail})
+              .eq('phone', phone.trim());
+        } catch (_) {}
+      }
+
+      // 2. Lookup product_id intelligently (matching base product name to avoid defaulting to Boom Barrier)
+      String? productId;
+      final rawProductName = currentLead?.productName.trim() ?? '';
+      if (rawProductName.isNotEmpty) {
+        try {
+          final allProdsRes = await _supabase.from('products').select('id, name, base_specs');
+          final allProds = (allProdsRes as List? ?? []).map((e) => e as Map<String, dynamic>).toList();
+
+          // A) Exact name match
+          for (final p in allProds) {
+            final pName = (p['name'] as String? ?? '').trim();
+            if (pName.toLowerCase() == rawProductName.toLowerCase()) {
+              productId = p['id'] as String;
+              break;
+            }
+          }
+
+          // B) Base product name match (e.g. "Heat Pump - 8KW" -> base name "Heat Pump")
+          if (productId == null && rawProductName.contains(' - ')) {
+            final baseName = rawProductName.split(' - ').first.trim().toLowerCase();
+            for (final p in allProds) {
+              final pName = (p['name'] as String? ?? '').trim().toLowerCase();
+              if (pName == baseName || baseName.contains(pName) || pName.contains(baseName)) {
+                productId = p['id'] as String;
+                break;
+              }
+            }
+          }
+
+          // C) Multi-product comma list (e.g. "Heat Pump - 8kW, Tank 500L") -> match first component
+          if (productId == null && rawProductName.contains(',')) {
+            final firstPart = rawProductName.split(',').first.trim();
+            final baseFirst = firstPart.split(' - ').first.trim().toLowerCase();
+            for (final p in allProds) {
+              final pName = (p['name'] as String? ?? '').trim().toLowerCase();
+              if (pName == baseFirst || baseFirst.contains(pName) || pName.contains(baseFirst)) {
+                productId = p['id'] as String;
+                break;
+              }
+            }
+          }
+
+          // D) Substring / token matching
+          if (productId == null) {
+            final lowerRaw = rawProductName.toLowerCase();
+            for (final p in allProds) {
+              final pName = (p['name'] as String? ?? '').trim().toLowerCase();
+              if (lowerRaw.contains(pName) || pName.contains(lowerRaw)) {
+                productId = p['id'] as String;
+                break;
+              }
+            }
+          }
+
+          // E) Check linked_items in base_specs (items treated as products)
+          if (productId == null) {
+            final lowerRaw = rawProductName.toLowerCase();
+            for (final p in allProds) {
+              final specs = p['base_specs'] as Map<String, dynamic>? ?? {};
+              final linkedList = (specs['linked_items'] as List?)
+                      ?.map((e) => e.toString().toLowerCase())
+                      .toList() ??
+                  [];
+              for (final item in linkedList) {
+                if (item == lowerRaw || lowerRaw.contains(item) || item.contains(lowerRaw)) {
+                  productId = p['id'] as String;
+                  break;
+                }
+              }
+              if (productId != null) break;
+            }
           }
         } catch (_) {}
       }
+
+      // If still not matched, fallback only if absolutely necessary
       if (productId == null) {
         try {
           final firstProd = await _supabase.from('products').select('id').limit(1);
@@ -946,7 +1082,24 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         } catch (_) {}
       }
 
-      // 3. Auto-create Deal in sales_pipelines
+      // 3. Check if a quotation was actually generated for this lead
+      String? quotationIdToLink;
+      try {
+        final quots = await _supabase
+            .from('quotations')
+            .select('id')
+            .eq('lead_id', leadId)
+            .order('revision', ascending: false)
+            .limit(1);
+        if (quots.isNotEmpty) {
+          quotationIdToLink = quots.first['id'] as String;
+        }
+      } catch (_) {}
+
+      // If no quotation was generated in the lead, start deal at Step 1 ('quotation')
+      final String initialStep = quotationIdToLink != null ? 'sales_order' : 'quotation';
+
+      // 4. Auto-create Deal in sales_pipelines
       String? pipelineId;
       if (productId != null) {
         try {
@@ -954,7 +1107,7 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
             'customer_id': customerId,
             'product_id': productId,
             'created_by': _userId,
-            'current_step': 'sales_order',
+            'current_step': initialStep,
             'status': 'in_progress',
             if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
             'created_at': DateTime.now().toIso8601String(),
@@ -964,25 +1117,18 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         } catch (_) {}
       }
 
-      // 4. Query latest quotation for the lead and link to deal
-      try {
-        final quots = await _supabase
-            .from('quotations')
-            .select('id')
-            .eq('lead_id', leadId)
-            .order('revision', ascending: false)
-            .limit(1);
-        if (quots.isNotEmpty) {
-          final qId = quots.first['id'] as String;
+      // 5. Link quotation to deal if one existed
+      if (quotationIdToLink != null) {
+        try {
           await _supabase.from('quotations').update({
             'is_final': true,
             'status': 'confirmed',
             if (pipelineId != null) 'pipeline_id': pipelineId,
             if (productId != null) 'product_id': productId,
             'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', qId);
-        }
-      } catch (_) {}
+          }).eq('id', quotationIdToLink);
+        } catch (_) {}
+      }
 
       // 5. Update lead status to 'Won' and set converted_to_customer_id, converted_by, converted_by_name
       await _supabase.from('crm_leads').update({

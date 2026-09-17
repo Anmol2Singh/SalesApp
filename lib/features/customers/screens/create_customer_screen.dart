@@ -248,6 +248,17 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
 
       final customer = Customer.fromJson(response);
 
+      // Ensure customer_profiles does not store synthetic/random emails when email is omitted
+      if (phone.isNotEmpty) {
+        try {
+          final cleanEmail = email.isNotEmpty ? email : null;
+          await supabase
+              .from('customer_profiles')
+              .update({'email': cleanEmail})
+              .eq('phone', phone);
+        } catch (_) {}
+      }
+
       // Invalidate list
       ref.invalidate(customersNotifierProvider);
 

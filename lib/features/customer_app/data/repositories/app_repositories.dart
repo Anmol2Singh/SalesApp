@@ -117,7 +117,10 @@ class MockAuthRepository implements AuthRepository {
 
 String _getDefaultProductImage(String category) {
   final cat = category.toLowerCase();
-  if (cat.contains('boiler')) {
+  if (cat.contains('barrier') || cat.contains('access')) {
+    return 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=800&auto=format&fit=crop';
+  }
+  if (cat.contains('boiler') || cat.contains('water heater') || cat.contains('swh')) {
     return 'https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop';
   }
   if (cat.contains('thermostat')) {
@@ -1042,6 +1045,57 @@ class SupabaseCustomerRepository implements CustomerRepository {
         }
       } catch (_) {}
 
+      // Pre-fetch catalog products to resolve images & specs by base product name
+      List<Map<String, dynamic>> catalogProducts = [];
+      try {
+        final cpRes = await _supabase.from('products').select('id, name, category, image_urls, brochure_urls, base_specs');
+        catalogProducts = List<Map<String, dynamic>>.from(cpRes as List? ?? []);
+      } catch (_) {}
+
+      Map<String, dynamic>? findCatalogProduct(String name) {
+        if (name.trim().isEmpty) return null;
+        final trimmed = name.trim().toLowerCase();
+        for (final cp in catalogProducts) {
+          final cpName = (cp['name']?.toString() ?? '').trim().toLowerCase();
+          if (cpName.isNotEmpty && cpName == trimmed) return cp;
+        }
+        // Extract base product name: strip " - ", " + ", " ("
+        String base = trimmed;
+        if (base.contains(' - ')) {
+          base = base.split(' - ').first.trim();
+        } else if (base.contains(' + ')) {
+          base = base.split(' + ').first.trim();
+        } else if (base.contains(' (')) {
+          base = base.split(' (').first.trim();
+        }
+        for (final cp in catalogProducts) {
+          final cpName = (cp['name']?.toString() ?? '').trim().toLowerCase();
+          if (cpName.isNotEmpty && (cpName == base || base.contains(cpName) || cpName.contains(base))) {
+            return cp;
+          }
+        }
+        for (final cp in catalogProducts) {
+          final cpName = (cp['name']?.toString() ?? '').trim().toLowerCase();
+          if (cpName.isNotEmpty && (trimmed.contains(cpName) || cpName.contains(trimmed))) {
+            return cp;
+          }
+        }
+        // Check linked_items (items treated as products)
+        for (final cp in catalogProducts) {
+          final specs = cp['base_specs'] as Map<String, dynamic>? ?? {};
+          final linkedList = (specs['linked_items'] as List?)
+                  ?.map((e) => e.toString().toLowerCase())
+                  .toList() ??
+              [];
+          for (final item in linkedList) {
+            if (trimmed == item || trimmed.contains(item) || item.contains(trimmed)) {
+              return cp;
+            }
+          }
+        }
+        return null;
+      }
+
       final list = <Product>[];
       for (final item in (response as List? ?? [])) {
         final pipelineId = item['id'] as String;
@@ -1088,11 +1142,23 @@ class SupabaseCustomerRepository implements CustomerRepository {
             ?? item['product_name'] as String?
             ?? item['deal_name'] as String?
             ?? 'IZYHEAT System';
-        final rawCat = (productData['category'] as String? ?? 'heat_pump').toLowerCase();
-        final category = (rawCat.contains('heat') || rawCat == 'hvac') ? 'heat_pump' : rawCat;
-        final modelNumber = (productData['model_number'] as String?) ?? (productData['category'] as String?)?.toUpperCase() ?? 'HEAT PUMP';
+
+        final matchedCatalog = findCatalogProduct(productName);
+        final String resolvedProductType = (matchedCatalog?['name'] as String?)
+            ?? (productData['name'] as String?)
+            ?? (matchedCatalog?['category'] as String?)
+            ?? (productData['category'] as String?)
+            ?? productName;
+        final String category = resolvedProductType;
+        final modelNumber = (productData['model_number'] as String?) 
+            ?? (matchedCatalog?['category'] as String?)?.toUpperCase()
+            ?? (productData['category'] as String?)?.toUpperCase() 
+            ?? 'COMMERCIAL';
         
-        final imgList = List<String>.from(productData['image_urls'] ?? []);
+        var imgList = List<String>.from(productData['image_urls'] ?? []);
+        if (imgList.isEmpty && matchedCatalog != null) {
+          imgList = List<String>.from(matchedCatalog['image_urls'] ?? []);
+        }
         final String firstImg = imgList.isNotEmpty ? imgList.first : '';
 
         // Seller/Dealer
@@ -1203,11 +1269,19 @@ class SupabaseCustomerRepository implements CustomerRepository {
           final grandTotal = (q['grand_total'] as num?)?.toDouble() ?? 0.0;
           final qCreatedAt = DateTime.tryParse(q['created_at'] ?? '') ?? DateTime.now();
 
+          final matchedCp = findCatalogProduct(qProdName);
+          final cpImgs = List<String>.from(matchedCp?['image_urls'] ?? []);
+          final String resolvedCat = (matchedCp?['name'] as String?)
+              ?? (matchedCp?['category'] as String?)
+              ?? qProdName;
+          final quoteImg = cpImgs.isNotEmpty ? cpImgs.first : _getDefaultProductImage(resolvedCat);
+
           list.add(Product(
             productId: qId,
             productName: qProdName,
-            modelNumber: 'COMMERCIAL',
-            imageUrl: _getDefaultProductImage('heat_pump'),
+            modelNumber: (matchedCp?['category'] as String?)?.toUpperCase() ?? 'COMMERCIAL',
+            imageUrl: quoteImg,
+            imageUrls: cpImgs.isNotEmpty ? cpImgs : [quoteImg],
             purchasedDate: qCreatedAt,
             sellerName: 'IZYHEAT Industry',
             amountPaid: grandTotal,
@@ -1216,7 +1290,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
             warrantyExpiryDate: qCreatedAt.add(const Duration(days: 365)),
             amcStatus: 'none',
             serialNumber: q['quotation_number'] ?? qId,
-            category: 'heat_pump',
+            category: resolvedCat,
             brochureUrls: const [],
             installationAddress: null,
             amcVisits: const [],
@@ -1763,7 +1837,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           lineItems.add({'name': 'Solar / Heat Pump Equipment', 'qty': 1, 'price': grandTotal});
         }
 
-        final title = mainProductName.isNotEmpty ? 'Invoice - $mainProductName' : 'Tax Invoice #$invNum';
+        final title = mainProductName.isNotEmpty ? 'Proforma Invoice - $mainProductName' : 'Proforma Invoice #$invNum';
 
         allInvoices.add(Invoice(
           invoiceId: qId,

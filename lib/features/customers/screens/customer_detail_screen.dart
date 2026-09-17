@@ -223,6 +223,76 @@ class CustomerDetailScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (customer.deletedAt != null) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.shade400),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.archive_outlined, color: Colors.amber.shade900, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'This Customer is Archived',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'This customer is hidden from active workflows. You can retrieve them back to the active list anytime.',
+                          style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber.shade800,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.unarchive_outlined, size: 16),
+                    label: const Text('Retrieve / Restore',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    onPressed: () async {
+                      try {
+                        await ref.read(customersNotifierProvider.notifier).restoreCustomer(customer.id);
+                        ref.invalidate(customerDetailProvider(customer.id));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('✓ "${customer.companyName}" restored to active customers.'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('Error restoring customer: $e'),
+                                backgroundColor: AppColors.error),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           // Contact info card
           _InfoCard(customer: customer),
           const SizedBox(height: 20),

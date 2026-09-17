@@ -28,6 +28,7 @@ class ExcelService {
       'Contact Person',
       'Phone',
       'Email',
+      'Address',
       'Product',
       'Current Step',
       'Status',
@@ -58,6 +59,7 @@ class ExcelService {
         p.customer?.contactPerson ?? '',
         p.customer?.phone ?? '',
         p.customer?.email ?? '',
+        p.customer?.address ?? '',
         p.product?.name ?? '',
         p.currentStep.displayName,
         p.status.displayName,
@@ -111,6 +113,7 @@ class ExcelService {
       'Created By (User)',
       'Assigned Salesperson',
       'Created Date',
+      'Notes',
     ];
 
     for (int i = 0; i < headers.length; i++) {
@@ -139,6 +142,7 @@ class ExcelService {
         c.salesmanName ?? c.createdBy,
         c.assignedToName ?? '-',
         _dateFormat.format(c.createdAt),
+        c.notes ?? '',
       ];
 
       previewRows.add(data);
@@ -183,6 +187,7 @@ class ExcelService {
       'Created By (User)',
       'Assigned To',
       'Created Date',
+      'Notes',
       'Converted to Lead',
     ];
 
@@ -212,6 +217,7 @@ class ExcelService {
         p.createdByName ?? p.createdBy,
         p.assignedByName ?? p.assignedTo ?? '-',
         _dateFormat.format(p.createdAt),
+        p.notes ?? '',
         p.convertedToLeadId != null ? 'Yes' : 'No',
       ];
 
@@ -247,6 +253,7 @@ class ExcelService {
     final headers = [
       'Prospect / Contact',
       'Phone',
+      'Address',
       'Product Name',
       'Status',
       'Estimated Value',
@@ -272,7 +279,7 @@ class ExcelService {
 
     for (int rowIdx = 0; rowIdx < leads.length; rowIdx++) {
       final l = leads[rowIdx];
-      final p = prospects.where((p) => p.id == l.prospectId).firstOrNull;
+      final p = prospects.where((p) => p.id == l.prospectId || (p.phone.isNotEmpty && p.phone == l.contactPhone)).firstOrNull;
       final displayName = (l.prospectName != null && l.prospectName!.isNotEmpty)
           ? l.prospectName!
           : (p?.name ?? 'Lead');
@@ -280,11 +287,24 @@ class ExcelService {
           ? l.contactPhone!
           : (p?.phone ?? '');
 
+      String productDisplay = l.productName;
+      if (l.components != null && l.components!.isNotEmpty) {
+        final compNames = l.components!
+            .map((c) => c is Map ? (c['display_name'] ?? c['product_name'])?.toString() : null)
+            .whereType<String>()
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (compNames.isNotEmpty) {
+          productDisplay = compNames.join(', ');
+        }
+      }
+
       final row = rowIdx + 1;
       final data = [
         displayName,
         displayPhone,
-        l.productName,
+        p?.address ?? '',
+        productDisplay,
         l.status,
         _currencyFormat.format(l.estimatedValue),
         l.createdByName ?? l.createdBy,
@@ -661,14 +681,29 @@ class ExcelService {
     }
   }
 
-  static Future<void> exportInventoryItems(BuildContext context, List<InventoryItem> items) async {
+  static Future<void> exportInventoryItems(
+    BuildContext context, 
+    List<InventoryItem> items, {
+    List<Product>? products,
+  }) async {
     final excel = Excel.createExcel();
     final sheet = excel['Inventory_Items'];
     excel.setDefaultSheet('Inventory_Items');
 
+    // Build map from item name (lowercase) to sell product name
+    final itemToProductName = <String, String>{};
+    if (products != null) {
+      for (final p in products) {
+        for (final li in p.baseSpecs.linkedItems) {
+          itemToProductName[li.trim().toLowerCase()] = p.name;
+        }
+      }
+    }
+
     final headers = [
       '#',
       'Item Name',
+      'Under Product Category',
       'HSN / SAC Code',
       'Unit (UOM)',
       'Default Price (₹)',
@@ -692,10 +727,12 @@ class ExcelService {
     for (int rowIdx = 0; rowIdx < items.length; rowIdx++) {
       final item = items[rowIdx];
       final row = rowIdx + 1;
+      final underProduct = itemToProductName[item.itemName.trim().toLowerCase()] ?? '';
 
       final data = [
         (rowIdx + 1).toString(),
         item.itemName,
+        underProduct.isNotEmpty ? underProduct : '-',
         item.hsnSac != null && item.hsnSac!.isNotEmpty ? item.hsnSac! : '-',
         item.uom != null && item.uom!.isNotEmpty ? item.uom! : 'NOS',
         '₹${_currencyFormat.format(item.price)}',
@@ -708,12 +745,13 @@ class ExcelService {
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = IntCellValue(rowIdx + 1);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(item.itemName);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(item.hsnSac ?? '');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(item.uom ?? 'NOS');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = DoubleCellValue(item.price);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = IntCellValue(item.warrantyMonths);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = TextCellValue(_dateFormat.format(item.createdAt.toLocal()));
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = TextCellValue(item.id);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(underProduct);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(item.hsnSac ?? '');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = TextCellValue(item.uom ?? 'NOS');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = DoubleCellValue(item.price);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = IntCellValue(item.warrantyMonths);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = TextCellValue(_dateFormat.format(item.createdAt.toLocal()));
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row)).value = TextCellValue(item.id);
 
       if (row.isEven) {
         for (int c = 0; c < headers.length; c++) {

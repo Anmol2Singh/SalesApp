@@ -1,11 +1,14 @@
 // lib/core/widgets/export_preview_dialog.dart
 
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
+import '../utils/file_folder_helper.dart';
 
 class ExportPreviewDialog extends StatelessWidget {
   final String title;
@@ -69,6 +72,26 @@ class ExportPreviewDialog extends StatelessWidget {
     try {
       File? savedFile;
       String locationName = 'Downloads';
+      String folderPath = '';
+
+      if (kIsWeb) {
+        final xfile = XFile.fromData(
+          Uint8List.fromList(fileBytes),
+          name: safeName,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+        await Share.shareXFiles([xfile], subject: safeName);
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✓ Downloaded: $safeName'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+        return;
+      }
 
       if (Platform.isWindows) {
         final userProfile = Platform.environment['USERPROFILE'];
@@ -79,18 +102,17 @@ class ExportPreviewDialog extends StatelessWidget {
         }
         winDownloads ??= await getDownloadsDirectory();
         if (winDownloads != null) {
+          folderPath = winDownloads.path;
           savedFile = File('${winDownloads.path}/$safeName');
           await savedFile.writeAsBytes(fileBytes, flush: true);
           locationName = 'Downloads folder';
-          try {
-            Process.run('explorer.exe', ['/select,', savedFile.path]);
-          } catch (_) {}
         }
       } else if (Platform.isAndroid) {
         bool savedDirectly = false;
         try {
           final downloadDir = Directory('/storage/emulated/0/Download');
           if (downloadDir.existsSync()) {
+            folderPath = downloadDir.path;
             final target = File('${downloadDir.path}/$safeName');
             await target.writeAsBytes(fileBytes, flush: true);
             savedFile = target;
@@ -100,20 +122,16 @@ class ExportPreviewDialog extends StatelessWidget {
         } catch (_) {}
 
         if (!savedDirectly) {
-          // Save to cache/documents and invoke system save sheet
           final tempDir = await getTemporaryDirectory();
+          folderPath = tempDir.path;
           final tempFile = File('${tempDir.path}/$safeName');
           await tempFile.writeAsBytes(fileBytes, flush: true);
           savedFile = tempFile;
-
-          await Share.shareXFiles(
-            [XFile(tempFile.path)],
-            subject: safeName,
-          );
-          locationName = 'Device Storage';
+          locationName = 'Downloads folder';
         }
       } else {
         final docsDir = await getApplicationDocumentsDirectory();
+        folderPath = docsDir.path;
         savedFile = File('${docsDir.path}/$safeName');
         await savedFile.writeAsBytes(fileBytes, flush: true);
         locationName = 'Documents';
@@ -121,22 +139,15 @@ class ExportPreviewDialog extends StatelessWidget {
 
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ Saved successfully to $locationName ($safeName)'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Share',
-              textColor: Colors.white,
-              onPressed: () {
-                if (savedFile != null) {
-                  Share.shareXFiles([XFile(savedFile.path)]);
-                }
-              },
-            ),
-          ),
-        );
+        if (savedFile != null) {
+          await FileFolderHelper.askViewInFolder(
+            context,
+            fileName: safeName,
+            locationName: locationName,
+            filePath: savedFile.path,
+            folderPath: folderPath,
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) {

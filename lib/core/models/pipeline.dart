@@ -178,6 +178,13 @@ class SalesPipeline {
     if (quotation != null && quotation!.status == QuotationStatus.confirmed) {
       return PipelineStep.salesOrder;
     }
+    if (quotation == null &&
+        salesOrder == null &&
+        boq == null &&
+        factoryOrder == null &&
+        purchaseOrder == null) {
+      return PipelineStep.quotation;
+    }
     return _dbCurrentStep;
   }
 

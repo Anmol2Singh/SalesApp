@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:intl/intl.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/searchable_dropdown.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
 import '../../../core/services/record_edit_permissions.dart';
 import '../widgets/crm_delete_dialog.dart';
+import '../widgets/product_combo_selector.dart';
 
 class ProspectDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -153,18 +152,12 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
     }
 
     final leads = ref.watch(leadsProvider).value ?? [];
-    final hasValidLead = prospect.convertedToLeadId != null &&
-        leads.any((l) => l.id == prospect.convertedToLeadId);
-    final isConverted = hasValidLead;
-
-    // If prospect references a deleted lead, silently clean it up in DB
-    if (prospect.convertedToLeadId != null && !hasValidLead) {
-      ref.read(supabaseClientProvider)
-          .from('crm_prospects')
-          .update({'converted_to_lead_id': null})
-          .eq('id', prospect.id)
-          .then((_) {});
-    }
+    final matchingLead = leads.where((l) =>
+        (prospect.convertedToLeadId != null && l.id == prospect.convertedToLeadId) ||
+        (l.prospectId != null && l.prospectId == prospect.id) ||
+        (prospect.phone.isNotEmpty && l.contactPhone != null && l.contactPhone!.trim() == prospect.phone.trim())).firstOrNull;
+    final isConverted = prospect.convertedToLeadId != null || matchingLead != null;
+    final leadIdToView = prospect.convertedToLeadId ?? matchingLead?.id;
 
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
     final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager;
@@ -619,7 +612,11 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () {
-                  context.push('/crm/leads/${prospect.convertedToLeadId}');
+                  if (leadIdToView != null && leadIdToView.isNotEmpty) {
+                    context.push('/crm/leads/$leadIdToView');
+                  } else {
+                    context.push('/crm/leads');
+                  }
                 },
                 icon: const Icon(Icons.arrow_forward),
                 label: const Text('View Qualified Lead', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -1573,32 +1570,6 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
   }
 }
 
-class ProductComboItem {
-  final String displayName;
-  final String productName;
-  final String? capacity;
-  final double price;
-  final String uom;
-
-  const ProductComboItem({
-    required this.displayName,
-    required this.productName,
-    this.capacity,
-    this.price = 0.0,
-    this.uom = 'SET',
-  });
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ProductComboItem &&
-          runtimeType == other.runtimeType &&
-          displayName == other.displayName;
-
-  @override
-  int get hashCode => displayName.hashCode;
-}
-
 class ConvertToLeadForm extends ConsumerStatefulWidget {
   final Prospect prospect;
 
@@ -1610,22 +1581,10 @@ class ConvertToLeadForm extends ConsumerStatefulWidget {
 
 class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
   final _formKey = GlobalKey<FormState>();
-  ProductComboItem? _selectedComboItem;
-  static List<ProductComboItem>? _cachedCombos;
-  static final List<ProductComboItem> _defaultCombos = [
-    const ProductComboItem(displayName: 'Boom Barrier - IZ-2026', productName: 'Boom Barrier', capacity: 'IZ-2026', price: 152500.0, uom: 'SET'),
-    const ProductComboItem(displayName: 'Boom Barrier - IZ-2001', productName: 'Boom Barrier', capacity: 'IZ-2001', price: 40000.0, uom: 'NOS'),
-    const ProductComboItem(displayName: 'Heat Pump - 4kW', productName: 'Heat Pump', capacity: '4kW', price: 110000.0, uom: 'SET'),
-    const ProductComboItem(displayName: 'Heat Pump - 8kW', productName: 'Heat Pump', capacity: '8kW', price: 180000.0, uom: 'SET'),
-    const ProductComboItem(displayName: 'Heat Pump - 10kW', productName: 'Heat Pump', capacity: '10kW', price: 230000.0, uom: 'SET'),
-    const ProductComboItem(displayName: 'Heat Pump - 18kW', productName: 'Heat Pump', capacity: '18kW', price: 330000.0, uom: 'SET'),
-    const ProductComboItem(displayName: 'Solar Water Heater - 200 Ltr', productName: 'Solar Water Heater', capacity: '200 Ltr', price: 60000.0, uom: 'NOS'),
-    const ProductComboItem(displayName: 'Solar Water Heater - 500 Ltr', productName: 'Solar Water Heater', capacity: '500 Ltr', price: 120000.0, uom: 'NOS'),
-    const ProductComboItem(displayName: 'Solar Water Heater - 1000 Ltr', productName: 'Solar Water Heater', capacity: '1000 Ltr', price: 210000.0, uom: 'NOS'),
-    const ProductComboItem(displayName: 'Commercial 10kW', productName: 'Commercial 10kW', capacity: '10kW', price: 542800.0, uom: 'SET'),
-  ];
+  List<ProductComboItem> _selectedProducts = [];
   List<ProductComboItem> _availableCombos = [];
-  final _valCtrl = TextEditingController();
+  String? _productError;
+  final _valCtrl = TextEditingController(text: '0.00');
   final _notesCtrl = TextEditingController();
   DateTime? _expectedDate;
   bool _isConverting = false;
@@ -1633,102 +1592,19 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
   @override
   void initState() {
     super.initState();
-    _availableCombos = List<ProductComboItem>.from(_cachedCombos ?? _defaultCombos);
-    if (_availableCombos.isNotEmpty) {
-      _selectedComboItem = _availableCombos.first;
-      _valCtrl.text = _selectedComboItem!.price > 0 ? _selectedComboItem!.price.toStringAsFixed(0) : '0.00';
-    }
+    _availableCombos = List<ProductComboItem>.from(ProductComboItem.defaultCombos);
     _loadCombos();
   }
 
   Future<void> _loadCombos() async {
     try {
-      final supabase = ref.read(supabaseClientProvider);
-
-      // Fetch products and inventory items
-      final prodRes = await supabase.from('products').select('id, name, base_specs');
-      final invRes = await supabase.from('inventory_items').select('id, item_name, price, uom').order('item_name');
-
-      final List<Map<String, dynamic>> inventoryItems = (invRes as List? ?? [])
-          .map((e) => e as Map<String, dynamic>)
-          .toList();
-
-      final List<ProductComboItem> combos = [];
-
-      for (final p in (prodRes as List? ?? [])) {
-        final prodName = p['name'] as String? ?? '';
-        final specs = p['base_specs'] as Map<String, dynamic>? ?? {};
-        List<String> capacities = [];
-        if (specs['capacities'] is List) {
-          capacities = (specs['capacities'] as List).map((c) => c.toString()).toList();
-        }
-        if (capacities.isEmpty) {
-          if (prodName.toLowerCase().contains('heat pump')) {
-            capacities = ['4kW', '8kW', '10kW', '18kW'];
-          } else if (prodName.toLowerCase().contains('water heater')) {
-            capacities = ['100 Ltr', '200 Ltr', '300 Ltr', '500 Ltr', '1000 Ltr'];
-          } else if (prodName.toLowerCase().contains('barrier')) {
-            capacities = ['IZ-2001', 'IZ-2026'];
-          } else {
-            capacities = ['Standard'];
-          }
-        }
-
-        for (final cap in capacities) {
-          final displayName = '$prodName - $cap';
-          double price = 0.0;
-          String uom = 'SET';
-
-          final cleanCap = cap.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-          final cleanProd = prodName.toLowerCase();
-
-          for (final inv in inventoryItems) {
-            final invName = (inv['item_name'] as String? ?? '').replaceAll(RegExp(r'\s+'), '').toLowerCase();
-            if (invName.contains(cleanCap) || (invName.contains(cleanProd) && invName.contains(cleanCap))) {
-              price = (inv['price'] as num?)?.toDouble() ?? 0.0;
-              uom = inv['uom'] as String? ?? 'SET';
-              break;
-            }
-          }
-
-          combos.add(ProductComboItem(
-            displayName: displayName,
-            productName: prodName,
-            capacity: cap,
-            price: price,
-            uom: uom,
-          ));
-        }
-      }
-
-      // Also add standalone inventory items if price > 0
-      for (final inv in inventoryItems) {
-        final invName = inv['item_name'] as String? ?? '';
-        final price = (inv['price'] as num?)?.toDouble() ?? 0.0;
-        final uom = inv['uom'] as String? ?? 'NOS';
-        if (!combos.any((c) => c.displayName.toLowerCase() == invName.toLowerCase())) {
-          combos.add(ProductComboItem(
-            displayName: invName,
-            productName: invName,
-            price: price,
-            uom: uom,
-          ));
-        }
-      }
-
+      final combos = await ProductComboItem.loadCombos(ref.read(supabaseClientProvider));
       if (mounted && combos.isNotEmpty) {
         setState(() {
           _availableCombos = combos;
-          _cachedCombos = combos;
-          if (_selectedComboItem == null || !_availableCombos.any((c) => c.displayName == _selectedComboItem!.displayName)) {
-            _selectedComboItem = _availableCombos.first;
-            _valCtrl.text = _selectedComboItem!.price > 0 ? _selectedComboItem!.price.toStringAsFixed(0) : '0.00';
-          }
         });
       }
-    } catch (_) {
-      // Default combos are already populated
-    }
+    } catch (_) {}
   }
 
   @override
@@ -1738,26 +1614,43 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
     super.dispose();
   }
 
+  void _onProductsChanged(List<ProductComboItem> items) {
+    setState(() {
+      _selectedProducts = items;
+      _productError = items.isEmpty ? 'Please select at least one product' : null;
+      final total = items.fold<double>(0.0, (sum, i) => sum + i.price);
+      _valCtrl.text = total > 0 ? total.toStringAsFixed(2) : '0.00';
+    });
+  }
+
   Future<void> _handleConvert() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedComboItem == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a registered product'), backgroundColor: AppColors.error),
-      );
+    if (_selectedProducts.isEmpty) {
+      setState(() => _productError = 'Please select at least one product');
       return;
     }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isConverting = true);
     try {
+      final joinedProductName = _selectedProducts.map((p) => p.displayName).join(', ');
+      final joinedCapacity = _selectedProducts
+          .map((p) => p.capacity)
+          .whereType<String>()
+          .where((c) => c.isNotEmpty)
+          .join(', ');
+      final totalValue = double.tryParse(_valCtrl.text.trim()) ??
+          _selectedProducts.fold<double>(0.0, (sum, i) => sum + i.price);
+
       final leadId = await ref.read(prospectsProvider.notifier).convertToLead(
             prospectId: widget.prospect.id,
             prospectName: widget.prospect.name,
             contactPhone: widget.prospect.phone,
-            productName: _selectedComboItem!.displayName,
-            estimatedValue: double.tryParse(_valCtrl.text.trim()) ?? _selectedComboItem!.price,
+            productName: joinedProductName,
+            estimatedValue: totalValue,
             expectedDate: _expectedDate,
             notes: _notesCtrl.text.trim(),
-            capacity: _selectedComboItem!.capacity,
+            capacity: joinedCapacity.isNotEmpty ? joinedCapacity : null,
+            components: _selectedProducts.map((p) => p.toComponentMap()).toList(),
           );
 
       if (mounted) {
@@ -1818,26 +1711,12 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
               ),
               const SizedBox(height: 20),
 
-              SearchableDropdown<ProductComboItem>(
-                label: 'Product Name (Product + Capacity) *',
-                hint: 'Search product or capacity...',
-                value: _selectedComboItem,
-                items: _availableCombos,
-                  itemLabel: (item) => item.displayName,
-                  itemSubtitle: (item) => item.price > 0
-                      ? '₹${NumberFormat('#,##,##0', 'en_IN').format(item.price)} (${item.uom})'
-                      : item.uom,
-                  itemLeading: (item) => const Icon(Icons.solar_power_outlined, color: AppColors.primary),
-                  onChanged: (selected) {
-                    setState(() {
-                      _selectedComboItem = selected;
-                      if (selected != null) {
-                        _valCtrl.text = selected.price > 0 ? selected.price.toStringAsFixed(0) : '0.00';
-                      }
-                    });
-                  },
-                  validator: (val) => val == null ? 'Please select a product' : null,
-                ),
+              MultiProductSelectorField(
+                selectedItems: _selectedProducts,
+                availableItems: _availableCombos,
+                onChanged: _onProductsChanged,
+                errorText: _productError,
+              ),
 
               const SizedBox(height: 16),
               TextFormField(
@@ -1849,7 +1728,7 @@ class _ConvertToLeadFormState extends ConsumerState<ConvertToLeadForm> {
                   hintText: '0.00',
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.currency_rupee),
-                  helperText: 'Auto-fetched from inventory price',
+                  helperText: 'Auto-calculated from selected items price',
                   filled: true,
                   fillColor: Colors.grey.shade100,
                 ),

@@ -871,39 +871,69 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           }
 
           if (_lineItems.isEmpty) {
-            // Revision 1: Pre-fill line item 1 with product combo name and base price from inventory
-            final prodName = leadData['product_name'] as String? ?? 'Solar System';
-            final cap = leadData['capacity'] as String?;
-            final desc = (cap != null && cap.isNotEmpty && !prodName.contains(cap))
-                ? '$prodName ($cap)'
-                : prodName;
+            // Revision 1: Pre-fill line items from lead components (if multiple products selected)
+            final rawComponents = leadData['components'];
+            if (rawComponents is List && rawComponents.isNotEmpty) {
+              for (final comp in rawComponents) {
+                if (comp is Map) {
+                  final displayName = comp['display_name']?.toString() ??
+                      (comp['capacity'] != null && comp['capacity'].toString().isNotEmpty
+                          ? '${comp['product_name']} - ${comp['capacity']}'
+                          : comp['product_name']?.toString() ?? '');
+                  final price = (comp['price'] as num?)?.toDouble() ?? 0.0;
+                  final hsn = comp['hsn_sac']?.toString() ?? '84191920';
+                  final uom = comp['uom']?.toString() ?? 'SET';
+                  final gst = ((comp['gst_percent'] as num?)?.toDouble() ?? 18.0).toStringAsFixed(0);
 
-            double unitPrice = 0.0;
-            try {
-              final invRes = await supabase
-                  .from('inventory_items')
-                  .select('selling_price')
-                  .ilike('item_name', '%$prodName%')
-                  .limit(1);
-              if (invRes.isNotEmpty && invRes.first['selling_price'] != null) {
-                unitPrice = (invRes.first['selling_price'] as num).toDouble();
+                  _lineItems.add({
+                    'description': TextEditingController(text: displayName),
+                    'hsn_sac': TextEditingController(text: hsn.isNotEmpty ? hsn : '84191920'),
+                    'qty': TextEditingController(text: '1'),
+                    'gst_percent': TextEditingController(text: gst),
+                    'uom': TextEditingController(text: uom.isNotEmpty ? uom : 'SET'),
+                    'unit_price': TextEditingController(
+                        text: price > 0 ? InventoryAutocomplete.formatIndianPrice(price) : '0'),
+                    'disc_percent': TextEditingController(text: '0.0'),
+                  });
+                }
               }
-            } catch (_) {}
-
-            if (unitPrice == 0.0 && (leadData['estimated_value'] as num?) != null) {
-              unitPrice = (leadData['estimated_value'] as num).toDouble();
             }
 
-            _lineItems.add({
-              'description': TextEditingController(text: desc),
-              'hsn_sac': TextEditingController(text: '84191920'),
-              'qty': TextEditingController(text: '1'),
-              'gst_percent': TextEditingController(text: '18'),
-              'uom': TextEditingController(text: 'SET'),
-              'unit_price': TextEditingController(
-                  text: unitPrice > 0 ? InventoryAutocomplete.formatIndianPrice(unitPrice) : '0'),
-              'disc_percent': TextEditingController(text: '0.0'),
-            });
+            if (_lineItems.isEmpty) {
+              // Fallback: Revision 1 single product / legacy pre-fill
+              final prodName = leadData['product_name'] as String? ?? 'Solar System';
+              final cap = leadData['capacity'] as String?;
+              final desc = (cap != null && cap.isNotEmpty && !prodName.contains(cap))
+                  ? '$prodName ($cap)'
+                  : prodName;
+
+              double unitPrice = 0.0;
+              try {
+                final invRes = await supabase
+                    .from('inventory_items')
+                    .select('selling_price')
+                    .ilike('item_name', '%$prodName%')
+                    .limit(1);
+                if (invRes.isNotEmpty && invRes.first['selling_price'] != null) {
+                  unitPrice = (invRes.first['selling_price'] as num).toDouble();
+                }
+              } catch (_) {}
+
+              if (unitPrice == 0.0 && (leadData['estimated_value'] as num?) != null) {
+                unitPrice = (leadData['estimated_value'] as num).toDouble();
+              }
+
+              _lineItems.add({
+                'description': TextEditingController(text: desc),
+                'hsn_sac': TextEditingController(text: '84191920'),
+                'qty': TextEditingController(text: '1'),
+                'gst_percent': TextEditingController(text: '18'),
+                'uom': TextEditingController(text: 'SET'),
+                'unit_price': TextEditingController(
+                    text: unitPrice > 0 ? InventoryAutocomplete.formatIndianPrice(unitPrice) : '0'),
+                'disc_percent': TextEditingController(text: '0.0'),
+              });
+            }
           }
         }
       } else if (widget.pipelineId != null) {

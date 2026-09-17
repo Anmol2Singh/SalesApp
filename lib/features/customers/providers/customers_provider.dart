@@ -60,15 +60,16 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
 
       dynamic response;
       try {
-        var query = _supabase
-            .from('customers')
-            .select(selectStr)
-            .isFilter('deleted_at', null);
-
-        if (_filterBy == 'active_deal') {
-          query = query.eq('sales_pipelines.status', 'in_progress');
-        } else if (_filterBy == 'active_amc') {
-          query = query.eq('amc_contracts.status', 'active');
+        var query = _supabase.from('customers').select(selectStr);
+        if (_filterBy == 'archived') {
+          query = query.not('deleted_at', 'is', null);
+        } else {
+          query = query.isFilter('deleted_at', null);
+          if (_filterBy == 'active_deal') {
+            query = query.eq('sales_pipelines.status', 'in_progress');
+          } else if (_filterBy == 'active_amc') {
+            query = query.eq('amc_contracts.status', 'active');
+          }
         }
 
         // Non-admins see customers created by them OR assigned to them
@@ -83,10 +84,12 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
         }
       } catch (e) {
         // Fallback: simple select without relations if schema variance occurs
-        var fallbackQuery = _supabase
-            .from('customers')
-            .select('*')
-            .isFilter('deleted_at', null);
+        var fallbackQuery = _supabase.from('customers').select('*');
+        if (_filterBy == 'archived') {
+          fallbackQuery = fallbackQuery.not('deleted_at', 'is', null);
+        } else {
+          fallbackQuery = fallbackQuery.isFilter('deleted_at', null);
+        }
         
         if (!_isAdmin && _userId != null) {
           fallbackQuery = fallbackQuery.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
@@ -104,7 +107,9 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
           .toList();
 
       // In-memory filter safety
-      if (_filterBy == 'active_deal') {
+      if (_filterBy == 'archived') {
+        customers = customers.where((c) => c.deletedAt != null).toList();
+      } else if (_filterBy == 'active_deal') {
         customers = customers.where((c) {
           final p = c.pipelines;
           return p != null && p.isNotEmpty && p.any((pipe) => pipe.status != PipelineStatus.completed);
@@ -304,6 +309,22 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
         }
       }
     } catch (_) {}
+    await refresh();
+  }
+
+  Future<void> restoreCustomer(String customerId) async {
+    try {
+      await _supabase.rpc('restore_customer', params: {'p_customer_id': customerId});
+    } catch (_) {
+      try {
+        await _supabase.from('customers').update({
+          'deleted_at': null,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', customerId);
+      } catch (e) {
+        print('Error updating deleted_at in restoreCustomer: $e');
+      }
+    }
     await refresh();
   }
 
@@ -533,19 +554,60 @@ final customerDetailProvider =
     );
   }
 
-  final response = await supabase.from('customers').select('''
-        *,
-        sales_pipelines(
-          id, product_id, current_step, status, created_at, created_by,
-          products(id, name, category),
-          quotations(pdf_url),
-          boqs(pdf_url),
-          factory_orders(pdf_url),
-          purchase_orders(pdf_url)
-        )
-      ''').eq('id', customerId).isFilter('deleted_at', null).single();
+  dynamic response;
+  try {
+    response = await supabase.from('customers').select('''
+          *,
+          sales_pipelines(
+            id, product_id, current_step, status, created_at, created_by,
+            products(id, name, category),
+            quotations(pdf_url),
+            boqs(pdf_url),
+            factory_orders(pdf_url),
+            purchase_orders(pdf_url)
+          )
+        ''').eq('id', customerId).maybeSingle();
+  } catch (_) {
+    response = null;
+  }
 
-  return Customer.fromJson(response);
+  // Fallback 1: Query without deep nested relation fields in case schema differs
+  if (response == null) {
+    try {
+      response = await supabase.from('customers').select('''
+            *,
+            sales_pipelines(
+              id, product_id, current_step, status, created_at, created_by,
+              products(id, name, category)
+            )
+          ''').eq('id', customerId).maybeSingle();
+    } catch (_) {
+      response = null;
+    }
+  }
+
+  // Fallback 2: Simple select
+  if (response == null) {
+    try {
+      response = await supabase.from('customers').select('*').eq('id', customerId).maybeSingle();
+    } catch (_) {
+      response = null;
+    }
+  }
+
+  // Fallback 3: In-memory cache from customers list provider
+  if (response == null) {
+    final cached = ref
+        .read(customersNotifierProvider)
+        .valueOrNull
+        ?.where((c) => c.id == customerId)
+        .firstOrNull;
+    if (cached != null) return cached;
+
+    throw Exception('Customer not found or access restricted.');
+  }
+
+  return Customer.fromJson(response as Map<String, dynamic>);
 });
 
 // Create customer

@@ -15,6 +15,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
+import '../../../core/utils/file_folder_helper.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
@@ -841,11 +842,12 @@ class ProductCatalogScreen extends ConsumerWidget {
         await file.writeAsBytes(response.bodyBytes);
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✓ Saved to Downloads: $fileName'),
-              backgroundColor: AppColors.success,
-            ),
+          await FileFolderHelper.askViewInFolder(
+            context,
+            fileName: fileName,
+            locationName: 'Downloads',
+            filePath: file.path,
+            folderPath: dir.path,
           );
         }
       } else {

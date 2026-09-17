@@ -73,16 +73,36 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
     final profile = ref.watch(currentProfileProvider);
     final canCreate = profile?.primaryRole.canCreateCustomers ?? false;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppRoutes.adminDashboard),
-        ),
-        title: const Text('Customers'),
-        actions: [
-          const SyncStatusIndicator(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        context.go(AppRoutes.adminDashboard);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Text('Customers'),
+          actions: [
+            const SyncStatusIndicator(),
+          Consumer(
+            builder: (context, ref, _) {
+              final notifier = ref.watch(customersNotifierProvider.notifier);
+              final isArchived = notifier.filterBy == 'archived';
+              return IconButton(
+                icon: Icon(isArchived ? Icons.people_outline : Icons.archive_outlined),
+                tooltip: isArchived ? 'View Active Customers' : 'View Archived Customers',
+                color: isArchived ? Colors.amber.shade300 : null,
+                onPressed: () {
+                  notifier.setFilterAndSort(
+                    filter: isArchived ? '' : 'archived',
+                    sort: notifier.sortBy,
+                  );
+                },
+              );
+            },
+          ),
           Consumer(
             builder: (context, ref, _) {
               final notifier = ref.watch(customersNotifierProvider.notifier);
@@ -128,37 +148,9 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: () =>
                 ref.read(customersNotifierProvider.notifier).refresh(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Logout'),
-                  content: const Text('Are you sure you want to sign out?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.error),
-                      child: const Text('Logout',
-                          style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await ref.read(authControllerProvider.notifier).signOut();
-              }
-            },
           ),
         ],
       ),
@@ -232,8 +224,18 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                           backgroundColor: const Color(0xFFEFF6FF),
                           side: const BorderSide(color: Color(0xFF3B82F6), width: 1),
                           label: Text(
-                            currentFilter == 'active_deal' ? 'Active Deal' : 'Active AMC',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
+                            currentFilter == 'active_deal'
+                                ? 'Active Deal'
+                                : (currentFilter == 'archived'
+                                    ? 'Archived Customers'
+                                    : 'Active AMC'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: currentFilter == 'archived'
+                                  ? Colors.amber.shade900
+                                  : const Color(0xFF1D4ED8),
+                            ),
                           ),
                           deleteIcon: const Icon(Icons.close, size: 14, color: Color(0xFF1D4ED8)),
                           onDeleted: () {
@@ -279,13 +281,49 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
               );
             },
           ),
+          // Archived Customers Banner
+          Consumer(
+            builder: (context, ref, _) {
+              final notifier = ref.watch(customersNotifierProvider.notifier);
+              if (notifier.filterBy != 'archived') return const SizedBox.shrink();
+              return Container(
+                color: Colors.amber.shade50,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.archive_outlined, size: 16, color: Colors.amber.shade900),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Viewing Archived Customers. Tap "Retrieve" to restore any customer.',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade900),
+                      ),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 24)),
+                      onPressed: () {
+                        ref.read(customersNotifierProvider.notifier).setFilterAndSort(
+                          filter: '',
+                          sort: notifier.sortBy,
+                        );
+                      },
+                      child: const Text('Back to Active', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           // List
           Expanded(
             child: customersAsync.when(
               data: (customers) {
                 if (customers.isEmpty) {
+                  final isArchivedFilter =
+                      ref.watch(customersNotifierProvider.notifier).filterBy == 'archived';
                   return _EmptyState(
-                      onAdd: canCreate ? _navigateToCreate : null);
+                      isArchived: isArchivedFilter,
+                      onAdd: (canCreate && !isArchivedFilter) ? _navigateToCreate : null);
                 }
                 return RefreshIndicator(
                   color: AppColors.primary,
@@ -367,6 +405,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
               ),
             )
           : null,
+      ),
     );
   }
 
@@ -496,6 +535,12 @@ class _CustomerFilterSheetState extends State<_CustomerFilterSheet> {
                 icon: Icons.verified_user_outlined,
                 selected: _filter == 'active_amc',
                 onTap: () => setState(() => _filter = 'active_amc'),
+              ),
+              _buildOption(
+                label: 'Archived Customers',
+                icon: Icons.archive_outlined,
+                selected: _filter == 'archived',
+                onTap: () => setState(() => _filter = 'archived'),
               ),
             ],
           ),
@@ -687,6 +732,33 @@ class _CustomerTile extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (customer.deletedAt != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.amber.shade400),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.archive_outlined, size: 10, color: Colors.amber.shade900),
+                              const SizedBox(width: 2),
+                              Text(
+                                'Archived',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       if (hasDuplicate) ...[
                         const SizedBox(width: 6),
                         Container(
@@ -806,7 +878,51 @@ class _CustomerTile extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 8),
-            if (customer.phone != null && customer.phone!.isNotEmpty) ...[
+            if (customer.deletedAt != null) ...[
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: const Size(0, 32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.unarchive_outlined, size: 14),
+                label: const Text('Retrieve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Retrieve Customer'),
+                      content: Text('Restore "${customer.companyName}" back to active customers?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Retrieve / Restore', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await ref.read(customersNotifierProvider.notifier).restoreCustomer(customer.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✓ "${customer.companyName}" restored successfully'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              const SizedBox(width: 8),
+            ] else if (customer.phone != null && customer.phone!.isNotEmpty) ...[
               IconButton(
                 icon: const Icon(Icons.phone_outlined, size: 20, color: AppColors.primary),
                 padding: EdgeInsets.zero,
@@ -835,9 +951,10 @@ class _CustomerTile extends ConsumerWidget {
 }
 
 class _EmptyState extends StatelessWidget {
+  final bool isArchived;
   final VoidCallback? onAdd;
 
-  const _EmptyState({this.onAdd});
+  const _EmptyState({this.isArchived = false, this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -851,19 +968,19 @@ class _EmptyState extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.primarySurface,
+                color: isArchived ? Colors.amber.shade50 : AppColors.primarySurface,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.business_outlined,
+              child: Icon(
+                isArchived ? Icons.archive_outlined : Icons.business_outlined,
                 size: 40,
-                color: AppColors.primary,
+                color: isArchived ? Colors.amber.shade800 : AppColors.primary,
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No Customers Yet',
-              style: TextStyle(
+            Text(
+              isArchived ? 'No Archived Customers' : 'No Customers Yet',
+              style: const TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -871,10 +988,12 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Add your first customer to start\nmanaging the sales pipeline.',
+            Text(
+              isArchived
+                  ? 'There are currently no archived customers in the system.'
+                  : 'Add your first customer to start\nmanaging the sales pipeline.',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 14,
                 color: AppColors.textSecondary,

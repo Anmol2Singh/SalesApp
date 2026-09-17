@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/theme/app_theme.dart';
@@ -2597,10 +2596,16 @@ class _LeadQuotationsSectionState
       );
 
       if (mounted) {
-        await Printing.layoutPdf(
-          onLayout: (_) async => pdfBytes,
-          name:
-              'Quotation_Rev${quot.revision}_${quot.quotationNumber.replaceAll('/', '_')}.pdf',
+        final fileName =
+            'Quotation_Rev${quot.revision}_${quot.quotationNumber.replaceAll('/', '_')}.pdf';
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: fileName,
+            ),
+          ),
         );
       }
     } catch (e) {

@@ -85,10 +85,17 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                     return matchesSearch && matchesSource;
                   }).toList();
 
+                  bool checkConverted(Prospect p) {
+                    if (p.convertedToLeadId != null) return true;
+                    return leads.any((l) =>
+                        (l.prospectId != null && l.prospectId == p.id) ||
+                        (p.phone.isNotEmpty && l.contactPhone != null && l.contactPhone!.trim() == p.phone.trim()));
+                  }
+
                   // Sort: Unconverted at top, converted at bottom; then newest first
                   filtered.sort((a, b) {
-                    final aConverted = a.convertedToLeadId != null && leads.any((l) => l.id == a.convertedToLeadId);
-                    final bConverted = b.convertedToLeadId != null && leads.any((l) => l.id == b.convertedToLeadId);
+                    final aConverted = checkConverted(a);
+                    final bConverted = checkConverted(b);
                     if (aConverted != bConverted) {
                       return aConverted ? 1 : -1;
                     }
@@ -107,8 +114,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                     separatorBuilder: (context, index) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final prospect = filtered[index];
-                      final isConverted = prospect.convertedToLeadId != null &&
-                          leads.any((l) => l.id == prospect.convertedToLeadId);
+                      final isConverted = checkConverted(prospect);
                       final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
                       final isCreatedByMe = prospect.createdBy == profile?.id;
                       final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
@@ -651,6 +657,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [

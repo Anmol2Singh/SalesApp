@@ -723,8 +723,8 @@ class _StepActionCard extends ConsumerWidget {
         hasData = false;
     }
 
-    final displayCompleted = isCompleted || hasData;
-    final displayActive = isActive && !hasData;
+    final displayCompleted = (isCompleted && (step != PipelineStep.quotation || hasData)) || hasData;
+    final displayActive = (isActive || (step == PipelineStep.quotation && !hasData)) && !hasData;
 
     final isLocked = !hasData && (stepIndex > currentStepIndex);
     final showActionSection = isActive || displayCompleted;

@@ -544,11 +544,11 @@ class _InvoiceExpandableTileState extends State<_InvoiceExpandableTile> {
           customer: customer,
           product: product,
           templateConfig: templateConfig,
-          docTitle: 'TAX INVOICE',
+          docTitle: 'PROFORMA INVOICE',
         );
 
-        final invNum = quotation.quotationNumber.replaceAll('QT', 'INV').replaceAll(RegExp(r'[/\\?%*:|<>]'), '_');
-        fileName = 'Tax_Invoice_$invNum.pdf';
+        final invNum = quotation.quotationNumber.replaceAll('QT', 'PI').replaceAll(RegExp(r'[/\\?%*:|<>]'), '_');
+        fileName = 'Proforma_Invoice_$invNum.pdf';
       } else {
         // Fallback for service invoices: build a tax invoice representation
         final dummyQuotation = core_quotation.Quotation(
@@ -605,10 +605,10 @@ class _InvoiceExpandableTileState extends State<_InvoiceExpandableTile> {
           customer: customer,
           product: product,
           templateConfig: templateConfig,
-          docTitle: 'TAX INVOICE',
+          docTitle: 'PROFORMA INVOICE',
         );
 
-        fileName = 'Invoice_${invoice.invoiceId.substring(0, invoice.invoiceId.length > 8 ? 8 : invoice.invoiceId.length).toUpperCase()}.pdf';
+        fileName = 'Proforma_Invoice_${invoice.invoiceId.substring(0, invoice.invoiceId.length > 8 ? 8 : invoice.invoiceId.length).toUpperCase()}.pdf';
       }
 
       if (isDialogShowing && context.mounted) {

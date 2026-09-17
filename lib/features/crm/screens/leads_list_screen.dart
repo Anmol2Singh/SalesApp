@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/excel_service.dart';
-import '../../admin/screens/product_catalog_screen.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
 import '../../../core/models/user_role.dart';
-import '../../../core/widgets/searchable_dropdown.dart';
+import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../widgets/product_combo_selector.dart';
 
 class LeadsListScreen extends ConsumerStatefulWidget {
   const LeadsListScreen({super.key});
@@ -190,6 +190,8 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (displayPhone.isNotEmpty)
+                                Text(displayPhone, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                               Text(
                                 lead.productName,
                                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
@@ -382,11 +384,29 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
   final _formKey = GlobalKey<FormState>();
   Prospect? _selectedProspect;
   final _contactPhoneCtrl = TextEditingController();
-  String? _selectedProductName;
+  List<ProductComboItem> _selectedProducts = [];
+  List<ProductComboItem> _availableCombos = [];
+  String? _productError;
   final _valCtrl = TextEditingController(text: '0.00');
   final _notesCtrl = TextEditingController();
   DateTime? _expectedDate;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _availableCombos = List<ProductComboItem>.from(ProductComboItem.defaultCombos);
+    _loadCombos();
+  }
+
+  Future<void> _loadCombos() async {
+    try {
+      final combos = await ProductComboItem.loadCombos(ref.read(supabaseClientProvider));
+      if (mounted && combos.isNotEmpty) {
+        setState(() => _availableCombos = combos);
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -394,6 +414,15 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
     _valCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  void _onProductsChanged(List<ProductComboItem> items) {
+    setState(() {
+      _selectedProducts = items;
+      _productError = items.isEmpty ? 'Please select at least one product' : null;
+      final total = items.fold<double>(0.0, (sum, i) => sum + i.price);
+      _valCtrl.text = total > 0 ? total.toStringAsFixed(2) : '0.00';
+    });
   }
 
   Future<void> _handleSave() async {
@@ -404,26 +433,40 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
       );
       return;
     }
-    if (_selectedProductName == null || _selectedProductName!.isEmpty) {
+    if (_selectedProducts.isEmpty) {
+      setState(() => _productError = 'Please select at least one product');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a registered product'), backgroundColor: AppColors.error),
+        const SnackBar(content: Text('Please select at least one product'), backgroundColor: AppColors.error),
       );
       return;
     }
 
     setState(() => _isSaving = true);
     try {
+      final joinedProductName = _selectedProducts.map((p) => p.displayName).join(', ');
+      final joinedCapacity = _selectedProducts
+          .map((p) => p.capacity)
+          .whereType<String>()
+          .where((c) => c.isNotEmpty)
+          .join(', ');
+      final totalValue = double.tryParse(_valCtrl.text.trim()) ??
+          _selectedProducts.fold<double>(0.0, (sum, i) => sum + i.price);
+
       final newLead = await ref.read(leadsProvider.notifier).addDirectLead(
+            prospectId: _selectedProspect!.id,
             prospectName: _selectedProspect!.name,
             contactPhone: _contactPhoneCtrl.text.trim(),
-            productName: _selectedProductName!,
-            estimatedValue: double.tryParse(_valCtrl.text.trim()) ?? 0.0,
+            productName: joinedProductName,
+            estimatedValue: totalValue,
             expectedDate: _expectedDate,
             notes: _notesCtrl.text.trim(),
+            capacity: joinedCapacity.isNotEmpty ? joinedCapacity : null,
+            components: _selectedProducts.map((p) => p.toComponentMap()).toList(),
           );
 
       if (mounted) {
         context.pop();
+        ref.read(prospectsProvider.notifier).load();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Lead created successfully!'), backgroundColor: AppColors.success),
         );
@@ -445,12 +488,6 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
   @override
   Widget build(BuildContext context) {
     final prospectsList = ref.watch(prospectsProvider).value ?? [];
-    final productsAsync = ref.watch(productsProvider);
-    final availableProducts = productsAsync.value?.map((p) => p.name).toList() ?? [
-      'Boom Barrier',
-      'Heat Pump',
-      'Solar Water Heater',
-    ];
 
     return Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
@@ -564,20 +601,12 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
               ),
               const SizedBox(height: 12),
 
-              // 3. Registered Products Searchable Dropdown
-              SearchableDropdown<String>(
-                label: 'Product Name *',
-                hint: 'Select registered product',
-                value: _selectedProductName,
-                items: availableProducts,
-                itemLabel: (prod) => prod,
-                onChanged: (val) => setState(() => _selectedProductName = val),
-                validator: (v) => v == null || v.isEmpty ? 'Please select a product' : null,
-                decoration: const InputDecoration(
-                  labelText: 'Product Name *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.solar_power_outlined),
-                ),
+              // 3. Multi-Product Selector (Combines all inventory items & capacities)
+              MultiProductSelectorField(
+                selectedItems: _selectedProducts,
+                availableItems: _availableCombos,
+                onChanged: _onProductsChanged,
+                errorText: _productError,
               ),
               const SizedBox(height: 12),
 
@@ -587,7 +616,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                 readOnly: true,
                 decoration: const InputDecoration(
                   labelText: 'Estimated Deal Value (₹)',
-                  helperText: 'Deal value will be determined by Quotation',
+                  helperText: 'Auto-calculated from selected items price',
                   filled: true,
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.currency_rupee),

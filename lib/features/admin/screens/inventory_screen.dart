@@ -2,11 +2,13 @@ import 'dart:io';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
+import '../../../core/models/inventory_item.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/manage_boq_items_provider.dart';
@@ -28,6 +30,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
 
   String _itemSearchQuery = '';
   String _productSearchQuery = '';
+  bool _itemsSortAscending = true;
+  final Set<String> _selectedItemIds = {};
 
   @override
   void initState() {
@@ -102,7 +106,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   onPressed: () {
                     final items = inventoryAsync.valueOrNull ?? [];
                     if (items.isNotEmpty) {
-                      ExcelService.exportInventoryItems(context, items);
+                      final products = ref.read(productsProvider).valueOrNull ?? [];
+                      ExcelService.exportInventoryItems(context, items, products: products);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('No items to export.')),
@@ -462,6 +467,103 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               ],
             ),
           ),
+          const Divider(height: 1),
+
+          // Items Treated as Products Section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.link, size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Items Treated as Products (${product.baseSpecs.linkedItems.length})',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    InkWell(
+                      onTap: () => _showLinkItemsDialog(context, product),
+                      borderRadius: BorderRadius.circular(6),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          children: [
+                            Icon(Icons.add, size: 14, color: AppColors.primary),
+                            SizedBox(width: 4),
+                            Text(
+                              'Add Items',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (product.baseSpecs.linkedItems.isEmpty)
+                  Text(
+                    'No items linked. Tap "Add Items" to treat inventory items as this product.',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey.shade500),
+                  )
+                else
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: product.baseSpecs.linkedItems.map((item) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              item,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E40AF),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () => _removeLinkedItem(context, product, item),
+                              child: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: Color(0xFF1E40AF),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -473,7 +575,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   Widget _buildItemsTab(AsyncValue<List<dynamic>> inventoryAsync) {
     return inventoryAsync.when(
       data: (items) {
-        final filteredItems = items.where((item) {
+        final typedItems = List<InventoryItem>.from(items);
+        final filteredItems = typedItems.where((item) {
           if (_itemSearchQuery.isEmpty) return true;
           final q = _itemSearchQuery.toLowerCase();
           final nameMatch = item.itemName.toLowerCase().contains(q);
@@ -481,40 +584,136 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           return nameMatch || hsnMatch;
         }).toList();
 
+        filteredItems.sort((a, b) => _itemsSortAscending
+            ? a.itemName.toLowerCase().compareTo(b.itemName.toLowerCase())
+            : b.itemName.toLowerCase().compareTo(a.itemName.toLowerCase()));
+
         return Column(
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               color: Colors.white,
-              child: TextField(
-                controller: _itemSearchController,
-                decoration: InputDecoration(
-                  hintText: 'Search items by name or HSN code...',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
-                  suffixIcon: _itemSearchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _itemSearchController.clear();
-                            setState(() => _itemSearchQuery = '');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: AppColors.background,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _itemSearchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search items by name or HSN code...',
+                        prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                        suffixIcon: _itemSearchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _itemSearchController.clear();
+                                  setState(() => _itemSearchQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: AppColors.background,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                      ),
+                      onChanged: (val) => setState(() => _itemSearchQuery = val.trim()),
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Tooltip(
+                      message: _itemsSortAscending ? 'Sort: A-Z (Click for Z-A)' : 'Sort: Z-A (Click for A-Z)',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => setState(() => _itemsSortAscending = !_itemsSortAscending),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _itemsSortAscending ? Icons.arrow_downward : Icons.arrow_upward,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _itemsSortAscending ? 'A-Z' : 'Z-A',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                onChanged: (val) => setState(() => _itemSearchQuery = val.trim()),
+                ],
               ),
             ),
+            if (_selectedItemIds.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: const Color(0xFFEFF6FF),
+                child: Row(
+                  children: [
+                    Text(
+                      '${_selectedItemIds.length} selected',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E40AF),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      onPressed: () {
+                        setState(() {
+                          if (_selectedItemIds.length == filteredItems.length) {
+                            _selectedItemIds.clear();
+                          } else {
+                            _selectedItemIds.addAll(filteredItems.map((e) => e.id));
+                          }
+                        });
+                      },
+                      child: Text(
+                        _selectedItemIds.length == filteredItems.length ? 'Deselect All' : 'Select All',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.delete, size: 14, color: Colors.white),
+                      label: Text('Delete (${_selectedItemIds.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () => _confirmBulkDelete(context, ref, typedItems),
+                    ),
+                  ],
+                ),
+              ),
             Expanded(
               child: filteredItems.isEmpty
                   ? Center(
@@ -549,16 +748,32 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
                         final item = filteredItems[index];
+                        final isSelected = _selectedItemIds.contains(item.id);
                         return Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: isSelected ? const Color(0xFFF8FAFC) : Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade200),
+                            border: Border.all(color: isSelected ? AppColors.primary : Colors.grey.shade200, width: isSelected ? 1.5 : 1.0),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Checkbox(
+                                value: isSelected,
+                                activeColor: AppColors.primary,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (val == true) {
+                                      _selectedItemIds.add(item.id);
+                                    } else {
+                                      _selectedItemIds.remove(item.id);
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 4),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,6 +851,77 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       },
       loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
       error: (err, _) => Center(child: Text('Error: $err')),
+    );
+  }
+
+  void _confirmBulkDelete(BuildContext context, WidgetRef ref, List<InventoryItem> allItems) {
+    if (_selectedItemIds.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Delete ${_selectedItemIds.length} Items'),
+        content: Text('Are you sure you want to delete ${_selectedItemIds.length} selected items? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final supabase = ref.read(supabaseClientProvider);
+                final idsToDelete = _selectedItemIds.toList();
+                final deletedNames = allItems
+                    .where((it) => _selectedItemIds.contains(it.id))
+                    .map((it) => it.itemName.toLowerCase())
+                    .toSet();
+
+                // 1. Delete from inventory_items
+                await supabase.from('inventory_items').delete().inFilter('id', idsToDelete);
+
+                // 2. Clean up from linked_items in products
+                final allProducts = ref.read(productsProvider).valueOrNull ?? [];
+                for (final p in allProducts) {
+                  final updated = List<String>.from(p.baseSpecs.linkedItems)
+                    ..removeWhere((name) => deletedNames.contains(name.toLowerCase()));
+                  if (updated.length != p.baseSpecs.linkedItems.length) {
+                    final rawSpecs = Map<String, dynamic>.from(p.baseSpecs.raw);
+                    rawSpecs['linked_items'] = updated;
+                    await supabase.from('products').update({
+                      'base_specs': rawSpecs,
+                      'updated_at': DateTime.now().toIso8601String(),
+                    }).eq('id', p.id);
+                  }
+                }
+
+                setState(() {
+                  _selectedItemIds.clear();
+                });
+
+                ref.invalidate(inventoryProvider);
+                ref.invalidate(productsProvider);
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Deleted ${idsToDelete.length} items successfully.'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting items: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1158,6 +1444,287 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   }
 
   // ==========================================
+  // LINK ITEMS TO PRODUCT DIALOG (TREAT AS PRODUCT)
+  // ==========================================
+  void _showLinkItemsDialog(BuildContext context, Product product) async {
+    // 1. Collect all capacities across ALL products to exclude capacity items
+    final allProducts = ref.read(productsProvider).valueOrNull ?? [];
+    final excludedNames = <String>{};
+    for (final p in allProducts) {
+      for (final cap in p.baseSpecs.capacities) {
+        final c = cap.trim().toLowerCase();
+        excludedNames.add(c);
+        excludedNames.add('${p.name.trim().toLowerCase()} - $c');
+        excludedNames.add('${p.name.trim().toLowerCase()} -$c');
+        excludedNames.add('${p.name.trim().toLowerCase()}-$c');
+      }
+      // Exclude items already added to any other sell product
+      if (p.id != product.id) {
+        for (final li in p.baseSpecs.linkedItems) {
+          excludedNames.add(li.trim().toLowerCase());
+        }
+      }
+    }
+
+    // 2. Fetch inventory items
+    final inventoryAsync = ref.read(inventoryProvider);
+    List<InventoryItem> allItems = [];
+    if (inventoryAsync.hasValue) {
+      allItems = inventoryAsync.value!;
+    } else {
+      allItems = await ref.read(inventoryProvider.future);
+    }
+
+    // 3. Filter out items created using capacity of any product
+    final availableItems = allItems.where((item) {
+      final nameLower = item.itemName.trim().toLowerCase();
+      if (excludedNames.contains(nameLower)) return false;
+      for (final p in allProducts) {
+        final prefix = '${p.name.trim().toLowerCase()} - ';
+        if (nameLower.startsWith(prefix)) {
+          final remainder = nameLower.substring(prefix.length).trim();
+          if (p.baseSpecs.capacities.any((c) => c.trim().toLowerCase() == remainder)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }).toList();
+
+    availableItems.sort((a, b) => a.itemName.toLowerCase().compareTo(b.itemName.toLowerCase()));
+
+    // 4. Current selected items
+    final selectedItems = Set<String>.from(product.baseSpecs.linkedItems);
+    String searchQuery = '';
+    bool isSaving = false;
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          final filtered = availableItems.where((item) {
+            if (searchQuery.isEmpty) return true;
+            return item.itemName.toLowerCase().contains(searchQuery.toLowerCase());
+          }).toList();
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.link, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Link Items to ${product.name}',
+                        style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Select items treated as this product (${selectedItems.length} selected)',
+                        style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 500,
+              height: 500,
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search items...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    onChanged: (val) => setModalState(() => searchQuery = val.trim()),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Available Items (${filtered.length})',
+                        style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      if (filtered.isNotEmpty)
+                        Row(
+                          children: [
+                            TextButton(
+                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                              onPressed: () {
+                                setModalState(() {
+                                  for (final it in filtered) {
+                                    selectedItems.add(it.itemName);
+                                  }
+                                });
+                              },
+                              child: const Text('Select All', style: TextStyle(fontSize: 12)),
+                            ),
+                            TextButton(
+                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                              onPressed: () {
+                                setModalState(() {
+                                  for (final it in filtered) {
+                                    selectedItems.remove(it.itemName);
+                                  }
+                                });
+                              },
+                              child: const Text('Clear', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No matching items found.',
+                              style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, idx) {
+                              final item = filtered[idx];
+                              final isSelected = selectedItems.contains(item.itemName);
+                              return CheckboxListTile(
+                                dense: true,
+                                value: isSelected,
+                                title: Text(
+                                  item.itemName,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                subtitle: item.price > 0
+                                    ? Text(
+                                        '₹${item.price.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                      )
+                                    : null,
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                onChanged: (val) {
+                                  setModalState(() {
+                                    if (val == true) {
+                                      selectedItems.add(item.itemName);
+                                    } else {
+                                      selectedItems.remove(item.itemName);
+                                    }
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setModalState(() => isSaving = true);
+                        try {
+                          final supabase = ref.read(supabaseClientProvider);
+                          final rawSpecs = Map<String, dynamic>.from(product.baseSpecs.raw);
+                          rawSpecs['linked_items'] = selectedItems.toList();
+
+                          await supabase.from('products').update({
+                            'base_specs': rawSpecs,
+                            'updated_at': DateTime.now().toIso8601String(),
+                          }).eq('id', product.id);
+
+                          ref.invalidate(productsProvider);
+
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Linked items updated successfully!'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error linking items: $e'), backgroundColor: AppColors.error),
+                            );
+                          }
+                        } finally {
+                          if (ctx.mounted) setModalState(() => isSaving = false);
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Save Items', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _removeLinkedItem(BuildContext context, Product product, String itemName) async {
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final rawSpecs = Map<String, dynamic>.from(product.baseSpecs.raw);
+      final list = List<String>.from(product.baseSpecs.linkedItems)..remove(itemName);
+      rawSpecs['linked_items'] = list;
+
+      await supabase.from('products').update({
+        'base_specs': rawSpecs,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', product.id);
+
+      ref.invalidate(productsProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Removed "$itemName" from ${product.name}'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error removing item: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  // ==========================================
   // SUB-SYSTEMS MODAL (BOQ ITEMS LINKED TO PRODUCT)
   // ==========================================
   void _showSubSystemsModal(BuildContext context, Product product) {
@@ -1527,6 +2094,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     final unitController = TextEditingController(text: 'NOS');
     final priceController = TextEditingController(text: '0');
     final warrantyController = TextEditingController(text: '12');
+    final allProducts = ref.read(productsProvider).valueOrNull ?? [];
+    String? selectedProductName;
     bool isSaving = false;
 
     showDialog(
@@ -1577,6 +2146,64 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         helperText: 'e.g. 12 or 24 months from customer purchase date',
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String?>(
+                      value: selectedProductName,
+                      decoration: const InputDecoration(
+                        labelText: 'Under Product (Optional)',
+                        prefixIcon: Icon(Icons.sell_outlined),
+                        helperText: 'Select sell product if treated as product name',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('None (Standard Item)', style: TextStyle(color: Colors.grey)),
+                        ),
+                        ...allProducts.map((p) => DropdownMenuItem<String?>(
+                          value: p.name,
+                          child: Text(p.name),
+                        )),
+                      ],
+                      onChanged: (newVal) async {
+                        if (newVal != null && newVal != selectedProductName) {
+                          final confirmed = await showDialog<bool>(
+                            context: ctx,
+                            builder: (alertCtx) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: AppColors.primary),
+                                  SizedBox(width: 8),
+                                  Text('Treat as Product?'),
+                                ],
+                              ),
+                              content: const Text(
+                                "it will be treated as product name, if it's just a side/extra item don't select this",
+                                style: TextStyle(fontFamily: 'Inter', fontSize: 14),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(alertCtx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                  onPressed: () => Navigator.pop(alertCtx, true),
+                                  child: const Text('OK', style: TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed == true) {
+                            setModalState(() => selectedProductName = newVal);
+                          } else {
+                            setModalState(() {});
+                          }
+                        } else if (newVal == null) {
+                          setModalState(() => selectedProductName = null);
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -1615,6 +2242,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               'price': double.tryParse(priceController.text) ?? 0.0,
                               'warranty_months': int.tryParse(warrantyController.text.trim()) ?? 12,
                             });
+
+                            // If Under Product is selected, link item to that product
+                            if (selectedProductName != null) {
+                              final matchedProd = allProducts.firstWhereOrNull((p) => p.name == selectedProductName);
+                              if (matchedProd != null) {
+                                final updatedLinked = List<String>.from(matchedProd.baseSpecs.linkedItems);
+                                if (!updatedLinked.contains(name)) {
+                                  updatedLinked.add(name);
+                                  final rawSpecs = Map<String, dynamic>.from(matchedProd.baseSpecs.raw);
+                                  rawSpecs['linked_items'] = updatedLinked;
+                                  await supabase.from('products').update({
+                                    'base_specs': rawSpecs,
+                                    'updated_at': DateTime.now().toIso8601String(),
+                                  }).eq('id', matchedProd.id);
+                                  ref.invalidate(productsProvider);
+                                }
+                              }
+                            }
+
                             ref.invalidate(inventoryProvider);
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
@@ -1650,6 +2296,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     final unitController = TextEditingController(text: item.uom ?? 'NOS');
     final priceController = TextEditingController(text: item.price.toString());
     final warrantyController = TextEditingController(text: '${item.warrantyMonths}');
+    final allProducts = ref.read(productsProvider).valueOrNull ?? [];
+    Product? initialProduct;
+    for (final p in allProducts) {
+      if (p.baseSpecs.linkedItems.contains(item.itemName)) {
+        initialProduct = p;
+        break;
+      }
+    }
+    String? selectedProductName = initialProduct?.name;
     bool isSaving = false;
 
     showDialog(
@@ -1700,6 +2355,64 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         helperText: 'e.g. 12 or 24 months from customer purchase date',
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String?>(
+                      value: selectedProductName,
+                      decoration: const InputDecoration(
+                        labelText: 'Under Product (Optional)',
+                        prefixIcon: Icon(Icons.sell_outlined),
+                        helperText: 'Select sell product if treated as product name',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('None (Standard Item)', style: TextStyle(color: Colors.grey)),
+                        ),
+                        ...allProducts.map((p) => DropdownMenuItem<String?>(
+                          value: p.name,
+                          child: Text(p.name),
+                        )),
+                      ],
+                      onChanged: (newVal) async {
+                        if (newVal != null && newVal != selectedProductName) {
+                          final confirmed = await showDialog<bool>(
+                            context: ctx,
+                            builder: (alertCtx) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: AppColors.primary),
+                                  SizedBox(width: 8),
+                                  Text('Treat as Product?'),
+                                ],
+                              ),
+                              content: const Text(
+                                "it will be treated as product name, if it's just a side/extra item don't select this",
+                                style: TextStyle(fontFamily: 'Inter', fontSize: 14),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(alertCtx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                  onPressed: () => Navigator.pop(alertCtx, true),
+                                  child: const Text('OK', style: TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed == true) {
+                            setModalState(() => selectedProductName = newVal);
+                          } else {
+                            setModalState(() {});
+                          }
+                        } else if (newVal == null) {
+                          setModalState(() => selectedProductName = null);
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -1726,6 +2439,40 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               'price': double.tryParse(priceController.text) ?? 0.0,
                               'warranty_months': int.tryParse(warrantyController.text.trim()) ?? 12,
                             }).eq('id', item.id);
+
+                            // Update linked_items in products if changed or renamed
+                            final oldName = item.itemName as String;
+                            if (selectedProductName != initialProduct?.name || name != oldName) {
+                              // 1. If old product existed, remove old name
+                              if (initialProduct != null) {
+                                final updatedOld = List<String>.from(initialProduct.baseSpecs.linkedItems)
+                                  ..remove(oldName)
+                                  ..remove(name);
+                                final rawOld = Map<String, dynamic>.from(initialProduct.baseSpecs.raw);
+                                rawOld['linked_items'] = updatedOld;
+                                await supabase.from('products').update({
+                                  'base_specs': rawOld,
+                                  'updated_at': DateTime.now().toIso8601String(),
+                                }).eq('id', initialProduct.id);
+                              }
+                              // 2. If new product selected, add name
+                              if (selectedProductName != null) {
+                                final newProd = allProducts.firstWhereOrNull((p) => p.name == selectedProductName);
+                                if (newProd != null) {
+                                  final updatedNew = List<String>.from(newProd.baseSpecs.linkedItems)
+                                    ..remove(oldName);
+                                  if (!updatedNew.contains(name)) updatedNew.add(name);
+                                  final rawNew = Map<String, dynamic>.from(newProd.baseSpecs.raw);
+                                  rawNew['linked_items'] = updatedNew;
+                                  await supabase.from('products').update({
+                                    'base_specs': rawNew,
+                                    'updated_at': DateTime.now().toIso8601String(),
+                                  }).eq('id', newProd.id);
+                                }
+                              }
+                              ref.invalidate(productsProvider);
+                            }
+
                             ref.invalidate(inventoryProvider);
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
@@ -1810,6 +2557,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       final existingItems = ref.read(inventoryProvider).valueOrNull ?? [];
       final existingNames = existingItems.map((e) => e.itemName.toLowerCase()).toSet();
 
+      final existingProducts = ref.read(productsProvider).valueOrNull ?? [];
+      final Map<String, Product> productByName = {};
+      final Map<String, List<String>> productLinkedItems = {};
+      final Map<String, Map<String, dynamic>> productRawSpecs = {};
+
+      for (final p in existingProducts) {
+        productByName[p.name.trim().toLowerCase()] = p;
+        productLinkedItems[p.id] = List<String>.from(p.baseSpecs.linkedItems);
+        productRawSpecs[p.id] = Map<String, dynamic>.from(p.baseSpecs.raw);
+      }
+
+      final Set<String> modifiedProductIds = {};
       int importedCount = 0;
       int skippedCount = 0;
 
@@ -1818,6 +2577,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         if (sheet == null) continue;
 
         int nameCol = 0;
+        int underProductCol = -1;
         int hsnCol = 1;
         int unitCol = 2;
         int priceCol = 3;
@@ -1830,7 +2590,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             // Parse headers to locate columns dynamically if headers exist
             for (int i = 0; i < row.length; i++) {
               final header = row[i]?.value?.toString().toLowerCase().trim() ?? '';
-              if (header.contains('item') || header.contains('name')) {
+              if (header.contains('under product') || header.contains('product category')) {
+                underProductCol = i;
+              } else if (header.contains('item') || header.contains('name')) {
                 nameCol = i;
               } else if (header.contains('hsn') || header.contains('sac')) {
                 hsnCol = i;
@@ -1848,6 +2610,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           if (row.isEmpty) continue;
 
           final itemNameCell = row.length > nameCol ? row[nameCol]?.value : null;
+          final underProductCell = underProductCol >= 0 && row.length > underProductCol ? row[underProductCol]?.value : null;
           final hsnCell = row.length > hsnCol ? row[hsnCol]?.value : null;
           final unitCell = row.length > unitCol ? row[unitCol]?.value : null;
           final priceCell = row.length > priceCol ? row[priceCol]?.value : null;
@@ -1855,6 +2618,21 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
 
           final itemName = itemNameCell?.toString().trim();
           if (itemName == null || itemName.isEmpty) continue;
+
+          final underProductName = underProductCell?.toString().trim();
+          final hasUnderProduct = underProductName != null && underProductName.isNotEmpty && underProductName != '-';
+
+          // If under product category is specified, check if it matches a sell product
+          if (hasUnderProduct) {
+            final matchedProd = productByName[underProductName.toLowerCase()];
+            if (matchedProd != null) {
+              final list = productLinkedItems[matchedProd.id]!;
+              if (!list.any((x) => x.toLowerCase() == itemName.toLowerCase())) {
+                list.add(itemName);
+                modifiedProductIds.add(matchedProd.id);
+              }
+            }
+          }
 
           if (existingNames.contains(itemName.toLowerCase())) {
             skippedCount++;
@@ -1899,15 +2677,30 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         }
       }
 
+      // Persist any updated product linked_items
+      for (final prodId in modifiedProductIds) {
+        final raw = productRawSpecs[prodId] ?? {};
+        raw['linked_items'] = productLinkedItems[prodId] ?? [];
+        await supabase.from('products').update({
+          'base_specs': raw,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', prodId);
+      }
+
+      if (modifiedProductIds.isNotEmpty) {
+        ref.invalidate(productsProvider);
+      }
+
       if (importedCount > 0) {
         ref.invalidate(inventoryProvider);
       }
 
       if (context.mounted) {
+        final linkedMsg = modifiedProductIds.isNotEmpty ? ' Linked to ${modifiedProductIds.length} products.' : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Imported $importedCount items. Skipped $skippedCount duplicates.'),
-            backgroundColor: importedCount > 0 ? AppColors.success : Colors.orange,
+            content: Text('Imported $importedCount items. Skipped $skippedCount duplicates.$linkedMsg'),
+            backgroundColor: (importedCount > 0 || modifiedProductIds.isNotEmpty) ? AppColors.success : Colors.orange,
           ),
         );
       }

@@ -22,6 +22,66 @@ ImageProvider _getProductImageProvider(String url, [String? category]) {
   );
 }
 
+Widget _buildProductThumbnail(Product product) {
+  final url = product.imageUrl.trim();
+  final isValidUrl = url.startsWith('http://') || url.startsWith('https://');
+
+  Widget fallbackIcon() {
+    final cat = product.category.toLowerCase();
+    final name = product.productName.toLowerCase();
+    IconData icon = Icons.solar_power_rounded;
+    if (cat.contains('heat') || name.contains('heat pump')) {
+      icon = Icons.heat_pump_rounded;
+    } else if (cat.contains('barrier') || name.contains('boom barrier') || name.contains('barrier')) {
+      icon = Icons.fence_rounded;
+    } else if (cat.contains('boiler') || name.contains('boiler') || name.contains('water heater')) {
+      icon = Icons.water_drop_rounded;
+    }
+
+    return Container(
+      width: 76,
+      height: 76,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Center(
+        child: Icon(icon, color: AppColors.primary, size: 36),
+      ),
+    );
+  }
+
+  if (!isValidUrl) {
+    return fallbackIcon();
+  }
+
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(14),
+    child: Image.network(
+      url,
+      width: 76,
+      height: 76,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => fallbackIcon(),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: 76,
+          height: 76,
+          color: AppColors.primary.withOpacity(0.05),
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
+
 /// A prominent, feature-rich card for displaying the customer's primary or single equipment
 class HeroProductCard extends StatelessWidget {
   final Product product;
@@ -77,8 +137,19 @@ class HeroProductCard extends StatelessWidget {
                         color: AppColors.primary.withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.solar_power_rounded,
+                      child: Icon(
+                        () {
+                          final cat = product.category.toLowerCase();
+                          final name = product.productName.toLowerCase();
+                          if (cat.contains('barrier') || name.contains('barrier')) {
+                            return Icons.fence_rounded;
+                          } else if (cat.contains('boiler') || name.contains('water heater') || cat.contains('swh')) {
+                            return Icons.water_drop_rounded;
+                          } else if (cat.contains('heat') || name.contains('heat pump')) {
+                            return Icons.heat_pump_rounded;
+                          }
+                          return Icons.solar_power_rounded;
+                        }(),
                         size: 14,
                         color: AppColors.primary,
                       ),
@@ -165,20 +236,7 @@ class HeroProductCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Product Image Thumbnail
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.08),
-                      image: DecorationImage(
-                        image: _getProductImageProvider(product.imageUrl, product.category),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ),
+                _buildProductThumbnail(product),
                 const SizedBox(width: 14),
 
                 // Name & Specs
@@ -318,7 +376,6 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isAmcActive = product.amcStatus.toLowerCase() == 'active';
 
     return Container(

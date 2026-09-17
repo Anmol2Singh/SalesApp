@@ -9,7 +9,6 @@ import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/data/repositories/app_repositories.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
-import 'package:salesapp/features/customer_app/shared/widgets/status_chip.dart';
 import 'package:salesapp/features/customer_app/features/dashboard/widgets/product_card.dart';
 
 class ActivityEvent {
@@ -83,7 +82,6 @@ class MainDashboard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(productsProvider);
     final advProductsAsync = ref.watch(advertisementProductsProvider);
-    final requestsAsync = ref.watch(serviceRequestsProvider);
     final profileAsync = ref.watch(userProfileProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -736,21 +734,6 @@ class MainDashboard extends ConsumerWidget {
       );
     }
 
-  String _getRequestStatusType(String status) {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'success';
-      case 'in_progress':
-      case 'confirmed':
-        return 'warning';
-      case 'cancelled':
-        return 'danger';
-      case 'pending':
-      default:
-        return 'info';
-    }
-  }
-
   Widget _buildStatusStrip(
     BuildContext context,
     int activeCount,
@@ -820,174 +803,6 @@ class MainDashboard extends ConsumerWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNextActionCard(BuildContext context, List<ServiceRequest> requests) {
-    final activeRequest = requests.cast<ServiceRequest?>().firstWhere(
-          (r) => r != null && r.status != 'completed' && r.status != 'cancelled',
-          orElse: () => null,
-        );
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
-
-    if (activeRequest == null) {
-      return GlassCard(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 16,
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.check_circle_outline, color: AppColors.success, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'All Systems Running',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'No upcoming service appointments.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: subtitleColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final isAssigned = activeRequest.technicianId != null && activeRequest.technicianId!.isNotEmpty;
-    final isTrackingActive = activeRequest.status == 'in_progress' || (isAssigned && activeRequest.status == 'assigned');
-
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      borderRadius: 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: (isTrackingActive ? AppColors.accent : AppColors.warning).withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isTrackingActive ? Icons.local_shipping : Icons.calendar_today,
-                      color: isTrackingActive ? AppColors.accent : AppColors.warning,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    isTrackingActive ? 'Technician En Route' : 'Service Scheduled',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                ],
-              ),
-              StatusChip(
-                label: activeRequest.status.toUpperCase(),
-                status: _getRequestStatusType(activeRequest.status),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            activeRequest.issueCategory,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(Icons.access_time, size: 14, color: subtitleColor),
-              const SizedBox(width: 6),
-              Text(
-                '${DateFormat('dd MMM yyyy').format(activeRequest.scheduledDate)} • ${activeRequest.timeSlot}',
-                style: TextStyle(fontSize: 12, color: subtitleColor),
-              ),
-            ],
-          ),
-          if (isAssigned) ...[
-            const SizedBox(height: 12),
-            Divider(color: isDark ? AppColors.borderColor : AppColors.borderColorLight, height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundImage: NetworkImage(
-                        'https://api.dicebear.com/7.x/avataaars/svg?seed=${activeRequest.technicianId}',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Technician Assigned',
-                          style: TextStyle(fontSize: 11, color: subtitleColor),
-                        ),
-                        Text(
-                          (activeRequest.technicianName != null && activeRequest.technicianName!.isNotEmpty)
-                              ? activeRequest.technicianName!
-                              : 'Technician will be allotted shortly',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (isTrackingActive)
-                  TextButton.icon(
-                    onPressed: () {
-                      context.push('/tracking/${activeRequest.technicianId}');
-                    },
-                    icon: const Icon(Icons.map, size: 16, color: AppColors.accent),
-                    label: const Text(
-                      'Track Live',
-                      style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
     );
@@ -1117,37 +932,13 @@ class MainDashboard extends ConsumerWidget {
       );
     }
 
-    if (products.length == 1) {
-      return HeroProductCard(product: products.first);
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        HeroProductCard(product: products.first),
-        const SizedBox(height: 18),
-        Text(
-          'Other Systems (${products.length - 1})',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 270,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            clipBehavior: Clip.none,
-            itemCount: products.length - 1,
-            separatorBuilder: (context, index) => const SizedBox(width: 14),
-            itemBuilder: (context, index) {
-              return ProductCard(product: products[index + 1]);
-            },
-          ),
-        ),
+        for (int i = 0; i < products.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          HeroProductCard(product: products[i]),
+        ],
       ],
     );
   }
