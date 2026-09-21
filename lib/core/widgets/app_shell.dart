@@ -12,19 +12,27 @@ import '../../features/notifications/providers/notifications_provider.dart';
 import '../router/app_router.dart';
 import '../providers/realtime_provider.dart';
 
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   final Widget child;
   final String currentRoute;
 
   const AppShell({super.key, required this.child, required this.currentRoute});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  bool? _crmExpanded;
+  bool? _complaintsExpanded;
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(realtimeSubscriptionProvider);
     final profile = ref.watch(currentProfileProvider);
     final unreadCount = ref.watch(unreadNotificationCountProvider).value ?? 0;
 
-    if (profile == null) return child;
+    if (profile == null) return widget.child;
 
     return PopScope(
       canPop: false,
@@ -42,7 +50,7 @@ class AppShell extends ConsumerWidget {
         }
 
         final home = getRoleHome(profile.primaryRole);
-        if (currentRoute != home) {
+        if (widget.currentRoute != home) {
           context.go(home);
           return;
         }
@@ -81,16 +89,18 @@ class AppShell extends ConsumerWidget {
               return Row(
                 children: [
                   _buildNavRail(context, profile.roles, unreadCount, isWide),
-                  Expanded(child: child),
+                  Expanded(child: widget.child),
                 ],
               );
             }
-            return child;
+            return widget.child;
           },
         ),
         bottomNavigationBar: MediaQuery.of(context).size.width < 800 &&
                 profile.primaryRole != UserRole.customer &&
-                (!currentRoute.startsWith('/crm') ||
+                !widget.currentRoute.startsWith('/inventory') &&
+                widget.currentRoute != AppRoutes.inventory &&
+                (!widget.currentRoute.startsWith('/crm') ||
                     profile.primaryRole == UserRole.boq ||
                     profile.primaryRole == UserRole.factory ||
                     profile.primaryRole == UserRole.purchase)
@@ -100,13 +110,7 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  
   Widget _buildNavRail(BuildContext context, List<UserRole> roles, int unreadCount, bool isWide) {
-    final items = _getNavItems(roles, isWide);
-    if (items.isEmpty) return const SizedBox.shrink();
-    
-    final currentIndex = _getCurrentIndex(items);
-
     // Determine nav rail colors based on current route
     Color navBgColor = Theme.of(context).scaffoldBackgroundColor;
     Color selectedTextColor = AppColors.primary;
@@ -116,13 +120,14 @@ class AppShell extends ConsumerWidget {
     Color logoIconBg = AppColors.primary.withOpacity(0.1);
     Color logoIcon = AppColors.primary;
 
-    if (currentRoute == AppRoutes.adminDashboard || 
-        currentRoute == AppRoutes.salesDashboard || 
-        currentRoute.startsWith('/pipelines') || 
-        currentRoute.startsWith('/factory') || 
-        currentRoute.startsWith('/purchase') || 
-        currentRoute.startsWith('/amc') ||
-        currentRoute.startsWith('/complaints')) {
+    if (widget.currentRoute == AppRoutes.adminDashboard || 
+        widget.currentRoute == AppRoutes.salesDashboard || 
+        widget.currentRoute.startsWith('/pipelines') || 
+        widget.currentRoute.startsWith('/customers') ||
+        widget.currentRoute.startsWith('/factory') || 
+        widget.currentRoute.startsWith('/purchase') || 
+        widget.currentRoute.startsWith('/amc') ||
+        widget.currentRoute.startsWith('/complaints')) {
       navBgColor = const Color(0xFF1E1B4B);
       selectedTextColor = Colors.white;
       unselectedTextColor = Colors.white70;
@@ -130,10 +135,10 @@ class AppShell extends ConsumerWidget {
       logoColor = Colors.white;
       logoIconBg = Colors.white.withOpacity(0.2);
       logoIcon = Colors.white;
-    } else if (currentRoute.startsWith('/customers') || 
-               currentRoute.startsWith('/admin') || 
-               currentRoute.startsWith('/inventory') ||
-               currentRoute.startsWith('/notifications')) {
+    } else if (widget.currentRoute.startsWith('/crm') || 
+               widget.currentRoute.startsWith('/admin') || 
+               widget.currentRoute.startsWith('/inventory') ||
+               widget.currentRoute.startsWith('/notifications')) {
       navBgColor = AppColors.primary;
       selectedTextColor = Colors.white;
       unselectedTextColor = Colors.white70;
@@ -142,6 +147,27 @@ class AppShell extends ConsumerWidget {
       logoIconBg = Colors.white.withOpacity(0.2);
       logoIcon = Colors.white;
     }
+
+    final hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
+    final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
+    final hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.sales || r == UserRole.salesHead);
+    final hasComplaints = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead);
+    final isTechnician = roles.any((r) => r == UserRole.technician);
+    final isBoq = roles.any((r) => r == UserRole.boq);
+    final isFactory = roles.any((r) => r == UserRole.factory);
+    final isPurchase = roles.any((r) => r == UserRole.purchase);
+
+    // Expansion status
+    final isCrmActive = widget.currentRoute.startsWith('/crm');
+    final isComplaintsActive = widget.currentRoute.startsWith('/complaints') || 
+        widget.currentRoute.startsWith('/technician') || 
+        widget.currentRoute.contains('complaint') ||
+        widget.currentRoute == AppRoutes.complaintsDashboard ||
+        widget.currentRoute == AppRoutes.assignTechnician ||
+        widget.currentRoute == AppRoutes.serviceHistory;
+
+    final crmExpanded = _crmExpanded ?? isCrmActive;
+    final complaintsExpanded = _complaintsExpanded ?? isComplaintsActive;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -184,99 +210,479 @@ class AppShell extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 36),
           Expanded(
-            child: ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final isSelected = currentIndex == index;
-                
-                // Skip admin item here, we'll put it at the bottom
-                if (item.label == 'Admin') return const SizedBox.shrink();
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                // 1. Primary Dashboard Item
+                if (hasAdminOrManager)
+                  _buildNavItemTile(
+                    route: AppRoutes.adminDashboard,
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    selectedIcon: const Icon(Icons.dashboard),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (hasSales)
+                  _buildNavItemTile(
+                    route: AppRoutes.salesDashboard,
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.bar_chart_outlined),
+                    selectedIcon: const Icon(Icons.bar_chart),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (isTechnician)
+                  _buildNavItemTile(
+                    route: AppRoutes.technicianDashboard,
+                    label: 'Home',
+                    icon: const Icon(Icons.home_outlined),
+                    selectedIcon: const Icon(Icons.home),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (isBoq)
+                  _buildNavItemTile(
+                    route: AppRoutes.boqDashboard,
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    selectedIcon: const Icon(Icons.dashboard),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (isFactory)
+                  _buildNavItemTile(
+                    route: AppRoutes.factoryQueue,
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    selectedIcon: const Icon(Icons.dashboard),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (isPurchase)
+                  _buildNavItemTile(
+                    route: AppRoutes.purchaseQueue,
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    selectedIcon: const Icon(Icons.dashboard),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (hasComplaints)
+                  _buildNavItemTile(
+                    route: AppRoutes.complaintsDashboard,
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    selectedIcon: const Icon(Icons.dashboard),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  )
+                else if (hasCrm)
+                  _buildNavItemTile(
+                    route: '/crm/dashboard',
+                    label: 'Dashboard',
+                    icon: const Icon(Icons.dashboard_outlined),
+                    selectedIcon: const Icon(Icons.dashboard),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
 
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isSelected ? selectedBgColor : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
+                // Factory Queue (when not already primary dashboard)
+                if (isFactory && (hasAdminOrManager || hasSales || hasComplaints || hasCrm || isBoq))
+                  _buildNavItemTile(
+                    route: AppRoutes.factoryQueue,
+                    label: 'Factory Queue',
+                    icon: const Icon(Icons.precision_manufacturing_outlined),
+                    selectedIcon: const Icon(Icons.precision_manufacturing),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
                   ),
-                  child: ListTile(
-                    dense: true,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    leading: IconTheme(
-                      data: IconThemeData(
-                        color: isSelected ? selectedTextColor : unselectedTextColor,
-                        size: 20,
-                      ),
-                      child: isSelected ? item.selectedIcon : item.icon,
-                    ),
-                    title: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 300),
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: isSelected ? selectedTextColor : unselectedTextColor,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                      child: Text(item.label),
-                    ),
-                    onTap: () => context.go(item.route),
+
+                // Purchase Queue (when not already primary dashboard)
+                if (isPurchase && (hasAdminOrManager || hasSales || hasComplaints || hasCrm || isBoq || isFactory))
+                  _buildNavItemTile(
+                    route: AppRoutes.purchaseQueue,
+                    label: 'Purchase Queue',
+                    icon: const Icon(Icons.shopping_cart_outlined),
+                    selectedIcon: const Icon(Icons.shopping_cart),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
                   ),
-                );
-              },
+
+                // BOQ Dashboard (when not already primary dashboard)
+                if (isBoq && (hasAdminOrManager || hasSales || hasComplaints || hasCrm))
+                  _buildNavItemTile(
+                    route: AppRoutes.boqDashboard,
+                    label: 'BOQ',
+                    icon: const Icon(Icons.calculate_outlined),
+                    selectedIcon: const Icon(Icons.calculate),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 2. Customers (Independent, above Deals)
+                if (hasAdminOrManager || hasSales || isBoq)
+                  _buildNavItemTile(
+                    route: AppRoutes.customers,
+                    label: 'Customers',
+                    icon: const Icon(Icons.business_outlined),
+                    selectedIcon: const Icon(Icons.business),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 3. Deals / Pipelines
+                if (hasAdminOrManager || hasSales || isBoq)
+                  _buildNavItemTile(
+                    route: AppRoutes.pipelines,
+                    label: 'Deals',
+                    icon: const Icon(Icons.handshake_outlined),
+                    selectedIcon: const Icon(Icons.handshake),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 4. Alerts / Notifications
+                _buildNavItemTile(
+                  route: AppRoutes.notifications,
+                  label: 'Alerts',
+                  icon: const Icon(Icons.notifications_outlined),
+                  selectedIcon: const Icon(Icons.notifications),
+                  selectedTextColor: selectedTextColor,
+                  unselectedTextColor: unselectedTextColor,
+                  selectedBgColor: selectedBgColor,
+                ),
+
+                // 5. Cascaded CRM Section
+                if (hasCrm) ...[
+                  _buildGroupHeader(
+                    label: 'CRM',
+                    icon: isCrmActive ? Icons.people_alt : Icons.people_alt_outlined,
+                    isExpanded: crmExpanded,
+                    isActive: isCrmActive,
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                    onTap: () {
+                      setState(() {
+                        _crmExpanded = !crmExpanded;
+                      });
+                    },
+                  ),
+                  if (crmExpanded) ...[
+                    _buildChildTile(
+                      label: 'Dashboard',
+                      route: '/crm/dashboard',
+                      icon: const Icon(Icons.dashboard_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Prospects',
+                      route: '/crm/prospects',
+                      icon: const Icon(Icons.person_search_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Leads',
+                      route: '/crm/leads',
+                      icon: const Icon(Icons.trending_up_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    if (hasAdminOrManager || hasSales)
+                      _buildChildTile(
+                        label: 'Customers',
+                        route: '/crm/customers',
+                        icon: const Icon(Icons.people_outline),
+                        selectedTextColor: selectedTextColor,
+                        unselectedTextColor: unselectedTextColor,
+                        selectedBgColor: selectedBgColor,
+                      ),
+                  ],
+                ],
+
+                // 5. Cascaded Complaints Section
+                if (hasComplaints) ...[
+                  _buildGroupHeader(
+                    label: 'Complaints',
+                    icon: isComplaintsActive ? Icons.support_agent : Icons.support_agent_outlined,
+                    isExpanded: complaintsExpanded,
+                    isActive: isComplaintsActive,
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                    onTap: () {
+                      setState(() {
+                        _complaintsExpanded = !complaintsExpanded;
+                      });
+                    },
+                  ),
+                  if (complaintsExpanded) ...[
+                    _buildChildTile(
+                      label: 'Dashboard',
+                      route: AppRoutes.complaintsDashboard,
+                      icon: const Icon(Icons.dashboard_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Complaints',
+                      route: AppRoutes.complaintsList,
+                      icon: const Icon(Icons.assignment_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Assign',
+                      route: AppRoutes.assignTechnician,
+                      icon: const Icon(Icons.assignment_ind_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Technicians',
+                      route: '/complaints/technicians',
+                      icon: const Icon(Icons.engineering_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'History',
+                      route: AppRoutes.serviceHistory,
+                      icon: const Icon(Icons.history_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                  ],
+                ],
+
+                // 6. Technician Specific items (if technician role only)
+                if (isTechnician && !hasComplaints) ...[
+                  _buildNavItemTile(
+                    route: AppRoutes.technicianTasks,
+                    label: 'My Tasks',
+                    icon: const Icon(Icons.assignment_outlined),
+                    selectedIcon: const Icon(Icons.assignment),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+                  _buildNavItemTile(
+                    route: AppRoutes.serviceHistory,
+                    label: 'History',
+                    icon: const Icon(Icons.history_outlined),
+                    selectedIcon: const Icon(Icons.history),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+                ],
+
+                // 7. Inventory
+                if (hasAdminOrManager)
+                  _buildNavItemTile(
+                    route: AppRoutes.inventory,
+                    label: 'Inventory',
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    selectedIcon: const Icon(Icons.inventory_2),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 8. Search PDF
+                if (hasAdminOrManager || hasSales)
+                  _buildNavItemTile(
+                    route: AppRoutes.searchPdf,
+                    label: 'Search PDF',
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    selectedIcon: const Icon(Icons.picture_as_pdf),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+              ],
             ),
           ),
-          // Admin item at the bottom
-          if (items.any((i) => i.label == 'Admin')) ...[
-            Builder(
-              builder: (context) {
-                final adminItem = items.firstWhere((i) => i.label == 'Admin');
-                final adminIndex = items.indexOf(adminItem);
-                final isSelected = currentIndex == adminIndex;
-                
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isSelected ? selectedBgColor : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ListTile(
-                      dense: true,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      leading: IconTheme(
-                        data: IconThemeData(
-                          color: isSelected ? selectedTextColor : unselectedTextColor,
-                          size: 20,
-                        ),
-                        child: isSelected ? adminItem.selectedIcon : adminItem.icon,
-                      ),
-                      title: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: isSelected ? selectedTextColor : unselectedTextColor,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                        child: Text(adminItem.label),
-                      ),
-                      onTap: () => context.go(adminItem.route),
-                    ),
-                  ),
-                );
-              }
+
+          // Admin item pinned at the bottom
+          if (hasAdminOrManager)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildNavItemTile(
+                route: AppRoutes.userManagement,
+                label: 'Admin',
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                selectedIcon: const Icon(Icons.admin_panel_settings),
+                selectedTextColor: selectedTextColor,
+                unselectedTextColor: unselectedTextColor,
+                selectedBgColor: selectedBgColor,
+              ),
             ),
-          ],
         ],
       ),
     );
   }
 
+  Widget _buildNavItemTile({
+    required String route,
+    required String label,
+    required Widget icon,
+    required Widget selectedIcon,
+    required Color selectedTextColor,
+    required Color unselectedTextColor,
+    required Color selectedBgColor,
+  }) {
+    final isSelected = widget.currentRoute == route || (route != '/' && widget.currentRoute.startsWith(route));
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? selectedBgColor : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        leading: IconTheme(
+          data: IconThemeData(
+            color: isSelected ? selectedTextColor : unselectedTextColor,
+            size: 20,
+          ),
+          child: isSelected ? selectedIcon : icon,
+        ),
+        title: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 250),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: isSelected ? selectedTextColor : unselectedTextColor,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 14,
+          ),
+          child: Text(label),
+        ),
+        onTap: () => context.go(route),
+      ),
+    );
+  }
+
+  Widget _buildGroupHeader({
+    required String label,
+    required IconData icon,
+    required bool isExpanded,
+    required bool isActive,
+    required Color selectedTextColor,
+    required Color unselectedTextColor,
+    required Color selectedBgColor,
+    required VoidCallback onTap,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      decoration: BoxDecoration(
+        color: isActive ? selectedBgColor.withOpacity(0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        leading: Icon(
+          icon,
+          size: 20,
+          color: isActive ? selectedTextColor : unselectedTextColor,
+        ),
+        title: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: isActive ? selectedTextColor : unselectedTextColor,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        trailing: AnimatedRotation(
+          turns: isExpanded ? 0.5 : 0.0,
+          duration: const Duration(milliseconds: 250),
+          child: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 18,
+            color: (isActive ? selectedTextColor : unselectedTextColor).withOpacity(0.7),
+          ),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildChildTile({
+    required String label,
+    required String route,
+    required Widget icon,
+    required Color selectedTextColor,
+    required Color unselectedTextColor,
+    required Color selectedBgColor,
+  }) {
+    final isSelected = widget.currentRoute == route;
+    return Padding(
+      padding: const EdgeInsets.only(left: 32, right: 16, top: 1, bottom: 1),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: isSelected ? selectedBgColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected ? Border.all(color: Colors.white.withOpacity(0.15)) : null,
+        ),
+        child: ListTile(
+          dense: true,
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          leading: IconTheme(
+            data: IconThemeData(
+              color: isSelected ? selectedTextColor : unselectedTextColor.withOpacity(0.8),
+              size: 16,
+            ),
+            child: icon,
+          ),
+          title: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: isSelected ? selectedTextColor : unselectedTextColor.withOpacity(0.85),
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+          onTap: () => context.go(route),
+        ),
+      ),
+    );
+  }
 
   Widget _buildNavBar(BuildContext context, List<UserRole> roles, int unreadCount, bool isWide) {
     final items = _getNavItems(roles, isWide);
@@ -285,8 +691,8 @@ class AppShell extends ConsumerWidget {
     return NavigationBarTheme(
       data: NavigationBarThemeData(
         height: 64,
-        labelTextStyle: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return const TextStyle(
               fontSize: 10.5,
               fontWeight: FontWeight.bold,
@@ -324,10 +730,10 @@ class AppShell extends ConsumerWidget {
     int bestIndex = 0;
     int maxMatchLength = -1;
     for (int i = 0; i < items.length; i++) {
-      if (currentRoute == items[i].route) {
+      if (widget.currentRoute == items[i].route) {
         return i;
       }
-      if (currentRoute.startsWith(items[i].route) && items[i].route.length > maxMatchLength) {
+      if (widget.currentRoute.startsWith(items[i].route) && items[i].route.length > maxMatchLength) {
         maxMatchLength = items[i].route.length;
         bestIndex = i;
       }
@@ -336,13 +742,13 @@ class AppShell extends ConsumerWidget {
   }
 
   List<_NavItem> _getNavItems(List<UserRole> roles, bool isWide) {
-    final bool isComplaintsRoute = currentRoute.contains('complaint') ||
-        currentRoute.contains('technician') ||
-        currentRoute.contains('history') ||
-        currentRoute.contains('service') ||
-        currentRoute == AppRoutes.complaintsDashboard ||
-        currentRoute == AppRoutes.assignTechnician ||
-        currentRoute == AppRoutes.serviceHistory;
+    final bool isComplaintsRoute = widget.currentRoute.contains('complaint') ||
+        widget.currentRoute.contains('technician') ||
+        widget.currentRoute.contains('history') ||
+        widget.currentRoute.contains('service') ||
+        widget.currentRoute == AppRoutes.complaintsDashboard ||
+        widget.currentRoute == AppRoutes.assignTechnician ||
+        widget.currentRoute == AppRoutes.serviceHistory;
 
     final Map<String, _NavItem> uniqueItems = {};
 
@@ -352,88 +758,146 @@ class AppShell extends ConsumerWidget {
       }
     }
 
-    // On mobile, we MUST split the nav items to avoid bottom bar overflow (max 5 items)
-    bool hasAdminOrManagerOrServiceHead = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead);
-    if (!isWide && hasAdminOrManagerOrServiceHead && isComplaintsRoute) {
+    final bool hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
+    final bool hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
+    final bool hasCrm = roles.any((r) => r == UserRole.crmStaff);
+    final bool hasComplaints = roles.any((r) => r == UserRole.serviceHead);
+    final bool isBoq = roles.any((r) => r == UserRole.boq);
+    final bool isFactory = roles.any((r) => r == UserRole.factory);
+    final bool isPurchase = roles.any((r) => r == UserRole.purchase);
+    final bool isTechnician = roles.any((r) => r == UserRole.technician);
+
+    // 1. Complaints routes
+    if (!isWide && (hasAdminOrManager || hasComplaints) && isComplaintsRoute) {
       addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
       addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
-      addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
+      
+      if (hasCrm) {
+        addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+      } else if (hasSales) {
+        addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Sales', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
+      } else if (isFactory) {
+        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
+      } else if (isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
+      } else if (isBoq) {
+        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'BOQ', icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate)));
+      } else {
+        addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
+      }
       addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
-    
-    for (final role in roles) {
-      switch (role) {
-        case UserRole.admin:
-        case UserRole.manager:
-          addItem(const _NavItem(route: AppRoutes.adminDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
-          addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
-          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-          addItem(const _NavItem(route: AppRoutes.userManagement, label: 'Admin', icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings)));
-          if (isWide) {
-            addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
-            addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints Dashboard', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
-            addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
-            addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
-            addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
-            addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
-            addItem(const _NavItem(route: AppRoutes.inventory, label: 'Inventory', icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2)));
-            addItem(const _NavItem(route: AppRoutes.searchPdf, label: 'Search PDF', icon: Icon(Icons.picture_as_pdf_outlined), selectedIcon: Icon(Icons.picture_as_pdf)));
-          }
-          break;
-        case UserRole.sales:
-        case UserRole.salesHead:
-          addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Dashboard', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
-          addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
-          addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
-          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-          addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
-          if (isWide) {
-            addItem(const _NavItem(route: AppRoutes.searchPdf, label: 'Search PDF', icon: Icon(Icons.picture_as_pdf_outlined), selectedIcon: Icon(Icons.picture_as_pdf)));
-          }
-          break;
-        case UserRole.crmStaff:
-          addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: '/crm/leads', label: 'Leads', icon: Icon(Icons.trending_up_outlined), selectedIcon: Icon(Icons.trending_up)));
-          addItem(const _NavItem(route: '/reports/activity', label: "Today's Report", icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment)));
-          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-          break;
-        case UserRole.serviceHead:
-          addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
-          addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
-          addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
-          addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
-          break;
-        case UserRole.technician:
-          addItem(const _NavItem(route: AppRoutes.technicianDashboard, label: 'My Tasks', icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build)));
-          addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
-          break;
-        case UserRole.boq:
-          addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
-          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-          break;
-        case UserRole.factory:
-          addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-          break;
-        case UserRole.purchase:
-          addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-          addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-          addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-          break;
-        case UserRole.customer:
-          break;
-      }
+
+    // 2. Admin / Manager
+    if (hasAdminOrManager) {
+      addItem(const _NavItem(route: AppRoutes.adminDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
+      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      addItem(const _NavItem(route: AppRoutes.userManagement, label: 'Admin', icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings)));
+      return uniqueItems.values.toList();
     }
-    
-    return uniqueItems.values.toList();
+
+    // 3. Sales / SalesHead
+    if (hasSales) {
+      addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Dashboard', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
+      addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
+      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      if (hasComplaints) {
+        addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
+      } else {
+        addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+      }
+      return uniqueItems.values.toList();
+    }
+
+    // 4. CRM Staff
+    if (hasCrm) {
+      addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+      addItem(const _NavItem(route: '/crm/leads', label: 'Leads', icon: Icon(Icons.trending_up_outlined), selectedIcon: Icon(Icons.trending_up)));
+      if (hasComplaints) {
+        addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
+      } else if (isFactory) {
+        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
+      } else if (isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
+      } else if (isBoq) {
+        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'BOQ', icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate)));
+      } else {
+        addItem(const _NavItem(route: '/reports/activity', label: "Today's Report", icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment)));
+      }
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      return uniqueItems.values.toList();
+    }
+
+    // 5. Service Head (when not on complaints route)
+    if (hasComplaints) {
+      addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
+      if (isFactory) {
+        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
+      } else if (isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
+      } else if (isBoq) {
+        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'BOQ', icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate)));
+      } else {
+        addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
+      }
+      addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      return uniqueItems.values.toList();
+    }
+
+    // 6. Technician
+    if (isTechnician) {
+      addItem(const _NavItem(route: AppRoutes.technicianDashboard, label: 'Home', icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home)));
+      addItem(const _NavItem(route: AppRoutes.technicianTasks, label: 'My Tasks', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      return uniqueItems.values.toList();
+    }
+
+    // 7. BOQ
+    if (isBoq) {
+      addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
+      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+      if (isFactory) {
+        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
+      } else if (isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
+      } else {
+        addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      }
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      return uniqueItems.values.take(5).toList();
+    }
+
+    // 8. Factory
+    if (isFactory) {
+      addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      if (isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
+      }
+      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      return uniqueItems.values.take(5).toList();
+    }
+
+    // 9. Purchase
+    if (isPurchase) {
+      addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
+      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      return uniqueItems.values.take(5).toList();
+    }
+
+    return uniqueItems.values.take(5).toList();
   }
 }
 

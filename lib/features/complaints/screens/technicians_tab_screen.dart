@@ -8,7 +8,6 @@ import '../../../core/providers/supabase_provider.dart';
 
 import '../../../core/models/user_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../core/router/app_router.dart';
 import 'package:go_router/go_router.dart';
 
 class TechniciansTabScreen extends ConsumerStatefulWidget {

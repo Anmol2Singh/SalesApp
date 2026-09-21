@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/supabase_provider.dart';
-import '../../../core/widgets/sync_status_indicator.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../reports/widgets/daily_report_modal.dart';
 
@@ -99,6 +98,10 @@ class BoqDashboardScreen extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider);
     final dataAsync = ref.watch(boqDashboardDataProvider);
 
+    final rawName = profile?.fullName.trim() ?? '';
+    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'BOQ Specialist');
+    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'B';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -111,30 +114,33 @@ class BoqDashboardScreen extends ConsumerWidget {
             SliverAppBar(
               expandedHeight: 180,
               pinned: true,
-              backgroundColor: const Color(0xFF1E1B4B),
+              backgroundColor: const Color(0xFF0F172A),
+              elevation: 0,
               clipBehavior: Clip.antiAlias,
               automaticallyImplyLeading: false,
               shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
               ),
               flexibleSpace: FlexibleSpaceBar(
                 background: Stack(
                   children: [
-                    // Deep indigo → violet gradient
+                    // Unified purple-violet gradient matching Admin
                     Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Color(0xFF1E1B4B),
-                            Color(0xFF4C1D95),
-                            Color(0xFF6D28D9),
+                            Color(0xFF0F172A),
+                            Color(0xFF2E1065),
+                            Color(0xFF6B21A8),
+                            Color(0xFF4F46E5),
+                            Color(0xFF2563EB),
                           ],
                         ),
                       ),
                     ),
-                    // Ambient glow top-right
+                    // Ambient light glow
                     Positioned(
                       top: -40,
                       right: -30,
@@ -145,7 +151,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              const Color(0xFFF59E0B).withValues(alpha: 0.25),
+                              Colors.white.withValues(alpha: 0.12),
                               Colors.transparent,
                             ],
                           ),
@@ -153,107 +159,142 @@ class BoqDashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     // Header Content
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 42, 20, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.35),
-                                    width: 2,
-                                  ),
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    (profile?.fullName ?? 'B')[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Stack(
+                              children: [
+                                Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1E293B),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.25),
+                                      width: 2,
                                     ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Good ${_getGreeting()}',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 12,
-                                        color: Colors.white.withValues(alpha: 0.65),
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      profile?.fullName ?? 'BOQ Specialist',
+                                  child: Center(
+                                    child: Text(
+                                      avatarInitial,
                                       style: const TextStyle(
                                         fontFamily: 'Inter',
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
                                         color: Colors.white,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ],
+                                  ),
                                 ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF22C55E),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Good ${_getGreeting()},',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white.withValues(alpha: 0.75),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    displayName,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.5,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'Today ${DateFormat('dd MMM').format(DateTime.now())}',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Responsive stat pills wrap (never overflows)
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              _buildHeaderStat(
-                                'Today',
-                                DateFormat('dd MMM').format(DateTime.now()),
-                                Icons.calendar_today_outlined,
-                              ),
-                              _buildHeaderStat(
-                                'Role',
-                                'BOQ',
-                                Icons.badge_outlined,
-                              ),
-                              _buildHeaderStat(
-                                '',
-                                'ONLINE',
-                                Icons.circle,
-                                iconColor: const Color(0xFF10B981),
-                                iconSize: 8,
-                              ),
-                            ],
-                          ),
-                        ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'BOQ',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.circle, color: Colors.white, size: 7),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'ONLINE',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               actions: [
-                const SyncStatusIndicator(),
-                IconButton(
-                  icon: const Icon(Icons.summarize_outlined, color: Colors.white),
-                  tooltip: 'Daily Report',
-                  onPressed: () => DailyReportModal.show(context, ref),
-                ),
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   tooltip: 'Refresh',
@@ -289,6 +330,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                     }
                   },
                 ),
+                const SizedBox(width: 4),
               ],
             ),
 
@@ -314,52 +356,42 @@ class BoqDashboardScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // KPI Metric Cards Row
-                        Row(
+                        // Unified 2x2 KPI Metric Cards Grid
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.34,
                           children: [
-                            Expanded(
-                              child: _buildMetricCard(
-                                title: 'Active Deals',
-                                count: activeDealsCount.toString(),
-                                icon: Icons.work_outline,
-                                color: const Color(0xFF6366F1),
-                                onTap: () => context.go(AppRoutes.pipelines),
-                              ),
+                            _buildMetricCard(
+                              title: 'Active\nDeals',
+                              count: activeDealsCount.toString(),
+                              icon: Icons.alt_route,
+                              color: const Color(0xFF2563EB),
+                              onTap: () => context.go(AppRoutes.pipelines),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildMetricCard(
-                                title: 'Pending BOQ',
-                                count: pendingBoqDeals.length.toString(),
-                                icon: Icons.pending_actions_outlined,
-                                color: const Color(0xFFF59E0B),
-                                isUrgent: pendingBoqDeals.isNotEmpty,
-                                onTap: () => context.go(AppRoutes.pipelines),
-                              ),
+                            _buildMetricCard(
+                              title: 'Pending\nBOQ',
+                              count: pendingBoqDeals.length.toString(),
+                              icon: Icons.pending_actions_outlined,
+                              color: const Color(0xFFF59E0B),
+                              onTap: () => context.go(AppRoutes.pipelines),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildMetricCard(
-                                title: 'BOQ Items Configured',
-                                count: totalBoqItems.toString(),
-                                icon: Icons.format_list_bulleted_outlined,
-                                color: const Color(0xFF10B981),
-                                onTap: () => context.push('/boq/manage-items'),
-                              ),
+                            _buildMetricCard(
+                              title: 'Configured\nItems',
+                              count: totalBoqItems.toString(),
+                              icon: Icons.inventory_2_outlined,
+                              color: const Color(0xFF10B981),
+                              onTap: () => context.push('/boq/manage-items'),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildMetricCard(
-                                title: 'Prospects Today',
-                                count: todayProspectsCount.toString(),
-                                icon: Icons.person_add_alt_1_outlined,
-                                color: const Color(0xFF06B6D4),
-                                onTap: () => context.go('/crm/prospects'),
-                              ),
+                            _buildMetricCard(
+                              title: 'Prospects\nToday',
+                              count: todayProspectsCount.toString(),
+                              icon: Icons.person_add_alt_1_outlined,
+                              color: const Color(0xFF8B5CF6),
+                              onTap: () => context.go('/crm/prospects'),
                             ),
                           ],
                         ),
@@ -378,53 +410,78 @@ class BoqDashboardScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
 
-                        // Quick Action 1: Deals & Pipelines
-                        _buildActionCard(
-                          title: 'Go to Deals & Pipelines',
-                          subtitle: 'View, filter, and process all customer deals and BOQs',
-                          icon: Icons.work_outline,
-                          iconColor: const Color(0xFF6366F1),
-                          badge: '${pendingBoqDeals.length} Needs BOQ',
-                          badgeColor: pendingBoqDeals.isNotEmpty
-                              ? const Color(0xFFF59E0B)
-                              : const Color(0xFF6366F1),
-                          onTap: () => context.go(AppRoutes.pipelines),
+                        // Row 1: Deals & Configure BOQ
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildQuickActionButton(
+                                context,
+                                title: 'Deals & Pipelines',
+                                subtitle: pendingBoqDeals.isNotEmpty
+                                    ? '${pendingBoqDeals.length} Needs BOQ'
+                                    : 'View customer deals',
+                                icon: Icons.work_outline,
+                                gradientColors: const [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                                onTap: () => context.go(AppRoutes.pipelines),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildQuickActionButton(
+                                context,
+                                title: 'Configure BOQ',
+                                subtitle: '$totalBoqItems BOM items',
+                                icon: Icons.format_list_bulleted,
+                                gradientColors: const [Color(0xFFD97706), Color(0xFFF59E0B)],
+                                onTap: () => context.push('/boq/manage-items'),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
 
-                        // Quick Action 2: Manage BOQ Items
-                        _buildActionCard(
-                          title: 'Configure BOQ Items',
-                          subtitle: 'Set up bill of materials items per product catalog',
-                          icon: Icons.format_list_bulleted,
-                          iconColor: const Color(0xFFF59E0B),
-                          badge: '$totalBoqItems Items',
-                          badgeColor: const Color(0xFFF59E0B),
-                          onTap: () => context.push('/boq/manage-items'),
+                        // Row 2: View Products & Daily Report
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildQuickActionButton(
+                                context,
+                                title: 'View Products',
+                                subtitle: 'Catalog & specs',
+                                icon: Icons.inventory_2_outlined,
+                                gradientColors: const [Color(0xFF0D9488), Color(0xFF14B8A6)],
+                                onTap: () => context.push('/products'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildQuickActionButton(
+                                context,
+                                title: 'Daily Report',
+                                subtitle: 'PDF / Excel summary',
+                                icon: Icons.summarize_outlined,
+                                gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+                                onTap: () => DailyReportModal.show(context, ref),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
 
-                        // Quick Action 3: Take Daily Report
-                        _buildActionCard(
-                          title: 'Take Daily Activity Report',
-                          subtitle: 'Download or share your today’s activity report (PDF / Excel)',
-                          icon: Icons.summarize_outlined,
-                          iconColor: const Color(0xFF10B981),
-                          badge: 'PDF / Excel',
-                          badgeColor: const Color(0xFF10B981),
-                          onTap: () => DailyReportModal.show(context, ref),
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Quick Action 4: Add / View Prospects
-                        _buildActionCard(
-                          title: 'Customer Prospects',
-                          subtitle: 'Add new prospects or track existing ones',
-                          icon: Icons.person_search_outlined,
-                          iconColor: const Color(0xFF06B6D4),
-                          badge: 'Add +',
-                          badgeColor: const Color(0xFF06B6D4),
-                          onTap: () => context.go('/crm/prospects'),
+                        // Row 3: Customer Prospects
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildQuickActionButton(
+                                context,
+                                title: 'Customer Prospects',
+                                subtitle: 'Add new prospects or track existing ones',
+                                icon: Icons.person_search_outlined,
+                                gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
+                                onTap: () => context.go('/crm/prospects'),
+                              ),
+                            ),
+                          ],
                         ),
 
                         const SizedBox(height: 24),
@@ -630,208 +687,159 @@ class BoqDashboardScreen extends ConsumerWidget {
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
-    bool isUrgent = false,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isUrgent ? color.withValues(alpha: 0.5) : Colors.grey.shade200,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.grey.shade200,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: color, size: 20),
-                ),
-                if (isUrgent)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              count,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: isUrgent ? color : AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color iconColor,
-    required String badge,
-    required Color badgeColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
                     ),
+                    child: Icon(icon, color: Colors.white, size: 22),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
                     ),
                   ),
                 ],
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                badge,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: badgeColor,
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  count,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderStat(
-    String label,
-    String value,
-    IconData icon, {
-    Color? iconColor,
-    double iconSize = 12,
+  Widget _buildQuickActionButton(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.2),
-          width: 1,
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: iconSize,
-            color: iconColor ?? Colors.white.withValues(alpha: 0.85),
-          ),
-          const SizedBox(width: 5),
-          if (label.isNotEmpty)
-            Text(
-              '$label: ',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-            ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors.first.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 10,
+                          color: Colors.white70,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 12),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

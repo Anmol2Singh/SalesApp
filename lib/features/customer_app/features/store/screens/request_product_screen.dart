@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
@@ -149,7 +148,7 @@ class _ProductGridCard extends StatelessWidget {
 class RequestBottomSheet extends StatefulWidget {
   final Product product;
 
-  const RequestBottomSheet({required this.product});
+  const RequestBottomSheet({super.key, required this.product});
 
   @override
   State<RequestBottomSheet> createState() => _RequestBottomSheetState();

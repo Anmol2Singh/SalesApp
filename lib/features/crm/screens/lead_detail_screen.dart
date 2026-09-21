@@ -12,6 +12,7 @@ import '../services/crm_pdf_service.dart';
 import '../providers/crm_providers.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../widgets/crm_delete_dialog.dart';
+import '../widgets/product_combo_selector.dart';
 import '../../quotation/screens/quotation_form_screen.dart';
 import '../../../core/models/quotation.dart';
 import '../../../core/providers/supabase_provider.dart';
@@ -1461,7 +1462,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                   ),
                   const SizedBox(height: 4),
                   DropdownButtonFormField<String>(
-                    value: selectedType,
+                    initialValue: selectedType,
                     decoration: const InputDecoration(border: OutlineInputBorder()),
                     items: typeList
                         .map((t) => DropdownMenuItem(value: t, child: Text(t)))
@@ -1759,51 +1760,135 @@ class _EditLeadSheet extends ConsumerStatefulWidget {
 
 class _EditLeadSheetState extends ConsumerState<_EditLeadSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _phoneCtrl;
-  late final TextEditingController _productCtrl;
+  Prospect? _selectedProspect;
+  late final TextEditingController _contactPhoneCtrl;
   late final TextEditingController _valCtrl;
   late final TextEditingController _notesCtrl;
-  late final TextEditingController _capacityCtrl;
   DateTime? _expectedDate;
   bool _isSaving = false;
+
+  List<ProductComboItem> _availableCombos = [];
+  List<ProductComboItem> _selectedProducts = [];
+  String? _productError;
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: widget.lead.prospectName ?? '');
-    _phoneCtrl = TextEditingController(text: widget.lead.contactPhone ?? '');
-    _productCtrl = TextEditingController(text: widget.lead.productName);
-    _valCtrl = TextEditingController(text: widget.lead.estimatedValue.toStringAsFixed(0));
+    _contactPhoneCtrl = TextEditingController(text: widget.lead.contactPhone ?? '');
+    _valCtrl = TextEditingController(
+      text: _formatIndianDealValue(widget.lead.estimatedValue),
+    );
     _notesCtrl = TextEditingController(text: widget.lead.notes ?? '');
-    _capacityCtrl = TextEditingController(text: widget.lead.capacity ?? '');
     _expectedDate = widget.lead.expectedDate;
+
+    // Initialize prospect
+    if (widget.lead.prospectName != null && widget.lead.prospectName!.isNotEmpty) {
+      _selectedProspect = Prospect(
+        id: widget.lead.prospectId ?? '',
+        name: widget.lead.prospectName!,
+        phone: widget.lead.contactPhone ?? '',
+        source: 'Manual',
+        createdBy: widget.lead.createdBy,
+        createdAt: widget.lead.createdAt,
+        updatedAt: DateTime.now(),
+      );
+    }
+
+    _availableCombos = List<ProductComboItem>.from(ProductComboItem.defaultCombos);
+
+    // Initialize selected products
+    if (widget.lead.components != null && widget.lead.components!.isNotEmpty) {
+      _selectedProducts = widget.lead.components!
+          .map((c) => ProductComboItem.fromComponentMap(c))
+          .toList();
+    } else if (widget.lead.productName.isNotEmpty) {
+      final names = widget.lead.productName.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
+      for (final n in names) {
+        final match = _availableCombos.where((c) => c.displayName.toLowerCase() == n.toLowerCase()).firstOrNull;
+        if (match != null) {
+          _selectedProducts.add(match);
+        } else {
+          _selectedProducts.add(
+            ProductComboItem(
+              displayName: n,
+              productName: n,
+              capacity: widget.lead.capacity,
+              price: widget.lead.estimatedValue,
+            ),
+          );
+        }
+      }
+    }
+
+    _loadCombos();
+  }
+
+  String _formatIndianDealValue(double value) {
+    if (value <= 0) return '0';
+    final isWhole = (value % 1 == 0);
+    final pattern = isWhole ? '#,##,###' : '#,##,###.##';
+    return NumberFormat(pattern, 'en_IN').format(value);
+  }
+
+  Future<void> _loadCombos() async {
+    try {
+      final combos = await ProductComboItem.loadCombos(ref.read(supabaseClientProvider));
+      if (mounted && combos.isNotEmpty) {
+        setState(() => _availableCombos = combos);
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _productCtrl.dispose();
+    _contactPhoneCtrl.dispose();
     _valCtrl.dispose();
     _notesCtrl.dispose();
-    _capacityCtrl.dispose();
     super.dispose();
+  }
+
+  void _onProductsChanged(List<ProductComboItem> items) {
+    setState(() {
+      _selectedProducts = items;
+      _productError = items.isEmpty ? 'Please select at least one product' : null;
+      final total = items.fold<double>(0.0, (sum, i) => sum + i.price);
+      _valCtrl.text = _formatIndianDealValue(total);
+    });
   }
 
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedProducts.isEmpty) {
+      setState(() => _productError = 'Please select at least one product');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one product'), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
+      final joinedProductName = _selectedProducts.map((p) => p.displayName).join(', ');
+      final joinedCapacity = _selectedProducts
+          .map((p) => p.capacity)
+          .whereType<String>()
+          .where((c) => c.isNotEmpty)
+          .join(', ');
+      final cleanValStr = _valCtrl.text.replaceAll(',', '').trim();
+      final totalValue = double.tryParse(cleanValStr) ??
+          _selectedProducts.fold<double>(0.0, (sum, i) => sum + i.price);
+
       await ref.read(leadsProvider.notifier).updateLead(
             leadId: widget.lead.id,
-            prospectName: _nameCtrl.text.trim(),
-            contactPhone: _phoneCtrl.text.trim(),
-            productName: _productCtrl.text.trim(),
-            estimatedValue: double.tryParse(_valCtrl.text.trim()),
+            prospectId: _selectedProspect?.id.isNotEmpty == true ? _selectedProspect!.id : null,
+            prospectName: _selectedProspect?.name ?? widget.lead.prospectName ?? '',
+            contactPhone: _contactPhoneCtrl.text.trim(),
+            productName: joinedProductName,
+            estimatedValue: totalValue,
             expectedDate: _expectedDate,
             notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-            capacity: _capacityCtrl.text.trim().isEmpty ? null : _capacityCtrl.text.trim(),
+            capacity: joinedCapacity.isNotEmpty ? joinedCapacity : null,
+            components: _selectedProducts.map((p) => p.toComponentMap()).toList(),
           );
       if (mounted) {
         Navigator.pop(context);
@@ -1824,32 +1909,9 @@ class _EditLeadSheetState extends ConsumerState<_EditLeadSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(currentProfileProvider);
-    final canEditName = RecordEditPermissions.canEditField(
-      fieldName: 'name',
-      userRole: profile?.primaryRole,
-      allRoles: profile?.roles ?? [],
-      currentUserId: profile?.id,
-      creatorId: widget.lead.createdBy,
-      assigneeId: widget.lead.assignedTo,
-    );
-    final canEditPhone = RecordEditPermissions.canEditField(
-      fieldName: 'phone',
-      userRole: profile?.primaryRole,
-      allRoles: profile?.roles ?? [],
-      currentUserId: profile?.id,
-      creatorId: widget.lead.createdBy,
-      assigneeId: widget.lead.assignedTo,
-    );
-    final isRestricted = !canEditName || !canEditPhone;
-
     return Container(
-      padding: EdgeInsets.only(
-        top: 24,
-        left: 24,
-        right: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+      padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1866,136 +1928,140 @@ class _EditLeadSheetState extends ConsumerState<_EditLeadSheet> {
                   const Expanded(
                     child: Text(
                       'Edit Lead Details',
-                      style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                 ],
               ),
-              if (isRestricted)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 16, color: Color(0xFFD97706)),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Contact Name and Phone are managed by creator/admin.',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E)),
-                        ),
-                      ),
-                    ],
+              const SizedBox(height: 16),
+
+              // 1. Prospect Name (Locked / Non-editable in Edit Lead)
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Customer / Prospect Name',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person, color: AppColors.textSecondary),
+                  filled: true,
+                  fillColor: Color(0xFFF3F4F6),
+                  suffixIcon: Tooltip(
+                    message: 'Prospect cannot be changed once lead is created',
+                    child: Icon(Icons.lock_outline, size: 18, color: AppColors.textSecondary),
                   ),
                 ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nameCtrl,
-                enabled: canEditName,
-                decoration: InputDecoration(
-                  labelText: 'Customer / Prospect Name *',
-                  filled: !canEditName,
-                  fillColor: !canEditName ? Colors.grey.shade100 : null,
+                child: Text(
+                  _selectedProspect != null
+                      ? (_selectedProspect!.company != null && _selectedProspect!.company!.isNotEmpty
+                          ? '${_selectedProspect!.name} (${_selectedProspect!.company})'
+                          : _selectedProspect!.name)
+                      : (widget.lead.prospectName ?? 'Prospect'),
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
               ),
               const SizedBox(height: 12),
+
+              // 2. Contact Phone Number (Locked / Non-editable in Edit Lead)
               TextFormField(
-                controller: _phoneCtrl,
-                enabled: canEditPhone,
+                controller: _contactPhoneCtrl,
+                enabled: false,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'Contact Phone Number',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone, color: AppColors.textSecondary),
+                  filled: true,
+                  fillColor: Color(0xFFF3F4F6),
+                  suffixIcon: Tooltip(
+                    message: 'Phone number cannot be changed once lead is created',
+                    child: Icon(Icons.lock_outline, size: 18, color: AppColors.textSecondary),
+                  ),
+                ),
                 keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Phone Number *',
-                  filled: !canEditPhone,
-                  fillColor: !canEditPhone ? Colors.grey.shade100 : null,
-                ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Phone is required' : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _productCtrl,
-                decoration: const InputDecoration(labelText: 'Product / System Interest *'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Product is required' : null,
+
+              // 3. Multi-Product Selector
+              MultiProductSelectorField(
+                selectedItems: _selectedProducts,
+                availableItems: _availableCombos,
+                onChanged: _onProductsChanged,
+                errorText: _productError,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _capacityCtrl,
-                decoration: const InputDecoration(labelText: 'System Capacity (e.g. 5kW, 10kW)'),
-              ),
-              const SizedBox(height: 12),
+
+              // 4. Estimated Deal Value
               TextFormField(
                 controller: _valCtrl,
                 readOnly: true,
-                keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Estimated Deal Value (₹)',
-                  helperText: 'Deal value is updated automatically from Quotations',
+                  helperText: 'Auto-calculated from selected items price',
                   filled: true,
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.currency_rupee),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+
+              // 5. Expected Closing Date
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _expectedDate ?? DateTime.now().add(const Duration(days: 14)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setState(() => _expectedDate = picked);
+                  }
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Expected Closing Date (Optional)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.event_outlined),
+                  ),
+                  child: Text(
+                    _expectedDate != null
+                        ? '${_expectedDate!.day}/${_expectedDate!.month}/${_expectedDate!.year}'
+                        : 'Select closing date',
+                    style: TextStyle(
+                      color: _expectedDate != null ? AppColors.textPrimary : AppColors.textSecondary,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today, color: AppColors.primary),
-                title: Text(
-                  _expectedDate == null ? 'Set Target Close Date' : 'Target: ${DateFormat('dd MMM yyyy').format(_expectedDate!)}',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                trailing: TextButton(
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _expectedDate ?? DateTime.now().add(const Duration(days: 14)),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (picked != null) setState(() => _expectedDate = picked);
-                  },
-                  child: const Text('Change'),
-                ),
-              ),
-              const SizedBox(height: 12),
+
+              // 6. Notes
               TextFormField(
                 controller: _notesCtrl,
-                maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Notes',
-                  hintText: 'Customer requirements, site details, follow-up history...',
+                  labelText: 'Initial Notes / Requirements',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.notes_outlined),
                 ),
+                maxLines: 3,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+
+              // Submit Button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _isSaving ? null : _handleSave,
                 child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text(
-                        'Save Changes',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -2445,7 +2511,7 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
             )
           else
             DropdownButtonFormField<String>(
-              value: _selectedSalesUserId,
+              initialValue: _selectedSalesUserId,
               decoration: const InputDecoration(
                 labelText: 'Select Sales Representative',
                 border: OutlineInputBorder(),

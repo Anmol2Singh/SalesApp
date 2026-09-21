@@ -29,6 +29,16 @@ class ProductComboItem {
         'qty': 1,
       };
 
+  factory ProductComboItem.fromComponentMap(Map<String, dynamic> map) {
+    return ProductComboItem(
+      displayName: (map['item_name'] as String?) ?? (map['product_name'] as String?) ?? '',
+      productName: (map['product_name'] as String?) ?? (map['item_name'] as String?) ?? '',
+      capacity: map['capacity'] as String?,
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      uom: (map['uom'] as String?) ?? 'SET',
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

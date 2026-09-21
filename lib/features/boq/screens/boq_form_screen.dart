@@ -1119,7 +1119,6 @@ class _BoqItemRow extends StatelessWidget {
   final bool enabled;
 
   const _BoqItemRow({
-    super.key,
     required this.index,
     required this.item,
     this.onRemove,

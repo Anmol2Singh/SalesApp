@@ -7,7 +7,8 @@ import '../../customer_app/core/theme/app_theme.dart' as cust_colors;
 import '../../customer_app/shared/widgets/glass_card.dart';
 import '../../customer_app/shared/widgets/gradient_button.dart';
 import '../../customer_app/shared/widgets/toast_service.dart';
-import '../../customer_app/data/providers/app_providers.dart' hide authStateProvider;
+import '../../customer_app/data/providers/app_providers.dart'
+    hide authStateProvider;
 import '../providers/auth_provider.dart';
 import '../../../core/providers/supabase_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,6 +40,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _rememberMe = false;
 
   @override
+  void initState() {
+    super.initState();
+    _checkEvictedStatus();
+  }
+
+  Future<void> _checkEvictedStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final kicked = prefs.getBool('user_account_deleted_kicked') ?? false;
+      if (kicked) {
+        await prefs.remove('user_account_deleted_kicked');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showUserNotFoundDialog(
+            message:
+                'Your account has been deleted or deactivated. You have been logged out.',
+          );
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _showUserNotFoundDialog({String? message}) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline,
+                color: cust_colors.AppColors.danger, size: 28),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'User Not Found',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message ??
+              'User not found. This account does not exist or has been deleted. Please contact your administrator.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: cust_colors.AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   void dispose() {
     _phoneController.dispose();
     _emailController.dispose();
@@ -48,7 +111,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleCustomerLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
     try {
       final phone = '$_selectedCountryCode${_phoneController.text.trim()}';
@@ -68,18 +131,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             .limit(1);
 
         if ((result as List).isEmpty) {
-          throw Exception('User not registered. Please contact your administrator to register your account.');
+          throw Exception(
+              'User not registered. Please contact your administrator to register your account.');
         }
       }
 
       await ref.read(authRepositoryProvider).sendOtp(phone);
       if (mounted) {
-        ToastService.show(context, 'OTP Sent successfully!', type: ToastType.success);
+        ToastService.show(context, 'OTP Sent successfully!',
+            type: ToastType.success);
         context.push('/otp', extra: {'phone': phone});
       }
     } catch (e) {
       if (mounted) {
-        ToastService.show(context, e.toString().replaceAll('Exception: ', ''), type: ToastType.error);
+        ToastService.show(context, e.toString().replaceAll('Exception: ', ''),
+            type: ToastType.error);
       }
     } finally {
       if (mounted) {
@@ -94,12 +160,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await ref.read(authControllerProvider.notifier).signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          );
       if (mounted) {
-        ToastService.show(context, 'Signed in successfully!', type: ToastType.success);
-        
+        ToastService.show(context, 'Signed in successfully!',
+            type: ToastType.success);
+
         // Invalidate authStateProvider so the router knows about the new session.
         ref.invalidate(authStateProvider);
 
@@ -123,10 +190,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         try {
           if (msg.startsWith('{')) {
             final json = jsonDecode(msg);
-            msg = json['error_description'] ?? json['message'] ?? json['msg'] ?? msg;
+            msg = json['error_description'] ??
+                json['message'] ??
+                json['msg'] ??
+                msg;
           }
         } catch (_) {}
-        ToastService.show(context, msg, type: ToastType.error);
+        if (msg.toLowerCase().contains('user not found') ||
+            msg.toLowerCase().contains('invalid login credentials') ||
+            msg.toLowerCase().contains('invalid_grant')) {
+          _showUserNotFoundDialog();
+        } else if (msg.toLowerCase().contains('deactivated')) {
+          _showUserNotFoundDialog(
+              message:
+                  'Your account has been deactivated. Please contact your administrator.');
+        } else {
+          ToastService.show(context, msg, type: ToastType.error);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -134,14 +214,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         try {
           if (msg.startsWith('{')) {
             final json = jsonDecode(msg);
-            msg = json['error_description'] ?? json['message'] ?? json['msg'] ?? msg;
+            msg = json['error_description'] ??
+                json['message'] ??
+                json['msg'] ??
+                msg;
           }
         } catch (_) {}
-        ToastService.show(
-          context,
-          msg,
-          type: ToastType.error,
-        );
+        if (msg.toLowerCase().contains('user not found') ||
+            msg.toLowerCase().contains('invalid login credentials') ||
+            msg.toLowerCase().contains('invalid_grant')) {
+          _showUserNotFoundDialog();
+        } else if (msg.toLowerCase().contains('deactivated')) {
+          _showUserNotFoundDialog(
+              message:
+                  'Your account has been deactivated. Please contact your administrator.');
+        } else {
+          ToastService.show(
+            context,
+            msg,
+            type: ToastType.error,
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -154,13 +247,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final scaffoldBg = isDark ? cust_colors.AppColors.bgPrimary : cust_colors.AppColors.bgPrimaryLight;
-    final glassCardBg = isDark ? cust_colors.AppColors.bgGlass : cust_colors.AppColors.bgGlassLight;
-    final textCol = isDark ? cust_colors.AppColors.textPrimary : cust_colors.AppColors.textPrimaryLight;
-    final subtitleCol = isDark ? cust_colors.AppColors.textSecondary : cust_colors.AppColors.textSecondaryLight;
+    final scaffoldBg = isDark
+        ? cust_colors.AppColors.bgPrimary
+        : cust_colors.AppColors.bgPrimaryLight;
+    final glassCardBg = isDark
+        ? cust_colors.AppColors.bgGlass
+        : cust_colors.AppColors.bgGlassLight;
+    final textCol = isDark
+        ? cust_colors.AppColors.textPrimary
+        : cust_colors.AppColors.textPrimaryLight;
+    final subtitleCol = isDark
+        ? cust_colors.AppColors.textSecondary
+        : cust_colors.AppColors.textSecondaryLight;
 
     final isSmallScreen = size.height < 700;
-    final headerHeight = isSmallScreen ? 210.0 : (size.height * 0.32).clamp(220.0, 290.0);
+    final headerHeight =
+        isSmallScreen ? 210.0 : (size.height * 0.32).clamp(220.0, 290.0);
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -280,7 +382,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
             // Bottom Form
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Column(
                 children: [
                   Center(
@@ -291,9 +394,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: GlassCard(
                           padding: const EdgeInsets.all(24),
                           borderRadius: 24,
-                          child: _isOfficeLogin 
-                            ? _buildOfficeLoginForm(isDark, textCol, subtitleCol, glassCardBg) 
-                            : _buildCustomerLoginForm(isDark, textCol, subtitleCol, glassCardBg),
+                          child: _isOfficeLogin
+                              ? _buildOfficeLoginForm(
+                                  isDark, textCol, subtitleCol, glassCardBg)
+                              : _buildCustomerLoginForm(
+                                  isDark, textCol, subtitleCol, glassCardBg),
                         ),
                       ),
                     ),
@@ -322,8 +427,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     Color subtitleCol,
     Color glassCardBg,
   ) {
-    final borderCol = isDark ? cust_colors.AppColors.borderColor : cust_colors.AppColors.borderColorLight;
-    final inputBg = isDark ? cust_colors.AppColors.bgPrimary : Colors.grey.shade50;
+    final borderCol = isDark
+        ? cust_colors.AppColors.borderColor
+        : cust_colors.AppColors.borderColorLight;
+    final inputBg =
+        isDark ? cust_colors.AppColors.bgPrimary : Colors.grey.shade50;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,7 +468,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedCountryCode,
-                  dropdownColor: isDark ? cust_colors.AppColors.bgSecondary : Colors.white,
+                  dropdownColor:
+                      isDark ? cust_colors.AppColors.bgSecondary : Colors.white,
                   style: TextStyle(
                     color: textCol,
                     fontWeight: FontWeight.bold,
@@ -389,9 +498,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   fontWeight: FontWeight.bold,
                 ),
                 decoration: InputDecoration(
-                  hintText: '99999 99999',
+                  hintText: 'Enter Phone No.',
                   hintStyle: TextStyle(color: subtitleCol.withOpacity(0.6)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   fillColor: inputBg,
                   filled: true,
                   enabledBorder: OutlineInputBorder(
@@ -400,15 +510,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: isDark ? cust_colors.AppColors.accent : cust_colors.AppColors.primary, width: 1.5),
+                    borderSide: BorderSide(
+                        color: isDark
+                            ? cust_colors.AppColors.accent
+                            : cust_colors.AppColors.primary,
+                        width: 1.5),
                   ),
                   errorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: cust_colors.AppColors.danger),
+                    borderSide:
+                        const BorderSide(color: cust_colors.AppColors.danger),
                   ),
                   focusedErrorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: cust_colors.AppColors.danger, width: 1.5),
+                    borderSide: const BorderSide(
+                        color: cust_colors.AppColors.danger, width: 1.5),
                   ),
                 ),
                 validator: (val) {
@@ -430,7 +546,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           label: 'Send OTP',
           isLoading: _isLoading,
           onTap: _handleCustomerLogin,
-          icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_forward_rounded,
+              color: Colors.white, size: 20),
         ),
         const SizedBox(height: 20),
         Center(
@@ -444,7 +561,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Text(
               'Office Staff? Login here',
               style: TextStyle(
-                color: isDark ? cust_colors.AppColors.accent : cust_colors.AppColors.primary,
+                color: isDark
+                    ? cust_colors.AppColors.accent
+                    : cust_colors.AppColors.primary,
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -461,8 +580,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     Color subtitleCol,
     Color glassCardBg,
   ) {
-    final borderCol = isDark ? cust_colors.AppColors.borderColor : cust_colors.AppColors.borderColorLight;
-    final inputBg = isDark ? cust_colors.AppColors.bgPrimary : Colors.grey.shade50;
+    final borderCol = isDark
+        ? cust_colors.AppColors.borderColor
+        : cust_colors.AppColors.borderColorLight;
+    final inputBg =
+        isDark ? cust_colors.AppColors.bgPrimary : Colors.grey.shade50;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,9 +615,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           decoration: InputDecoration(
             labelText: 'Email Address',
             labelStyle: TextStyle(color: subtitleCol),
-            hintText: 'admin@insiya.com or admin@izyheat.com',
+            hintText: 'Enter Email ID',
             hintStyle: TextStyle(color: subtitleCol.withOpacity(0.5)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             fillColor: inputBg,
             filled: true,
             prefixIcon: Icon(Icons.email_outlined, color: subtitleCol),
@@ -505,7 +628,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? cust_colors.AppColors.accent : cust_colors.AppColors.primary, width: 1.5),
+              borderSide: BorderSide(
+                  color: isDark
+                      ? cust_colors.AppColors.accent
+                      : cust_colors.AppColors.primary,
+                  width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -513,7 +640,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: cust_colors.AppColors.danger, width: 1.5),
+              borderSide: const BorderSide(
+                  color: cust_colors.AppColors.danger, width: 1.5),
             ),
           ),
           validator: (value) {
@@ -534,16 +662,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             labelStyle: TextStyle(color: subtitleCol),
             hintText: '••••••••',
             hintStyle: TextStyle(color: subtitleCol.withOpacity(0.5)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             fillColor: inputBg,
             filled: true,
             prefixIcon: Icon(Icons.lock_outline, color: subtitleCol),
             suffixIcon: IconButton(
               icon: Icon(
-                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
                 color: subtitleCol,
               ),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -551,7 +683,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? cust_colors.AppColors.accent : cust_colors.AppColors.primary, width: 1.5),
+              borderSide: BorderSide(
+                  color: isDark
+                      ? cust_colors.AppColors.accent
+                      : cust_colors.AppColors.primary,
+                  width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -559,7 +695,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: cust_colors.AppColors.danger, width: 1.5),
+              borderSide: const BorderSide(
+                  color: cust_colors.AppColors.danger, width: 1.5),
             ),
           ),
           validator: (value) {
@@ -614,7 +751,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Text(
               'Customer? Login here',
               style: TextStyle(
-                color: isDark ? cust_colors.AppColors.accent : cust_colors.AppColors.primary,
+                color: isDark
+                    ? cust_colors.AppColors.accent
+                    : cust_colors.AppColors.primary,
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),

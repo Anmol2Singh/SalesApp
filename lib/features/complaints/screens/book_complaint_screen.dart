@@ -727,7 +727,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
-            value: _selectedReplacementReason,
+            initialValue: _selectedReplacementReason,
             decoration: InputDecoration(
               labelText: 'Reason for Part Replacement',
               hintText: 'Select reason if replacement required',

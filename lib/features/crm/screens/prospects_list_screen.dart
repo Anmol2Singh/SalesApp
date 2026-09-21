@@ -663,7 +663,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: (ref.watch(crmSourcesProvider).value ?? CrmSourcesNotifier.defaultSources).contains(_source)
+                      initialValue: (ref.watch(crmSourcesProvider).value ?? CrmSourcesNotifier.defaultSources).contains(_source)
                           ? _source
                           : ((ref.watch(crmSourcesProvider).value ?? CrmSourcesNotifier.defaultSources).isNotEmpty
                               ? (ref.watch(crmSourcesProvider).value ?? CrmSourcesNotifier.defaultSources).first
@@ -875,7 +875,7 @@ class _AssignProspectSheetState extends ConsumerState<_AssignProspectSheet> {
             )
           else
             DropdownButtonFormField<String>(
-              value: _selectedSalesUserId,
+              initialValue: _selectedSalesUserId,
               decoration: const InputDecoration(
                 labelText: 'Select Sales Representative',
                 border: OutlineInputBorder(),

@@ -17,12 +17,13 @@ class CrmShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isWide = MediaQuery.of(context).size.width >= 800;
     final profile = ref.watch(currentProfileProvider);
-    final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
-    final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
-    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
+    final isSalesOrAdmin = profile?.roles.any((r) => r.isSalesOrAdmin) ?? false;
+    final isCrmStaff = profile?.roles.contains(UserRole.crmStaff) ?? false;
+    final isAdmin = profile?.roles.contains(UserRole.admin) ?? false;
+    final hasComplaints = profile?.roles.contains(UserRole.serviceHead) ?? false;
     final canAccessCrmDashboard = isSalesOrAdmin || isCrmStaff;
     final canAccessLeads = isSalesOrAdmin || isCrmStaff;
-    final canAccessCustomers = isSalesOrAdmin; // CRM staff cannot access Customers
+    final canAccessCustomers = isSalesOrAdmin; // CRM staff cannot access Customers unless they have sales/admin
 
     // Non-sales/non-CRM staff roles (BOQ, factory, material staff) must only access Prospects
     if (!canAccessCrmDashboard && currentRoute == '/crm/dashboard') {
@@ -31,8 +32,8 @@ class CrmShell extends ConsumerWidget {
       });
     }
 
-    // CRM Staff cannot access Customer list or customer details
-    if (isCrmStaff && currentRoute.startsWith('/crm/customers')) {
+    // CRM Staff without sales/admin cannot access Customer list or customer details
+    if (!canAccessCustomers && isCrmStaff && currentRoute.startsWith('/crm/customers')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.go('/crm/dashboard');
       });
@@ -97,6 +98,7 @@ class CrmShell extends ConsumerWidget {
                 context,
                 isCrmStaff: isCrmStaff,
                 canAccessCustomers: canAccessCustomers,
+                hasComplaints: hasComplaints,
               ),
       ),
     );
@@ -159,42 +161,63 @@ class CrmShell extends ConsumerWidget {
     BuildContext context, {
     required bool isCrmStaff,
     required bool canAccessCustomers,
+    required bool hasComplaints,
   }) {
-    final destinations = <NavigationDestination>[
-      const NavigationDestination(
-        icon: Icon(Icons.dashboard_outlined),
-        selectedIcon: Icon(Icons.dashboard),
-        label: 'Dashboard',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.person_search_outlined),
-        selectedIcon: Icon(Icons.person_search),
-        label: 'Prospects',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.trending_up_outlined),
-        selectedIcon: Icon(Icons.trending_up),
-        label: 'Leads',
-      ),
-      if (isCrmStaff)
-        const NavigationDestination(
-          icon: Icon(Icons.assessment_outlined),
-          selectedIcon: Icon(Icons.assessment),
-          label: "Today's Report",
-        ),
-      if (canAccessCustomers)
-        const NavigationDestination(
-          icon: Icon(Icons.people_outline),
-          selectedIcon: Icon(Icons.people),
-          label: 'Customers',
-        ),
+    final navItems = <({String route, String label, IconData icon, IconData activeIcon, bool isPush})>[
+      (route: '/crm/dashboard', label: 'Dashboard', icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, isPush: false),
+      (route: '/crm/prospects', label: 'Prospects', icon: Icons.person_search_outlined, activeIcon: Icons.person_search, isPush: false),
+      (route: '/crm/leads', label: 'Leads', icon: Icons.trending_up_outlined, activeIcon: Icons.trending_up, isPush: false),
     ];
+
+    if (hasComplaints) {
+      navItems.add((
+        route: AppRoutes.complaintsDashboard,
+        label: 'Complaints',
+        icon: Icons.support_agent_outlined,
+        activeIcon: Icons.support_agent,
+        isPush: false,
+      ));
+    } else if (canAccessCustomers) {
+      navItems.add((
+        route: '/crm/customers',
+        label: 'Customers',
+        icon: Icons.people_outline,
+        activeIcon: Icons.people,
+        isPush: false,
+      ));
+    }
+
+    if (isCrmStaff && navItems.length < 5) {
+      navItems.add((
+        route: '/reports/activity',
+        label: "Today's Report",
+        icon: Icons.assessment_outlined,
+        activeIcon: Icons.assessment,
+        isPush: true,
+      ));
+    } else if (canAccessCustomers && navItems.length < 5 && !navItems.any((i) => i.route == '/crm/customers')) {
+      navItems.add((
+        route: '/crm/customers',
+        label: 'Customers',
+        icon: Icons.people_outline,
+        activeIcon: Icons.people,
+        isPush: false,
+      ));
+    }
+
+    int selectedIndex = 0;
+    for (int i = 0; i < navItems.length; i++) {
+      if (currentRoute == navItems[i].route || (navItems[i].route != '/crm/dashboard' && currentRoute.startsWith(navItems[i].route))) {
+        selectedIndex = i;
+        break;
+      }
+    }
 
     return NavigationBarTheme(
       data: NavigationBarThemeData(
         height: 64,
-        labelTextStyle: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return const TextStyle(
               fontSize: 10.5,
               fontWeight: FontWeight.bold,
@@ -211,46 +234,22 @@ class CrmShell extends ConsumerWidget {
         }),
       ),
       child: NavigationBar(
-        selectedIndex: _getSelectedIndex(currentRoute, canAccessCustomers, isCrmStaff: isCrmStaff),
+        selectedIndex: selectedIndex.clamp(0, navItems.length - 1),
         onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go('/crm/dashboard');
-              break;
-            case 1:
-              context.go('/crm/prospects');
-              break;
-            case 2:
-              context.go('/crm/leads');
-              break;
-            case 3:
-              if (isCrmStaff) {
-                context.push('/reports/activity');
-              } else if (canAccessCustomers) {
-                context.go('/crm/customers');
-              }
-              break;
-            case 4:
-              if (isCrmStaff && canAccessCustomers) {
-                context.go('/crm/customers');
-              }
-              break;
+          final item = navItems[index];
+          if (item.isPush) {
+            context.push(item.route);
+          } else {
+            context.go(item.route);
           }
         },
-        destinations: destinations,
+        destinations: navItems.map((item) => NavigationDestination(
+          icon: Icon(item.icon),
+          selectedIcon: Icon(item.activeIcon),
+          label: item.label,
+        )).toList(),
       ),
     );
-  }
-
-  int _getSelectedIndex(String route, bool canAccessCustomers, {bool isCrmStaff = false}) {
-    if (route == '/crm/dashboard') return 0;
-    if (route.startsWith('/crm/prospects')) return 1;
-    if (route.startsWith('/crm/leads')) return 2;
-    if (isCrmStaff && route == '/reports/activity') return 3;
-    if (canAccessCustomers && route.startsWith('/crm/customers')) {
-      return isCrmStaff ? 4 : 3;
-    }
-    return 0;
   }
 }
 

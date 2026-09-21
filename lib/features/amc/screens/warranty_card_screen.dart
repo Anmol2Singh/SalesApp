@@ -260,7 +260,7 @@ class _WarrantyCardScreenState extends ConsumerState<WarrantyCardScreen> {
                   const Text('Warranty Period (Years):', style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<int>(
-                    value: selectedYears,
+                    initialValue: selectedYears,
                     decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                     items: [1, 2, 3, 5]
                         .map((y) => DropdownMenuItem(value: y, child: Text('$y Year${y > 1 ? "s" : ""}')))

@@ -62,7 +62,7 @@ class _WorkflowConfigScreenState extends ConsumerState<WorkflowConfigScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _selectedProductId,
+                        initialValue: _selectedProductId,
                         decoration: const InputDecoration(
                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           border: OutlineInputBorder(),
@@ -247,7 +247,7 @@ class _WorkflowConfigScreenState extends ConsumerState<WorkflowConfigScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedRole,
+                  initialValue: selectedRole,
                   decoration: const InputDecoration(labelText: 'Owner Role'),
                   items: const [
                     DropdownMenuItem(value: 'admin', child: Text('Admin')),
@@ -345,7 +345,7 @@ class _WorkflowConfigScreenState extends ConsumerState<WorkflowConfigScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedRole,
+                  initialValue: selectedRole,
                   decoration: const InputDecoration(labelText: 'Owner Role'),
                   items: const [
                     DropdownMenuItem(value: 'admin', child: Text('Admin')),

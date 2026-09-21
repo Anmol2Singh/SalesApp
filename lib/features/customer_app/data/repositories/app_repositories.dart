@@ -681,13 +681,11 @@ class SupabaseAuthRepository implements AuthRepository {
         .eq('id', uid)
         .maybeSingle();
 
-    if (response == null) {
-      response = await _supabase
+    response ??= await _supabase
           .from('profiles')
           .select()
           .eq('id', uid)
           .maybeSingle();
-    }
 
     final fullName = response?['full_name'] ?? 'Customer';
     final pPhone = response?['phone'] ?? _pendingPhone ?? '';
@@ -808,14 +806,12 @@ class SupabaseCustomerRepository implements CustomerRepository {
             .eq('id', currentUser.id)
             .limit(1)
             .maybeSingle();
-        if (profile == null) {
-          profile = await _supabase
+        profile ??= await _supabase
               .from('profiles')
               .select('full_name, email, phone')
               .eq('id', currentUser.id)
               .limit(1)
               .maybeSingle();
-        }
         if (profile != null) {
           fullName = profile['full_name'] ?? fullName;
           final pName = (profile['full_name'] as String? ?? '').trim().toLowerCase();
@@ -840,6 +836,17 @@ class SupabaseCustomerRepository implements CustomerRepository {
           }
         }
       } catch (_) {}
+    }
+
+    final cleanEmail = (email ?? '').trim().toLowerCase();
+    final cleanName = fullName.trim().toLowerCase();
+
+    // STRICT GUARD: Staff / Admin accounts must NEVER be auto-created as customers!
+    if (cleanEmail.endsWith('@insiya.com') ||
+        cleanEmail.endsWith('@izyheat.com') ||
+        cleanName.contains('admin') ||
+        cleanEmail.contains('admin@')) {
+      throw Exception('Access denied: Staff accounts cannot be registered as customers.');
     }
 
     final insertData = {
@@ -907,13 +914,11 @@ class SupabaseCustomerRepository implements CustomerRepository {
               .select('full_name, email, phone')
               .eq('id', currentUid)
               .maybeSingle();
-          if (profile == null) {
-            profile = await _supabase
+          profile ??= await _supabase
                 .from('profiles')
                 .select('full_name, email, phone')
                 .eq('id', currentUid)
                 .maybeSingle();
-          }
           if (profile != null) {
             userEmail = (profile['email'] as String?)?.trim().toLowerCase() ?? userEmail;
             userName = (profile['full_name'] as String?)?.trim().toLowerCase();
@@ -1673,13 +1678,11 @@ class SupabaseCustomerRepository implements CustomerRepository {
             .select('full_name, email, phone')
             .eq('id', currentUid)
             .maybeSingle();
-        if (profile == null) {
-          profile = await _supabase
+        profile ??= await _supabase
               .from('profiles')
               .select('full_name, email, phone')
               .eq('id', currentUid)
               .maybeSingle();
-        }
         if (profile != null) {
           sessionEmail = (profile['email'] as String?)?.trim().toLowerCase() ?? sessionEmail;
           sessionName = (profile['full_name'] as String?)?.trim();

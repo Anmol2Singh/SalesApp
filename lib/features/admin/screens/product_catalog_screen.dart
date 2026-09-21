@@ -89,7 +89,7 @@ class ProductCatalogScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(productsProvider);
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = (profile?.primaryRole == UserRole.admin) && !isViewOnly;
+    final isAdmin = (profile?.primaryRole.canManageCatalog ?? false) && !isViewOnly;
 
     return Scaffold(
       backgroundColor: AppColors.background,

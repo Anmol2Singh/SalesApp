@@ -39,6 +39,7 @@ import '../../features/customer_app/screens/customer_dashboard_screen.dart';
 import '../../features/complaints/screens/coordinator_dashboard_screen.dart';
 import '../../features/complaints/screens/book_complaint_screen.dart';
 import '../../features/complaints/screens/technician_dashboard_screen.dart';
+import '../../features/complaints/screens/technician_tasks_screen.dart';
 import '../../features/complaints/screens/assign_technician_screen.dart';
 import '../../features/complaints/screens/service_history_screen.dart';
 import '../../features/complaints/screens/complaint_details_screen.dart';
@@ -100,6 +101,7 @@ class AppRoutes {
   static const String amcSetup = '/amc/setup';
   static const String complaintsDashboard = '/complaints/dashboard';
   static const String technicianDashboard = '/technician/dashboard';
+  static const String technicianTasks = '/technician/tasks';
   static const String bookComplaint = '/complaints/book';
   static const String assignTechnician = '/complaints/assign';
   static const String serviceHistory = '/complaints/history';
@@ -149,8 +151,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           if (isOnAuth) {
             return _getRoleHome(profile.primaryRole);
           }
-          // Guard CRM Staff from accessing customer screens
-          if (profile.primaryRole == UserRole.crmStaff) {
+          // Guard pure CRM Staff (without sales or admin roles) from accessing customer screens
+          if (profile.roles.contains(UserRole.crmStaff) &&
+              !profile.roles.any((r) => r.isSalesOrAdmin)) {
             if (location == AppRoutes.customers ||
                 location.startsWith('/customers') ||
                 location.startsWith('/crm/customers')) {
@@ -377,6 +380,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const TechnicianDashboardScreen(),
           ),
           GoRoute(
+            path: AppRoutes.technicianTasks,
+            builder: (context, state) => const TechnicianTasksScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.bookComplaint,
             builder: (context, state) => const BookComplaintScreen(),
           ),
@@ -527,7 +534,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/products',
-        builder: (context, state) => const ProductCatalogScreen(isEmbedded: false, isViewOnly: true),
+        builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
       ),
       GoRoute(
         path: '/customer/dashboard',

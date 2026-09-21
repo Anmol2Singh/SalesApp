@@ -1027,7 +1027,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButtonFormField<double>(
-                            value: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
+                            initialValue: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
                                 ? (_cgstRate + _sgstRate)
                                 : null,
                             isDense: true,

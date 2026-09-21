@@ -13,6 +13,7 @@ import '../providers/crm_leaderboard_provider.dart';
 import '../data/models/crm_leaderboard_entry.dart';
 import '../data/models/lead_model.dart';
 import '../data/models/prospect_model.dart';
+import '../../../core/widgets/dashboard_switcher_button.dart';
 
 class CrmDashboardScreen extends ConsumerStatefulWidget {
   const CrmDashboardScreen({super.key});
@@ -119,8 +120,23 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                   color: Colors.white,
                 ),
               ),
-        backgroundColor: AppColors.primary,
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0F172A),
+                Color(0xFF2E1065),
+                Color(0xFF6B21A8),
+                Color(0xFF4F46E5),
+                Color(0xFF2563EB),
+              ],
+            ),
+          ),
+        ),
         leading: isCrmStaff
             ? null
             : IconButton(
@@ -136,6 +152,7 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                 },
               ),
         actions: [
+          const DashboardSwitcherButton(),
           IconButton(
             icon: _isRefreshing
                 ? const SizedBox(
@@ -239,71 +256,128 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
             const SizedBox(height: 24),
 
             if (isCrmStaff) ...[
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E3A5F), Color(0xFF2563EB)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF2563EB).withOpacity(0.25),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => context.push('/reports/activity'),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.assessment_outlined, color: Colors.white, size: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E3A5F), Color(0xFF2563EB)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                          const SizedBox(width: 16),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => context.push('/reports/activity'),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                            child: Row(
                               children: [
-                                Text(
-                                  "Today's Activity Report",
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Generate and review daily CRM activity & progress',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white70,
+                                Icon(Icons.assessment_outlined, color: Colors.white, size: 24),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Today's Report",
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Daily activity',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF0F766E), Color(0xFF14B8A6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF14B8A6).withValues(alpha: 0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => context.push('/products'),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                            child: Row(
+                              children: [
+                                Icon(Icons.inventory_2_outlined, color: Colors.white, size: 24),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'View Products',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Product catalog',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
             ],

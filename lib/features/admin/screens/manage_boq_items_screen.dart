@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
-import '../../../core/models/product.dart';
 import '../providers/manage_boq_items_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../../admin/screens/product_catalog_screen.dart';

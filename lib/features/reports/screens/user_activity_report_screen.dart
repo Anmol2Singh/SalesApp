@@ -803,7 +803,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: filter.dateRangeType,
+                        initialValue: filter.dateRangeType,
                         decoration: const InputDecoration(
                           labelText: 'Date Range',
                           border: OutlineInputBorder(),

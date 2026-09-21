@@ -9,9 +9,8 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../../core/models/customer.dart';
-import '../../../core/widgets/global_search_delegate.dart';
-import '../../../core/providers/theme_provider.dart';
-import '../../../core/widgets/sync_status_indicator.dart';
+import '../../crm/providers/crm_providers.dart';
+import '../../../core/widgets/dashboard_switcher_button.dart';
 
 class SalesDashboardScreen extends ConsumerWidget {
   const SalesDashboardScreen({super.key});
@@ -21,6 +20,18 @@ class SalesDashboardScreen extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider);
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
 
+    final leadsAsync = ref.watch(leadsProvider);
+    final activeLeadsCount = leadsAsync.valueOrNull
+            ?.where((l) =>
+                l.status.toLowerCase() != 'won' &&
+                l.status.toLowerCase() != 'lost')
+            .length ??
+        0;
+
+    final rawName = profile?.fullName.trim() ?? '';
+    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Sales Executive');
+    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
@@ -29,31 +40,32 @@ class SalesDashboardScreen extends ConsumerWidget {
             expandedHeight: 180,
             pinned: true,
             backgroundColor: const Color(0xFF1E1B4B),
+            elevation: 0,
             clipBehavior: Clip.antiAlias,
             automaticallyImplyLeading: false,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(28),
+                bottom: Radius.circular(32),
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 children: [
-                  // Deep indigo → violet gradient
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Color(0xFF1E1B4B),
-                          Color(0xFF4C1D95),
-                          Color(0xFF6D28D9),
+                          Color(0xFF0F172A),
+                          Color(0xFF2E1065),
+                          Color(0xFF6B21A8),
+                          Color(0xFF4F46E5),
+                          Color(0xFF2563EB),
                         ],
                       ),
                     ),
                   ),
-                  // Radial glow top-right
                   Positioned(
                     top: -40,
                     right: -30,
@@ -64,135 +76,158 @@ class SalesDashboardScreen extends ConsumerWidget {
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            AppColors.primary.withOpacity(0.25),
+                            Colors.white.withValues(alpha: 0.12),
                             Colors.transparent,
                           ],
                         ),
                       ),
                     ),
                   ),
-                  // Radial glow bottom-left
-                  Positioned(
-                    bottom: -20,
-                    left: -40,
-                    child: Container(
-                      width: 160,
-                      height: 160,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            const Color(0xFF06B6D4).withOpacity(0.15),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 40, 20, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
-                                  width: 2,
-                                ),
-                                gradient: LinearGradient(
-                                  colors: profile?.primaryRole.gradientColors ??
-                                      [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)],
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  (profile?.fullName ?? 'S')[0].toUpperCase(),
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                    width: 2,
                                   ),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Good ${_getGreeting()}',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 12,
-                                      color: Colors.white.withOpacity(0.6),
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    profile?.fullName ?? 'Representative',
+                                child: Center(
+                                  child: Text(
+                                    avatarInitial,
                                     style: const TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 22,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ],
+                                ),
                               ),
+                              Positioned(
+                                bottom: 1,
+                                right: 1,
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: const Color(0xFF1E1B4B), width: 2),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Good ${_getGreeting()},',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  displayName,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Today ${DateFormat('dd MMM').format(DateTime.now())}',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12,
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // Mini stat pills row
-                        Row(
-                          children: [
-                            _buildHeaderStat(
-                              'Today',
-                              DateFormat('dd MMM').format(DateTime.now()),
-                              Icons.calendar_today_outlined,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildHeaderStat(
-                              'Role',
-                              profile?.primaryRole.name.toUpperCase() ?? 'STAFF',
-                              Icons.badge_outlined,
-                              iconColor: profile?.primaryRole.roleColor ?? Colors.white,
-                              accentColor: profile?.primaryRole.roleColor,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildHeaderStat(
-                              'Status',
-                              'ONLINE',
-                              Icons.circle,
-                              iconColor: const Color(0xFF10B981),
-                              iconSize: 10,
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                (profile?.primaryRole.displayName ?? 'SALES')
+                                    .toUpperCase(),
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.circle, color: Colors.white, size: 7),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'ONLINE',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
             actions: [
-              const SyncStatusIndicator(),
+              const DashboardSwitcherButton(),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white),
-                onPressed: () =>
-                    ref.read(pipelinesNotifierProvider.notifier).refresh(),
+                tooltip: 'Refresh',
+                onPressed: () {
+                  ref.read(pipelinesNotifierProvider.notifier).refresh();
+                  ref.invalidate(leadsProvider);
+                },
               ),
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white),
@@ -223,13 +258,14 @@ class SalesDashboardScreen extends ConsumerWidget {
                   }
                 },
               ),
+              const SizedBox(width: 4),
             ],
           ),
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // My stats
+                // 2x2 Metric KPI Cards (Unified Dashboard Style)
                 pipelinesAsync.when(
                   data: (pipelines) {
                     final total = pipelines.length;
@@ -240,32 +276,51 @@ class SalesDashboardScreen extends ConsumerWidget {
                         .where((p) => p.status == PipelineStatus.completed)
                         .length;
 
-                    return Row(
+                    return GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1.34,
                       children: [
-                        Expanded(
-                          child: _MiniStat(
-                              label: 'Total',
-                              value: '$total',
-                              color: AppColors.primary),
+                        _SalesStatCard(
+                          title: 'Active\nDeals',
+                          value: '$inProgress',
+                          icon: Icons.alt_route,
+                          color: const Color(0xFF2563EB),
+                          onTap: () => context.go(AppRoutes.pipelines),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _MiniStat(
-                              label: 'Active',
-                              value: '$inProgress',
-                              color: AppColors.info),
+                        _SalesStatCard(
+                          title: 'Completed\nDeals',
+                          value: '$completed',
+                          icon: Icons.verified_outlined,
+                          color: const Color(0xFF10B981),
+                          onTap: () => context.go(AppRoutes.pipelines),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _MiniStat(
-                              label: 'Done',
-                              value: '$completed',
-                              color: AppColors.success),
+                        _SalesStatCard(
+                          title: 'Customer\nLeads',
+                          value: '$activeLeadsCount',
+                          icon: Icons.person,
+                          color: const Color(0xFF06B6D4),
+                          onTap: () => context.push('/crm/prospects'),
+                        ),
+                        _SalesStatCard(
+                          title: 'Total\nDeals',
+                          value: '$total',
+                          icon: Icons.handshake_outlined,
+                          color: const Color(0xFF8B5CF6),
+                          onTap: () => context.go(AppRoutes.pipelines),
                         ),
                       ],
                     );
                   },
-                  loading: () => const SizedBox.shrink(),
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  ),
                   error: (_, __) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 20),
@@ -475,105 +530,6 @@ class SalesDashboardScreen extends ConsumerWidget {
     if (hour < 17) return 'Afternoon';
     return 'Evening';
   }
-
-  static Widget _buildHeaderStat(
-    String label,
-    String value,
-    IconData icon, {
-    Color iconColor = Colors.white,
-    double iconSize = 14,
-    Color? accentColor,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: accentColor != null ? accentColor.withOpacity(0.18) : Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: accentColor != null ? accentColor.withOpacity(0.45) : Colors.white.withOpacity(0.1),
-            width: accentColor != null ? 1.2 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor, size: iconSize),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _MiniStat({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 Color _getDealBadgeColor(PipelineStep step, PipelineStatus status) {
@@ -655,6 +611,104 @@ class _ActionCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SalesStatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SalesStatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : const Color(0xFF1E293B),
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

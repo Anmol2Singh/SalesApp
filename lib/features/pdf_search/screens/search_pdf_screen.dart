@@ -738,7 +738,7 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _selectedDocType,
+                      initialValue: _selectedDocType,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Document Type',

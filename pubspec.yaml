@@ -79,6 +79,7 @@ dependencies:
   pin_code_fields: ^9.4.0
 
 
+  collection: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

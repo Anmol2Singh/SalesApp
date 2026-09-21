@@ -451,7 +451,7 @@ class ComplaintPdfService {
                                           fontWeight: pw.FontWeight.bold))),
                             ],
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ],

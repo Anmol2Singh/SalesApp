@@ -41,16 +41,20 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
     final prefs = await SharedPreferences.getInstance();
     final staffId = prefs.getString('staff_session_id') ?? prefs.getString('technician_session_id');
     final staffRoleStr = prefs.getString('staff_session_role') ?? 'technician';
+    final staffRolesList = prefs.getStringList('staff_session_roles');
     final staffEmail = prefs.getString('staff_session_email') ?? prefs.getString('technician_session_email') ?? '';
     final staffName = prefs.getString('staff_session_name') ?? prefs.getString('technician_session_name') ?? 'Staff';
 
     if (staffId != null && staffId.isNotEmpty && supabase.auth.currentUser == null) {
+      final roles = (staffRolesList != null && staffRolesList.isNotEmpty)
+          ? staffRolesList.map((r) => UserRole.fromString(r)).toList()
+          : [UserRole.fromString(staffRoleStr)];
       yield Profile(
         id: staffId,
         fullName: staffName,
         email: staffEmail,
         phone: '',
-        roles: [UserRole.fromString(staffRoleStr)],
+        roles: roles,
         isActive: true,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -117,16 +121,20 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
       final prefs = await SharedPreferences.getInstance();
       final staffId = prefs.getString('staff_session_id') ?? prefs.getString('technician_session_id');
       final staffRoleStr = prefs.getString('staff_session_role') ?? 'technician';
+      final staffRolesList = prefs.getStringList('staff_session_roles');
       final staffEmail = prefs.getString('staff_session_email') ?? prefs.getString('technician_session_email') ?? '';
       final staffName = prefs.getString('staff_session_name') ?? prefs.getString('technician_session_name') ?? 'Staff';
 
       if (staffId != null && staffId.isNotEmpty) {
+        final roles = (staffRolesList != null && staffRolesList.isNotEmpty)
+            ? staffRolesList.map((r) => UserRole.fromString(r)).toList()
+            : [UserRole.fromString(staffRoleStr)];
         yield Profile(
           id: staffId,
           fullName: staffName,
           email: staffEmail,
           phone: '',
-          roles: [UserRole.fromString(staffRoleStr)],
+          roles: roles,
           isActive: true,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -187,6 +195,26 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
       
       if (response != null) {
         var profile = Profile.fromJson(response);
+        if (!profile.isActive || (response['roles'] is List && (response['roles'] as List).contains('deactivated'))) {
+          // Deactivated user: Auto log out!
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('user_account_deleted_kicked', true);
+            await prefs.remove('cached_profile_id_${user.id}');
+            await prefs.remove('cached_profile_name_${user.id}');
+            await prefs.remove('cached_profile_email_${user.id}');
+            await prefs.remove('cached_profile_roles_${user.id}');
+            await prefs.remove('staff_session_id');
+            await prefs.remove('staff_session_email');
+            await prefs.remove('staff_session_name');
+            await prefs.remove('staff_session_role');
+            await prefs.remove('staff_session_roles');
+            await supabase.auth.signOut();
+          } catch (_) {}
+          yield null;
+          return;
+        }
+
         // Cache user profile for offline session resilience
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -249,71 +277,79 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
             ? await techQuery.or('id.eq.${user.id},email.eq.${user.email}').maybeSingle()
             : await techQuery.eq('id', user.id).maybeSingle();
         if (techResponse != null) {
+          final isTechActive = techResponse['is_active'] ?? true;
+          if (!isTechActive) {
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('user_account_deleted_kicked', true);
+              await prefs.remove('technician_session_id');
+              await prefs.remove('technician_session_email');
+              await prefs.remove('technician_session_name');
+              await supabase.auth.signOut();
+            } catch (_) {}
+            yield null;
+            return;
+          }
+
           yield Profile(
             id: user.id,
             fullName: techResponse['name'] ?? 'Technician',
             email: techResponse['email'] ?? user.email ?? '',
             phone: techResponse['phone'] ?? user.phone,
             roles: [UserRole.technician],
-            isActive: techResponse['is_active'] ?? true,
+            isActive: true,
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
         } else {
-          throw Exception('User not found in profiles, customer_profiles or technicians');
+          // User was deleted from profiles, customer_profiles, and technicians (DELETED USER!)
+          // Cleanly auto-logout session immediately and never convert to a customer!
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('user_account_deleted_kicked', true);
+            await prefs.remove('cached_profile_id_${user.id}');
+            await prefs.remove('cached_profile_name_${user.id}');
+            await prefs.remove('cached_profile_email_${user.id}');
+            await prefs.remove('cached_profile_roles_${user.id}');
+            await prefs.remove('staff_session_id');
+            await prefs.remove('staff_session_email');
+            await prefs.remove('staff_session_name');
+            await prefs.remove('staff_session_role');
+            await prefs.remove('customer_session_uid');
+            await prefs.remove('customer_session_phone');
+            await prefs.remove('technician_session_id');
+            await prefs.remove('technician_session_email');
+            await prefs.remove('technician_session_name');
+            await supabase.auth.signOut();
+          } catch (_) {}
+          yield null;
+          return;
         }
       }
     } catch (e) {
-      String name = user.userMetadata?['full_name'] ?? 'User';
-      String themePref = 'system';
-      List<UserRole> offlineRoles = [UserRole.customer];
+      // Offline fallback: only restore if a cached profile actually exists
       try {
         final prefs = await SharedPreferences.getInstance();
         final cachedRolesStr = prefs.getString('cached_profile_roles_${user.id}');
         if (cachedRolesStr != null && cachedRolesStr.isNotEmpty) {
-          offlineRoles = cachedRolesStr.split(',').map((r) => UserRole.fromString(r)).toList();
-        }
-        final cachedName = prefs.getString('cached_profile_name_${user.id}');
-        if (cachedName != null && cachedName.isNotEmpty) {
-          name = cachedName;
-        }
-
-        final savedCustPhone = prefs.getString('customer_session_phone');
-        if (savedCustPhone != null && savedCustPhone.isNotEmpty) {
-          final cleanDigits = savedCustPhone.replaceAll(RegExp(r'\D'), '');
-          if (cleanDigits.isNotEmpty) {
-            final dbCust = await supabase
-                .from('customers')
-                .select('customer_name, contact_person')
-                .or('phone.eq.$savedCustPhone,phone.ilike.%$cleanDigits')
-                .limit(1)
-                .maybeSingle();
-            if (dbCust != null) {
-              name = dbCust['customer_name'] ?? dbCust['contact_person'] ?? name;
-            }
-          }
-        }
-        final custResponse = await supabase
-            .from('customers')
-            .select('theme_preference')
-            .eq('id', user.id)
-            .maybeSingle();
-        if (custResponse != null) {
-          themePref = custResponse['theme_preference'] ?? themePref;
+          final offlineRoles = cachedRolesStr.split(',').map((r) => UserRole.fromString(r)).toList();
+          final cachedName = prefs.getString('cached_profile_name_${user.id}') ?? (user.userMetadata?['full_name'] ?? 'User');
+          yield Profile(
+            id: user.id,
+            fullName: cachedName,
+            email: user.email ?? '',
+            phone: user.phone ?? user.userMetadata?['phone'],
+            roles: offlineRoles,
+            isActive: true,
+            themePreference: 'system',
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+          continue;
         }
       } catch (_) {}
 
-      yield Profile(
-        id: user.id,
-        fullName: name,
-        email: user.email ?? '',
-        phone: user.phone ?? user.userMetadata?['phone'],
-        roles: offlineRoles,
-        isActive: true,
-        themePreference: themePref,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      yield null;
     }
   }
 });
@@ -368,21 +404,42 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         await prefs.remove('customer_session_uid');
         await prefs.remove('customer_session_phone');
 
-        // Check if user is active
-        try {
-          final profileResponse = await _supabase
-              .from('profiles')
-              .select('is_active')
-              .eq('id', response!.user!.id)
-              .single();
+        // Check if user exists and is active
+        final profileResponse = await _supabase
+            .from('profiles')
+            .select('is_active')
+            .eq('id', response!.user!.id)
+            .maybeSingle();
 
-          if (!(profileResponse['is_active'] as bool? ?? true)) {
-            await _supabase.auth.signOut();
-            throw Exception(
-                'Your account has been deactivated. Please contact admin.');
-          }
-        } catch (e) {
-          if (e.toString().contains('deactivated')) rethrow;
+        final custResponse = profileResponse == null
+            ? await _supabase
+                .from('customer_profiles')
+                .select('id')
+                .eq('id', response.user!.id)
+                .maybeSingle()
+            : null;
+
+        final techResponse = (profileResponse == null && custResponse == null)
+            ? await _supabase
+                .from('technicians')
+                .select('is_active')
+                .eq('id', response.user!.id)
+                .maybeSingle()
+            : null;
+
+        if (profileResponse == null && custResponse == null && techResponse == null) {
+          await _supabase.auth.signOut();
+          throw Exception('User not found. This account does not exist or has been deleted.');
+        }
+
+        if (profileResponse != null && !(profileResponse['is_active'] as bool? ?? true)) {
+          await _supabase.auth.signOut();
+          throw Exception('Your account has been deactivated. Please contact admin.');
+        }
+
+        if (techResponse != null && !(techResponse['is_active'] as bool? ?? true)) {
+          await _supabase.auth.signOut();
+          throw Exception('Your account has been deactivated. Please contact admin.');
         }
 
         state = const AsyncValue.data(null);
@@ -413,7 +470,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
                 .ilike('email', '$username@%')
                 .limit(1);
             if ((matches as List).isNotEmpty) {
-              profileRow = matches.first as Map<String, dynamic>;
+              profileRow = matches.first;
             }
           } catch (_) {}
         }
@@ -422,8 +479,15 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
           if (!(profileRow['is_active'] as bool? ?? true)) {
             throw Exception('Your account has been deactivated. Please contact admin.');
           }
-          final roleStr = (profileRow['role'] as String?) ?? 'admin';
-          final role = UserRole.fromString(roleStr);
+          final rolesData = profileRow['roles'];
+          List<String> roleStrings = [];
+          if (rolesData is List) {
+            roleStrings = rolesData.map((e) => e.toString()).toList();
+          } else if (profileRow['role'] != null) {
+            roleStrings = [profileRow['role'].toString()];
+          }
+          if (roleStrings.isEmpty) roleStrings = ['admin'];
+          final roles = roleStrings.map((r) => UserRole.fromString(r)).toList();
 
           await prefs.remove('customer_session_uid');
           await prefs.remove('customer_session_phone');
@@ -431,7 +495,8 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
           await prefs.setString('staff_session_id', profileRow['id'] as String);
           await prefs.setString('staff_session_email', profileRow['email'] as String? ?? cleanEmail);
           await prefs.setString('staff_session_name', (profileRow['full_name'] as String?) ?? 'Staff Member');
-          await prefs.setString('staff_session_role', role.value);
+          await prefs.setString('staff_session_role', roles.first.value);
+          await prefs.setStringList('staff_session_roles', roles.map((r) => r.value).toList());
 
           state = const AsyncValue.data(null);
           return;
@@ -462,7 +527,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
                 .ilike('email', '$username@%')
                 .limit(1);
             if ((matches as List).isNotEmpty) {
-              techRow = matches.first as Map<String, dynamic>;
+              techRow = matches.first;
             }
           } catch (_) {}
         }
@@ -514,6 +579,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         await prefs.remove('staff_session_email');
         await prefs.remove('staff_session_name');
         await prefs.remove('staff_session_role');
+        await prefs.remove('staff_session_roles');
       } catch (_) {}
       await _supabase.auth.signOut();
       state = const AsyncValue.data(null);

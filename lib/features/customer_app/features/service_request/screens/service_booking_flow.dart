@@ -43,7 +43,7 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   // Step 3 State
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
-  bool _bookPreviousTechnician = false;
+  final bool _bookPreviousTechnician = false;
 
   // Step 4 State
   final _flatController = TextEditingController();

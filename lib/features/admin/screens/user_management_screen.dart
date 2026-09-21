@@ -1,6 +1,7 @@
 // lib/features/admin/screens/user_management_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/profile.dart';
@@ -212,6 +213,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final passwordController = TextEditingController();
     UserRole selectedRole = user.primaryRole;
     final formKey = GlobalKey<FormState>();
+    bool obscureNewPassword = true;
+    bool showCurrentPassword = false;
 
     showDialog(
       context: context,
@@ -239,16 +242,68 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         v == null || v.isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 10),
+                  if (user.plainPassword != null && user.plainPassword!.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.key, size: 16, color: Color(0xFF475569)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Current Password', style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                Text(
+                                  showCurrentPassword ? user.plainPassword! : '••••••••',
+                                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(showCurrentPassword ? Icons.visibility_off : Icons.visibility, size: 18, color: const Color(0xFF475569)),
+                            onPressed: () => setModalState(() => showCurrentPassword = !showCurrentPassword),
+                            tooltip: showCurrentPassword ? 'Hide' : 'Show',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(4),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 16, color: Color(0xFF475569)),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: user.plainPassword!));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Password copied to clipboard'), duration: Duration(seconds: 2)),
+                              );
+                            },
+                            tooltip: 'Copy',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(4),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   TextFormField(
                     controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
+                    obscureText: obscureNewPassword,
+                    decoration: InputDecoration(
                       labelText: 'New Password (Optional)',
                       hintText: 'Leave blank to keep current',
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureNewPassword ? Icons.visibility_off : Icons.visibility, size: 18),
+                        onPressed: () => setModalState(() => obscureNewPassword = !obscureNewPassword),
+                      ),
                     ),
                     validator: (v) {
-                      if (v != null && v.isNotEmpty && v.length < 8) {
-                        return 'Min 8 characters';
+                      if (v != null && v.isNotEmpty && v.length < 6) {
+                        return 'Min 6 characters';
                       }
                       return null;
                     },
@@ -304,7 +359,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     throw Exception(result['error'] ?? 'Failed to update user');
                   }
 
-                  Navigator.pop(ctx);
+                  if (ctx.mounted) Navigator.pop(ctx);
                   ref.invalidate(usersListProvider);
 
                   if (mounted) {
@@ -340,6 +395,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final passwordController = TextEditingController();
     UserRole selectedRole = UserRole.sales;
     final formKey = GlobalKey<FormState>();
+    bool obscurePassword = true;
 
     showDialog(
       context: context,
@@ -368,11 +424,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password *'),
+                  obscureText: obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password *',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, size: 18),
+                      onPressed: () => setModalState(() => obscurePassword = !obscurePassword),
+                    ),
+                  ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (v.length < 8) return 'Min 8 characters';
+                    if (v.length < 6) return 'Min 6 characters';
                     return null;
                   },
                 ),
@@ -424,7 +486,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     throw Exception(result['error'] ?? 'Failed to create user');
                   }
 
-                  Navigator.pop(ctx);
+                  if (ctx.mounted) Navigator.pop(ctx);
                   ref.invalidate(usersListProvider);
 
                   if (mounted) {
@@ -541,6 +603,8 @@ class _UserTile extends StatelessWidget {
                         color: AppColors.textSecondary,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    _UserPasswordWidget(password: user.plainPassword),
                   ],
                 ),
               ),
@@ -670,5 +734,79 @@ class _UserTile extends StatelessWidget {
       case UserRole.customer:
         return Colors.blueGrey;
     }
+  }
+}
+
+class _UserPasswordWidget extends StatefulWidget {
+  final String? password;
+  const _UserPasswordWidget({required this.password});
+
+  @override
+  State<_UserPasswordWidget> createState() => _UserPasswordWidgetState();
+}
+
+class _UserPasswordWidgetState extends State<_UserPasswordWidget> {
+  bool _revealed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.password == null || widget.password!.isEmpty) {
+      return Row(
+        children: [
+          Icon(Icons.key_off_outlined, size: 12, color: Colors.grey.shade400),
+          const SizedBox(width: 4),
+          Text(
+            'Password: not set',
+            style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.key, size: 12, color: Color(0xFF4F46E5)),
+          const SizedBox(width: 4),
+          Text(
+            'Pass: ',
+            style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+          ),
+          Text(
+            _revealed ? widget.password! : '••••••••',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => setState(() => _revealed = !_revealed),
+            child: Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: Icon(_revealed ? Icons.visibility_off : Icons.visibility, size: 14, color: const Color(0xFF64748B)),
+            ),
+          ),
+          const SizedBox(width: 3),
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: widget.password!));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Password copied to clipboard'), duration: Duration(seconds: 2)),
+              );
+            },
+            child: const Padding(
+              padding: EdgeInsets.all(2.0),
+              child: Icon(Icons.copy, size: 13, color: Color(0xFF64748B)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

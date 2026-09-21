@@ -2092,7 +2092,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         Expanded(
                           child: DropdownButtonFormField<double>(
                             isExpanded: true,
-                            value: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
+                            initialValue: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
                                 ? (_cgstRate + _sgstRate)
                                 : null,
                             isDense: true,
@@ -3126,7 +3126,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _billType,
+                  initialValue: _billType,
                   decoration: const InputDecoration(labelText: 'Bill Type *'),
                   items: const [
                     DropdownMenuItem(value: 'Credit', child: Text('Credit')),

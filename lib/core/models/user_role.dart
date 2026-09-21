@@ -110,6 +110,8 @@ enum UserRole {
       this == UserRole.manager ||
       this == UserRole.serviceHead;
 
+  bool get canViewProducts => true;
+
   bool get canAccessCrm =>
       this == UserRole.admin ||
       this == UserRole.manager ||

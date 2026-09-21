@@ -542,7 +542,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                       context: context,
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
-                      builder: (ctx) => _SearchableProspectSheet(prospects: prospectsList),
+                      builder: (ctx) => SearchableProspectSheet(prospects: prospectsList),
                     );
                     if (picked != null) {
                       setState(() {
@@ -689,15 +689,15 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
   }
 }
 
-class _SearchableProspectSheet extends StatefulWidget {
+class SearchableProspectSheet extends StatefulWidget {
   final List<Prospect> prospects;
-  const _SearchableProspectSheet({required this.prospects});
+  const SearchableProspectSheet({super.key, required this.prospects});
 
   @override
-  State<_SearchableProspectSheet> createState() => _SearchableProspectSheetState();
+  State<SearchableProspectSheet> createState() => _SearchableProspectSheetState();
 }
 
-class _SearchableProspectSheetState extends State<_SearchableProspectSheet> {
+class _SearchableProspectSheetState extends State<SearchableProspectSheet> {
   String _query = '';
 
   @override

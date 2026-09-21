@@ -87,12 +87,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     }
                   },
                 ),
-                TextButton.icon(
-                  style: TextButton.styleFrom(foregroundColor: Colors.white),
-                  icon: const Icon(Icons.add_circle_outline, size: 18, color: Colors.white),
-                  label: const Text('Add Product', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                  onPressed: () => _showAddProductDialog(context),
-                ),
               ]
             : [
                 IconButton(
@@ -472,95 +466,79 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           // Items Treated as Products Section
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.link, size: 16, color: AppColors.textSecondary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Items Treated as Products (${product.baseSpecs.linkedItems.length})',
-                          style: const TextStyle(
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.link, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      const Flexible(
+                        child: Text(
+                          'Items Treated as Products',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             fontFamily: 'Inter',
                             fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                            fontSize: 12.5,
                             color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: product.baseSpecs.linkedItems.isNotEmpty
+                              ? const Color(0xFFEFF6FF)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: product.baseSpecs.linkedItems.isNotEmpty
+                                ? const Color(0xFFBFDBFE)
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          '${product.baseSpecs.linkedItems.length} selected',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: product.baseSpecs.linkedItems.isNotEmpty
+                                ? const Color(0xFF1E40AF)
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => _showLinkItemsDialog(context, product),
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.tune, size: 14, color: AppColors.primary),
+                        SizedBox(width: 3),
+                        Text(
+                          'Manage items',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
                           ),
                         ),
                       ],
                     ),
-                    InkWell(
-                      onTap: () => _showLinkItemsDialog(context, product),
-                      borderRadius: BorderRadius.circular(6),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        child: Row(
-                          children: [
-                            Icon(Icons.add, size: 14, color: AppColors.primary),
-                            SizedBox(width: 4),
-                            Text(
-                              'Add Items',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (product.baseSpecs.linkedItems.isEmpty)
-                  Text(
-                    'No items linked. Tap "Add Items" to treat inventory items as this product.',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey.shade500),
-                  )
-                else
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: product.baseSpecs.linkedItems.map((item) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              item,
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1E40AF),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            InkWell(
-                              onTap: () => _removeLinkedItem(context, product, item),
-                              child: const Icon(
-                                Icons.close,
-                                size: 14,
-                                color: Color(0xFF1E40AF),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
                   ),
+                ),
               ],
             ),
           ),
@@ -749,19 +727,32 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       itemBuilder: (context, index) {
                         final item = filteredItems[index];
                         final isSelected = _selectedItemIds.contains(item.id);
+                        final hasAnySelection = _selectedItemIds.isNotEmpty;
+
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFF8FAFC) : Colors.white,
+                            color: isSelected ? const Color(0xFFF1F5F9) : Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: isSelected ? AppColors.primary : Colors.grey.shade200, width: isSelected ? 1.5 : 1.0),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF0F172A) : Colors.grey.shade200,
+                              width: isSelected ? 1.5 : 1.0,
+                            ),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Checkbox(
                                 value: isSelected,
-                                activeColor: AppColors.primary,
+                                activeColor: const Color(0xFF0F172A),
+                                checkColor: Colors.white,
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? const Color(0xFF0F172A)
+                                      : (hasAnySelection ? const Color(0xFF475569) : const Color(0xFFCBD5E1)),
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                 visualDensity: VisualDensity.compact,
                                 onChanged: (val) {
                                   setState(() {
@@ -773,65 +764,55 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                   });
                                 },
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       item.itemName,
                                       style: const TextStyle(
                                         fontFamily: 'Inter',
-                                        fontSize: 16,
+                                        fontSize: 15,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        if (item.hsnSac != null && item.hsnSac!.isNotEmpty)
-                                          _buildBadge('HSN: ${item.hsnSac}'),
-                                        if (item.hsnSac != null && item.hsnSac!.isNotEmpty)
-                                          const SizedBox(width: 8),
-                                        if (item.uom != null && item.uom!.isNotEmpty)
-                                          _buildBadge('Unit: ${item.uom}'),
-                                        const SizedBox(width: 8),
-                                        _buildBadge(
-                                          'Warranty: ${item.warrantyMonths}m',
-                                          color: const Color(0xFFFFFBEB),
-                                          textColor: const Color(0xFFB45309),
-                                        ),
-                                      ],
-                                    ),
+                                    if (item.uom != null && item.uom!.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      _buildBadge('Unit: ${item.uom!.trim()}'),
+                                    ],
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 16),
+                              const SizedBox(width: 12),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    '₹${item.price.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primary,
+                                  if (item.price > 0)
+                                    Text(
+                                      '₹${item.price.truncateToDouble() == item.price ? item.price.toInt().toString() : item.price.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.edit_outlined, size: 20, color: Colors.blueGrey),
+                                        icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blueGrey),
                                         onPressed: () => _showEditItemDialog(context, ref, item),
                                         constraints: const BoxConstraints(),
                                         padding: const EdgeInsets.symmetric(horizontal: 4),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
                                         onPressed: () => _confirmDelete(context, ref, item),
                                         constraints: const BoxConstraints(),
                                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1693,37 +1674,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     );
   }
 
-  void _removeLinkedItem(BuildContext context, Product product, String itemName) async {
-    try {
-      final supabase = ref.read(supabaseClientProvider);
-      final rawSpecs = Map<String, dynamic>.from(product.baseSpecs.raw);
-      final list = List<String>.from(product.baseSpecs.linkedItems)..remove(itemName);
-      rawSpecs['linked_items'] = list;
-
-      await supabase.from('products').update({
-        'base_specs': rawSpecs,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', product.id);
-
-      ref.invalidate(productsProvider);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Removed "$itemName" from ${product.name}'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing item: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
   // ==========================================
   // SUB-SYSTEMS MODAL (BOQ ITEMS LINKED TO PRODUCT)
   // ==========================================
@@ -2148,7 +2098,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String?>(
-                      value: selectedProductName,
+                      initialValue: selectedProductName,
                       decoration: const InputDecoration(
                         labelText: 'Under Product (Optional)',
                         prefixIcon: Icon(Icons.sell_outlined),
@@ -2357,7 +2307,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String?>(
-                      value: selectedProductName,
+                      initialValue: selectedProductName,
                       decoration: const InputDecoration(
                         labelText: 'Under Product (Optional)',
                         prefixIcon: Icon(Icons.sell_outlined),

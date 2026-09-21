@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,12 +10,13 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/models/customer.dart';
+import '../../../core/models/pipeline.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
+import '../../crm/providers/crm_providers.dart';
+import '../../complaints/providers/complaints_provider.dart';
 import 'product_interests_screen.dart';
 import '../providers/product_inquiries_provider.dart';
-
-import '../../../core/widgets/sync_status_indicator.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
@@ -28,8 +30,8 @@ final dashboardStatsProvider =
     return {
       'active_deals': 12,
       'revenue_in_pipeline': 845000.0,
-      'amc_needs_attention': 4,
-      'awaiting_fulfillment': 3,
+      'customer_leads': 28,
+      'service_complaints': 5,
       'trend': [
         {'date': 'Day 1', 'created': 2.0, 'completed': 1.0},
         {'date': 'Day 2', 'created': 4.0, 'completed': 2.0},
@@ -42,23 +44,39 @@ final dashboardStatsProvider =
     };
   }
 
+  Map<String, dynamic> stats = {
+    'active_deals': 0,
+    'revenue_in_pipeline': 0.0,
+    'customer_leads': 0,
+    'service_complaints': 0,
+    'trend': []
+  };
+
   try {
-    final result = await supabase.rpc('get_dashboard_stats', params: {'time_filter': timeFilter});
-    return Map<String, dynamic>.from(result as Map);
+    final result = await supabase
+        .rpc('get_dashboard_stats', params: {'time_filter': timeFilter});
+    stats = Map<String, dynamic>.from(result as Map);
   } catch (e) {
     try {
       final result = await supabase.rpc('get_dashboard_stats');
-      return Map<String, dynamic>.from(result as Map);
-    } catch (_) {
-      return {
-        'active_deals': 0,
-        'revenue_in_pipeline': 0.0,
-        'amc_needs_attention': 0,
-        'awaiting_fulfillment': 0,
-        'trend': []
-      };
-    }
+      stats = Map<String, dynamic>.from(result as Map);
+    } catch (_) {}
   }
+
+  try {
+    final prospectsRes = await supabase.from('crm_prospects').select('id');
+    stats['customer_leads'] = (prospectsRes as List).length;
+  } catch (_) {}
+
+  try {
+    final complaintsRes = await supabase
+        .from('complaints')
+        .select('id')
+        .inFilter('status', ['assigned', 'in_progress', 'pending_approval']);
+    stats['service_complaints'] = (complaintsRes as List).length;
+  } catch (_) {}
+
+  return stats;
 });
 
 class AdminDashboardScreen extends ConsumerWidget {
@@ -69,190 +87,211 @@ class AdminDashboardScreen extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider);
     final statsAsync = ref.watch(dashboardStatsProvider);
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
+    final leadsAsync = ref.watch(leadsProvider);
+    final complaints = ref.watch(complaintsProvider);
     final currentFilter = ref.watch(dashboardTimeFilterProvider);
+
+    final activeLeadsCount = leadsAsync.value
+            ?.where((l) =>
+                l.status.toLowerCase() != 'won' &&
+                l.status.toLowerCase() != 'lost')
+            .length ??
+        0;
+    final liveComplaintsCount = complaints
+        .where((c) => c.status != 'closed' && c.status != 'resolved')
+        .length;
+
+    final rawName = profile?.fullName.trim() ?? '';
+    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Admin User');
+    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'A';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 200,
+            expandedHeight: 180,
             pinned: true,
             backgroundColor: const Color(0xFF1E1B4B),
+            elevation: 0,
             clipBehavior: Clip.antiAlias,
             automaticallyImplyLeading: false,
-            title: const Text(
-              'Dashboard',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(28),
+                bottom: Radius.circular(32),
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                children: [
-                  // Deep indigo → violet gradient
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF1E1B4B),
-                          Color(0xFF4C1D95),
-                          Color(0xFF6D28D9),
-                        ],
-                      ),
-                    ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0F172A),
+                      Color(0xFF2E1065),
+                      Color(0xFF6B21A8),
+                      Color(0xFF4F46E5),
+                      Color(0xFF2563EB),
+                    ],
                   ),
-                  // Radial glow top-right
-                  Positioned(
-                    top: -40,
-                    right: -30,
-                    child: Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            AppColors.primary.withOpacity(0.25),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(32),
                   ),
-                  // Radial glow bottom-left
-                  Positioned(
-                    bottom: -20,
-                    left: -40,
-                    child: Container(
-                      width: 160,
-                      height: 160,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            const Color(0xFF06B6D4).withOpacity(0.15),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 40, 20, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
+                ),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Row(
+                        Stack(
                           children: [
                             Container(
-                              width: 48,
-                              height: 48,
+                              width: 50,
+                              height: 50,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
+                                color: const Color(0xFF5A6B8A),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.white.withValues(alpha: 0.25),
                                   width: 2,
-                                ),
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
                                 ),
                               ),
                               child: Center(
                                 child: Text(
-                                  (profile?.fullName ?? 'A')[0].toUpperCase(),
+                                  avatarInitial,
                                   style: const TextStyle(
                                     fontFamily: 'Inter',
-                                    fontSize: 20,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Good ${_getGreeting()}',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 12,
-                                      color: Colors.white.withOpacity(0.6),
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    profile?.fullName ?? 'Admin',
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                width: 13,
+                                height: 13,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: const Color(0xFF1E1B4B), width: 2),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        // Mini stat pills row
-                        Row(
-                          children: [
-                            _buildHeaderStat(
-                              'Today',
-                              DateFormat('dd MMM').format(DateTime.now()),
-                              Icons.calendar_today_outlined,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildHeaderStat(
-                              'Role',
-                              profile?.primaryRole.name.toUpperCase() ?? 'ADMIN',
-                              Icons.admin_panel_settings_outlined,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildHeaderStat(
-                              'Status',
-                              'ONLINE',
-                              Icons.circle,
-                              iconColor: const Color(0xFF10B981),
-                              iconSize: 10,
-                            ),
-                          ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Good ${_getGreeting()},',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                displayName,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                DateFormat("'Today 'd MMM").format(DateTime.now()),
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          profile?.primaryRole.name.toUpperCase() ?? 'ADMIN',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF22C55E),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              const Text(
+                                'ONLINE',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            actions: [
-              const SyncStatusIndicator(),
+          ),
+        ),
+        actions: [
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white),
+                icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
+                tooltip: 'Refresh Data',
                 onPressed: () {
                   ref.invalidate(dashboardStatsProvider);
+                  ref.read(leadsProvider.notifier).load(refresh: true);
+                  ref.read(prospectsProvider.notifier).load(refresh: true);
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
+                icon: const Icon(Icons.logout, color: Colors.white, size: 22),
                 tooltip: 'Logout',
                 onPressed: () async {
                   final confirm = await showDialog<bool>(
@@ -267,8 +306,10 @@ class AdminDashboardScreen extends ConsumerWidget {
                         ),
                         ElevatedButton(
                           onPressed: () => Navigator.pop(ctx, true),
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-                          child: const Text('Logout', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.error),
+                          child: const Text('Logout',
+                              style: TextStyle(color: Colors.white)),
                         ),
                       ],
                     ),
@@ -278,9 +319,9 @@ class AdminDashboardScreen extends ConsumerWidget {
                   }
                 },
               ),
+              const SizedBox(width: 4),
             ],
           ),
-
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
@@ -295,25 +336,33 @@ class AdminDashboardScreen extends ConsumerWidget {
                         _FilterChip(
                           label: 'Today',
                           selected: currentFilter == 'today',
-                          onSelected: () => ref.read(dashboardTimeFilterProvider.notifier).state = 'today',
+                          onSelected: () => ref
+                              .read(dashboardTimeFilterProvider.notifier)
+                              .state = 'today',
                         ),
                         const SizedBox(width: 8),
                         _FilterChip(
                           label: 'This Week',
                           selected: currentFilter == 'week',
-                          onSelected: () => ref.read(dashboardTimeFilterProvider.notifier).state = 'week',
+                          onSelected: () => ref
+                              .read(dashboardTimeFilterProvider.notifier)
+                              .state = 'week',
                         ),
                         const SizedBox(width: 8),
                         _FilterChip(
                           label: 'This Month',
                           selected: currentFilter == 'month',
-                          onSelected: () => ref.read(dashboardTimeFilterProvider.notifier).state = 'month',
+                          onSelected: () => ref
+                              .read(dashboardTimeFilterProvider.notifier)
+                              .state = 'month',
                         ),
                         const SizedBox(width: 8),
                         _FilterChip(
                           label: 'This Year',
                           selected: currentFilter == 'year',
-                          onSelected: () => ref.read(dashboardTimeFilterProvider.notifier).state = 'year',
+                          onSelected: () => ref
+                              .read(dashboardTimeFilterProvider.notifier)
+                              .state = 'year',
                         ),
                       ],
                     ),
@@ -324,35 +373,55 @@ class AdminDashboardScreen extends ConsumerWidget {
                 statsAsync.when(
                   data: (stats) {
                     final trendList = stats['trend'] as List<dynamic>? ?? [];
-                    final created = trendList.map((t) => (t['created'] as num? ?? 0.0).toDouble()).toList();
-                    final completed = trendList.map((t) => (t['completed'] as num? ?? 0.0).toDouble()).toList();
-                    
-                    while (created.length < 7) created.add(0.0);
-                    while (completed.length < 7) completed.add(0.0);
+                    final created = trendList
+                        .map((t) => (t['created'] as num? ?? 0.0).toDouble())
+                        .toList();
+                    final completed = trendList
+                        .map((t) => (t['completed'] as num? ?? 0.0).toDouble())
+                        .toList();
+
+                    while (created.length < 7) {
+                      created.add(0.0);
+                    }
+                    while (completed.length < 7) {
+                      completed.add(0.0);
+                    }
 
                     final trendMap = {
                       'created': created,
                       'completed': completed,
-                      'revenue': (stats['revenue_in_pipeline'] as num? ?? 0.0).toDouble(),
+                      'revenue': (stats['revenue_in_pipeline'] as num? ?? 0.0)
+                          .toDouble(),
                     };
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _StatsGrid(stats: stats),
+                        _StatsGrid(
+                          stats: stats,
+                          customerLeadsCount: activeLeadsCount,
+                          serviceComplaintsCount: liveComplaintsCount > 0
+                              ? liveComplaintsCount
+                              : (stats['service_complaints'] ?? 0),
+                        ),
                         const SizedBox(height: 20),
-                        _TrendChartCard(data: trendMap),
+                        _TrendChartCard(
+                          data: trendMap,
+                          pipelines: pipelinesAsync.value ?? [],
+                        ),
                       ],
                     );
                   },
                   loading: () => const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     ),
                   ),
                   error: (e, _) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppColors.errorLight,
                       borderRadius: BorderRadius.circular(12),
@@ -363,18 +432,23 @@ class AdminDashboardScreen extends ConsumerWidget {
                         const Expanded(
                           child: Text(
                             'Unable to load latest statistics. Check your internet connection.',
-                            style: TextStyle(fontSize: 12, color: AppColors.error),
+                            style:
+                                TextStyle(fontSize: 12, color: AppColors.error),
                           ),
                         ),
                         TextButton(
-                          onPressed: () => ref.invalidate(dashboardStatsProvider),
-                          child: const Text('Retry', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                          onPressed: () =>
+                              ref.invalidate(dashboardStatsProvider),
+                          child: const Text('Retry',
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
                 // Quick Actions
                 const Text(
@@ -387,82 +461,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.shield_outlined,
-                          label: 'AMC',
-                          color: AppColors.primary,
-                          onTap: () => context.push('/amc'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.people_alt_outlined,
-                          label: 'CRM',
-                          color: Colors.blueAccent,
-                          onTap: () => context.push('/crm/dashboard'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.report_problem_outlined,
-                          label: 'Complaints',
-                          color: const Color(0xFF6D28D9),
-                          onTap: () => context.go('/complaints/dashboard'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.inventory_2_outlined,
-                          label: 'Inventory',
-                          color: AppColors.accent,
-                          onTap: () => context.push(AppRoutes.inventory),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.local_mall_outlined,
-                          label: 'View Products',
-                          color: Colors.teal,
-                          onTap: () => context.push('/products'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.download_outlined,
-                          label: "Today's Report",
-                          color: AppColors.success,
-                          onTap: () => context.push('/reports/activity'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 140,
-                        child: _QuickActionCard(
-                          icon: Icons.picture_as_pdf_outlined,
-                          label: 'Search PDF',
-                          color: Colors.deepOrange,
-                          onTap: () => context.push(AppRoutes.searchPdf),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                const _QuickActionsGrid(),
                 const SizedBox(height: 24),
 
                 // Customer Product Interests (Admin View)
@@ -515,7 +514,8 @@ class AdminDashboardScreen extends ConsumerWidget {
                   loading: () => const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     ),
                   ),
                   error: (e, _) => Center(child: Text('$e')),
@@ -531,59 +531,24 @@ class AdminDashboardScreen extends ConsumerWidget {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning,';
-    if (hour < 17) return 'Afternoon,';
-    return 'Evening,';
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
   }
+}
 
-  static Widget _buildHeaderStat(
-    String label,
-    String value,
-    IconData icon, {
-    Color iconColor = Colors.white,
-    double iconSize = 14,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor, size: iconSize),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+String _formatCompactRevenue(double value) {
+  if (value >= 10000000) {
+    final cr = value / 10000000;
+    return '₹${cr.toStringAsFixed(cr.truncateToDouble() == cr ? 0 : 1)}Cr';
+  } else if (value >= 100000) {
+    final l = value / 100000;
+    return '₹${l.toStringAsFixed(l.truncateToDouble() == l ? 0 : 1)}L';
+  } else if (value >= 1000) {
+    final k = value / 1000;
+    return '₹${k.toStringAsFixed(k.truncateToDouble() == k ? 0 : 1)}k';
+  } else {
+    return '₹${NumberFormat('#,##,##0').format(value.toInt())}';
   }
 }
 
@@ -600,24 +565,41 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onSelected,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
+          color: selected
+              ? const Color(0xFF0F172A)
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected
+                ? const Color(0xFF0F172A)
+                : (isDark ? const Color(0xFF334155) : Colors.grey.shade300),
+            width: 1,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: 13,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            color: selected ? Colors.white : AppColors.textPrimary,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected
+                ? Colors.white
+                : (isDark ? Colors.grey.shade300 : const Color(0xFF334155)),
           ),
         ),
       ),
@@ -627,19 +609,25 @@ class _FilterChip extends StatelessWidget {
 
 class _StatsGrid extends StatelessWidget {
   final Map<String, dynamic> stats;
+  final int customerLeadsCount;
+  final int serviceComplaintsCount;
 
-  const _StatsGrid({required this.stats});
+  const _StatsGrid({
+    required this.stats,
+    required this.customerLeadsCount,
+    required this.serviceComplaintsCount,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat('#,##,##0', 'en_IN');
     final revenue = (stats['revenue_in_pipeline'] as num? ?? 0).toDouble();
+    final activeDeals = stats['active_deals'] ?? stats['active_pipelines'] ?? 0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth >= 800 ? 4 : 2;
-        final childAspectRatio = constraints.maxWidth >= 800 ? 1.6 : 2.1;
-        
+        final childAspectRatio = constraints.maxWidth >= 800 ? 1.6 : 1.34;
+
         return GridView.count(
           crossAxisCount: crossAxisCount,
           shrinkWrap: true,
@@ -647,36 +635,36 @@ class _StatsGrid extends StatelessWidget {
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
           childAspectRatio: childAspectRatio,
-      children: [
-        _StatCard(
-          title: 'Active Deals',
-          value: '${stats['active_deals'] ?? 0}',
-          icon: Icons.alt_route,
-          color: AppColors.primary,
-          onTap: () => context.go(AppRoutes.pipelines),
-        ),
-        _StatCard(
-          title: 'Revenue in Pipeline',
-          value: '₹${currencyFormat.format(revenue)}',
-          icon: Icons.currency_rupee,
-          color: AppColors.success,
-          onTap: () => context.go(AppRoutes.pipelines),
-        ),
-        _StatCard(
-          title: 'AMC Needs Attention',
-          value: '${stats['amc_needs_attention'] ?? 0}',
-          icon: Icons.warning_amber_outlined,
-          color: AppColors.warning,
-          onTap: () => context.push('/amc'),
-        ),
-        _StatCard(
-          title: 'Awaiting Fulfillment',
-          value: '${stats['awaiting_fulfillment'] ?? 0}',
-          icon: Icons.factory_outlined,
-          color: AppColors.error,
-          onTap: () => context.go('${AppRoutes.pipelines}?step=factory_order'),
-        ),
-      ],
+          children: [
+            _StatCard(
+              title: 'Active\nDeals',
+              value: '$activeDeals',
+              icon: Icons.alt_route,
+              color: const Color(0xFF2563EB),
+              onTap: () => context.go(AppRoutes.pipelines),
+            ),
+            _StatCard(
+              title: 'Pipeline\nRevenue',
+              value: _formatCompactRevenue(revenue),
+              icon: Icons.currency_rupee,
+              color: const Color(0xFF10B981),
+              onTap: () => context.go(AppRoutes.pipelines),
+            ),
+            _StatCard(
+              title: 'Customer\nLeads',
+              value: '$customerLeadsCount',
+              icon: Icons.person,
+              color: const Color(0xFF06B6D4),
+              onTap: () => context.push('/crm/prospects'),
+            ),
+            _StatCard(
+              title: 'Service\nComplaints',
+              value: '$serviceComplaintsCount',
+              icon: Icons.support_agent_outlined,
+              color: const Color(0xFF8B5CF6),
+              onTap: () => context.go('/complaints/dashboard'),
+            ),
+          ],
         );
       },
     );
@@ -700,116 +688,236 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 22),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+              width: 1.2,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      value,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                      ),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
                     ),
+                    child: Icon(icon, color: Colors.white, size: 22),
                   ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : const Color(0xFF1E293B),
+                        height: 1.2,
                       ),
                       maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  final IconData icon;
+class _QuickActionBtn {
   final String label;
+  final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _QuickActionCard({
-    required this.icon,
+  const _QuickActionBtn({
     required this.label,
+    required this.icon,
     required this.color,
     required this.onTap,
   });
+}
+
+class _QuickActionsGrid extends StatelessWidget {
+  const _QuickActionsGrid();
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final actions = [
+      _QuickActionBtn(
+        label: 'CRM',
+        icon: Icons.people_alt_outlined,
+        color: const Color(0xFF3B82F6),
+        onTap: () => context.push('/crm/dashboard'),
       ),
+      _QuickActionBtn(
+        label: 'Deals',
+        icon: Icons.currency_rupee,
+        color: const Color(0xFF6366F1),
+        onTap: () => context.go(AppRoutes.pipelines),
+      ),
+      _QuickActionBtn(
+        label: 'Complaints',
+        icon: Icons.build_outlined,
+        color: const Color(0xFF8B5CF6),
+        onTap: () => context.go('/complaints/dashboard'),
+      ),
+      _QuickActionBtn(
+        label: 'View Products',
+        icon: Icons.grid_view_outlined,
+        color: const Color(0xFF0D9488),
+        onTap: () => context.push('/products'),
+      ),
+      _QuickActionBtn(
+        label: 'Inventory',
+        icon: Icons.inventory_2_outlined,
+        color: const Color(0xFFEC4899),
+        onTap: () => context.push(AppRoutes.inventory),
+      ),
+      _QuickActionBtn(
+        label: "Today's Report",
+        icon: Icons.bar_chart_outlined,
+        color: const Color(0xFF10B981),
+        onTap: () => context.push('/reports/activity'),
+      ),
+      _QuickActionBtn(
+        label: 'AMC',
+        icon: Icons.shield_outlined,
+        color: const Color(0xFF2563EB),
+        onTap: () => context.push('/amc'),
+      ),
+      _QuickActionBtn(
+        label: 'Search PDF',
+        icon: Icons.picture_as_pdf_outlined,
+        color: const Color(0xFFF97316),
+        onTap: () => context.push(AppRoutes.searchPdf),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth >= 700 ? 4 : 2;
+        final childAspectRatio = constraints.maxWidth >= 700 ? 3.0 : 2.45;
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: actions.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: childAspectRatio,
+          ),
+          itemBuilder: (context, index) {
+            final a = actions[index];
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: a.onTap,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : Colors.grey.shade200,
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color:
+                            Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: a.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(a.icon, color: a.color, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          a.label,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color:
+                                isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -822,7 +930,7 @@ class _RecentPipelineTile extends StatelessWidget {
   Color _getBadgeColor(String step, String status) {
     if (status == 'completed') return Colors.green;
     if (status == 'suspended' || status == 'cancelled') return Colors.red;
-    
+
     switch (step) {
       case 'quotation':
         return Colors.amber;
@@ -858,10 +966,13 @@ class _RecentPipelineTile extends StatelessWidget {
       stepValue = pipeline['current_step'] as String? ?? 'quotation';
       statusValue = pipeline['status'] as String? ?? 'in_progress';
       stepName = PipelineStep.fromString(stepValue).displayName;
-      
+
       final cust = pipeline['customers'];
       if (cust is Map) {
-        companyName = cust['customer_name'] as String? ?? cust['company_name'] as String? ?? cust['contact_person'] as String? ?? '';
+        companyName = cust['customer_name'] as String? ??
+            cust['company_name'] as String? ??
+            cust['contact_person'] as String? ??
+            '';
       }
       final prod = pipeline['products'];
       if (prod is Map) {
@@ -874,7 +985,10 @@ class _RecentPipelineTile extends StatelessWidget {
         stepValue = pipeline.currentStep.dbValue;
         statusValue = pipeline.status.dbValue;
         stepName = pipeline.currentStep.displayName;
-        companyName = pipeline.customer?.customerName ?? pipeline.customer?.companyName ?? pipeline.customer?.contactPerson ?? '';
+        companyName = pipeline.customer?.customerName ??
+            pipeline.customer?.companyName ??
+            pipeline.customer?.contactPerson ??
+            '';
         productName = pipeline.product?.name ?? '';
       } catch (_) {}
     }
@@ -925,8 +1039,12 @@ class _RecentPipelineTile extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: companyName.isNotEmpty ? 12 : 14,
-                      fontWeight: companyName.isNotEmpty ? FontWeight.normal : FontWeight.w600,
-                      color: companyName.isNotEmpty ? AppColors.textSecondary : AppColors.textPrimary,
+                      fontWeight: companyName.isNotEmpty
+                          ? FontWeight.normal
+                          : FontWeight.w600,
+                      color: companyName.isNotEmpty
+                          ? AppColors.textSecondary
+                          : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -956,147 +1074,526 @@ class _RecentPipelineTile extends StatelessWidget {
   }
 }
 
-class _TrendChartCard extends StatelessWidget {
+class _TrendChartCard extends StatefulWidget {
   final Map<String, dynamic> data;
+  final List<SalesPipeline> pipelines;
 
-  const _TrendChartCard({required this.data});
+  const _TrendChartCard({
+    required this.data,
+    this.pipelines = const [],
+  });
+
+  @override
+  State<_TrendChartCard> createState() => _TrendChartCardState();
+}
+
+class _TrendChartCardState extends State<_TrendChartCard> {
+  String _viewMode = 'stages'; // 'stages' or 'trend'
+  int? _selectedStageIndex;
 
   @override
   Widget build(BuildContext context) {
-    final List<double> created = List<double>.from(data['created']);
-    final List<double> completed = List<double>.from(data['completed']);
-    final double revenue = (data['revenue'] as num? ?? 0).toDouble();
-    final currencyFormat = NumberFormat('#,##,##0', 'en_IN');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Real Stage Counts from live pipelines
+    final quotationCount = widget.pipelines
+        .where((p) => p.currentStep == PipelineStep.quotation)
+        .length;
+    final salesOrderCount = widget.pipelines
+        .where((p) => p.currentStep == PipelineStep.salesOrder)
+        .length;
+    final boqCount =
+        widget.pipelines.where((p) => p.currentStep == PipelineStep.boq).length;
+    final factoryCount = widget.pipelines
+        .where((p) => p.currentStep == PipelineStep.factoryOrder)
+        .length;
+    final purchaseCount = widget.pipelines
+        .where((p) => p.currentStep == PipelineStep.purchaseOrder)
+        .length;
+    final completedCount = widget.pipelines
+        .where((p) => p.currentStep == PipelineStep.completed)
+        .length;
+
+    final stages = [
+      {
+        'name': 'Quotation',
+        'short': 'Quote',
+        'count': quotationCount,
+        'color': const Color(0xFFF59E0B),
+        'step': 'quotation'
+      },
+      {
+        'name': 'Sales Order',
+        'short': 'Order',
+        'count': salesOrderCount,
+        'color': const Color(0xFF3B82F6),
+        'step': 'sales_order'
+      },
+      {
+        'name': 'BOQ',
+        'short': 'BOQ',
+        'count': boqCount,
+        'color': const Color(0xFF06B6D4),
+        'step': 'boq'
+      },
+      {
+        'name': 'Factory Order',
+        'short': 'Factory',
+        'count': factoryCount,
+        'color': const Color(0xFF8B5CF6),
+        'step': 'factory_order'
+      },
+      {
+        'name': 'Purchase Order',
+        'short': 'PO',
+        'count': purchaseCount,
+        'color': const Color(0xFF6366F1),
+        'step': 'purchase_order'
+      },
+      {
+        'name': 'Completed',
+        'short': 'Done',
+        'count': completedCount,
+        'color': const Color(0xFF10B981),
+        'step': 'completed'
+      },
+    ];
+
+    final totalDeals = widget.pipelines.length;
+    final activeDeals = totalDeals - completedCount;
+    final maxStageCount =
+        stages.fold<int>(0, (prev, s) => max(prev, s['count'] as int));
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with Title & View Switcher
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Deals Trend (Last 7 Days)',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _viewMode == 'stages'
+                          ? 'Deal Stages Distribution'
+                          : 'Deals Activity Trend',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Created vs. Completed',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                    const SizedBox(height: 2),
+                    Text(
+                      _viewMode == 'stages'
+                          ? (_selectedStageIndex != null
+                              ? '${stages[_selectedStageIndex!]['name']}: ${stages[_selectedStageIndex!]['count']} deals (${totalDeals > 0 ? ((stages[_selectedStageIndex!]['count'] as int) / totalDeals * 100).toStringAsFixed(0) : 0}%)'
+                              : '$totalDeals total deals • $activeDeals in progress')
+                          : 'Created vs. completed deal trajectory',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11.5,
+                        fontWeight: _selectedStageIndex != null
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: _selectedStageIndex != null
+                            ? (stages[_selectedStageIndex!]['color'] as Color)
+                            : (isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    'Pipeline Value',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  Text(
-                    '₹${currencyFormat.format(revenue)}',
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
+              // Toggle pills: Stages vs Trend
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildToggleBtn('Stages', _viewMode == 'stages', isDark),
+                    _buildToggleBtn('Trend', _viewMode == 'trend', isDark),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 120,
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                minX: 0,
-                maxX: 6,
-                minY: 0,
-                maxY: 10,
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: List.generate(7, (i) => FlSpot(i.toDouble(), created[i])),
-                    isCurved: true,
-                    color: AppColors.primary,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: AppColors.primary.withOpacity(0.1),
+          const SizedBox(height: 18),
+
+          // Main Interactive Chart
+          if (_viewMode == 'stages') ...[
+            _buildInteractiveStagesBarChart(stages, maxStageCount, isDark),
+          ] else ...[
+            _buildInteractiveTrendLineChart(isDark),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Bottom Interactive Badges / Filters
+          if (_viewMode == 'stages') ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(stages.length, (i) {
+                  final s = stages[i];
+                  final isSelected = _selectedStageIndex == i;
+                  final color = s['color'] as Color;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedStageIndex = isSelected ? null : i;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? color
+                              : color.withValues(alpha: isDark ? 0.2 : 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? color
+                                : color.withValues(alpha: 0.3),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: isSelected ? Colors.white : color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${s['name']}: ${s['count']}',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                                color: isSelected
+                                    ? Colors.white
+                                    : (isDark
+                                        ? Colors.grey.shade300
+                                        : const Color(0xFF1E293B)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                  LineChartBarData(
-                    spots: List.generate(7, (i) => FlSpot(i.toDouble(), completed[i])),
-                    isCurved: true,
-                    color: AppColors.success,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: AppColors.success.withOpacity(0.1),
-                    ),
-                  ),
-                ],
+                  );
+                }),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF2563EB),
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              const Text('Created', style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary)),
-              const SizedBox(width: 20),
-              Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
+                const SizedBox(width: 5),
+                Text(
+                  'Deals Created',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    color:
+                        isDark ? Colors.grey.shade400 : AppColors.textSecondary,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              const Text('Completed', style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary)),
-            ],
-          ),
+                const SizedBox(width: 20),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'Deals Completed',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    color:
+                        isDark ? Colors.grey.shade400 : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildToggleBtn(String label, bool isSelected, bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _viewMode = label.toLowerCase();
+          _selectedStageIndex = null;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? const Color(0xFF1E293B) : Colors.white)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected
+                ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInteractiveStagesBarChart(
+      List<Map<String, dynamic>> stages, int maxCount, bool isDark) {
+    return SizedBox(
+      height: 110,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(stages.length, (index) {
+          final s = stages[index];
+          final count = s['count'] as int;
+          final color = s['color'] as Color;
+          final isSelected = _selectedStageIndex == index;
+          final isAnySelected = _selectedStageIndex != null;
+
+          final ratio = maxCount > 0 ? (count / maxCount) : 0.0;
+          final barHeight = 8.0 + (ratio * 64.0);
+          final opacity = isAnySelected && !isSelected ? 0.35 : 1.0;
+
+          return Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() {
+                  _selectedStageIndex = isSelected ? null : index;
+                });
+              },
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: opacity,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight:
+                            isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected
+                            ? color
+                            : (isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      height: barHeight,
+                      width: isSelected ? 22 : 18,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            color,
+                            color.withValues(alpha: 0.65),
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(6)),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: color.withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      s['short'] as String,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.w500,
+                        color: isSelected
+                            ? color
+                            : (isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildInteractiveTrendLineChart(bool isDark) {
+    final List<double> created =
+        List<double>.from(widget.data['created'] ?? [0, 0, 0, 0, 0, 0, 0]);
+    final List<double> completed =
+        List<double>.from(widget.data['completed'] ?? [0, 0, 0, 0, 0, 0, 0]);
+
+    while (created.length < 7) {
+      created.add(0.0);
+    }
+    while (completed.length < 7) {
+      completed.add(0.0);
+    }
+
+    double maxY = 5.0;
+    for (final v in created) {
+      if (v > maxY) maxY = v + 2;
+    }
+    for (final v in completed) {
+      if (v > maxY) maxY = v + 2;
+    }
+
+    return SizedBox(
+      height: 110,
+      child: LineChart(
+        LineChartData(
+          gridData: const FlGridData(show: false),
+          titlesData: const FlTitlesData(show: false),
+          borderData: FlBorderData(show: false),
+          minX: 0,
+          maxX: 6,
+          minY: 0,
+          maxY: maxY,
+          lineTouchData: LineTouchData(
+            enabled: true,
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) {
+                  final isCreated = spot.barIndex == 0;
+                  return LineTooltipItem(
+                    '${isCreated ? "Created" : "Done"}: ${spot.y.toInt()}',
+                    TextStyle(
+                      color: isCreated
+                          ? const Color(0xFF60A5FA)
+                          : const Color(0xFF34D399),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: List.generate(7, (i) => FlSpot(i.toDouble(), created[i])),
+              isCurved: true,
+              color: const Color(0xFF2563EB),
+              barWidth: 2.5,
+              isStrokeCapRound: true,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: const Color(0xFF2563EB).withValues(alpha: 0.08),
+              ),
+            ),
+            LineChartBarData(
+              spots:
+                  List.generate(7, (i) => FlSpot(i.toDouble(), completed[i])),
+              isCurved: true,
+              color: const Color(0xFF10B981),
+              barWidth: 2.5,
+              isStrokeCapRound: true,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: const Color(0xFF10B981).withValues(alpha: 0.08),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1119,16 +1616,19 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
     if (clean.isEmpty) return;
     final uri = Uri.parse('https://wa.me/$clean');
     try {
-      if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (await canLaunchUrl(uri))
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
   }
 
-  Future<void> _cancelRequest(BuildContext context, WidgetRef ref, ProductInterestItem item) async {
+  Future<void> _cancelRequest(
+      BuildContext context, WidgetRef ref, ProductInterestItem item) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel Request?'),
-        content: Text('Are you sure you want to cancel the interest request for "${item.productName}" from ${item.customerName}?'),
+        content: Text(
+            'Are you sure you want to cancel the interest request for "${item.productName}" from ${item.customerName}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1161,13 +1661,16 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error cancelling request: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error cancelling request: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
   }
 
-  Future<void> _acceptRequest(BuildContext context, WidgetRef ref, ProductInterestItem item) async {
+  Future<void> _acceptRequest(
+      BuildContext context, WidgetRef ref, ProductInterestItem item) async {
     try {
       await ref.read(productInquiriesServiceProvider).acceptInquiry(item);
       if (context.mounted) {
@@ -1181,13 +1684,16 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error accepting request: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error accepting request: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
   }
 
-  void _showInterestMenu(BuildContext context, WidgetRef ref, ProductInterestItem item) {
+  void _showInterestMenu(
+      BuildContext context, WidgetRef ref, ProductInterestItem item) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1225,7 +1731,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_outline, color: Color(0xFF2563EB), size: 28),
+                    child: const Icon(Icons.person_outline,
+                        color: Color(0xFF2563EB), size: 28),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -1234,11 +1741,13 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       children: [
                         Text(
                           item.customerName,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         Text(
                           item.customerPhone,
-                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.grey.shade600),
                         ),
                       ],
                     ),
@@ -1257,11 +1766,19 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Product of Interest', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    const Text('Product of Interest',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text(item.productName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(item.productName,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                     if (item.modelNumber.isNotEmpty)
-                      Text('Model: ${item.modelNumber}', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                      Text('Model: ${item.modelNumber}',
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.grey.shade600)),
                   ],
                 ),
               ),
@@ -1277,7 +1794,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       ),
                       onPressed: () => _launchWhatsApp(item.customerPhone),
                       icon: const Icon(Icons.chat_outlined),
-                      label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: const Text('WhatsApp',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1290,7 +1808,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       ),
                       onPressed: () => _launchCall(item.customerPhone),
                       icon: const Icon(Icons.phone_outlined),
-                      label: const Text('Call', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: const Text('Call',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -1304,14 +1823,17 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       backgroundColor: const Color(0xFF16A34A),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {
                       Navigator.pop(ctx);
                       _acceptRequest(context, ref, item);
                     },
                     icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Accept Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    label: const Text('Accept Request',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1327,8 +1849,13 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                     Navigator.pop(ctx);
                     _cancelRequest(context, ref, item);
                   },
-                  icon: Icon(Icons.cancel_outlined, color: Colors.red.shade600, size: 18),
-                  label: Text('Cancel Request', style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.bold, fontSize: 14)),
+                  icon: Icon(Icons.cancel_outlined,
+                      color: Colors.red.shade600, size: 18),
+                  label: Text('Cancel Request',
+                      style: TextStyle(
+                          color: Colors.red.shade600,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
                 ),
               ),
               SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
@@ -1360,7 +1887,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+                icon: const Icon(Icons.refresh,
+                    size: 20, color: AppColors.textSecondary),
                 tooltip: 'Refresh inquiries',
                 onPressed: () => ref.invalidate(productInquiriesProvider),
               ),
@@ -1398,7 +1926,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
@@ -1416,14 +1945,14 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+                  icon: const Icon(Icons.refresh,
+                      size: 20, color: AppColors.textSecondary),
                   tooltip: 'Refresh inquiries',
                   onPressed: () => ref.invalidate(productInquiriesProvider),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-
             if (!hasItems)
               Container(
                 width: double.infinity,
@@ -1441,7 +1970,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                         color: Colors.grey.shade100,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 22),
+                      child: const Icon(Icons.shopping_bag_outlined,
+                          color: Colors.grey, size: 22),
                     ),
                     const SizedBox(width: 14),
                     const Expanded(
@@ -1450,7 +1980,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                         children: [
                           Text(
                             'No Pending Product Inquiries',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                           SizedBox(height: 2),
                           Text(
@@ -1483,10 +2014,13 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.2)),
+                          border: Border.all(
+                              color: const Color(0xFF2563EB)
+                                  .withValues(alpha: 0.2)),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF2563EB).withValues(alpha: 0.04),
+                              color: const Color(0xFF2563EB)
+                                  .withValues(alpha: 0.04),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -1502,7 +2036,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                                    color: const Color(0xFF2563EB)
+                                        .withValues(alpha: 0.12),
                                     shape: BoxShape.circle,
                                   ),
                                   child: const Icon(
@@ -1514,7 +2049,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       RichText(
                                         text: TextSpan(
@@ -1525,17 +2061,23 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                             height: 1.35,
                                           ),
                                           children: [
-                                            const TextSpan(text: 'Respected customer '),
+                                            const TextSpan(
+                                                text: 'Respected customer '),
                                             TextSpan(
                                               text: item.customerName,
-                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold),
                                             ),
                                             if (item.customerPhone.isNotEmpty)
                                               TextSpan(
-                                                text: ' (${item.customerPhone})',
-                                                style: const TextStyle(color: Color(0xFF64748B)),
+                                                text:
+                                                    ' (${item.customerPhone})',
+                                                style: const TextStyle(
+                                                    color: Color(0xFF64748B)),
                                               ),
-                                            const TextSpan(text: ' has shown interest in following product: '),
+                                            const TextSpan(
+                                                text:
+                                                    ' has shown interest in following product: '),
                                             TextSpan(
                                               text: item.productName,
                                               style: const TextStyle(
@@ -1546,7 +2088,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                             if (item.modelNumber.isNotEmpty)
                                               TextSpan(
                                                 text: ' (${item.modelNumber})',
-                                                style: const TextStyle(color: Color(0xFF64748B)),
+                                                style: const TextStyle(
+                                                    color: Color(0xFF64748B)),
                                               ),
                                           ],
                                         ),
@@ -1554,10 +2097,13 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                       const SizedBox(height: 6),
                                       Row(
                                         children: [
-                                          Icon(Icons.schedule, size: 13, color: Colors.grey.shade500),
+                                          Icon(Icons.schedule,
+                                              size: 13,
+                                              color: Colors.grey.shade500),
                                           const SizedBox(width: 4),
                                           Text(
-                                            DateFormat('dd MMM yyyy, hh:mm a').format(item.createdAt),
+                                            DateFormat('dd MMM yyyy, hh:mm a')
+                                                .format(item.createdAt),
                                             style: TextStyle(
                                               fontFamily: 'Inter',
                                               fontSize: 11,
@@ -1566,12 +2112,18 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                           ),
                                           const SizedBox(width: 10),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: item.status == 'accepted' ? Colors.green.shade50 : Colors.amber.shade50,
-                                              borderRadius: BorderRadius.circular(4),
+                                              color: item.status == 'accepted'
+                                                  ? Colors.green.shade50
+                                                  : Colors.amber.shade50,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                               border: Border.all(
-                                                color: item.status == 'accepted' ? Colors.green.shade300 : Colors.amber.shade200,
+                                                color: item.status == 'accepted'
+                                                    ? Colors.green.shade300
+                                                    : Colors.amber.shade200,
                                               ),
                                             ),
                                             child: Text(
@@ -1580,7 +2132,9 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                                 fontFamily: 'Inter',
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.bold,
-                                                color: item.status == 'accepted' ? Colors.green.shade800 : Colors.amber.shade800,
+                                                color: item.status == 'accepted'
+                                                    ? Colors.green.shade800
+                                                    : Colors.amber.shade800,
                                               ),
                                             ),
                                           ),
@@ -1602,7 +2156,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.touch_app_outlined, size: 15, color: Colors.blue.shade600),
+                                    Icon(Icons.touch_app_outlined,
+                                        size: 15, color: Colors.blue.shade600),
                                     const SizedBox(width: 4),
                                     Text(
                                       'Tap for actions',
@@ -1619,29 +2174,48 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                   children: [
                                     OutlinedButton.icon(
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFF16A34A),
-                                        side: const BorderSide(color: Color(0xFF16A34A), width: 1.2),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        foregroundColor:
+                                            const Color(0xFF16A34A),
+                                        side: const BorderSide(
+                                            color: Color(0xFF16A34A),
+                                            width: 1.2),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
                                         visualDensity: VisualDensity.compact,
                                       ),
-                                      icon: const Icon(Icons.chat_outlined, size: 14),
-                                      label: const Text('WhatsApp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                      onPressed: () => _launchWhatsApp(item.customerPhone),
+                                      icon: const Icon(Icons.chat_outlined,
+                                          size: 14),
+                                      label: const Text('WhatsApp',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold)),
+                                      onPressed: () =>
+                                          _launchWhatsApp(item.customerPhone),
                                     ),
                                     const SizedBox(width: 6),
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF2563EB),
+                                        backgroundColor:
+                                            const Color(0xFF2563EB),
                                         foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
                                         visualDensity: VisualDensity.compact,
                                         elevation: 0,
                                       ),
                                       icon: const Icon(Icons.phone, size: 14),
-                                      label: const Text('Call', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                      onPressed: () => _launchCall(item.customerPhone),
+                                      label: const Text('Call',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold)),
+                                      onPressed: () =>
+                                          _launchCall(item.customerPhone),
                                     ),
                                   ],
                                 ),
@@ -1662,7 +2236,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ProductInterestsScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const ProductInterestsScreen()),
                     );
                   },
                   child: const Text('View all Requests'),

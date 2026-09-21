@@ -1536,7 +1536,7 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
             )
           else
             DropdownButtonFormField<String>(
-              value: _selectedSalesUserId,
+              initialValue: _selectedSalesUserId,
               decoration: const InputDecoration(
                 labelText: 'Select Sales Representative',
                 border: OutlineInputBorder(),

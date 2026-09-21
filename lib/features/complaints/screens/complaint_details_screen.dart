@@ -1624,7 +1624,7 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
 
                     // Defect Reason Dropdown (Selected once overall at top)
                     DropdownButtonFormField<String>(
-                      value: _selectedReason,
+                      initialValue: _selectedReason,
                       decoration: InputDecoration(
                         labelText: 'Reason for Part Replacement *',
                         prefixIcon: const Icon(Icons.build_circle_outlined, color: Color(0xFF6D28D9)),

@@ -94,7 +94,7 @@ class _AmcSetupFormScreenState extends ConsumerState<AmcSetupFormScreen> {
       
       try {
         final cRes = await supabase.from('customers').select('id, customer_name').limit(50);
-        if (cRes != null && mounted) {
+        if (mounted) {
           _customersList = (cRes as List).cast<Map<String, dynamic>>();
           if (_selectedCustomerId == null && _customersList.isNotEmpty) {
             _selectedCustomerId = _customersList.first['id'] as String?;
@@ -115,7 +115,7 @@ class _AmcSetupFormScreenState extends ConsumerState<AmcSetupFormScreen> {
 
       try {
         final pRes = await supabase.from('products').select('id, name').limit(50);
-        if (pRes != null && mounted) {
+        if (mounted) {
           _productsList = (pRes as List).cast<Map<String, dynamic>>();
           if (_selectedProductId == null && _productsList.isNotEmpty) {
             _selectedProductId = _productsList.first['id'] as String?;
@@ -283,7 +283,7 @@ class _AmcSetupFormScreenState extends ConsumerState<AmcSetupFormScreen> {
 
                   if (_selectedCustomerId == null && _customersList.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
-                      value: _selectedCustomerId,
+                      initialValue: _selectedCustomerId,
                       decoration: const InputDecoration(labelText: 'Select Customer *', border: OutlineInputBorder()),
                       items: _customersList.map((c) {
                         final name = c['customer_name'] ?? c['company_name'] ?? c['contact_person'] ?? 'Customer';

@@ -3,13 +3,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/shimmer_loader.dart';
 import '../providers/complaints_provider.dart';
 import '../data/models/complaint_model.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/router/app_router.dart';
+import '../../reports/widgets/daily_report_modal.dart';
 import 'complaints_leaderboard_screen.dart';
+import '../../../core/widgets/dashboard_switcher_button.dart';
 
 class CoordinatorDashboardScreen extends ConsumerStatefulWidget {
   const CoordinatorDashboardScreen({super.key});
@@ -32,6 +36,13 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
   }
 
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
@@ -62,69 +73,314 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
   Widget build(BuildContext context) {
     final complaints = ref.watch(complaintsProvider);
     final isLoading = ref.watch(complaintsLoadingProvider);
+    final profile = ref.watch(currentProfileProvider);
+    final isAdmin = profile?.primaryRole == UserRole.admin ||
+        profile?.primaryRole == UserRole.manager ||
+        profile?.roles.contains(UserRole.admin) == true;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          tooltip: 'Back to Main Dashboard',
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              context.pop();
-            } else {
-              context.go(AppRoutes.adminDashboard);
-            }
-          },
-        ),
-        title: const FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
+    final rawName = profile?.fullName.trim() ?? '';
+    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Service Coordinator');
+    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+
+    if (isAdmin) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF0F172A),
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            tooltip: 'Back',
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go(AppRoutes.adminDashboard);
+              }
+            },
+          ),
+          title: const Text(
             'Complaints Dashboard',
             style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: 17,
               fontWeight: FontWeight.bold,
+              fontSize: 18,
               color: Colors.white,
             ),
           ),
+          actions: [
+            const DashboardSwitcherButton(),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
+              tooltip: 'Settings',
+              onPressed: () => context.push('/complaints/error-codes'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+              tooltip: 'Refresh',
+              onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
+            ),
+            const SizedBox(width: 4),
+          ],
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorColor: Colors.white,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
+            tabs: const [
+              Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Tickets & Operations'),
+              Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Technicians Leaderboard'),
+            ],
+          ),
         ),
-        backgroundColor: const Color(0xFF1E1B4B),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh Tickets',
-            onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildOperationsTab(complaints, isLoading, isAdmin: true),
+            const ComplaintsLeaderboardScreen(isEmbedded: true),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFF0F172A),
+          icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
+          label: const Text(
+            'Book Complaint',
+            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, color: Colors.white),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white),
-            tooltip: 'Error Code Settings',
-            onPressed: () => context.push('/complaints/error-codes'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Sign Out',
-            onPressed: () => _showLogoutDialog(context, ref),
+          onPressed: () => context.push('/complaints/book'),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverAppBar(
+            expandedHeight: 245,
+            pinned: true,
+            backgroundColor: const Color(0xFF0F172A),
+            elevation: 0,
+            clipBehavior: Clip.antiAlias,
+            automaticallyImplyLeading: false,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF0F172A),
+                          Color(0xFF2E1065),
+                          Color(0xFF6B21A8),
+                          Color(0xFF4F46E5),
+                          Color(0xFF2563EB),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -40,
+                    right: -30,
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.12),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    avatarInitial,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Good ${_getGreeting()},',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  displayName,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.5,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Today ${DateFormat('dd MMM').format(DateTime.now())}',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 11.5,
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'SERVICE',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.circle, color: Colors.white, size: 7),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'ONLINE',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              const DashboardSwitcherButton(),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
+                tooltip: 'Settings',
+                onPressed: () => context.push('/complaints/error-codes'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                tooltip: 'Refresh',
+                onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white, size: 20),
+                tooltip: 'Sign Out',
+                onPressed: () => _showLogoutDialog(context, ref),
+              ),
+              const SizedBox(width: 4),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
+              tabs: const [
+                Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Tickets & Operations'),
+                Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Technicians Leaderboard'),
+              ],
+            ),
           ),
         ],
-        bottom: TabBar(
+        body: TabBarView(
           controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: const [
-            Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Tickets & Operations'),
-            Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Technicians Leaderboard'),
+          children: [
+            _buildOperationsTab(complaints, isLoading, isAdmin: false),
+            const ComplaintsLeaderboardScreen(isEmbedded: true),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF1E1B4B),
+        backgroundColor: const Color(0xFF0F172A),
         icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
         label: const Text(
           'Book Complaint',
@@ -132,17 +388,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
         ),
         onPressed: () => context.push('/complaints/book'),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildOperationsTab(complaints, isLoading),
-          const ComplaintsLeaderboardScreen(isEmbedded: true),
-        ],
-      ),
     );
   }
 
-  Widget _buildOperationsTab(List<Complaint> complaints, bool isLoading) {
+  Widget _buildOperationsTab(List<Complaint> complaints, bool isLoading, {bool isAdmin = false}) {
     final pendingCount = complaints.where((c) => c.status == 'pending').length;
     final inProgressCount = complaints.where((c) => c.status == 'in_progress' || c.status == 'assigned').length;
     final closedCount = complaints.where((c) => c.status == 'closed' || c.status == 'resolved').length;
@@ -175,33 +424,29 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: isWide ? 1.6 : 1.35,
+                childAspectRatio: isWide ? 1.6 : 1.34,
                 children: [
                   _buildKpiCard(
-                    title: 'Total Tickets',
+                    title: 'Total\nTickets',
                     value: '$totalCount',
-                    subtitle: 'Lifetime tickets',
-                    badgeColor: const Color(0xFF6366F1),
+                    badgeColor: const Color(0xFF2563EB),
                     icon: Icons.confirmation_number_outlined,
                   ),
                   _buildKpiCard(
-                    title: 'Pending Dispatch',
+                    title: 'Pending\nDispatch',
                     value: '$pendingCount',
-                    subtitle: '$pendingCount need tech',
                     badgeColor: const Color(0xFFEF4444),
                     icon: Icons.hourglass_empty_rounded,
                   ),
                   _buildKpiCard(
-                    title: 'In Field / Active',
+                    title: 'Active in\nField',
                     value: '$inProgressCount',
-                    subtitle: '$inProgressCount dispatched',
-                    badgeColor: const Color(0xFF3B82F6),
+                    badgeColor: const Color(0xFF06B6D4),
                     icon: Icons.local_shipping_outlined,
                   ),
                   _buildKpiCard(
-                    title: 'Closed / Resolved',
+                    title: 'Closed\nTickets',
                     value: '$closedCount',
-                    subtitle: '$closedCount completed',
                     badgeColor: const Color(0xFF10B981),
                     icon: Icons.check_circle_outline,
                   ),
@@ -209,6 +454,35 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               );
             },
           ),
+
+          if (!isAdmin) ...[
+            const SizedBox(height: 16),
+
+            // Action Buttons: View Products & Daily Report (Complaints Staff only)
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionBtn(
+                    title: 'View Products',
+                    subtitle: 'Catalog & Specs',
+                    icon: Icons.inventory_2_outlined,
+                    color: const Color(0xFF3B82F6),
+                    onTap: () => context.push('/products'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildActionBtn(
+                    title: 'Daily Report',
+                    subtitle: 'Export PDF / Excel',
+                    icon: Icons.summarize_outlined,
+                    color: const Color(0xFF8B5CF6),
+                    onTap: () => DailyReportModal.show(context, ref),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 20),
 
@@ -277,69 +551,149 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
   Widget _buildKpiCard({
     required String title,
     required String value,
-    required String subtitle,
     required Color badgeColor,
     required IconData icon,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.grey.shade200,
+            width: 1.2,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
                 style: const TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.5,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: badgeColor, size: 18),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionBtn({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10.5,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: badgeColor,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

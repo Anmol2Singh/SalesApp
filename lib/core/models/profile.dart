@@ -10,6 +10,7 @@ class Profile {
   final List<UserRole> roles;
   final bool isActive;
   final String? pushToken;
+  final String? plainPassword;
   final String themePreference;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -22,6 +23,7 @@ class Profile {
     required this.roles,
     required this.isActive,
     this.pushToken,
+    this.plainPassword,
     this.themePreference = 'light',
     required this.createdAt,
     required this.updatedAt,
@@ -62,6 +64,7 @@ class Profile {
       roles: parsedRoles,
       isActive: json['is_active'] as bool? ?? true,
       pushToken: json['push_token'] as String?,
+      plainPassword: json['plain_password'] as String?,
       themePreference: json['theme_preference'] as String? ?? 'light',
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now())
@@ -80,6 +83,7 @@ class Profile {
     'roles': roles.map((r) => r.name).toList(),
     'is_active': isActive,
     'push_token': pushToken,
+    if (plainPassword != null) 'plain_password': plainPassword,
     'theme_preference': themePreference,
   };
 
@@ -89,6 +93,7 @@ class Profile {
     List<UserRole>? roles,
     bool? isActive,
     String? pushToken,
+    String? plainPassword,
     String? themePreference,
   }) {
     return Profile(
@@ -99,6 +104,7 @@ class Profile {
       roles: roles ?? this.roles,
       isActive: isActive ?? this.isActive,
       pushToken: pushToken ?? this.pushToken,
+      plainPassword: plainPassword ?? this.plainPassword,
       themePreference: themePreference ?? this.themePreference,
       createdAt: createdAt,
       updatedAt: updatedAt,

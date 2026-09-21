@@ -760,6 +760,7 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
 
   Future<void> updateLead({
     required String leadId,
+    String? prospectId,
     String? prospectName,
     String? contactPhone,
     String? productName,
@@ -773,6 +774,7 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
     String? reminderNote,
   }) async {
     final data = <String, dynamic>{
+      if (prospectId != null) 'prospect_id': prospectId,
       if (prospectName != null) 'prospect_name': prospectName.trim(),
       if (contactPhone != null) 'contact_phone': contactPhone.trim(),
       if (productName != null) 'product_name': productName.trim(),

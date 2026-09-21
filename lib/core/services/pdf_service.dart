@@ -2787,7 +2787,7 @@ class PdfService {
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 headers: ['ID', 'Name', 'Phone', 'Created At'],
                 data: data.customers.map((c) => [
-                  (c['id']?.toString() ?? '').length > 8 ? (c['id']?.toString() ?? '').substring(0, 8) + '...' : (c['id']?.toString() ?? ''),
+                  (c['id']?.toString() ?? '').length > 8 ? '${(c['id']?.toString() ?? '').substring(0, 8)}...' : (c['id']?.toString() ?? ''),
                   c['customer_name']?.toString() ?? '-',
                   c['phone']?.toString() ?? '-',
                   c['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(c['created_at']) ?? DateTime.now()) : '-',
@@ -2806,7 +2806,7 @@ class PdfService {
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 headers: ['Deal ID', 'Customer', 'Product', 'Status'],
                 data: data.pipelines.map((p) => [
-                  (p['id']?.toString() ?? '').length > 8 ? (p['id']?.toString() ?? '').substring(0, 8) + '...' : (p['id']?.toString() ?? ''),
+                  (p['id']?.toString() ?? '').length > 8 ? '${(p['id']?.toString() ?? '').substring(0, 8)}...' : (p['id']?.toString() ?? ''),
                   p['customers'] != null ? p['customers']['customer_name'] : '-',
                   p['products'] != null ? p['products']['name'] : '-',
                   p['status']?.toString().toUpperCase() ?? '-',
@@ -2934,7 +2934,7 @@ class PdfService {
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 headers: ['Ticket ID', 'Title', 'Customer', 'Status'],
                 data: data.complaints.map((c) => [
-                  c['ticket_number'] ?? (c['id'] != null && c['id'].toString().length > 8 ? c['id'].toString().substring(0, 8) + '...' : '-'),
+                  c['ticket_number'] ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
                   c['title']?.toString() ?? '-',
                   c['customer_name']?.toString() ?? '-',
                   c['status']?.toString().toUpperCase() ?? '-',
@@ -3110,7 +3110,7 @@ class PdfService {
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   headers: ['ID', 'Name', 'Phone', 'Created At'],
                   data: uData.customers.map((c) => [
-                    (c['id']?.toString() ?? '').length > 8 ? (c['id']?.toString() ?? '').substring(0, 8) + '...' : (c['id']?.toString() ?? ''),
+                    (c['id']?.toString() ?? '').length > 8 ? '${(c['id']?.toString() ?? '').substring(0, 8)}...' : (c['id']?.toString() ?? ''),
                     c['customer_name']?.toString() ?? '-',
                     c['phone']?.toString() ?? '-',
                     c['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(c['created_at']) ?? DateTime.now()) : '-',
@@ -3129,7 +3129,7 @@ class PdfService {
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   headers: ['Deal ID', 'Customer', 'Product', 'Status'],
                   data: uData.pipelines.map((p) => [
-                    (p['id']?.toString() ?? '').length > 8 ? (p['id']?.toString() ?? '').substring(0, 8) + '...' : (p['id']?.toString() ?? ''),
+                    (p['id']?.toString() ?? '').length > 8 ? '${(p['id']?.toString() ?? '').substring(0, 8)}...' : (p['id']?.toString() ?? ''),
                     p['customers'] != null ? p['customers']['customer_name']?.toString() ?? '-' : '-',
                     p['products'] != null ? p['products']['name']?.toString() ?? '-' : '-',
                     p['status']?.toString().toUpperCase() ?? '-',
@@ -3257,7 +3257,7 @@ class PdfService {
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   headers: ['Ticket ID', 'Title', 'Customer', 'Status'],
                   data: uData.complaints.map((c) => [
-                    c['ticket_number']?.toString() ?? (c['id'] != null && c['id'].toString().length > 8 ? c['id'].toString().substring(0, 8) + '...' : '-'),
+                    c['ticket_number']?.toString() ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
                     c['title']?.toString() ?? '-',
                     c['customer_name']?.toString() ?? '-',
                     c['status']?.toString().toUpperCase() ?? '-',
