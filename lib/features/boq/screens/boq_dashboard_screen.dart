@@ -468,17 +468,28 @@ class BoqDashboardScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
 
-                        // Row 3: Customer Prospects
+                        // Row 3: Customer Prospects & Daily Tasks
                         Row(
                           children: [
                             Expanded(
                               child: _buildQuickActionButton(
                                 context,
                                 title: 'Customer Prospects',
-                                subtitle: 'Add new prospects or track existing ones',
+                                subtitle: 'Track prospects',
                                 icon: Icons.person_search_outlined,
                                 gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
                                 onTap: () => context.go('/crm/prospects'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildQuickActionButton(
+                                context,
+                                title: 'Daily Tasks',
+                                subtitle: 'Tasks completed',
+                                icon: Icons.fact_check_outlined,
+                                gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                                onTap: () => context.push(AppRoutes.dailyTasks),
                               ),
                             ),
                           ],

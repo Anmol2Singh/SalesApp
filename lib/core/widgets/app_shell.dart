@@ -127,7 +127,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         widget.currentRoute.startsWith('/factory') || 
         widget.currentRoute.startsWith('/purchase') || 
         widget.currentRoute.startsWith('/amc') ||
-        widget.currentRoute.startsWith('/complaints')) {
+        widget.currentRoute.startsWith('/complaints') ||
+        widget.currentRoute == AppRoutes.dailyTasks) {
       navBgColor = const Color(0xFF1E1B4B);
       selectedTextColor = Colors.white;
       unselectedTextColor = Colors.white70;
@@ -363,6 +364,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                   label: 'Alerts',
                   icon: const Icon(Icons.notifications_outlined),
                   selectedIcon: const Icon(Icons.notifications),
+                  selectedTextColor: selectedTextColor,
+                  unselectedTextColor: unselectedTextColor,
+                  selectedBgColor: selectedBgColor,
+                ),
+
+                // 5. Daily Tasks Completed (Available for all roles)
+                _buildNavItemTile(
+                  route: AppRoutes.dailyTasks,
+                  label: 'Daily Tasks',
+                  icon: const Icon(Icons.fact_check_outlined),
+                  selectedIcon: const Icon(Icons.fact_check),
                   selectedTextColor: selectedTextColor,
                   unselectedTextColor: unselectedTextColor,
                   selectedBgColor: selectedBgColor,

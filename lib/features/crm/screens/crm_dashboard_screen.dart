@@ -14,6 +14,7 @@ import '../data/models/crm_leaderboard_entry.dart';
 import '../data/models/lead_model.dart';
 import '../data/models/prospect_model.dart';
 import '../../../core/widgets/dashboard_switcher_button.dart';
+import '../../../core/router/app_router.dart';
 
 class CrmDashboardScreen extends ConsumerStatefulWidget {
   const CrmDashboardScreen({super.key});
@@ -262,6 +263,66 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
+                          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => context.push(AppRoutes.dailyTasks),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                            child: Row(
+                              children: [
+                                Icon(Icons.fact_check_outlined, color: Colors.white, size: 24),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Daily Tasks',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Tasks completed',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
                           colors: [Color(0xFF1E3A5F), Color(0xFF2563EB)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -317,7 +378,11 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(

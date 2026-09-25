@@ -278,30 +278,48 @@ class PurchaseQueueScreen extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: _buildBentoKpiGrid(queueAsync.value ?? []),
               ),
-            // Action Buttons: View Products & Daily Report
+            // Action Buttons: Daily Tasks, View Products & Daily Report
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: _buildActionBtn(
-                        title: 'View Products',
-                        subtitle: 'Catalog & Specs',
-                        icon: Icons.inventory_2_outlined,
-                        color: const Color(0xFF3B82F6),
-                        onTap: () => context.push('/products'),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionBtn(
+                            title: 'Daily Tasks',
+                            subtitle: 'Tasks completed',
+                            icon: Icons.fact_check_outlined,
+                            color: const Color(0xFF6366F1),
+                            onTap: () => context.push(AppRoutes.dailyTasks),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildActionBtn(
+                            title: 'View Products',
+                            subtitle: 'Catalog & Specs',
+                            icon: Icons.inventory_2_outlined,
+                            color: const Color(0xFF3B82F6),
+                            onTap: () => context.push('/products'),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildActionBtn(
-                        title: 'Daily Report',
-                        subtitle: 'Export PDF / Excel',
-                        icon: Icons.summarize_outlined,
-                        color: const Color(0xFF8B5CF6),
-                        onTap: () => DailyReportModal.show(context, ref),
-                      ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionBtn(
+                            title: 'Daily Report',
+                            subtitle: 'Export PDF / Excel',
+                            icon: Icons.summarize_outlined,
+                            color: const Color(0xFF8B5CF6),
+                            onTap: () => DailyReportModal.show(context, ref),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

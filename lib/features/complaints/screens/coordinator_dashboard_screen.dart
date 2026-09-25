@@ -458,9 +458,19 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           if (!isAdmin) ...[
             const SizedBox(height: 16),
 
-            // Action Buttons: View Products & Daily Report (Complaints Staff only)
+            // Action Buttons: Daily Tasks, View Products & Daily Report (Complaints Staff only)
             Row(
               children: [
+                Expanded(
+                  child: _buildActionBtn(
+                    title: 'Daily Tasks',
+                    subtitle: 'Tasks Completed',
+                    icon: Icons.fact_check_outlined,
+                    color: const Color(0xFF6366F1),
+                    onTap: () => context.push(AppRoutes.dailyTasks),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: _buildActionBtn(
                     title: 'View Products',
@@ -470,7 +480,11 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                     onTap: () => context.push('/products'),
                   ),
                 ),
-                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(
                   child: _buildActionBtn(
                     title: 'Daily Report',

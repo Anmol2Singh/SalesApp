@@ -828,6 +828,12 @@ class _QuickActionsGrid extends StatelessWidget {
         onTap: () => context.push('/reports/activity'),
       ),
       _QuickActionBtn(
+        label: 'Daily Tasks',
+        icon: Icons.fact_check_outlined,
+        color: const Color(0xFF8B5CF6),
+        onTap: () => context.push(AppRoutes.dailyTasks),
+      ),
+      _QuickActionBtn(
         label: 'AMC',
         icon: Icons.shield_outlined,
         color: const Color(0xFF2563EB),
@@ -1418,7 +1424,7 @@ class _TrendChartCardState extends State<_TrendChartCard> {
   Widget _buildInteractiveStagesBarChart(
       List<Map<String, dynamic>> stages, int maxCount, bool isDark) {
     return SizedBox(
-      height: 110,
+      height: 120,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: List.generate(stages.length, (index) {

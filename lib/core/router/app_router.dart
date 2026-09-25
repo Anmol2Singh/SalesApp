@@ -33,6 +33,7 @@ import '../../features/amc/screens/amc_list_screen.dart';
 import '../../features/amc/screens/amc_detail_screen.dart';
 import '../../features/amc/screens/amc_setup_form_screen.dart';
 import '../../features/quotation/screens/quotation_approval_screen.dart';
+import '../../features/daily_tasks/screens/daily_tasks_screen.dart';
 import '../../features/amc/screens/service_visit_form_screen.dart';
 import '../../features/amc/screens/warranty_card_screen.dart';
 import '../../features/customer_app/screens/customer_dashboard_screen.dart';
@@ -109,6 +110,7 @@ class AppRoutes {
   static const String searchPdf = '/search-pdf';
   static const String boqDashboard = '/boq/dashboard';
   static const String manageBoqItems = '/boq/manage-items';
+  static const String dailyTasks = '/daily-tasks';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -322,6 +324,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.amcList,
             builder: (context, state) => const AmcListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.dailyTasks,
+            builder: (context, state) => const DailyTasksScreen(),
           ),
           ShellRoute(
             builder: (context, state, child) {

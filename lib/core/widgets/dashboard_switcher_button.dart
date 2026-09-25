@@ -174,6 +174,22 @@ class DashboardSwitcherButton extends ConsumerWidget {
           );
         }
 
+        items.add(
+          const PopupMenuDivider(height: 1),
+        );
+        items.add(
+          const PopupMenuItem<String>(
+            value: AppRoutes.dailyTasks,
+            child: Row(
+              children: [
+                Icon(Icons.fact_check_outlined, color: Color(0xFF34D399), size: 18),
+                SizedBox(width: 10),
+                Text('Daily Tasks Completed', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        );
+
         return items;
       },
     );

@@ -387,6 +387,15 @@ class SalesDashboardScreen extends ConsumerWidget {
                         onTap: () => context.push('/crm/dashboard'),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Daily Tasks',
+                        color: const Color(0xFF8B5CF6),
+                        onTap: () => context.push(AppRoutes.dailyTasks),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),

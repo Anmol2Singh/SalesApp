@@ -16,6 +16,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/widgets/breadcrumbs.dart';
 import '../../../core/services/record_edit_permissions.dart';
+import '../../daily_tasks/widgets/customer_tasks_sheet.dart';
 
 class CustomerDetailScreen extends ConsumerWidget {
   final String customerId;
@@ -104,6 +105,28 @@ class CustomerDetailScreen extends ConsumerWidget {
         },
       ),
       actions: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: TextButton.icon(
+            onPressed: () => CustomerTasksSheet.show(context, customer),
+            icon: const Icon(Icons.assignment_turned_in_outlined, color: Colors.white, size: 16),
+            label: const Text(
+              'Tasks',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+                color: Colors.white,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
         if (canEdit) ...[
           IconButton(
             icon: const Icon(Icons.edit_outlined, color: Colors.white),
@@ -116,6 +139,7 @@ class CustomerDetailScreen extends ConsumerWidget {
             onPressed: () => _showDeleteDeactivateModal(context, ref, customer),
           ),
         ],
+        const SizedBox(width: 6),
       ],
       flexibleSpace: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {

@@ -318,7 +318,19 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      // Quick Action 1: Leaderboard
+                      // Quick Action 1: Daily Tasks
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'Daily Tasks',
+                          subtitle: 'Tasks completed',
+                          icon: Icons.fact_check_outlined,
+                          gradientColors: const [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                          onTap: () => context.push(AppRoutes.dailyTasks),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Quick Action 2: Leaderboard
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
@@ -336,8 +348,12 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           },
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // Quick Action 2: View Products
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Quick Action 3: View Products
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
