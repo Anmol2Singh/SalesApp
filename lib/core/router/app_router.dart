@@ -649,6 +649,8 @@ String getRoleHome(UserRole role) {
       return AppRoutes.boqDashboard;
     case UserRole.serviceHead:
       return AppRoutes.complaintsDashboard;
+    case UserRole.installation:
+      return AppRoutes.installationsDashboard;
     case UserRole.technician:
       return AppRoutes.technicianDashboard;
     case UserRole.customer:

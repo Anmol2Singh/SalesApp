@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
@@ -301,11 +302,22 @@ class _CompanyDetailsCardState extends ConsumerState<_CompanyDetailsCard> {
       final data = await supabase.from('company_settings').select().maybeSingle();
       if (data != null) {
         if (data['logo_url'] != null) setState(() => _logoUrl = data['logo_url'] as String);
-        if (data['company_name'] != null) _nameCtrl.text = data['company_name'] as String;
-        if (data['address'] != null) _addressCtrl.text = data['address'] as String;
-        if (data['phone'] != null) _phoneCtrl.text = data['phone'] as String;
-        if (data['email'] != null) _emailCtrl.text = data['email'] as String;
-        if (data['gstin'] != null) _gstCtrl.text = data['gstin'] as String;
+        if (data['company_name'] != null && (data['company_name'] as String).isNotEmpty) _nameCtrl.text = data['company_name'] as String;
+        if (data['address'] != null && (data['address'] as String).isNotEmpty) _addressCtrl.text = data['address'] as String;
+        if (data['phone'] != null && (data['phone'] as String).isNotEmpty) _phoneCtrl.text = data['phone'] as String;
+        if (data['email'] != null && (data['email'] as String).isNotEmpty) _emailCtrl.text = data['email'] as String;
+        if (data['gstin'] != null && (data['gstin'] as String).isNotEmpty) _gstCtrl.text = data['gstin'] as String;
+      } else {
+        final t = await supabase.from('pdf_templates').select('template_config').limit(1).maybeSingle();
+        if (t != null && t['template_config'] is Map) {
+          final cfg = Map<String, dynamic>.from(t['template_config'] as Map);
+          if (cfg['logo_url'] != null) setState(() => _logoUrl = cfg['logo_url'] as String);
+          if (cfg['company_name'] != null) _nameCtrl.text = cfg['company_name'].toString();
+          if (cfg['company_address'] != null) _addressCtrl.text = cfg['company_address'].toString();
+          if (cfg['company_phone'] != null) _phoneCtrl.text = cfg['company_phone'].toString();
+          if (cfg['company_email'] != null) _emailCtrl.text = cfg['company_email'].toString();
+          if (cfg['company_gst'] != null) _gstCtrl.text = cfg['company_gst'].toString();
+        }
       }
     } catch (_) {}
   }
@@ -344,10 +356,16 @@ class _CompanyDetailsCardState extends ConsumerState<_CompanyDetailsCard> {
           'id': 'default',
           'logo_url': publicUrl,
           'company_name': _nameCtrl.text.trim(),
+          'address': _addressCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
           'email': _emailCtrl.text.trim(),
           'gstin': _gstCtrl.text.trim(),
         });
+      } catch (_) {}
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('company_logo_url', publicUrl);
       } catch (_) {}
 
       ref.invalidate(pdfTemplatesProvider);
@@ -412,11 +430,23 @@ class _CompanyDetailsCardState extends ConsumerState<_CompanyDetailsCard> {
         await supabase.from('company_settings').upsert({
           'id': 'default',
           'company_name': _nameCtrl.text.trim(),
+          'address': _addressCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
           'email': _emailCtrl.text.trim(),
           'gstin': _gstCtrl.text.trim(),
           if (_logoUrl != null) 'logo_url': _logoUrl,
         });
+      } catch (_) {}
+
+      // Cache to SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('company_name', _nameCtrl.text.trim());
+        await prefs.setString('company_address', _addressCtrl.text.trim());
+        await prefs.setString('company_phone', _phoneCtrl.text.trim());
+        await prefs.setString('company_email', _emailCtrl.text.trim());
+        await prefs.setString('company_gst', _gstCtrl.text.trim());
+        if (_logoUrl != null) await prefs.setString('company_logo_url', _logoUrl!);
       } catch (_) {}
 
       ref.invalidate(pdfTemplatesProvider);
@@ -443,7 +473,7 @@ class _CompanyDetailsCardState extends ConsumerState<_CompanyDetailsCard> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
       ),
       child: Column(
         children: [

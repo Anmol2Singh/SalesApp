@@ -1,11 +1,10 @@
-// lib/features/complaints/screens/technicians_tab_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/complaints_provider.dart';
 import '../data/models/complaint_model.dart';
 import '../../../core/providers/supabase_provider.dart';
-
+import '../../../core/theme/app_theme.dart';
 import '../../../core/models/user_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -205,6 +204,9 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
     final emailController = TextEditingController(text: tech.email ?? '');
     final phoneController = TextEditingController(text: tech.phone ?? '');
     final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool obscureNewPassword = true;
+    bool showCurrentPassword = false;
     bool isSaving = false;
 
     showDialog(
@@ -213,66 +215,163 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.edit, color: Color(0xFF6D28D9)),
-                  SizedBox(width: 8),
-                  Text('Edit Technician', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Technician Full Name *', prefixIcon: Icon(Icons.person)),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(labelText: 'Email Address *', prefixIcon: Icon(Icons.email)),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'Mobile Phone', prefixIcon: Icon(Icons.phone)),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'New Password (Optional)', prefixIcon: Icon(Icons.lock_outline)),
-                    ),
-                  ],
+              title: const Text('Edit Technician'),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: 'Full Name *'),
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Email *'),
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Phone Number',
+                          hintText: 'Enter mobile number',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (tech.plainPassword != null && tech.plainPassword!.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.key, size: 16, color: Color(0xFF475569)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Current Password',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      showCurrentPassword ? tech.plainPassword! : '••••••••',
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  showCurrentPassword ? Icons.visibility_off : Icons.visibility,
+                                  size: 18,
+                                  color: const Color(0xFF475569),
+                                ),
+                                onPressed: () => setModalState(() => showCurrentPassword = !showCurrentPassword),
+                                tooltip: showCurrentPassword ? 'Hide' : 'Show',
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(4),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 16, color: Color(0xFF475569)),
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: tech.plainPassword!));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Password copied to clipboard'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                tooltip: 'Copy',
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(4),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      TextFormField(
+                        controller: passwordController,
+                        obscureText: obscureNewPassword,
+                        decoration: InputDecoration(
+                          labelText: 'New Password (Optional)',
+                          hintText: 'Leave blank to keep current',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureNewPassword ? Icons.visibility_off : Icons.visibility,
+                              size: 18,
+                            ),
+                            onPressed: () => setModalState(() => obscureNewPassword = !obscureNewPassword),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v != null && v.isNotEmpty && v.length < 6) {
+                            return 'Min 6 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: 'Technician',
+                        decoration: const InputDecoration(labelText: 'Role'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'Technician',
+                            child: Text('Technician'),
+                          ),
+                        ],
+                        onChanged: null,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6D28D9)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   onPressed: isSaving
                       ? null
                       : () async {
+                          if (!formKey.currentState!.validate()) return;
+
                           final name = nameController.text.trim();
                           final email = emailController.text.trim();
                           final phone = phoneController.text.trim();
                           final pwd = passwordController.text.trim();
 
-                          if (name.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Name is required.')),
-                            );
-                            return;
-                          }
-
                           setModalState(() => isSaving = true);
                           try {
                             final supabase = ref.read(supabaseClientProvider);
-                            
+
                             // 1. Update Auth user via RPC if editing an existing UUID
                             if (tech.id.isNotEmpty) {
                               try {
@@ -289,13 +388,20 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                               } catch (_) {
                                 // Ignore if they don't have an auth profile
                               }
+
+                              // Update profiles table phone
+                              try {
+                                await supabase.from('profiles').update({
+                                  'phone': phone.isNotEmpty ? phone : null,
+                                }).eq('id', tech.id);
+                              } catch (_) {}
                             }
 
                             // 2. Update technicians table
                             final updates = <String, dynamic>{
                               'name': name,
                               'email': email,
-                              'phone': phone,
+                              'phone': phone.isNotEmpty ? phone : null,
                             };
                             if (pwd.isNotEmpty) updates['password'] = pwd;
 
@@ -306,7 +412,6 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                                 await supabase.from('technicians').update(updates).eq('name', tech.name);
                               }
                             } catch (e) {
-                              // Fallback if password column does not exist
                               updates.remove('password');
                               if (tech.id.isNotEmpty) {
                                 await supabase.from('technicians').update(updates).eq('id', tech.id);
@@ -319,13 +424,19 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                             if (mounted) {
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Technician updated successfully!'), backgroundColor: Color(0xFF10B981)),
+                                const SnackBar(
+                                  content: Text('Technician updated successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
                               );
                             }
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error updating technician: $e'), backgroundColor: Colors.red),
+                                SnackBar(
+                                  content: Text('Error updating technician: $e'),
+                                  backgroundColor: AppColors.error,
+                                ),
                               );
                             }
                           } finally {
@@ -333,8 +444,12 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                           }
                         },
                   child: isSaving
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Save', style: TextStyle(color: Colors.white)),
                 ),
               ],
             );

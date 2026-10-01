@@ -96,6 +96,30 @@ class PipelineCard extends ConsumerWidget {
     }
   }
 
+  int _getCompletedStepsCount(SalesPipeline p) {
+    if (p.status == PipelineStatus.completed || p.currentStep == PipelineStep.completed) {
+      return 5;
+    }
+
+    switch (p.currentStep) {
+      case PipelineStep.quotation:
+        if (p.quotation?.status == QuotationStatus.confirmed) {
+          return 1;
+        }
+        return 0; // quotation step pending, then 0%
+      case PipelineStep.salesOrder:
+        return 1; // 20%
+      case PipelineStep.boq:
+        return 2; // 40%
+      case PipelineStep.factoryOrder:
+        return 3; // 60%
+      case PipelineStep.purchaseOrder:
+        return 4; // 80%
+      case PipelineStep.completed:
+        return 5; // 100%
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
@@ -106,6 +130,26 @@ class PipelineCard extends ConsumerWidget {
         profile?.roles.contains(UserRole.salesHead) == true;
 
     final isSalesExecutive = profile?.primaryRole == UserRole.sales && !isApproverRole;
+
+    final roles = profile?.roles ?? [];
+    final isSalesOrAdmin = profile?.primaryRole == UserRole.admin ||
+        profile?.primaryRole == UserRole.manager ||
+        profile?.primaryRole == UserRole.salesHead ||
+        profile?.primaryRole == UserRole.sales ||
+        roles.contains(UserRole.admin) ||
+        roles.contains(UserRole.manager) ||
+        roles.contains(UserRole.salesHead) ||
+        roles.contains(UserRole.sales);
+
+    final isBoqFactoryOrMaterial = profile?.primaryRole == UserRole.boq ||
+        profile?.primaryRole == UserRole.factory ||
+        profile?.primaryRole == UserRole.purchase ||
+        roles.contains(UserRole.boq) ||
+        roles.contains(UserRole.factory) ||
+        roles.contains(UserRole.purchase);
+
+    // Requirement 7: For BOQ, Factory & Material roles, don't show Deal Amount
+    final hideDealAmount = isBoqFactoryOrMaterial && !isSalesOrAdmin;
 
     final bool requiresApproval =
         pipeline.quotation?.status == QuotationStatus.pendingApproval;
@@ -121,8 +165,8 @@ class PipelineCard extends ConsumerWidget {
     final dealValue = _formatDealValue(pipeline.quotation?.grandTotal);
     final currentStepNum = _getStepNumber(pipeline);
     final currentStepName = _getStepName(pipeline);
-    final isCompleted = pipeline.status == PipelineStatus.completed;
-    final progressFraction = isCompleted ? 1.0 : (currentStepNum / 5.0);
+    final completedStepsCount = _getCompletedStepsCount(pipeline);
+    final isCompleted = pipeline.status == PipelineStatus.completed || completedStepsCount == 5;
 
     return InkWell(
       onTap: () => context.push(
@@ -269,7 +313,7 @@ class PipelineCard extends ConsumerWidget {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                if (dealValue.isNotEmpty)
+                                if (!hideDealAmount && dealValue.isNotEmpty)
                                   Text(
                                     dealValue,
                                     style: const TextStyle(
@@ -309,7 +353,7 @@ class PipelineCard extends ConsumerWidget {
                                       ],
                                     ),
                                   )
-                                else if (dealValue.isEmpty)
+                                else if (dealValue.isEmpty || hideDealAmount)
                                   _StatusBadge(status: pipeline.status),
                               ],
                             ),
@@ -322,8 +366,9 @@ class PipelineCard extends ConsumerWidget {
                         _buildCompactProgressSection(
                           currentStepNum: currentStepNum,
                           currentStepName: currentStepName,
+                          currentStep: pipeline.currentStep,
                           requiresApproval: requiresApproval,
-                          progressFraction: progressFraction,
+                          completedStepsCount: completedStepsCount,
                           isCompleted: isCompleted,
                         ),
 
@@ -457,31 +502,32 @@ class PipelineCard extends ConsumerWidget {
     );
   }
 
-  Color _getStepColor(int stepNum) {
-    switch (stepNum) {
-      case 1:
-        return const Color(0xFFD97706); // Quotation (Amber)
-      case 2:
-        return const Color(0xFF2563EB); // Sales Order (Royal Blue)
-      case 3:
-        return const Color(0xFF0D9488); // BOQ (Teal)
-      case 4:
-        return const Color(0xFF7C3AED); // Factory Order (Purple)
-      case 5:
-        return const Color(0xFF059669); // Material Requisition (Emerald)
-      default:
-        return const Color(0xFF10B981); // Completed (Green)
+  Color _getStepColor(PipelineStep step) {
+    switch (step) {
+      case PipelineStep.quotation:
+        return const Color(0xFF2563EB); // Royal Blue
+      case PipelineStep.salesOrder:
+        return const Color(0xFF0284C7); // Sky Blue
+      case PipelineStep.boq:
+        return const Color(0xFF7C3AED); // Purple
+      case PipelineStep.factoryOrder:
+        return const Color(0xFFEA580C); // Deep Orange
+      case PipelineStep.purchaseOrder:
+        return const Color(0xFF0D9488); // Teal
+      case PipelineStep.completed:
+        return const Color(0xFF10B981); // Emerald Green
     }
   }
 
   Widget _buildCompactProgressSection({
     required int currentStepNum,
     required String currentStepName,
+    required PipelineStep currentStep,
     required bool requiresApproval,
-    required double progressFraction,
+    required int completedStepsCount,
     required bool isCompleted,
   }) {
-    final stepColor = isCompleted ? const Color(0xFF10B981) : _getStepColor(currentStepNum);
+    final stageColor = isCompleted ? const Color(0xFF10B981) : _getStepColor(currentStep);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,77 +538,53 @@ class PipelineCard extends ConsumerWidget {
             Expanded(
               child: Row(
                 children: List.generate(5, (index) {
-                  final nodeIndex = index + 1;
-                  final isDone = isCompleted || nodeIndex < currentStepNum;
-                  final isActive = !isCompleted && nodeIndex == currentStepNum;
+                  final isDone = isCompleted || index < completedStepsCount;
+                  final isNextUnlocked = !isCompleted && index == completedStepsCount;
 
                   final Color dotColor;
                   if (isDone) {
-                    dotColor = const Color(0xFF10B981);
-                  } else if (isActive) {
-                    dotColor = requiresApproval
-                        ? const Color(0xFFF59E0B)
-                        : _getStepColor(nodeIndex);
+                    dotColor = const Color(0xFF10B981); // Green dot for completed
+                  } else if (isNextUnlocked) {
+                    dotColor = const Color(0xFFF59E0B); // Yellow dot for next unlocked step
                   } else {
-                    dotColor = Colors.grey.shade300;
+                    dotColor = Colors.grey.shade300; // Grey default for locked steps
+                  }
+
+                  // Requirement 1: Make the horizontal line before yellow dot as yellow
+                  final Color lineColor;
+                  if (!isCompleted && (index + 1) == completedStepsCount) {
+                    lineColor = const Color(0xFFF59E0B);
+                  } else if (isDone) {
+                    lineColor = const Color(0xFF10B981);
+                  } else {
+                    lineColor = Colors.grey.shade200;
                   }
 
                   return Expanded(
                     child: Row(
                       children: [
-                        if (isActive && requiresApproval)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: const Color(0xFFF59E0B), width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.hourglass_top,
-                                    size: 10, color: Color(0xFFD97706)),
-                                const SizedBox(width: 2),
-                                Text(
-                                  currentStepName,
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFFD97706),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          Container(
-                            width: 9,
-                            height: 9,
-                            decoration: BoxDecoration(
-                              color: dotColor,
-                              shape: BoxShape.circle,
-                              boxShadow: isActive
-                                  ? [
-                                      BoxShadow(
-                                        color: dotColor.withValues(alpha: 0.4),
-                                        blurRadius: 4,
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
+                        Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: dotColor,
+                            shape: BoxShape.circle,
+                            boxShadow: isNextUnlocked
+                                ? [
+                                    BoxShadow(
+                                      color: dotColor.withValues(alpha: 0.4),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : null,
                           ),
+                        ),
                         if (index < 4)
                           Expanded(
                             child: Container(
                               height: 2,
-                              color: isDone
-                                  ? const Color(0xFF10B981)
-                                  : Colors.grey.shade200,
+                              color: lineColor,
                             ),
                           ),
                       ],
@@ -574,12 +596,14 @@ class PipelineCard extends ConsumerWidget {
             const SizedBox(width: 10),
             // Percentage shifted to step dots line
             Text(
-              '${(progressFraction * 100).toInt()}%',
+              '${completedStepsCount * 20}%',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
-                color: isCompleted ? const Color(0xFF10B981) : stepColor,
+                color: isCompleted
+                    ? const Color(0xFF10B981)
+                    : (completedStepsCount > 0 ? const Color(0xFFF59E0B) : Colors.grey.shade600),
               ),
             ),
           ],
@@ -587,7 +611,7 @@ class PipelineCard extends ConsumerWidget {
 
         const SizedBox(height: 6),
 
-        // Row 2: Stage name highlighted with the distinct color of each step
+        // Row 2: Stage name highlighted with its default color
         Row(
           children: [
             Text(
@@ -620,7 +644,7 @@ class PipelineCard extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                 decoration: BoxDecoration(
-                  color: stepColor.withValues(alpha: 0.12),
+                  color: stageColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -629,7 +653,7 @@ class PipelineCard extends ConsumerWidget {
                     fontFamily: 'Inter',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: stepColor,
+                    color: stageColor,
                   ),
                 ),
               ),

@@ -133,50 +133,18 @@ class ComplaintPdfService {
       }
     } catch (_) {}
 
-    String companyName = 'INSIYA SOLAR INDUSTRY';
-    String companyAddress =
-        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, MH - 411014';
-    String companyPhone = '+91 9292922992';
-    String companyEmail = 'insiyasolarindustry@gmail.com';
-    String companyGst = '27CFTPS5292A1ZY';
+    final resolvedConfig = await PdfService.resolveTemplateConfig(null);
+    final String companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final String companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, MH - 411014';
+    final String companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final String companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final String companyGst = resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
     pw.ImageProvider? logoImage;
-
-    try {
-      final tRes = await Supabase.instance.client
-          .from('pdf_templates')
-          .select('template_config')
-          .limit(1)
-          .maybeSingle();
-      if (tRes != null && tRes['template_config'] is Map) {
-        final cfg = Map<String, dynamic>.from(tRes['template_config'] as Map);
-        if (cfg['company_name'] != null &&
-            cfg['company_name'].toString().trim().isNotEmpty) {
-          companyName = cfg['company_name'].toString().trim();
-        }
-        if (cfg['company_address'] != null &&
-            cfg['company_address'].toString().trim().isNotEmpty) {
-          companyAddress = cfg['company_address'].toString().trim();
-        }
-        if (cfg['company_phone'] != null &&
-            cfg['company_phone'].toString().trim().isNotEmpty) {
-          companyPhone = cfg['company_phone'].toString().trim();
-        }
-        if (cfg['company_email'] != null &&
-            cfg['company_email'].toString().trim().isNotEmpty) {
-          companyEmail = cfg['company_email'].toString().trim();
-        }
-        if (cfg['company_gst'] != null &&
-            cfg['company_gst'].toString().trim().isNotEmpty) {
-          companyGst = cfg['company_gst'].toString().trim();
-        }
-        if (cfg['logo_url'] != null &&
-            cfg['logo_url'].toString().trim().isNotEmpty) {
-          try {
-            logoImage = await networkImage(cfg['logo_url'].toString().trim());
-          } catch (_) {}
-        }
-      }
-    } catch (_) {}
+    if (resolvedConfig['logo_url'] != null && resolvedConfig['logo_url'].toString().trim().isNotEmpty) {
+      try {
+        logoImage = await networkImage(resolvedConfig['logo_url'].toString().trim()).timeout(const Duration(seconds: 2));
+      } catch (_) {}
+    }
 
     String formattedProductName = complaint.productName ?? 'Solar Equipment';
     if (formattedProductName.length > 25 &&

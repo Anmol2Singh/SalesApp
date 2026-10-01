@@ -11,6 +11,7 @@ enum UserRole {
   purchase,
   boq,
   serviceHead,
+  installation,
   technician,
   customer,
   crmStaff;
@@ -22,6 +23,7 @@ enum UserRole {
       case 'sales': return UserRole.sales;
       case 'sales_head': return UserRole.salesHead;
       case 'service_head': return UserRole.serviceHead;
+      case 'installation': return UserRole.installation;
       case 'factory': return UserRole.factory;
       case 'purchase': return UserRole.purchase;
       case 'boq': return UserRole.boq;
@@ -39,6 +41,7 @@ enum UserRole {
       case UserRole.sales: return 'sales';
       case UserRole.salesHead: return 'sales_head';
       case UserRole.serviceHead: return 'service_head';
+      case UserRole.installation: return 'installation';
       case UserRole.factory: return 'factory';
       case UserRole.purchase: return 'purchase';
       case UserRole.boq: return 'boq';
@@ -60,6 +63,8 @@ enum UserRole {
         return 'Sales Head';
       case UserRole.serviceHead:
         return 'Complaints Staff';
+      case UserRole.installation:
+        return 'Installation Staff';
       case UserRole.factory:
         return 'Factory Staff';
       case UserRole.purchase:
@@ -82,6 +87,7 @@ enum UserRole {
       this == UserRole.manager ||
       this == UserRole.salesHead ||
       this == UserRole.serviceHead ||
+      this == UserRole.installation ||
       this == UserRole.factory ||
       this == UserRole.purchase ||
       this == UserRole.boq;
@@ -145,6 +151,8 @@ enum UserRole {
         return const Color(0xFF0EA5E9); // Sky Blue
       case UserRole.serviceHead:
         return const Color(0xFF3B82F6); // Blue
+      case UserRole.installation:
+        return const Color(0xFF0284C7); // Sky Blue / Cyan
       case UserRole.factory:
         return const Color(0xFFF59E0B); // Amber/Orange
       case UserRole.purchase:
@@ -172,6 +180,8 @@ enum UserRole {
         return const [Color(0xFF0369A1), Color(0xFF0EA5E9)];
       case UserRole.serviceHead:
         return const [Color(0xFF1D4ED8), Color(0xFF3B82F6)];
+      case UserRole.installation:
+        return const [Color(0xFF0284C7), Color(0xFF38BDF8)];
       case UserRole.factory:
         return const [Color(0xFFD97706), Color(0xFFF59E0B)];
       case UserRole.purchase:

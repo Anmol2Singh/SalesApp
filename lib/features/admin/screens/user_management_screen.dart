@@ -234,6 +234,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         return Colors.teal;
       case UserRole.customer:
         return Colors.blueGrey;
+      case UserRole.installation:
+        return const Color(0xFF0284C7);
     }
   }
 
@@ -261,6 +263,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         return Icons.support_agent_outlined;
       case UserRole.customer:
         return Icons.person_outline;
+      case UserRole.installation:
+        return Icons.build_circle_outlined;
     }
   }
 
@@ -703,6 +707,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   void _editUser(Profile user, bool isCurrentAdmin) {
     final nameController = TextEditingController(text: user.fullName);
     final emailController = TextEditingController(text: user.email);
+    final phoneController = TextEditingController(text: user.phone ?? '');
     final passwordController = TextEditingController();
     UserRole selectedRole = user.primaryRole;
     final formKey = GlobalKey<FormState>();
@@ -733,6 +738,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     decoration: const InputDecoration(labelText: 'Email *'),
                     validator: (v) =>
                         v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      hintText: 'Enter mobile number',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   if (user.plainPassword != null &&
@@ -884,6 +898,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   if (result['success'] != true) {
                     throw Exception(result['error'] ?? 'Failed to update user');
                   }
+
+                  // Update phone in profiles table
+                  final updatedPhone = phoneController.text.trim();
+                  await supabase
+                      .from('profiles')
+                      .update({'phone': updatedPhone.isNotEmpty ? updatedPhone : null})
+                      .eq('id', user.id);
 
                   if (ctx.mounted) Navigator.pop(ctx);
                   ref.invalidate(usersListProvider);
@@ -1290,6 +1311,8 @@ class _UserTile extends StatelessWidget {
         return Colors.teal;
       case UserRole.customer:
         return Colors.blueGrey;
+      case UserRole.installation:
+        return const Color(0xFF0284C7);
     }
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -79,6 +80,7 @@ class CrmShell extends ConsumerWidget {
         }
       },
       child: Scaffold(
+        extendBody: true,
         body: Column(
           children: [
             if (isWide)
@@ -213,41 +215,144 @@ class CrmShell extends ConsumerWidget {
       }
     }
 
-    return NavigationBarTheme(
-      data: NavigationBarThemeData(
-        height: 64,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.2,
-              color: AppColors.primary,
-            );
-          }
-          return const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-            letterSpacing: -0.2,
-            color: AppColors.textSecondary,
-          );
-        }),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Container(
+      color: Colors.transparent,
+      padding: EdgeInsets.fromLTRB(
+        screenWidth > 500 ? (screenWidth - 480) / 2 : 16,
+        6,
+        screenWidth > 500 ? (screenWidth - 480) / 2 : 16,
+        bottomInset > 0 ? bottomInset + 4 : 12,
       ),
-      child: NavigationBar(
-        selectedIndex: selectedIndex.clamp(0, navItems.length - 1),
-        onDestinationSelected: (index) {
-          final item = navItems[index];
-          if (item.isPush) {
-            context.push(item.route);
-          } else {
-            context.go(item.route);
-          }
-        },
-        destinations: navItems.map((item) => NavigationDestination(
-          icon: Icon(item.icon),
-          selectedIcon: Icon(item.activeIcon),
-          label: item.label,
-        )).toList(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: 66,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF0F172A).withValues(alpha: 0.78)
+                  : Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.6),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.45)
+                      : const Color(0xFF1E3A5F).withValues(alpha: 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(navItems.length, (index) {
+                final item = navItems[index];
+                final isSelected = index == selectedIndex;
+
+                return Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (item.isPush) {
+                        context.push(item.route);
+                      } else {
+                        context.go(item.route);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(22),
+                    splashColor: AppColors.primary.withValues(alpha: 0.1),
+                    highlightColor: Colors.transparent,
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOutCubic,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSelected ? 12 : 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? (isDark
+                                  ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
+                                  : const Color(0xFF1E3A5F).withValues(alpha: 0.1))
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                          border: isSelected
+                              ? Border.all(
+                                  color: (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                      .withValues(alpha: 0.25),
+                                  width: 1,
+                                )
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            AnimatedScale(
+                              scale: isSelected ? 1.15 : 1.0,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutBack,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                transitionBuilder: (child, anim) => FadeTransition(
+                                  opacity: anim,
+                                  child: ScaleTransition(scale: anim, child: child),
+                                ),
+                                child: KeyedSubtree(
+                                  key: ValueKey<bool>(isSelected),
+                                  child: IconTheme(
+                                    data: IconThemeData(
+                                      size: 21,
+                                      color: isSelected
+                                          ? (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                          : (isDark ? Colors.white60 : AppColors.textSecondary),
+                                    ),
+                                    child: Icon(isSelected ? item.activeIcon : item.icon),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: isSelected ? 10.5 : 9.5,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                letterSpacing: -0.2,
+                                color: isSelected
+                                    ? (isDark ? const Color(0xFF93C5FD) : AppColors.primary)
+                                    : (isDark ? Colors.white60 : AppColors.textSecondary),
+                              ),
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
       ),
     );
   }

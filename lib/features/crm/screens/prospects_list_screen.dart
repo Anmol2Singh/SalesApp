@@ -90,86 +90,99 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildFilters(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: AppColors.surface,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(prospectsProvider.notifier).load(refresh: true),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _buildFilters(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    color: AppColors.surface,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'Active Pipeline',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                Text(
-                  'Active Pipeline',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
                   ),
-                ),
-              ],
+                  const Divider(height: 1, color: AppColors.border),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => ref.read(prospectsProvider.notifier).load(refresh: true),
-              child: prospectsAsync.when(
-                data: (prospects) {
-                  // Apply filters
-                  var filtered = prospects.where((p) {
-                    final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-                                          p.phone.contains(_searchQuery) ||
-                                          (p.company?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
-                    final matchesSource = _selectedSource == 'All' || p.source == _selectedSource;
-                    return matchesSearch && matchesSource;
-                  }).toList();
+            prospectsAsync.when(
+              data: (prospects) {
+                // Apply filters
+                var filtered = prospects.where((p) {
+                  final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+                                        p.phone.contains(_searchQuery) ||
+                                        (p.company?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
+                  final matchesSource = _selectedSource == 'All' || p.source == _selectedSource;
+                  return matchesSearch && matchesSource;
+                }).toList();
 
-                  bool checkConverted(Prospect p) {
-                    if (p.convertedToLeadId != null) return true;
-                    return leads.any((l) =>
-                        (l.prospectId != null && l.prospectId == p.id) ||
-                        (p.phone.isNotEmpty && l.contactPhone != null && l.contactPhone!.trim() == p.phone.trim()));
+                bool checkConverted(Prospect p) {
+                  if (p.convertedToLeadId != null) return true;
+                  return leads.any((l) =>
+                      (l.prospectId != null && l.prospectId == p.id) ||
+                      (p.phone.isNotEmpty && l.contactPhone != null && l.contactPhone!.trim() == p.phone.trim()));
+                }
+
+                // Sort: Unconverted at top, converted at bottom; then newest first
+                filtered.sort((a, b) {
+                  final aConverted = checkConverted(a);
+                  final bConverted = checkConverted(b);
+                  if (aConverted != bConverted) {
+                    return aConverted ? 1 : -1;
                   }
+                  return b.createdAt.compareTo(a.createdAt);
+                });
 
-                  // Sort: Unconverted at top, converted at bottom; then newest first
-                  filtered.sort((a, b) {
-                    final aConverted = checkConverted(a);
-                    final bConverted = checkConverted(b);
-                    if (aConverted != bConverted) {
-                      return aConverted ? 1 : -1;
-                    }
-                    return b.createdAt.compareTo(a.createdAt);
-                  });
-
-                  if (filtered.isEmpty) {
-                    return const Center(
+                if (filtered.isEmpty) {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
                       child: Text('No prospects found.', style: TextStyle(color: AppColors.textSecondary)),
-                    );
-                  }
+                    ),
+                  );
+                }
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                    itemCount: filtered.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final prospect = filtered[index];
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final itemIndex = index ~/ 2;
+                        if (index.isOdd) {
+                          return const SizedBox(height: 12);
+                        }
+                        final prospect = filtered[itemIndex];
                       final isConverted = checkConverted(prospect);
                       final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
                       final isCreatedByMe = prospect.createdBy == profile?.id;
@@ -420,15 +433,21 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                         ),
                       );
                     },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
-              ),
+                    childCount: filtered.length * 2 - 1,
+                  ),
+                ),
+              );
+            },
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, st) => SliverFillRemaining(
+              child: Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
             ),
           ),
         ],
       ),
+    ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           _showAddProspectForm(context);

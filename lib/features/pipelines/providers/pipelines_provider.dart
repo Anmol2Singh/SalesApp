@@ -20,6 +20,7 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   int _page = 0;
   static const int _pageSize = 20;
   bool _hasMore = true;
+  bool _isLoading = false;
   String _stepFilter = '';
   String _statusFilter = '';
 
@@ -29,6 +30,7 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   }
 
   Future<void> load({bool refresh = false}) async {
+    if (_isLoading && !refresh) return;
     if (refresh) {
       _page = 0;
       _hasMore = true;
@@ -36,11 +38,14 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
     }
     if (!_hasMore && !refresh) return;
 
+    _isLoading = true;
+
     final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
     if (supabaseUrl.contains('your-project-ref')) {
       final mock = _getMockPipelines();
       state = AsyncValue.data(mock);
       _hasMore = false;
+      _isLoading = false;
       return;
     }
 
@@ -99,10 +104,20 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
       _page++;
 
       if (!mounted) return;
+      // Requirement 2: Deduplicate by ID so deals never repeat automatically
       final existing = refresh ? <SalesPipeline>[] : (state.value ?? []);
-      state = AsyncValue.data([...existing, ...pipelines]);
+      final Map<String, SalesPipeline> dealMap = {};
+      for (final p in existing) {
+        dealMap[p.id] = p;
+      }
+      for (final p in pipelines) {
+        dealMap[p.id] = p;
+      }
+      state = AsyncValue.data(dealMap.values.toList());
     } catch (e, st) {
       if (mounted) state = AsyncValue.error(e, st);
+    } finally {
+      _isLoading = false;
     }
   }
 
@@ -120,10 +135,12 @@ final pipelinesNotifierProvider =
         (ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
+  final canViewAll = profile?.primaryRole.canViewAllPipelines == true ||
+      profile?.roles.any((r) => r.canViewAllPipelines) == true;
   return PipelinesNotifier(
     supabase,
     profile?.id,
-    profile?.primaryRole.canViewAllPipelines ?? false,
+    canViewAll,
   );
 });
 

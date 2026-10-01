@@ -861,6 +861,8 @@ class _CustomerTile extends ConsumerWidget {
                         fontSize: 13,
                         color: AppColors.textSecondary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   if (customer.phone != null) ...[
@@ -870,12 +872,16 @@ class _CustomerTile extends ConsumerWidget {
                         const Icon(Icons.phone_outlined,
                             size: 12, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
-                        Text(
-                          customer.phone!,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
+                        Expanded(
+                          child: Text(
+                            customer.phone!,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

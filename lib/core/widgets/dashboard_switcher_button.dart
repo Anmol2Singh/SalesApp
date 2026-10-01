@@ -25,16 +25,20 @@ class DashboardSwitcherButton extends ConsumerWidget {
     final hasAdmin = uniqueRoles.contains(UserRole.admin) || uniqueRoles.contains(UserRole.manager);
     final hasSales = uniqueRoles.contains(UserRole.sales) || uniqueRoles.contains(UserRole.salesHead);
     final hasService = uniqueRoles.contains(UserRole.serviceHead);
+    final hasInstallation = uniqueRoles.contains(UserRole.installation) || hasService;
     final hasCrm = uniqueRoles.contains(UserRole.crmStaff);
     final hasTechnician = uniqueRoles.contains(UserRole.technician);
-    final hasOperations = uniqueRoles.contains(UserRole.boq) ||
+    // Per requirements 3(v-ix): no external BOQ/operations dashboard needed if sales role is present
+    final hasOperations = !hasSales && !hasAdmin && (
+        uniqueRoles.contains(UserRole.boq) ||
         uniqueRoles.contains(UserRole.factory) ||
-        uniqueRoles.contains(UserRole.purchase);
+        uniqueRoles.contains(UserRole.purchase));
 
     int distinctDashboards = 0;
     if (hasAdmin) distinctDashboards++;
     if (hasSales) distinctDashboards++;
     if (hasService) distinctDashboards++;
+    if (hasInstallation && !hasService) distinctDashboards++;
     if (hasCrm) distinctDashboards++;
     if (hasTechnician) distinctDashboards++;
     if (hasOperations) distinctDashboards++;
@@ -101,6 +105,9 @@ class DashboardSwitcherButton extends ConsumerWidget {
               ),
             ),
           );
+        }
+
+        if (hasInstallation) {
           items.add(
             const PopupMenuItem<String>(
               value: AppRoutes.installationsDashboard,
@@ -174,22 +181,6 @@ class DashboardSwitcherButton extends ConsumerWidget {
             ),
           );
         }
-
-        items.add(
-          const PopupMenuDivider(height: 1),
-        );
-        items.add(
-          const PopupMenuItem<String>(
-            value: AppRoutes.dailyTasks,
-            child: Row(
-              children: [
-                Icon(Icons.fact_check_outlined, color: Color(0xFF34D399), size: 18),
-                SizedBox(width: 10),
-                Text('Daily Tasks Completed', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-        );
 
         return items;
       },

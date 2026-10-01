@@ -708,7 +708,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
         MaterialPageRoute(
           builder: (context) => PdfPreviewScreen(
             pdfBytes: pdfBytes,
-            fileName: 'BOQ_${boq.boqNumber.replaceAll('/', '_')}.pdf',
+            fileName: '${boq.boqNumber.replaceAll('/', '_')}.pdf',
           ),
         ),
       );

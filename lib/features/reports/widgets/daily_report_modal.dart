@@ -106,6 +106,7 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
 
   void _showPdfSectionPicker() {
     final selectedKeys = availableSections.map((s) => s['key'] as String).toSet();
+    bool isGenerating = false;
 
     showModalBottomSheet(
       context: context,
@@ -305,20 +306,39 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                      icon: isGenerating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.picture_as_pdf_outlined, size: 20),
                       label: Text(
-                        selectedKeys.isEmpty ? 'Select at least 1 section' : 'Generate PDF (${selectedKeys.length} selected)',
+                        isGenerating
+                            ? 'Generating PDF Report...'
+                            : (selectedKeys.isEmpty
+                                ? 'Select at least 1 section'
+                                : 'Generate PDF (${selectedKeys.length} selected)'),
                         style: const TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      onPressed: selectedKeys.isEmpty
+                      onPressed: (selectedKeys.isEmpty || isGenerating)
                           ? null
-                          : () {
-                              Navigator.pop(sheetCtx);
-                              _generatePdfReport(selectedKeys);
+                          : () async {
+                              setPickerState(() => isGenerating = true);
+                              try {
+                                if (sheetCtx.mounted) {
+                                  Navigator.pop(sheetCtx);
+                                }
+                                await _generatePdfReport(selectedKeys);
+                              } catch (e) {
+                                if (sheetCtx.mounted) {
+                                  setPickerState(() => isGenerating = false);
+                                }
+                              }
                             },
                     ),
                   ),
@@ -362,7 +382,7 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
           'Daily_Report_${profile.fullName.replaceAll(" ", "_")}_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
 
       if (!mounted) return;
-      Navigator.pop(context); // close bottom sheet
+      setState(() => _isLoading = false);
 
       Navigator.push(
         context,

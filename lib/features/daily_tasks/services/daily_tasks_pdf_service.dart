@@ -6,8 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
+import '../../../core/services/pdf_service.dart';
 import '../models/daily_task_model.dart';
 import '../providers/daily_tasks_provider.dart';
 
@@ -54,22 +54,29 @@ class DailyTasksPdfService {
   }) async {
     final pdf = pw.Document();
 
-    final prefs = await SharedPreferences.getInstance();
-    final companyName = prefs.getString('company_name') ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = prefs.getString('company_address') ??
+    final resolvedConfig = await PdfService.resolveTemplateConfig(null);
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
         'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = prefs.getString('company_phone') ?? '+91 9292922992';
-    final companyEmail = prefs.getString('company_email') ?? 'insiyasolarindustry@gmail.com';
-    final logoUrl = prefs.getString('company_logo_url');
+    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     pw.ImageProvider? logoImage;
     if (logoUrl != null && logoUrl.isNotEmpty) {
       try {
-        logoImage = await networkImage(logoUrl);
+        logoImage = await networkImage(logoUrl).timeout(const Duration(seconds: 2));
       } catch (_) {}
     }
 
-    final regularFont = await PdfGoogleFonts.interRegular();
-    final boldFont = await PdfGoogleFonts.interBold();
+    pw.Font regularFont;
+    pw.Font boldFont;
+    try {
+      regularFont = await PdfGoogleFonts.interRegular().timeout(const Duration(seconds: 2));
+      boldFont = await PdfGoogleFonts.interBold().timeout(const Duration(seconds: 2));
+    } catch (_) {
+      regularFont = pw.Font.helvetica();
+      boldFont = pw.Font.helveticaBold();
+    }
 
     final theme = pw.ThemeData.withFont(base: regularFont, bold: boldFont);
 

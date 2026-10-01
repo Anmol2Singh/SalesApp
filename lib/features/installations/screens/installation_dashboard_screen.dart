@@ -213,6 +213,7 @@ class _InstallationDashboardScreenState
               ),
             ),
             actions: [
+              const DashboardSwitcherButton(),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
                 tooltip: 'Refresh',

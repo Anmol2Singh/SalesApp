@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,15 +19,17 @@ final allCustomersForReportProvider = FutureProvider<List<Customer>>((ref) async
 
   final isAdmin = profile.primaryRole == UserRole.admin || profile.roles.contains(UserRole.admin);
   final isSalesHead = profile.primaryRole == UserRole.salesHead || profile.roles.contains(UserRole.salesHead);
+  final isManager = profile.primaryRole == UserRole.manager || profile.roles.contains(UserRole.manager);
+  final isSales = profile.primaryRole == UserRole.sales || profile.roles.contains(UserRole.sales);
 
-  if (!isAdmin && !isSalesHead) {
+  if (!isAdmin && !isSalesHead && !isManager && !isSales) {
     return [];
   }
 
   final response = await supabase
       .from('customers')
       .select('*')
-      .order('company_name', ascending: true);
+      .order('customer_name', ascending: true);
 
   return (response as List).map((c) => Customer.fromJson(c)).toList();
 });
@@ -48,7 +49,15 @@ class CustomerReportScreen extends ConsumerStatefulWidget {
 
 class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
   Customer? _selectedCustomer;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   bool _isGenerating = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,44 +80,203 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
           if (customers.isEmpty) {
             return const Center(child: Text('No customers found or permission denied.'));
           }
+
+          final q = _searchQuery.trim().toLowerCase();
+          final filteredCustomers = q.isEmpty
+              ? customers
+              : customers.where((c) {
+                  final name = c.customerName.toLowerCase();
+                  final comp = c.companyName.toLowerCase();
+                  final contact = (c.contactPerson ?? '').toLowerCase();
+                  final phone = (c.phone ?? '').toLowerCase();
+                  return name.contains(q) || comp.contains(q) || contact.contains(q) || phone.contains(q);
+                }).toList();
+
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Select Customer for Report',
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                    borderRadius: BorderRadius.circular(8),
+                if (_selectedCustomer == null) ...[
+                  const Text(
+                    'Search & Select Customer',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<Customer>(
-                      isExpanded: true,
-                      hint: const Text('Choose a customer...'),
-                      value: _selectedCustomer,
-                      items: customers.map((c) {
-                        return DropdownMenuItem(
-                          value: c,
-                          child: Text('${c.companyName} (${c.phone ?? "No Phone"})'),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedCustomer = val;
-                        });
-                      },
+                  const SizedBox(height: 10),
+                  // Search Box
+                  TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search customer by name, company, or phone...',
+                      prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                  ),
+                  const SizedBox(height: 12),
+                  // Filtered Customer List
+                  Expanded(
+                    child: filteredCustomers.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_search, size: 48, color: Colors.grey.shade400),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No customers matching "$_searchQuery"',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filteredCustomers.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                            itemBuilder: (context, index) {
+                              final c = filteredCustomers[index];
+                              final title = c.customerName.trim().isNotEmpty
+                                  ? c.customerName
+                                  : (c.contactPerson?.isNotEmpty == true ? c.contactPerson! : c.companyName);
+                              final subtitle = [
+                                if (c.companyName.isNotEmpty && c.companyName != title) c.companyName,
+                                if (c.phone != null && c.phone!.isNotEmpty) c.phone,
+                              ].join(' • ');
+
+                              return Card(
+                                elevation: 0,
+                                margin: const EdgeInsets.symmetric(vertical: 3),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: BorderSide(color: Colors.grey.shade200),
+                                ),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                    child: Text(
+                                      title.isNotEmpty ? title[0].toUpperCase() : 'C',
+                                      style: const TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  subtitle: subtitle.isNotEmpty
+                                      ? Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)))
+                                      : null,
+                                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.primary),
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedCustomer = c;
+                                    });
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ] else ...[
+                  // Selected Customer Header Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                          child: Text(
+                            _selectedCustomer!.customerName.isNotEmpty
+                                ? _selectedCustomer!.customerName[0].toUpperCase()
+                                : 'C',
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedCustomer!.customerName,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (_selectedCustomer!.phone != null && _selectedCustomer!.phone!.isNotEmpty)
+                                Text(
+                                  '📞 ${_selectedCustomer!.phone}',
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                ),
+                            ],
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _selectedCustomer = null;
+                              _searchController.clear();
+                              _searchQuery = '';
+                            });
+                          },
+                          icon: const Icon(Icons.swap_horiz, size: 16),
+                          label: const Text('Change', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: const Size(0, 32),
+                            side: const BorderSide(color: AppColors.primary),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                if (_selectedCustomer != null)
+                  const SizedBox(height: 16),
                   Expanded(
                     child: dataAsync.when(
                       data: (data) {
@@ -119,6 +287,7 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
                       error: (e, _) => Center(child: Text('Error: $e')),
                     ),
                   ),
+                ],
               ],
             ),
           );
@@ -140,22 +309,22 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
               _buildStatsRow(data),
               const SizedBox(height: 24),
               _buildSectionTitle('Sales Pipelines (${data.pipelines.length})', Icons.timeline),
-              ...data.pipelines.map((p) => _buildDataCard(p['products']?['name'] ?? 'Pipeline', p['status'] ?? '-', p['created_at'])).toList(),
+              ...data.pipelines.map((p) => _buildDataCard(p['products']?['name'] ?? 'Pipeline', p['status'] ?? '-', p['created_at'])),
               if (data.pipelines.isEmpty) const Text('No pipelines found', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 16),
               
               _buildSectionTitle('Tasks (${data.tasks.length})', Icons.task),
-              ...data.tasks.map((t) => _buildDataCard(t['task_description'] ?? 'Task', t['user_name'] ?? '-', t['completed_at'])).toList(),
+              ...data.tasks.map((t) => _buildDataCard(t['task_description'] ?? 'Task', t['user_name'] ?? '-', t['completed_at'])),
               if (data.tasks.isEmpty) const Text('No tasks found', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 16),
               
               _buildSectionTitle('Complaints (${data.complaints.length})', Icons.report_problem),
-              ...data.complaints.map((c) => _buildDataCard(c['ticket_number'] ?? 'Complaint', c['status'] ?? '-', c['created_at'])).toList(),
+              ...data.complaints.map((c) => _buildDataCard(c['ticket_number'] ?? 'Complaint', c['status'] ?? '-', c['created_at'])),
               if (data.complaints.isEmpty) const Text('No complaints found', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 16),
               
               _buildSectionTitle('Service Visits (${data.serviceVisits.length})', Icons.handyman),
-              ...data.serviceVisits.map((s) => _buildDataCard(s['technician_name'] ?? 'Visit', s['status'] ?? '-', s['scheduled_date'])).toList(),
+              ...data.serviceVisits.map((s) => _buildDataCard(s['technician_name'] ?? 'Visit', s['status'] ?? '-', s['scheduled_date'])),
               if (data.serviceVisits.isEmpty) const Text('No service visits found', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 32),
             ],
@@ -232,15 +401,15 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
       width: 80,
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
           Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 12, color: color.withOpacity(0.8), fontWeight: FontWeight.w600)),
+          Text(title, style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w600)),
         ],
       ),
     );

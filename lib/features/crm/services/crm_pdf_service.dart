@@ -21,6 +21,8 @@ class CrmPdfService {
   }) async {
     final pdf = pw.Document();
     final generatedByName = await PdfService.resolveCurrentUserName();
+    final resolvedConfig = await PdfService.resolveTemplateConfig(null);
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
 
     final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
         ? lead.prospectName!
@@ -48,7 +50,7 @@ class CrmPdfService {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'INSIYA SOLAR INDUSTRY',
+                    companyName,
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,

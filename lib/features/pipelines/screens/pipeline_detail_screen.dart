@@ -519,11 +519,11 @@ class _PipelineDetailContent extends ConsumerWidget {
                         break;
                     }
                     
-                    final role = profile?.primaryRole;
-                    final isAllowed = (role == UserRole.admin || role == UserRole.sales || role == UserRole.salesHead) ||
-                        (role == UserRole.factory && step == PipelineStep.factoryOrder) ||
-                        (role == UserRole.purchase && step == PipelineStep.purchaseOrder) ||
-                        (role == UserRole.boq && step == PipelineStep.boq);
+                    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+                    final isAllowed = (userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead) || userRoles.contains(UserRole.manager)) ||
+                        (userRoles.contains(UserRole.factory) && step == PipelineStep.factoryOrder) ||
+                        (userRoles.contains(UserRole.purchase) && step == PipelineStep.purchaseOrder) ||
+                        (userRoles.contains(UserRole.boq) && step == PipelineStep.boq);
 
                     if (isAvailable && isAllowed) {
                       String? variant;
@@ -569,7 +569,7 @@ class _PipelineDetailContent extends ConsumerWidget {
                             MaterialPageRoute(
                               builder: (context) => PdfPreviewScreen(
                                 pdfBytes: bytes,
-                                fileName: '${step.displayName}_${pipeline.id.substring(0, 8)}.pdf',
+                                fileName: _getStepPdfFileName(pipeline, step, variant: variant),
                               ),
                             ),
                           );
@@ -823,9 +823,11 @@ class _StepActionCard extends ConsumerWidget {
     final showActionSection = !isLocked && (isActive || isCompleted || hasData);
     
     // Post-Approval Lock and 100% Completion Lock
-    final isAdmin = userRole == UserRole.admin;
+    final currentRoles = ref.watch(currentProfileProvider)?.roles ?? [];
+    final isAdmin = currentRoles.contains(UserRole.admin);
+    final isSalesHead = currentRoles.contains(UserRole.salesHead);
     final is100PercentComplete = pipeline.status == PipelineStatus.completed;
-    final canApproveQuotations = ref.watch(currentProfileProvider)?.roles.any((r) => r.canApproveQuotations) ?? false;
+    final canApproveQuotations = currentRoles.any((r) => r.canApproveQuotations);
     
     bool isButtonEnabled = !isLocked;
     String buttonText = hasData ? 'View / Edit' : 'Fill In';
@@ -848,9 +850,7 @@ class _StepActionCard extends ConsumerWidget {
         }
       }
     } else {
-      if (is100PercentComplete && !isAdmin) {
-        isButtonEnabled = false;
-      } else if (isQuotationApproved && hasData && !isAdmin) {
+      if (is100PercentComplete && !isAdmin && !isSalesHead) {
         isButtonEnabled = false;
       }
     }
@@ -1114,14 +1114,7 @@ class _StepActionCard extends ConsumerWidget {
                           final bytes = await _generatePdfOnTheFly(ref, pipeline, step, variant: variant);
                           if (context.mounted) Navigator.pop(context);
                           if (context.mounted) {
-                            String fileName = '${step.displayName}_${pipeline.id.substring(0, 8)}.pdf';
-                            if (step == PipelineStep.boq) {
-                              if (variant == 'company') {
-                                fileName = 'BOQ_CompanyScope_${pipeline.id.substring(0, 8)}.pdf';
-                              } else if (variant == 'customer') {
-                                fileName = 'BOQ_CustomerScope_${pipeline.id.substring(0, 8)}.pdf';
-                              }
-                            }
+                            final fileName = _getStepPdfFileName(pipeline, step, variant: variant);
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -1269,9 +1262,9 @@ class _StepActionCard extends ConsumerWidget {
       case PipelineStep.salesOrder:
         return hasRole(UserRole.sales);
       case PipelineStep.boq:
-        return hasRole(UserRole.boq) || hasRole(UserRole.sales);
+        return hasRole(UserRole.boq);
       case PipelineStep.factoryOrder:
-        return hasRole(UserRole.factory) || hasRole(UserRole.sales);
+        return hasRole(UserRole.factory);
       case PipelineStep.purchaseOrder:
         return hasRole(UserRole.purchase);
       case PipelineStep.completed:
@@ -1430,6 +1423,43 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
     default:
       throw Exception('Invalid step');
   }
+}
+
+String _getStepPdfFileName(SalesPipeline pipeline, PipelineStep step, {String? variant}) {
+  switch (step) {
+    case PipelineStep.quotation:
+      if (pipeline.quotation?.quotationNumber != null && pipeline.quotation!.quotationNumber.isNotEmpty) {
+        return '${pipeline.quotation!.quotationNumber.replaceAll('/', '_')}.pdf';
+      }
+      break;
+    case PipelineStep.salesOrder:
+      if (pipeline.salesOrder?.salesOrderNumber != null && pipeline.salesOrder!.salesOrderNumber.isNotEmpty) {
+        final base = pipeline.salesOrder!.salesOrderNumber.replaceAll('/', '_');
+        return variant == 'production' ? '${base}_Production.pdf' : '$base.pdf';
+      }
+      break;
+    case PipelineStep.boq:
+      if (pipeline.boq?.boqNumber != null && pipeline.boq!.boqNumber.isNotEmpty) {
+        final base = pipeline.boq!.boqNumber.replaceAll('/', '_');
+        if (variant == 'company') return '${base}_CompanyScope.pdf';
+        if (variant == 'customer') return '${base}_CustomerScope.pdf';
+        return '$base.pdf';
+      }
+      break;
+    case PipelineStep.factoryOrder:
+      if (pipeline.factoryOrder?.orderNumber != null && pipeline.factoryOrder!.orderNumber.isNotEmpty) {
+        return '${pipeline.factoryOrder!.orderNumber.replaceAll('/', '_')}.pdf';
+      }
+      break;
+    case PipelineStep.purchaseOrder:
+      if (pipeline.purchaseOrder?.poNumber != null && pipeline.purchaseOrder!.poNumber.isNotEmpty) {
+        return '${pipeline.purchaseOrder!.poNumber.replaceAll('/', '_')}.pdf';
+      }
+      break;
+    default:
+      break;
+  }
+  return '${step.displayName}_${pipeline.id.substring(0, 8)}.pdf';
 }
 
 class _AmcActionCard extends ConsumerWidget {

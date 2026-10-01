@@ -29,6 +29,30 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool? _installationsExpanded;
 
   @override
+  void didUpdateWidget(AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentRoute != widget.currentRoute) {
+      final isCrm = widget.currentRoute.startsWith('/crm');
+      final isComplaints = widget.currentRoute.startsWith('/complaints') || 
+          widget.currentRoute.startsWith('/technician') || 
+          widget.currentRoute.contains('complaint') ||
+          widget.currentRoute == AppRoutes.complaintsDashboard ||
+          widget.currentRoute == AppRoutes.assignTechnician ||
+          widget.currentRoute == AppRoutes.serviceHistory;
+      final isInstallations = widget.currentRoute.startsWith('/installations') ||
+          widget.currentRoute == AppRoutes.installationsDashboard ||
+          widget.currentRoute == AppRoutes.installationsList ||
+          widget.currentRoute == AppRoutes.bookInstallation ||
+          widget.currentRoute == AppRoutes.assignInstallation ||
+          widget.currentRoute == AppRoutes.installationHistory;
+
+      _crmExpanded = isCrm;
+      _complaintsExpanded = isComplaints;
+      _installationsExpanded = isInstallations;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     ref.watch(realtimeSubscriptionProvider);
     final profile = ref.watch(currentProfileProvider);
@@ -84,6 +108,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         }
       },
       child: Scaffold(
+        extendBody: true,
         body: LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 800;
@@ -395,7 +420,12 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                     onTap: () {
                       setState(() {
-                        _crmExpanded = !crmExpanded;
+                        final next = !crmExpanded;
+                        _crmExpanded = next;
+                        if (next) {
+                          _complaintsExpanded = false;
+                          _installationsExpanded = false;
+                        }
                       });
                     },
                   ),
@@ -448,7 +478,12 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                     onTap: () {
                       setState(() {
-                        _complaintsExpanded = !complaintsExpanded;
+                        final next = !complaintsExpanded;
+                        _complaintsExpanded = next;
+                        if (next) {
+                          _crmExpanded = false;
+                          _installationsExpanded = false;
+                        }
                       });
                     },
                   ),
@@ -508,7 +543,12 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                     onTap: () {
                       setState(() {
-                        _installationsExpanded = !installationsExpanded;
+                        final next = !installationsExpanded;
+                        _installationsExpanded = next;
+                        if (next) {
+                          _crmExpanded = false;
+                          _complaintsExpanded = false;
+                        }
                       });
                     },
                   ),
@@ -769,7 +809,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             height: 66,
             decoration: BoxDecoration(

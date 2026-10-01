@@ -35,6 +35,7 @@ class Profile {
     if (roles.contains(UserRole.manager)) return UserRole.manager;
     if (roles.contains(UserRole.salesHead)) return UserRole.salesHead;
     if (roles.contains(UserRole.serviceHead)) return UserRole.serviceHead;
+    if (roles.contains(UserRole.installation)) return UserRole.installation;
     if (roles.contains(UserRole.sales)) return UserRole.sales;
     if (roles.contains(UserRole.purchase)) return UserRole.purchase;
     if (roles.contains(UserRole.factory)) return UserRole.factory;

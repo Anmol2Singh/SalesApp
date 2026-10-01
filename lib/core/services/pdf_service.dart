@@ -32,6 +32,35 @@ class PdfService {
       'footer_text': 'Thank you for your business.',
     };
 
+    // 1. Check local SharedPreferences cache
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString('company_name')?.isNotEmpty == true) resolved['company_name'] = prefs.getString('company_name')!;
+      if (prefs.getString('company_address')?.isNotEmpty == true) resolved['company_address'] = prefs.getString('company_address')!;
+      if (prefs.getString('company_phone')?.isNotEmpty == true) resolved['company_phone'] = prefs.getString('company_phone')!;
+      if (prefs.getString('company_email')?.isNotEmpty == true) resolved['company_email'] = prefs.getString('company_email')!;
+      if (prefs.getString('company_gst')?.isNotEmpty == true) resolved['company_gst'] = prefs.getString('company_gst')!;
+      if (prefs.getString('company_logo_url')?.isNotEmpty == true) resolved['logo_url'] = prefs.getString('company_logo_url')!;
+    } catch (_) {}
+
+    // 2. Check company_settings table (saved by Company Details & Branding page)
+    try {
+      final cRes = await Supabase.instance.client
+          .from('company_settings')
+          .select()
+          .limit(1)
+          .maybeSingle();
+      if (cRes != null && cRes is Map) {
+        if (cRes['company_name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = cRes['company_name'].toString().trim();
+        if (cRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = cRes['address'].toString().trim();
+        if (cRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = cRes['phone'].toString().trim();
+        if (cRes['email']?.toString().trim().isNotEmpty == true) resolved['company_email'] = cRes['email'].toString().trim();
+        if (cRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = cRes['gstin'].toString().trim();
+        if (cRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = cRes['logo_url'].toString().trim();
+      }
+    } catch (_) {}
+
+    // 3. Check pdf_templates table
     try {
       final res = await Supabase.instance.client
           .from('pdf_templates')
@@ -66,7 +95,7 @@ class PdfService {
   static Future<pw.ImageProvider?> _fetchLogo(String? url) async {
     if (url == null || url.isEmpty) return null;
     try {
-      return await networkImage(url);
+      return await networkImage(url).timeout(const Duration(seconds: 2));
     } catch (_) {}
     return null;
   }
@@ -2782,12 +2811,12 @@ class PdfService {
     final pdf = pw.Document();
     final generatedByName = await resolveCurrentUserName();
 
-    final prefs = await SharedPreferences.getInstance();
-    final companyName = prefs.getString('company_name') ?? 'Insiya Solar Industry';
-    final companyAddress = prefs.getString('company_address') ?? 'Default Address';
-    final companyPhone = prefs.getString('company_phone') ?? '+91 0000000000';
-    final companyEmail = prefs.getString('company_email') ?? 'info@insiyasolar.com';
-    final logoUrl = prefs.getString('company_logo_url');
+    final resolvedConfig = await resolveTemplateConfig(null);
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final incProspects = selectedSections == null || selectedSections.contains('prospects');
@@ -2804,19 +2833,10 @@ class PdfService {
       dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
     }
 
-    pw.ThemeData pdfTheme;
-    try {
-      pdfTheme = pw.ThemeData.withFont(
-        base: await PdfGoogleFonts.interRegular(),
-        bold: await PdfGoogleFonts.interBold(),
-      );
-    } catch (_) {
-      // Fallback to built-in fonts if Google Fonts download fails
-      pdfTheme = pw.ThemeData.withFont(
-        base: pw.Font.helvetica(),
-        bold: pw.Font.helveticaBold(),
-      );
-    }
+    final pw.ThemeData pdfTheme = pw.ThemeData.withFont(
+      base: pw.Font.helvetica(),
+      bold: pw.Font.helveticaBold(),
+    );
 
     pw.Widget buildHeader() {
       return pw.Row(
@@ -2827,16 +2847,19 @@ class PdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(companyName, style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                pw.SizedBox(height: 4),
-                pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                pw.Text('Phone: $companyPhone | Email: $companyEmail', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                pw.SizedBox(height: 3),
+                pw.Text(_cleanText(companyAddress), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.SizedBox(height: 2),
+                pw.Text('Phone: ${_cleanText(companyPhone)} | Email: ${_cleanText(companyEmail)}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
               ],
             ),
           ),
           if (logoImage != null)
             pw.Container(
-              height: 50,
+              height: 48,
+              width: 100,
+              alignment: pw.Alignment.topRight,
               child: pw.Image(logoImage, fit: pw.BoxFit.contain),
             ),
         ],
@@ -2870,25 +2893,23 @@ class PdfService {
         theme: pdfTheme,
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
-        header: (context) => pw.Column(
-          children: [
-            buildHeader(),
-            pw.SizedBox(height: 16),
-            pw.Divider(color: PdfColors.grey400),
-            pw.SizedBox(height: 16),
-            pw.Center(
-              child: pw.Column(
-                children: [
-                  pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.5)),
-                  pw.SizedBox(height: 4),
-                  pw.Text('Generated for: $userName', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                ],
-              ),
+        header: (context) {
+          if (context.pageNumber == 1) return pw.SizedBox();
+          return pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 12),
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
             ),
-            pw.SizedBox(height: 20),
-          ],
-        ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                pw.Text('USER ACTIVITY REPORT • ${_cleanText(userName)}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+              ],
+            ),
+          );
+        },
         footer: (context) => pw.Column(
           children: [
             pw.Divider(color: PdfColors.grey400),
@@ -2923,6 +2944,23 @@ class PdfService {
               (incComplaints && data.complaints.isNotEmpty);
 
           return [
+            // Company Header & Report Title directly in body flow (not clipped at top margin)
+            buildHeader(),
+            pw.SizedBox(height: 10),
+            pw.Divider(color: PdfColors.grey400, thickness: 0.8),
+            pw.SizedBox(height: 8),
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.2)),
+                  pw.SizedBox(height: 3),
+                  pw.Text('Generated for: ${_cleanText(userName)}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 14),
+
             // Activity Overview Summary Box
             if (summaryStats.isNotEmpty)
               pw.Container(
@@ -2946,12 +2984,13 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['ID', 'Name', 'Phone', 'Created At'],
-                data: data.customers.map((c) => [
-                  (c['id']?.toString() ?? '').length > 8 ? '${(c['id']?.toString() ?? '').substring(0, 8)}...' : (c['id']?.toString() ?? ''),
-                  c['customer_name']?.toString() ?? '-',
-                  c['phone']?.toString() ?? '-',
-                  c['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(c['created_at']) ?? DateTime.now()) : '-',
+                headers: ['Sr. No.', 'ID', 'Name', 'Phone', 'Created At'],
+                data: data.customers.asMap().entries.map((entry) => [
+                  (entry.key + 1).toString(),
+                  (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
+                  _cleanText(entry.value['customer_name']?.toString() ?? '-'),
+                  _cleanText(entry.value['phone']?.toString() ?? '-'),
+                  entry.value['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(entry.value['created_at']) ?? DateTime.now()) : '-',
                 ]).toList(),
               ),
             ],
@@ -2965,12 +3004,13 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Deal ID', 'Customer', 'Product', 'Status'],
-                data: data.pipelines.map((p) => [
-                  (p['id']?.toString() ?? '').length > 8 ? '${(p['id']?.toString() ?? '').substring(0, 8)}...' : (p['id']?.toString() ?? ''),
-                  p['customers'] != null ? p['customers']['customer_name'] : '-',
-                  p['products'] != null ? p['products']['name'] : '-',
-                  p['status']?.toString().toUpperCase() ?? '-',
+                headers: ['Sr. No.', 'Deal ID', 'Customer', 'Product', 'Status'],
+                data: data.pipelines.asMap().entries.map((entry) => [
+                  (entry.key + 1).toString(),
+                  (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
+                  _cleanText(entry.value['customers'] != null ? entry.value['customers']['customer_name'] : '-'),
+                  _cleanText(entry.value['products'] != null ? entry.value['products']['name'] : '-'),
+                  entry.value['status']?.toString().toUpperCase() ?? '-',
                 ]).toList(),
               ),
             ],
@@ -2984,8 +3024,9 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Deal / Customer', 'Step', 'Action', 'Time'],
-                data: data.stepAuditLogs.map((s) {
+                headers: ['Sr. No.', 'Deal / Customer', 'Step', 'Action', 'Time'],
+                data: data.stepAuditLogs.asMap().entries.map((entry) {
+                  final s = entry.value;
                   final pipeline = s['sales_pipelines'] as Map<String, dynamic>?;
                   final cust = pipeline?['customers'] as Map<String, dynamic>?;
                   final prod = pipeline?['products'] as Map<String, dynamic>?;
@@ -2993,7 +3034,8 @@ class PdfService {
                   final pName = prod?['name'] ?? '';
                   final dealStr = [cName, pName].where((e) => e.isNotEmpty).join(' - ');
                   return [
-                    dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-'),
+                    (entry.key + 1).toString(),
+                    _cleanText(dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-')),
                     s['step_name']?.toString().toUpperCase() ?? '-',
                     s['action']?.toString() ?? '-',
                     s['performed_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(s['performed_at']) ?? DateTime.now()) : '-',
@@ -3011,14 +3053,16 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Lead / Prospect', 'Type', 'Summary', 'Time'],
-                data: data.communications.map((comm) {
+                headers: ['Sr. No.', 'Lead / Prospect', 'Type', 'Summary', 'Time'],
+                data: data.communications.asMap().entries.map((entry) {
+                  final comm = entry.value;
                   final lead = comm['crm_leads'] as Map<String, dynamic>?;
                   final leadName = lead?['prospect_name'] ?? '-';
                   return [
-                    leadName,
+                    (entry.key + 1).toString(),
+                    _cleanText(leadName),
                     comm['type']?.toString() ?? '-',
-                    comm['summary']?.toString() ?? '-',
+                    _cleanText(comm['summary']?.toString() ?? '-'),
                     comm['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(comm['created_at']) ?? DateTime.now()) : '-',
                   ];
                 }).toList(),
@@ -3034,13 +3078,17 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Prospect', 'Product', 'Est. Value', 'Status'],
-                data: data.leads.map((l) => [
-                  l['prospect_name']?.toString() ?? '-',
-                  l['product_name']?.toString() ?? '-',
-                  '₹${l['estimated_value'] ?? 0}',
-                  l['status']?.toString() ?? 'New',
-                ]).toList(),
+                headers: ['Sr. No.', 'Prospect', 'Product', 'Est. Value', 'Status'],
+                data: data.leads.asMap().entries.map((entry) {
+                  final l = entry.value;
+                  return [
+                    (entry.key + 1).toString(),
+                    _cleanText(l['prospect_name']?.toString() ?? '-'),
+                    _cleanText(l['product_name']?.toString() ?? '-'),
+                    'Rs. ${l['estimated_value'] ?? 0}',
+                    l['status']?.toString() ?? 'New',
+                  ];
+                }).toList(),
               ),
             ],
 
@@ -3053,15 +3101,19 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
-                data: data.prospects.map((pr) => [
-                  pr['name']?.toString() ?? '-',
-                  pr['phone']?.toString() ?? '-',
-                  pr['company']?.toString() ?? '-',
-                  pr['source']?.toString() ?? 'Manual',
-                  pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
-                  pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
-                ]).toList(),
+                headers: ['Sr. No.', 'Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
+                data: data.prospects.asMap().entries.map((entry) {
+                  final pr = entry.value;
+                  return [
+                    (entry.key + 1).toString(),
+                    _cleanText(pr['name']?.toString() ?? '-'),
+                    _cleanText(pr['phone']?.toString() ?? '-'),
+                    _cleanText(pr['company']?.toString() ?? '-'),
+                    pr['source']?.toString() ?? 'Manual',
+                    pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
+                    pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+                  ];
+                }).toList(),
               ),
             ],
 
@@ -3074,13 +3126,24 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Type', 'Name', 'Details', 'Time'],
-                data: data.conversions.map((conv) => [
-                  conv['type']?.toString() ?? '-',
-                  conv['name']?.toString() ?? '-',
-                  conv['details']?.toString() ?? '-',
-                  conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
-                ]).toList(),
+                columnWidths: {
+                  0: const pw.FixedColumnWidth(26),
+                  1: const pw.FixedColumnWidth(80),
+                  2: const pw.FixedColumnWidth(115),
+                  3: const pw.FlexColumnWidth(2.5),
+                  4: const pw.FixedColumnWidth(65),
+                },
+                headers: ['Sr. No.', 'Type', 'Name', 'Details', 'Time'],
+                data: data.conversions.asMap().entries.map((entry) {
+                  final conv = entry.value;
+                  return [
+                    (entry.key + 1).toString(),
+                    _cleanText(conv['type']?.toString() ?? '-'),
+                    _cleanText(conv['name']?.toString() ?? '-'),
+                    _cleanText(conv['details']?.toString() ?? '-'),
+                    conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
+                  ];
+                }).toList(),
               ),
             ],
 
@@ -3093,13 +3156,17 @@ class PdfService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Ticket ID', 'Title', 'Customer', 'Status'],
-                data: data.complaints.map((c) => [
-                  c['ticket_number'] ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
-                  c['title']?.toString() ?? '-',
-                  c['customer_name']?.toString() ?? '-',
-                  c['status']?.toString().toUpperCase() ?? '-',
-                ]).toList(),
+                headers: ['Sr. No.', 'Ticket ID', 'Title', 'Customer', 'Status'],
+                data: data.complaints.asMap().entries.map((entry) {
+                  final c = entry.value;
+                  return [
+                    (entry.key + 1).toString(),
+                    c['ticket_number'] ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
+                    c['title']?.toString() ?? '-',
+                    c['customer_name']?.toString() ?? '-',
+                    c['status']?.toString().toUpperCase() ?? '-',
+                  ];
+                }).toList(),
               ),
             ],
 
@@ -3124,12 +3191,12 @@ class PdfService {
     final pdf = pw.Document();
     final generatedByName = await resolveCurrentUserName();
 
-    final prefs = await SharedPreferences.getInstance();
-    final companyName = prefs.getString('company_name') ?? 'Insiya Solar Industry';
-    final companyAddress = prefs.getString('company_address') ?? 'Default Address';
-    final companyPhone = prefs.getString('company_phone') ?? '+91 0000000000';
-    final companyEmail = prefs.getString('company_email') ?? 'info@insiyasolar.com';
-    final logoUrl = prefs.getString('company_logo_url');
+    final resolvedConfig = await resolveTemplateConfig(null);
+    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
     final incProspects = selectedSections == null || selectedSections.contains('prospects');
@@ -3146,18 +3213,10 @@ class PdfService {
       dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
     }
 
-    pw.ThemeData pdfTheme;
-    try {
-      pdfTheme = pw.ThemeData.withFont(
-        base: await PdfGoogleFonts.interRegular(),
-        bold: await PdfGoogleFonts.interBold(),
-      );
-    } catch (_) {
-      pdfTheme = pw.ThemeData.withFont(
-        base: pw.Font.helvetica(),
-        bold: pw.Font.helveticaBold(),
-      );
-    }
+    final pw.ThemeData pdfTheme = pw.ThemeData.withFont(
+      base: pw.Font.helvetica(),
+      bold: pw.Font.helveticaBold(),
+    );
 
     pw.Widget buildHeader() {
       return pw.Row(
@@ -3168,10 +3227,11 @@ class PdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(companyName, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
                 pw.SizedBox(height: 3),
-                pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-                pw.Text('Phone: $companyPhone | Email: $companyEmail', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Text(_cleanText(companyAddress), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.SizedBox(height: 2),
+                pw.Text('Phone: ${_cleanText(companyPhone)} | Email: ${_cleanText(companyEmail)}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
               ],
             ),
           ),
@@ -3216,25 +3276,23 @@ class PdfService {
           theme: pdfTheme,
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(32),
-          header: (pageCtx) => pw.Column(
-            children: [
-              buildHeader(),
-              pw.SizedBox(height: 12),
-              pw.Divider(color: PdfColors.grey400),
-              pw.SizedBox(height: 10),
-              pw.Center(
-                child: pw.Column(
-                  children: [
-                    pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.5)),
-                    pw.SizedBox(height: 3),
-                    pw.Text('Staff Member: $uName ${uRole.isNotEmpty ? "($uRole)" : ""}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                    pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  ],
-                ),
+          header: (pageCtx) {
+            if (pageCtx.pageNumber == 1) return pw.SizedBox();
+            return pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 12),
+              padding: const pw.EdgeInsets.only(bottom: 4),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
               ),
-              pw.SizedBox(height: 14),
-            ],
-          ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                  pw.Text('USER ACTIVITY REPORT • ${_cleanText(uName)}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                ],
+              ),
+            );
+          },
           footer: (pageCtx) => pw.Column(
             children: [
               pw.Divider(color: PdfColors.grey400),
@@ -3269,6 +3327,23 @@ class PdfService {
                 (incComplaints && uData.complaints.isNotEmpty);
 
             return [
+              // Company Header & Title on first page flow
+              buildHeader(),
+              pw.SizedBox(height: 10),
+              pw.Divider(color: PdfColors.grey400, thickness: 0.8),
+              pw.SizedBox(height: 8),
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.2)),
+                    pw.SizedBox(height: 3),
+                    pw.Text('Staff Member: ${_cleanText(uName)} ${uRole.isNotEmpty ? "($_cleanText(uRole))" : ""}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                    pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
               // Activity Overview Summary Box for this user
               if (summaryStats.isNotEmpty)
                 pw.Container(
@@ -3292,12 +3367,13 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['ID', 'Name', 'Phone', 'Created At'],
-                  data: uData.customers.map((c) => [
-                    (c['id']?.toString() ?? '').length > 8 ? '${(c['id']?.toString() ?? '').substring(0, 8)}...' : (c['id']?.toString() ?? ''),
-                    c['customer_name']?.toString() ?? '-',
-                    c['phone']?.toString() ?? '-',
-                    c['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(c['created_at']) ?? DateTime.now()) : '-',
+                  headers: ['Sr. No.', 'ID', 'Name', 'Phone', 'Created At'],
+                  data: uData.customers.asMap().entries.map((entry) => [
+                    (entry.key + 1).toString(),
+                    (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
+                    entry.value['customer_name']?.toString() ?? '-',
+                    entry.value['phone']?.toString() ?? '-',
+                    entry.value['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(entry.value['created_at']) ?? DateTime.now()) : '-',
                   ]).toList(),
                 ),
               ],
@@ -3311,12 +3387,13 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Deal ID', 'Customer', 'Product', 'Status'],
-                  data: uData.pipelines.map((p) => [
-                    (p['id']?.toString() ?? '').length > 8 ? '${(p['id']?.toString() ?? '').substring(0, 8)}...' : (p['id']?.toString() ?? ''),
-                    p['customers'] != null ? p['customers']['customer_name']?.toString() ?? '-' : '-',
-                    p['products'] != null ? p['products']['name']?.toString() ?? '-' : '-',
-                    p['status']?.toString().toUpperCase() ?? '-',
+                  headers: ['Sr. No.', 'Deal ID', 'Customer', 'Product', 'Status'],
+                  data: uData.pipelines.asMap().entries.map((entry) => [
+                    (entry.key + 1).toString(),
+                    (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
+                    entry.value['customers'] != null ? entry.value['customers']['customer_name']?.toString() ?? '-' : '-',
+                    entry.value['products'] != null ? entry.value['products']['name']?.toString() ?? '-' : '-',
+                    entry.value['status']?.toString().toUpperCase() ?? '-',
                   ]).toList(),
                 ),
               ],
@@ -3330,8 +3407,9 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Deal / Customer', 'Step', 'Action', 'Time'],
-                  data: uData.stepAuditLogs.map((s) {
+                  headers: ['Sr. No.', 'Deal / Customer', 'Step', 'Action', 'Time'],
+                  data: uData.stepAuditLogs.asMap().entries.map((entry) {
+                    final s = entry.value;
                     final pipeline = s['sales_pipelines'] as Map<String, dynamic>?;
                     final cust = pipeline?['customers'] as Map<String, dynamic>?;
                     final prod = pipeline?['products'] as Map<String, dynamic>?;
@@ -3339,6 +3417,7 @@ class PdfService {
                     final pName = prod?['name'] ?? '';
                     final dealStr = [cName, pName].where((e) => e.isNotEmpty).join(' - ');
                     return [
+                      (entry.key + 1).toString(),
                       dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-'),
                       s['step_name']?.toString().toUpperCase() ?? '-',
                       s['action']?.toString() ?? '-',
@@ -3357,11 +3436,13 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Lead / Prospect', 'Type', 'Summary', 'Time'],
-                  data: uData.communications.map((comm) {
+                  headers: ['Sr. No.', 'Lead / Prospect', 'Type', 'Summary', 'Time'],
+                  data: uData.communications.asMap().entries.map((entry) {
+                    final comm = entry.value;
                     final lead = comm['crm_leads'] as Map<String, dynamic>?;
                     final leadName = lead?['prospect_name'] ?? '-';
                     return [
+                      (entry.key + 1).toString(),
                       leadName,
                       comm['type']?.toString() ?? '-',
                       comm['summary']?.toString() ?? '-',
@@ -3380,13 +3461,17 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Prospect', 'Product', 'Est. Value', 'Status'],
-                  data: uData.leads.map((l) => [
-                    l['prospect_name']?.toString() ?? '-',
-                    l['product_name']?.toString() ?? '-',
-                    '₹${l['estimated_value'] ?? 0}',
-                    l['status']?.toString() ?? 'New',
-                  ]).toList(),
+                  headers: ['Sr. No.', 'Prospect', 'Product', 'Est. Value', 'Status'],
+                  data: uData.leads.asMap().entries.map((entry) {
+                    final l = entry.value;
+                    return [
+                      (entry.key + 1).toString(),
+                      _cleanText(l['prospect_name']?.toString() ?? '-'),
+                      _cleanText(l['product_name']?.toString() ?? '-'),
+                      'Rs. ${l['estimated_value'] ?? 0}',
+                      l['status']?.toString() ?? 'New',
+                    ];
+                  }).toList(),
                 ),
               ],
 
@@ -3399,15 +3484,19 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
-                  data: uData.prospects.map((pr) => [
-                    pr['name']?.toString() ?? '-',
-                    pr['phone']?.toString() ?? '-',
-                    pr['company']?.toString() ?? '-',
-                    pr['source']?.toString() ?? 'Manual',
-                    pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
-                    pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
-                  ]).toList(),
+                  headers: ['Sr. No.', 'Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
+                  data: uData.prospects.asMap().entries.map((entry) {
+                    final pr = entry.value;
+                    return [
+                      (entry.key + 1).toString(),
+                      _cleanText(pr['name']?.toString() ?? '-'),
+                      _cleanText(pr['phone']?.toString() ?? '-'),
+                      _cleanText(pr['company']?.toString() ?? '-'),
+                      pr['source']?.toString() ?? 'Manual',
+                      pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
+                      pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+                    ];
+                  }).toList(),
                 ),
               ],
 
@@ -3420,13 +3509,24 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Type', 'Name', 'Details', 'Time'],
-                  data: uData.conversions.map((conv) => [
-                    conv['type']?.toString() ?? '-',
-                    conv['name']?.toString() ?? '-',
-                    conv['details']?.toString() ?? '-',
-                    conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
-                  ]).toList(),
+                  columnWidths: {
+                    0: const pw.FixedColumnWidth(26),
+                    1: const pw.FixedColumnWidth(80),
+                    2: const pw.FixedColumnWidth(115),
+                    3: const pw.FlexColumnWidth(2.5),
+                    4: const pw.FixedColumnWidth(65),
+                  },
+                  headers: ['Sr. No.', 'Type', 'Name', 'Details', 'Time'],
+                  data: uData.conversions.asMap().entries.map((entry) {
+                    final conv = entry.value;
+                    return [
+                      (entry.key + 1).toString(),
+                      _cleanText(conv['type']?.toString() ?? '-'),
+                      _cleanText(conv['name']?.toString() ?? '-'),
+                      _cleanText(conv['details']?.toString() ?? '-'),
+                      conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
+                    ];
+                  }).toList(),
                 ),
               ],
 
@@ -3439,13 +3539,17 @@ class PdfService {
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Ticket ID', 'Title', 'Customer', 'Status'],
-                  data: uData.complaints.map((c) => [
-                    c['ticket_number']?.toString() ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
-                    c['title']?.toString() ?? '-',
-                    c['customer_name']?.toString() ?? '-',
-                    c['status']?.toString().toUpperCase() ?? '-',
-                  ]).toList(),
+                  headers: ['Sr. No.', 'Ticket ID', 'Title', 'Customer', 'Status'],
+                  data: uData.complaints.asMap().entries.map((entry) {
+                    final c = entry.value;
+                    return [
+                      (entry.key + 1).toString(),
+                      c['ticket_number']?.toString() ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
+                      c['title']?.toString() ?? '-',
+                      c['customer_name']?.toString() ?? '-',
+                      c['status']?.toString().toUpperCase() ?? '-',
+                    ];
+                  }).toList(),
                 ),
               ],
 

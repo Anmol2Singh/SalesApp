@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/customer.dart';
+import '../../../core/models/pipeline.dart';
 import '../../../core/models/quotation.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/widgets/pipeline_card.dart';
@@ -58,6 +59,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               status: _selectedStatus,
             );
       });
+    } else {
+      // Requirement 6: Refresh directly on open so fresh data loads first
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
+      });
     }
   }
 
@@ -77,7 +83,6 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(dealsStreamProvider);
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
     final profile = ref.watch(currentProfileProvider);
     final canViewAll = profile?.primaryRole == UserRole.admin ||
@@ -85,6 +90,35 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         profile?.primaryRole == UserRole.salesHead ||
         profile?.roles.contains(UserRole.admin) == true ||
         profile?.roles.contains(UserRole.salesHead) == true;
+
+    final roles = profile?.roles ?? [];
+    final isSalesOrAdmin = profile?.primaryRole == UserRole.admin ||
+        profile?.primaryRole == UserRole.manager ||
+        profile?.primaryRole == UserRole.salesHead ||
+        profile?.primaryRole == UserRole.sales ||
+        roles.contains(UserRole.admin) ||
+        roles.contains(UserRole.manager) ||
+        roles.contains(UserRole.salesHead) ||
+        roles.contains(UserRole.sales);
+
+    final hasBoqRole = profile?.primaryRole == UserRole.boq || roles.contains(UserRole.boq);
+    final hasFactoryRole = profile?.primaryRole == UserRole.factory || roles.contains(UserRole.factory);
+    final hasMaterialRole = profile?.primaryRole == UserRole.purchase || roles.contains(UserRole.purchase);
+
+    final isRoleRestricted = !isSalesOrAdmin && (hasBoqRole || hasFactoryRole || hasMaterialRole);
+
+    bool isDealVisibleForUser(SalesPipeline p) {
+      if (!isRoleRestricted) return true;
+      final isCompleted = p.status == PipelineStatus.completed || p.currentStep == PipelineStep.completed;
+      if (isCompleted) return true;
+
+      final stepIndex = p.currentStep.stepIndex;
+      if (hasBoqRole && stepIndex >= PipelineStep.boq.stepIndex) return true;
+      if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex) return true;
+      if (hasMaterialRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex) return true;
+
+      return false;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -212,7 +246,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           slivers: [
             // Segmented Control Tabs & Quick Filter Chips
             pipelinesAsync.maybeWhen(
-              data: (allPipelines) {
+              data: (rawPipelines) {
+                final allPipelines = rawPipelines.where(isDealVisibleForUser).toList();
                 final needsActionCount = allPipelines
                     .where((p) =>
                         p.quotation?.status == QuotationStatus.pendingApproval)
@@ -343,12 +378,6 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                             children: [
                               _buildQuickChip('All', 'all'),
                               const SizedBox(width: 6),
-                              _buildQuickChip(
-                                '⚠️ Needs Approval ($needsActionCount)',
-                                'needs_approval',
-                                isAlert: true,
-                              ),
-                              const SizedBox(width: 6),
                               _buildQuickChip('Quotation', 'quotation'),
                               const SizedBox(width: 6),
                               _buildQuickChip('BOQ', 'boq'),
@@ -386,7 +415,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               ),
 
             pipelinesAsync.when(
-              data: (allPipelines) {
+              data: (rawPipelines) {
+                final allPipelines = rawPipelines.where(isDealVisibleForUser).toList();
                 final pipelines = allPipelines.where((p) {
                   // Tab selection
                   if (_selectedTabIndex == 0) {

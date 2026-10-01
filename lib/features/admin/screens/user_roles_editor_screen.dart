@@ -95,23 +95,70 @@ class _UserRolesEditorScreenState extends ConsumerState<UserRolesEditorScreen> {
               itemBuilder: (context, index) {
                 final role = availableRoles[index];
                 final isSelected = _selectedRoles.contains(role);
+
+                final hasAdmin = _selectedRoles.contains(UserRole.admin);
+                final hasManager = _selectedRoles.contains(UserRole.manager);
+                final hasSalesHead = _selectedRoles.contains(UserRole.salesHead);
+
+                bool isDisabled = false;
+                String subtitleText = 'ID: ${role.name}';
+
+                if (hasAdmin && role != UserRole.admin) {
+                  isDisabled = true;
+                  subtitleText = 'Disabled (Admin has full access to all roles)';
+                } else if (hasManager && role != UserRole.manager && role != UserRole.admin) {
+                  isDisabled = true;
+                  subtitleText = 'Disabled (Manager cannot be allotted other roles)';
+                } else if (hasSalesHead && (role == UserRole.sales || role == UserRole.crmStaff)) {
+                  isDisabled = true;
+                  subtitleText = 'Disabled (Superseded by Sales Head)';
+                }
+
                 return CheckboxListTile(
                   title: Text(
                     role.displayName,
-                    style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      color: isDisabled ? Colors.grey.shade400 : AppColors.textPrimary,
+                    ),
                   ),
-                  subtitle: Text('ID: ${role.name}', style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary)),
+                  subtitle: Text(
+                    subtitleText,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: isDisabled ? Colors.grey.shade400 : AppColors.textSecondary,
+                    ),
+                  ),
                   value: isSelected,
                   activeColor: AppColors.primary,
-                  onChanged: (bool? checked) {
-                    setState(() {
-                      if (checked == true) {
-                        _selectedRoles.add(role);
-                      } else {
-                        _selectedRoles.remove(role);
-                      }
-                    });
-                  },
+                  onChanged: isDisabled
+                      ? null
+                      : (bool? checked) {
+                          setState(() {
+                            if (checked == true) {
+                              if (role == UserRole.admin) {
+                                // i) admin role: disable giving any other role, clear all others
+                                _selectedRoles = [UserRole.admin];
+                              } else if (role == UserRole.manager) {
+                                // ii) manager role: disable rest all roles allotment
+                                _selectedRoles = [UserRole.manager];
+                              } else if (role == UserRole.salesHead) {
+                                // iii) Sales Head role: disable sales executive & crm staff role, (uncheck if already allotted)
+                                _selectedRoles.remove(UserRole.sales);
+                                _selectedRoles.remove(UserRole.crmStaff);
+                                _selectedRoles.add(UserRole.salesHead);
+                              } else {
+                                // If promoting to admin from anything, handled above
+                                _selectedRoles.remove(UserRole.manager);
+                                _selectedRoles.add(role);
+                              }
+                            } else {
+                              _selectedRoles.remove(role);
+                            }
+                          });
+                        },
                 );
               },
             ),

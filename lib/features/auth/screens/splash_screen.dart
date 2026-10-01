@@ -189,6 +189,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return '/customer/dashboard';
       case UserRole.crmStaff:
         return '/crm/dashboard';
+      case UserRole.installation:
+        return AppRoutes.installationsDashboard;
     }
   }
 }

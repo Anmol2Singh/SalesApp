@@ -2311,7 +2311,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           builder: (context) => PdfPreviewScreen(
             pdfBytes: pdfBytes,
             fileName:
-                'Quotation_${quotation.quotationNumber.replaceAll('/', '_')}.pdf',
+                '${quotation.quotationNumber.replaceAll('/', '_')}.pdf',
           ),
         ),
       );

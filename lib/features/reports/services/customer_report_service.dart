@@ -1,13 +1,10 @@
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:excel/excel.dart';
 import '../../../core/models/customer.dart';
-import '../../../core/widgets/export_preview_dialog.dart';
 
 class Customer360Data {
   final List pipelines;
@@ -25,7 +22,6 @@ class Customer360Data {
 
 class CustomerReportService {
   static final _dateFormat = DateFormat('dd MMM yyyy, HH:mm');
-  static final _currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
 
   static Future<Customer360Data> fetchCustomerData(
     SupabaseClient supabase,
@@ -156,13 +152,14 @@ class CustomerReportService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellAlignment: pw.Alignment.centerLeft,
                 oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                headers: ['ID', 'Product', 'Status', 'Step', 'Created At'],
-                data: pipelines.map((p) => [
-                  _shortId(p['id']),
-                  p['products']?['name'] ?? 'N/A',
-                  p['status'] ?? '-',
-                  (p['current_step'] ?? '-').toString().replaceAll('_', ' ').toUpperCase(),
-                  _formatDate(p['created_at']),
+                headers: ['Sr. No.', 'ID', 'Product', 'Status', 'Step', 'Created At'],
+                data: pipelines.asMap().entries.map((entry) => [
+                  (entry.key + 1).toString(),
+                  _shortId(entry.value['id']),
+                  entry.value['products']?['name'] ?? 'N/A',
+                  entry.value['status'] ?? '-',
+                  (entry.value['current_step'] ?? '-').toString().replaceAll('_', ' ').toUpperCase(),
+                  _formatDate(entry.value['created_at']),
                 ]).toList(),
               ),
               pw.SizedBox(height: 24),
@@ -178,13 +175,14 @@ class CustomerReportService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellAlignment: pw.Alignment.centerLeft,
                 oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                headers: ['Ticket', 'Status', 'Priority', 'Type', 'Created At'],
-                data: complaints.map((c) => [
-                  c['ticket_number'] ?? _shortId(c['id']),
-                  c['status'] ?? '-',
-                  c['priority'] ?? '-',
-                  c['complaint_type'] ?? '-',
-                  _formatDate(c['created_at']),
+                headers: ['Sr. No.', 'Ticket', 'Status', 'Priority', 'Type', 'Created At'],
+                data: complaints.asMap().entries.map((entry) => [
+                  (entry.key + 1).toString(),
+                  entry.value['ticket_number'] ?? _shortId(entry.value['id']),
+                  entry.value['status'] ?? '-',
+                  entry.value['priority'] ?? '-',
+                  entry.value['complaint_type'] ?? '-',
+                  _formatDate(entry.value['created_at']),
                 ]).toList(),
               ),
               pw.SizedBox(height: 24),
@@ -200,12 +198,13 @@ class CustomerReportService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellAlignment: pw.Alignment.centerLeft,
                 oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                headers: ['ID', 'Status', 'Technician', 'Scheduled For'],
-                data: serviceVisits.map((v) => [
-                  _shortId(v['id']),
-                  v['status'] ?? '-',
-                  v['technician_name'] ?? '-',
-                  _formatDate(v['scheduled_date']),
+                headers: ['Sr. No.', 'ID', 'Status', 'Technician', 'Scheduled For'],
+                data: serviceVisits.asMap().entries.map((entry) => [
+                  (entry.key + 1).toString(),
+                  _shortId(entry.value['id']),
+                  entry.value['status'] ?? '-',
+                  entry.value['technician_name'] ?? '-',
+                  _formatDate(entry.value['scheduled_date']),
                 ]).toList(),
               ),
               pw.SizedBox(height: 24),
@@ -221,11 +220,12 @@ class CustomerReportService {
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellAlignment: pw.Alignment.centerLeft,
                 oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                headers: ['Task', 'Staff', 'Completed At'],
-                data: tasks.map((t) => [
-                  t['task_description'] ?? '-',
-                  t['user_name'] ?? '-',
-                  _formatDate(t['completed_at']),
+                headers: ['Sr. No.', 'Task', 'Staff', 'Completed At'],
+                data: tasks.asMap().entries.map((entry) => [
+                  (entry.key + 1).toString(),
+                  entry.value['task_description'] ?? '-',
+                  entry.value['user_name'] ?? '-',
+                  _formatDate(entry.value['completed_at']),
                 ]).toList(),
               ),
               pw.SizedBox(height: 24),

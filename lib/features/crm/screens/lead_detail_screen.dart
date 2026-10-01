@@ -2691,8 +2691,9 @@ class _LeadQuotationsSectionState
       );
 
       if (mounted) {
-        final fileName =
-            'Quotation_Rev${quot.revision}_${quot.quotationNumber.replaceAll('/', '_')}.pdf';
+        final fileName = quot.revision > 0
+            ? '${quot.quotationNumber.replaceAll('/', '_')}_Rev${quot.revision}.pdf'
+            : '${quot.quotationNumber.replaceAll('/', '_')}.pdf';
         Navigator.push(
           context,
           MaterialPageRoute(

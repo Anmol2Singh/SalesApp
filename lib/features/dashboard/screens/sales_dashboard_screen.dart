@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/models/user_role.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../../core/models/customer.dart';
@@ -321,77 +322,168 @@ class SalesDashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (profile?.primaryRole.canCreateCustomers ?? false) ...[
-                      Expanded(
-                        child: _ActionCard(
+                Builder(
+                  builder: (context) {
+                    final roles = profile?.roles ?? [];
+                    final isHeadOrAdmin = profile?.primaryRole == UserRole.admin ||
+                        profile?.primaryRole == UserRole.manager ||
+                        profile?.primaryRole == UserRole.salesHead ||
+                        roles.contains(UserRole.admin) ||
+                        roles.contains(UserRole.salesHead);
+
+                    final actionCards = <_ActionCard>[];
+
+                    // Requirement 4: Exclude "New Customer" & "View Deals" for sales person & sales head as already in nav bar
+                    final isSalesRole = profile?.primaryRole == UserRole.sales ||
+                        profile?.primaryRole == UserRole.salesHead ||
+                        roles.contains(UserRole.sales) ||
+                        roles.contains(UserRole.salesHead);
+
+                    if (!isSalesRole && (profile?.primaryRole.canCreateCustomers ?? false)) {
+                      actionCards.add(
+                        _ActionCard(
                           icon: Icons.business_outlined,
                           label: 'New Customer',
                           color: AppColors.primary,
                           onTap: () => context.push(AppRoutes.createCustomer),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.alt_route_outlined,
-                        label: 'View Deals',
-                        color: const Color(0xFF6366F1),
-                        onTap: () => context.go(AppRoutes.pipelines),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
+                      );
+                    }
+
+                    if (!isSalesRole) {
+                      actionCards.add(
+                        _ActionCard(
+                          icon: Icons.alt_route_outlined,
+                          label: 'View Deals',
+                          color: const Color(0xFF6366F1),
+                          onTap: () => context.go(AppRoutes.pipelines),
+                        ),
+                      );
+                    }
+
+                    actionCards.add(
+                      _ActionCard(
                         icon: Icons.inventory_2_outlined,
                         label: 'View Products',
                         color: Colors.teal,
                         onTap: () => context.push('/products'),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActionCard(
+                    );
+
+                    // Multi-role direct Quick Action: Complaints (serviceHead / admin)
+                    if (roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
+                      actionCards.add(
+                        _ActionCard(
+                          icon: Icons.support_agent_outlined,
+                          label: 'Complaints',
+                          color: const Color(0xFF8B5CF6),
+                          onTap: () => context.push('/complaints/dashboard'),
+                        ),
+                      );
+                    }
+
+                    // Multi-role direct Quick Action: Installations (installation / serviceHead / admin)
+                    if (roles.contains(UserRole.installation) || roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
+                      actionCards.add(
+                        _ActionCard(
+                          icon: Icons.build_circle_outlined,
+                          label: 'Installations',
+                          color: const Color(0xFF0284C7),
+                          onTap: () => context.push('/installations/dashboard'),
+                        ),
+                      );
+                    }
+
+                    // Multi-role direct Quick Action: Manage BOQ Items (boq / admin)
+                    if (roles.contains(UserRole.boq) || isHeadOrAdmin) {
+                      actionCards.add(
+                        _ActionCard(
+                          icon: Icons.format_list_bulleted_outlined,
+                          label: 'BOQ Items',
+                          color: const Color(0xFFEC4899),
+                          onTap: () => context.push(AppRoutes.manageBoqItems),
+                        ),
+                      );
+                    }
+
+                    // Multi-role direct Quick Action: Factory Queue (factory)
+                    if (roles.contains(UserRole.factory)) {
+                      actionCards.add(
+                        _ActionCard(
+                          icon: Icons.precision_manufacturing_outlined,
+                          label: 'Factory Queue',
+                          color: const Color(0xFFEA580C),
+                          onTap: () => context.push(AppRoutes.factoryQueue),
+                        ),
+                      );
+                    }
+
+                    // Multi-role direct Quick Action: Material Queue (purchase)
+                    if (roles.contains(UserRole.purchase)) {
+                      actionCards.add(
+                        _ActionCard(
+                          icon: Icons.shopping_cart_outlined,
+                          label: 'Material Queue',
+                          color: const Color(0xFF10B981),
+                          onTap: () => context.push(AppRoutes.purchaseQueue),
+                        ),
+                      );
+                    }
+
+                    actionCards.add(
+                      _ActionCard(
                         icon: Icons.download_outlined,
-                        label: 'Today\'s Report',
+                        label: "Today's Report",
                         color: AppColors.success,
                         onTap: () => context.push('/reports/activity'),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
+                    );
+
+                    actionCards.add(
+                      _ActionCard(
                         icon: Icons.contact_page_outlined,
                         label: 'Customer 360',
                         color: const Color(0xFFF59E0B),
                         onTap: () => context.push('/reports/customer'),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
+                    );
+
+                    actionCards.add(
+                      _ActionCard(
                         icon: Icons.people_alt_outlined,
                         label: 'CRM',
                         color: Colors.blueAccent,
                         onTap: () => context.push('/crm/dashboard'),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
+                    );
+
+                    actionCards.add(
+                      _ActionCard(
                         icon: Icons.fact_check_outlined,
                         label: 'Daily Tasks',
                         color: const Color(0xFF8B5CF6),
                         onTap: () => context.push(AppRoutes.dailyTasks),
                       ),
-                    ),
-                  ],
+                    );
+
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final crossAxisCount = constraints.maxWidth > 550 ? 4 : 3;
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: actionCards.length,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 1.15,
+                          ),
+                          itemBuilder: (context, idx) => actionCards[idx],
+                        );
+                      },
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
 

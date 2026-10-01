@@ -89,92 +89,105 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildFilters(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: AppColors.surface,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.leaderboard_outlined, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Total Leads: ${leadsAsync.value?.length ?? 0}',
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.read(leadsProvider.notifier).load(refresh: true);
+          ref.read(prospectsProvider.notifier).load(refresh: true);
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _buildFilters(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    color: AppColors.surface,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.leaderboard_outlined, size: 18, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Total Leads: ${leadsAsync.value?.length ?? 0}',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'All Stages',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                Text(
-                  'All Stages',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
                   ),
-                ),
-              ],
+                  const Divider(height: 1, color: AppColors.border),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                ref.read(leadsProvider.notifier).load(refresh: true);
-                ref.read(prospectsProvider.notifier).load(refresh: true);
-              },
-              child: leadsAsync.when(
-                data: (leads) {
-                  final prospects = prospectsAsync.value ?? [];
+            leadsAsync.when(
+              data: (leads) {
+                final prospects = prospectsAsync.value ?? [];
 
-                  // Apply filters
-                  var filtered = leads.where((l) {
-                    final prospect = prospects.where((p) => p.id == l.prospectId).firstOrNull;
-                    final displayName = (l.prospectName != null && l.prospectName!.isNotEmpty)
-                        ? l.prospectName!
-                        : (prospect?.name ?? '');
-                    final phone = (l.contactPhone != null && l.contactPhone!.isNotEmpty)
-                        ? l.contactPhone!
-                        : (prospect?.phone ?? '');
+                // Apply filters
+                var filtered = leads.where((l) {
+                  final prospect = prospects.where((p) => p.id == l.prospectId).firstOrNull;
+                  final displayName = (l.prospectName != null && l.prospectName!.isNotEmpty)
+                      ? l.prospectName!
+                      : (prospect?.name ?? '');
+                  final phone = (l.contactPhone != null && l.contactPhone!.isNotEmpty)
+                      ? l.contactPhone!
+                      : (prospect?.phone ?? '');
 
-                    final matchesSearch = displayName.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-                                          phone.contains(_searchQuery) ||
-                                          l.productName.toLowerCase().contains(_searchQuery.toLowerCase());
-                    final matchesStatus = _selectedStatus == 'All' || l.status == _selectedStatus;
-                    return matchesSearch && matchesStatus;
-                  }).toList();
+                  final matchesSearch = displayName.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+                                        phone.contains(_searchQuery) ||
+                                        l.productName.toLowerCase().contains(_searchQuery.toLowerCase());
+                  final matchesStatus = _selectedStatus == 'All' || l.status == _selectedStatus;
+                  return matchesSearch && matchesStatus;
+                }).toList();
 
-                  // Sort: Uncompleted leads at top, Won & Lost at bottom; then newest first
-                  filtered.sort((a, b) {
-                    final aDone = a.status == 'Won' || a.status == 'Lost' || a.convertedToCustomerId != null;
-                    final bDone = b.status == 'Won' || b.status == 'Lost' || b.convertedToCustomerId != null;
-                    if (aDone != bDone) {
-                      return aDone ? 1 : -1;
-                    }
-                    return b.createdAt.compareTo(a.createdAt);
-                  });
-
-                  if (filtered.isEmpty) {
-                    return const Center(
-                      child: Text('No leads found.', style: TextStyle(color: AppColors.textSecondary)),
-                    );
+                // Sort: Uncompleted leads at top, Won & Lost at bottom; then newest first
+                filtered.sort((a, b) {
+                  final aDone = a.status == 'Won' || a.status == 'Lost' || a.convertedToCustomerId != null;
+                  final bDone = b.status == 'Won' || b.status == 'Lost' || b.convertedToCustomerId != null;
+                  if (aDone != bDone) {
+                    return aDone ? 1 : -1;
                   }
+                  return b.createdAt.compareTo(a.createdAt);
+                });
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                    itemCount: filtered.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final lead = filtered[index];
+                if (filtered.isEmpty) {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Text('No leads found.', style: TextStyle(color: AppColors.textSecondary)),
+                    ),
+                  );
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final itemIndex = index ~/ 2;
+                        if (index.isOdd) {
+                          return const SizedBox(height: 12);
+                        }
+                        final lead = filtered[itemIndex];
                       final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
                       final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
                           ? lead.prospectName!
@@ -327,15 +340,21 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                         ),
                       );
                     },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
-              ),
+                    childCount: filtered.length * 2 - 1,
+                  ),
+                ),
+              );
+            },
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, st) => SliverFillRemaining(
+              child: Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
             ),
           ),
         ],
       ),
+    ),
       floatingActionButton: isCrmStaff
           ? null
           : FloatingActionButton.extended(

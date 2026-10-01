@@ -362,7 +362,7 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
         conversions.add({
           'type': 'Prospect -> Lead',
           'name': l['prospect_name'] ?? 'Prospect',
-          'details': '${l['product_name'] ?? 'Lead'} (Est. ₹${l['estimated_value'] ?? 0})',
+          'details': '${l['product_name'] ?? 'Lead'} (Est. Rs. ${l['estimated_value'] ?? 0})',
           'time': l['created_at'],
           'user_id': l['created_by'],
         });
@@ -382,7 +382,7 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
       conversions.add({
         'type': 'Lead -> Customer/Deal',
         'name': cl['prospect_name'] ?? 'Customer',
-        'details': 'Product: ${cl['product_name'] ?? '-'} | Value: ₹${cl['estimated_value'] ?? 0}',
+        'details': 'Product: ${cl['product_name'] ?? '-'} | Value: Rs. ${cl['estimated_value'] ?? 0}',
         'time': cl['updated_at'],
         'user_id': cl['converted_by'],
       });
@@ -458,6 +458,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
 
   void _showPdfSectionPicker(BuildContext context, ActivityReportData data) {
     final selectedKeys = _reportSections.map((s) => s['key'] as String).toSet();
+    bool isGeneratingPdf = false;
 
     showModalBottomSheet(
       context: context,
@@ -643,20 +644,55 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                      icon: isGeneratingPdf
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.picture_as_pdf_outlined, size: 20),
                       label: Text(
-                        selectedKeys.isEmpty ? 'Select at least 1 section' : 'Generate PDF (${selectedKeys.length} selected)',
+                        isGeneratingPdf
+                            ? 'Generating PDF Report...'
+                            : (selectedKeys.isEmpty
+                                ? 'Select at least 1 section'
+                                : 'Generate PDF (${selectedKeys.length} selected)'),
                         style: const TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      onPressed: selectedKeys.isEmpty
+                      onPressed: (selectedKeys.isEmpty || isGeneratingPdf)
                           ? null
-                          : () {
-                              Navigator.pop(sheetCtx);
-                              _downloadReport(context, data, selectedKeys);
+                          : () async {
+                              setPickerState(() => isGeneratingPdf = true);
+                              try {
+                                final result = await _generateReportBytes(data, selectedKeys);
+                                if (sheetCtx.mounted) {
+                                  Navigator.pop(sheetCtx);
+                                }
+                                if (mounted && result != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PdfPreviewScreen(
+                                        pdfBytes: result['bytes'] as Uint8List,
+                                        fileName: result['fileName'] as String,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (sheetCtx.mounted) {
+                                  setPickerState(() => isGeneratingPdf = false);
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error generating report: $e'), backgroundColor: AppColors.error),
+                                  );
+                                }
+                              }
                             },
                     ),
                   ),
@@ -669,104 +705,86 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
     );
   }
 
-  void _downloadReport(BuildContext context, ActivityReportData data, [Set<String>? selectedSections]) async {
+  Future<Map<String, dynamic>?> _generateReportBytes(ActivityReportData data, [Set<String>? selectedSections]) async {
     final filter = ref.read(reportFilterProvider);
     final profile = ref.read(currentProfileProvider);
-    if (profile == null) return;
+    if (profile == null) return null;
 
     final isAll = filter.selectedUserId == 'ALL';
 
-    try {
-      Uint8List pdfBytes;
-      String fileName;
+    Uint8List pdfBytes;
+    String fileName;
 
-      final isSalesHead = profile.primaryRole == UserRole.salesHead || profile.roles.contains(UserRole.salesHead);
-      final isAdmin = profile.primaryRole == UserRole.admin || profile.roles.contains(UserRole.admin);
+    final isSalesHead = profile.primaryRole == UserRole.salesHead || profile.roles.contains(UserRole.salesHead);
+    final isAdmin = profile.primaryRole == UserRole.admin || profile.roles.contains(UserRole.admin);
 
-      if (isAll) {
-        final usersAsync = ref.read(allUsersProvider);
-        final rawUsers = (usersAsync.valueOrNull ?? [])
-            .where((u) => u.primaryRole != UserRole.customer)
-            .toList();
+    if (isAll) {
+      final usersAsync = ref.read(allUsersProvider);
+      final rawUsers = (usersAsync.valueOrNull ?? [])
+          .where((u) => u.primaryRole != UserRole.customer)
+          .toList();
 
-        final users = rawUsers
-          ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+      final users = rawUsers
+        ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
-        final userEntries = users.map((u) {
-          final uCustomers = data.customers.where((c) => c['created_by'] == u.id).toList();
-          final uPipelines = data.pipelines.where((p) => p['created_by'] == u.id).toList();
-          final uComplaints = data.complaints.where((c) => c['technician_id'] == u.id).toList();
-          final uStepLogs = data.stepAuditLogs.where((s) => s['performed_by'] == u.id).toList();
-          final uComms = data.communications.where((c) => c['logged_by'] == u.id).toList();
-          final uLeads = data.leads.where((l) => l['created_by'] == u.id).toList();
-          final uProspects = data.prospects.where((p) => p['created_by'] == u.id || p['assigned_to'] == u.id).toList();
-          final uConversions = data.conversions.where((c) => c['user_id'] == u.id).toList();
+      final userEntries = users.map((u) {
+        final uCustomers = data.customers.where((c) => c['created_by'] == u.id).toList();
+        final uPipelines = data.pipelines.where((p) => p['created_by'] == u.id).toList();
+        final uComplaints = data.complaints.where((c) => c['technician_id'] == u.id).toList();
+        final uStepLogs = data.stepAuditLogs.where((s) => s['performed_by'] == u.id).toList();
+        final uComms = data.communications.where((c) => c['logged_by'] == u.id).toList();
+        final uLeads = data.leads.where((l) => l['created_by'] == u.id).toList();
+        final uProspects = data.prospects.where((p) => p['created_by'] == u.id || p['assigned_to'] == u.id).toList();
+        final uConversions = data.conversions.where((c) => c['user_id'] == u.id).toList();
 
-          return {
-            'userName': u.fullName.isNotEmpty ? u.fullName : 'User (${u.id.substring(0, 6)})',
-            'userRole': u.primaryRole.displayName,
-            'data': ActivityReportData(
-              customers: uCustomers,
-              pipelines: uPipelines,
-              complaints: uComplaints,
-              stepAuditLogs: uStepLogs,
-              communications: uComms,
-              leads: uLeads,
-              prospects: uProspects,
-              conversions: uConversions,
-            ),
-          };
-        }).toList();
-
-        pdfBytes = await PdfService.generateAllUsersActivityReportPdf(
-          context: context,
-          userEntries: userEntries,
-          dateRangeType: filter.dateRangeType,
-          customStartDate: filter.customStartDate,
-          customEndDate: filter.customEndDate,
-          selectedSections: selectedSections,
-        );
-        fileName = 'All_Users_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
-      } else {
-        String userName = profile.fullName;
-        if ((isAdmin || isSalesHead) && filter.selectedUserId != null) {
-          final usersAsync = ref.read(allUsersProvider);
-          usersAsync.whenData((users) {
-            final u = users.firstWhere((element) => element.id == filter.selectedUserId, orElse: () => profile);
-            userName = u.fullName;
-          });
-        }
-
-        pdfBytes = await PdfService.generateActivityReportPdf(
-          context: context,
-          data: data,
-          userName: userName,
-          dateRangeType: filter.dateRangeType,
-          customStartDate: filter.customStartDate,
-          customEndDate: filter.customEndDate,
-          selectedSections: selectedSections,
-        );
-        fileName = 'User_Activity_Report_${userName.replaceAll(" ", "_")}.pdf';
-      }
-
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PdfPreviewScreen(
-              pdfBytes: pdfBytes,
-              fileName: fileName,
-            ),
+        return {
+          'userName': u.fullName.isNotEmpty ? u.fullName : 'User (${u.id.substring(0, 6)})',
+          'userRole': u.primaryRole.displayName,
+          'data': ActivityReportData(
+            customers: uCustomers,
+            pipelines: uPipelines,
+            complaints: uComplaints,
+            stepAuditLogs: uStepLogs,
+            communications: uComms,
+            leads: uLeads,
+            prospects: uProspects,
+            conversions: uConversions,
           ),
-        );
+        };
+      }).toList();
+
+      pdfBytes = await PdfService.generateAllUsersActivityReportPdf(
+        context: context,
+        userEntries: userEntries,
+        dateRangeType: filter.dateRangeType,
+        customStartDate: filter.customStartDate,
+        customEndDate: filter.customEndDate,
+        selectedSections: selectedSections,
+      );
+      fileName = 'All_Users_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
+    } else {
+      String userName = profile.fullName;
+      if ((isAdmin || isSalesHead) && filter.selectedUserId != null) {
+        final usersAsync = ref.read(allUsersProvider);
+        usersAsync.whenData((users) {
+          final u = users.firstWhere((element) => element.id == filter.selectedUserId, orElse: () => profile);
+          userName = u.fullName;
+        });
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating report: $e'), backgroundColor: AppColors.error),
-        );
-      }
+
+      pdfBytes = await PdfService.generateActivityReportPdf(
+        context: context,
+        data: data,
+        userName: userName,
+        dateRangeType: filter.dateRangeType,
+        customStartDate: filter.customStartDate,
+        customEndDate: filter.customEndDate,
+        selectedSections: selectedSections,
+      );
+      fileName = 'User_Activity_Report_${userName.replaceAll(" ", "_")}.pdf';
     }
+
+    return {'bytes': pdfBytes, 'fileName': fileName};
   }
 
   void _exportReportExcel(BuildContext context, ActivityReportData data) {

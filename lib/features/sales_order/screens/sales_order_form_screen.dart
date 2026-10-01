@@ -507,15 +507,15 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             child: CircularProgressIndicator(color: AppColors.primary)),
       );
       try {
-        final bytes = await _generatePdfBytes(soId, variant);
+        final result = await _generatePdfBytes(soId, variant);
         if (mounted) Navigator.pop(context); // pop loading dialog
         if (mounted) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => PdfPreviewScreen(
-                pdfBytes: bytes,
-                fileName: 'SalesOrder_${variant}_${widget.pipelineId.substring(0, 8)}.pdf',
+                pdfBytes: result.bytes,
+                fileName: result.fileName,
               ),
             ),
           );
@@ -527,7 +527,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     }
   }
 
-  Future<Uint8List> _generatePdfBytes(String soId, String variant) async {
+  Future<({Uint8List bytes, String fileName})> _generatePdfBytes(String soId, String variant) async {
     final supabase = ref.read(supabaseClientProvider);
     final soData =
         await supabase.from('sales_orders').select().eq('id', soId).single();
@@ -583,13 +583,17 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       };
     }
 
-    return await PdfService.generateSalesOrderPdf(
+    final bytes = await PdfService.generateSalesOrderPdf(
       salesOrder: so,
       customer: customer,
       product: product,
       variant: variant,
       templateConfig: templateConfig,
     );
+
+    final String cleanOrderNum = so.salesOrderNumber.replaceAll('/', '_');
+    final String fileName = variant == 'production' ? '${cleanOrderNum}_Production.pdf' : '$cleanOrderNum.pdf';
+    return (bytes: bytes, fileName: fileName);
   }
 
   Future<String> _upsertSalesOrder({required bool confirmed}) async {

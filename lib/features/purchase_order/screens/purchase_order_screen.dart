@@ -402,7 +402,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         MaterialPageRoute(
           builder: (context) => PdfPreviewScreen(
             pdfBytes: pdfBytes,
-            fileName: 'PurchaseOrder_${purchaseOrder.poNumber.replaceAll('/', '_')}.pdf',
+            fileName: '${purchaseOrder.poNumber.replaceAll('/', '_')}.pdf',
           ),
         ),
       );

@@ -1381,7 +1381,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
         MaterialPageRoute(
           builder: (context) => PdfPreviewScreen(
             pdfBytes: pdfBytes,
-            fileName: 'FactoryOrder_${factoryOrder.orderNumber.replaceAll('/', '_')}.pdf',
+            fileName: '${factoryOrder.orderNumber.replaceAll('/', '_')}.pdf',
           ),
         ),
       );

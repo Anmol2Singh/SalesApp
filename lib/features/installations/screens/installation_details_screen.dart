@@ -14,7 +14,9 @@ import '../../../core/models/user_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../complaints/widgets/signature_pad_widget.dart';
+import '../services/installation_pdf_service.dart';
 
 class InstallationDetailsScreen extends ConsumerStatefulWidget {
   final String installationId;
@@ -959,6 +961,108 @@ class _InstallationDetailsScreenState
               ),
             ),
             const SizedBox(height: 24),
+
+            // Installation Completion Report PDF Section
+            if (isClosed ||
+                installation.status == 'resolved' ||
+                (installation.customerSignatureUrl != null &&
+                    installation.technicianSignatureUrl != null)) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.verified, color: Color(0xFF10B981)),
+                        SizedBox(width: 8),
+                        Text(
+                          'Installation Completion Report',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF047857),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Official report generated with technician and customer verification signatures.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.picture_as_pdf,
+                                color: Colors.white, size: 18),
+                            label: const Text('View PDF',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
+                            onPressed: () async {
+                              final pdfBytes =
+                                  await InstallationPdfService.generateCompletionReportPdf(
+                                      installation);
+                              if (mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (ctx) => PdfPreviewScreen(
+                                      pdfBytes: pdfBytes,
+                                      fileName:
+                                          'InstallationReport_${installation.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.share,
+                                color: Colors.white, size: 18),
+                            label: const Text('Share PDF',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
+                            onPressed: () =>
+                                InstallationPdfService.shareCompletionReport(
+                                    installation),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Complete Action Button
             if (!isClosed)
