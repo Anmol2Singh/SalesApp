@@ -1,4 +1,4 @@
-// lib/core/services/excel_service.dart
+﻿// lib/core/services/excel_service.dart
 
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart';
@@ -90,7 +90,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Deals',
+        title: 'Export Preview â€” Deals',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -163,7 +163,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Customers',
+        title: 'Export Preview â€” Customers',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -237,7 +237,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Prospects',
+        title: 'Export Preview â€” Prospects',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -331,7 +331,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Leads',
+        title: 'Export Preview â€” Leads',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -409,7 +409,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — CRM Customers',
+        title: 'Export Preview â€” CRM Customers',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -483,7 +483,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Complaints',
+        title: 'Export Preview â€” Complaints',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -574,7 +574,7 @@ class ExcelService {
         final rowData = [
           l['prospect_name']?.toString() ?? '-',
           l['product_name']?.toString() ?? '-',
-          '₹${l['estimated_value'] ?? 0}',
+          'â‚¹${l['estimated_value'] ?? 0}',
           l['status']?.toString() ?? 'New',
           l['created_at'] != null ? _dateFormat.format(DateTime.tryParse(l['created_at']) ?? DateTime.now()) : '-',
         ];
@@ -592,7 +592,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Activity Report ($userName)',
+        title: 'Export Preview â€” Activity Report ($userName)',
         fileName: fileName,
         headers: headers,
         rows: summaryRows,
@@ -672,7 +672,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — AMC Contracts',
+        title: 'Export Preview â€” AMC Contracts',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -706,7 +706,7 @@ class ExcelService {
       'Under Product Category',
       'HSN / SAC Code',
       'Unit (UOM)',
-      'Default Price (₹)',
+      'Default Price (â‚¹)',
       'Warranty (Months)',
       'Created Date',
       'Item ID',
@@ -735,7 +735,7 @@ class ExcelService {
         underProduct.isNotEmpty ? underProduct : '-',
         item.hsnSac != null && item.hsnSac!.isNotEmpty ? item.hsnSac! : '-',
         item.uom != null && item.uom!.isNotEmpty ? item.uom! : 'NOS',
-        '₹${_currencyFormat.format(item.price)}',
+        'â‚¹${_currencyFormat.format(item.price)}',
         '${item.warrantyMonths}m',
         _dateFormat.format(item.createdAt.toLocal()),
         item.id,
@@ -769,7 +769,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Inventory Items (${items.length})',
+        title: 'Export Preview â€” Inventory Items (${items.length})',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -845,7 +845,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview — Products (${products.length})',
+        title: 'Export Preview â€” Products (${products.length})',
         fileName: fileName,
         headers: headers,
         rows: previewRows,

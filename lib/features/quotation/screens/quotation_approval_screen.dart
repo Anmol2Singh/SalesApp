@@ -10,13 +10,62 @@ import '../../auth/providers/auth_provider.dart';
 
 final pendingQuotationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
+
+  // Fetch quotations with pipeline/customer/product — skip profiles join
+  // (no FK named 'created_by' in schema cache)
   final response = await supabase
       .from('quotations')
-      .select('*, sales_pipelines(*, customers(*), products(*)), profiles!created_by(full_name)')
+      .select('*, sales_pipelines(*, customers(*), products(*))')
       .eq('status', 'pending_approval')
       .order('created_at', ascending: false);
 
-  return List<Map<String, dynamic>>.from(response as List);
+  final rows = List<Map<String, dynamic>>.from(response as List);
+
+  // Resolve submitter names for all unique created_by user IDs
+  final createdByIds = rows
+      .map((r) => r['created_by']?.toString())
+      .where((id) => id != null && id.isNotEmpty)
+      .toSet()
+      .cast<String>()
+      .toList();
+
+  final Map<String, String> submitterNames = {};
+  if (createdByIds.isNotEmpty) {
+    try {
+      // Try RPC first (bypasses RLS)
+      final rpcRes = await supabase.rpc('get_all_staff_profiles');
+      if (rpcRes is List) {
+        for (final p in rpcRes) {
+          final id = p['id']?.toString() ?? '';
+          final name = p['full_name']?.toString() ?? '';
+          if (id.isNotEmpty && name.isNotEmpty) submitterNames[id] = name;
+        }
+      }
+    } catch (_) {}
+
+    if (submitterNames.isEmpty) {
+      try {
+        final profilesRes = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .inFilter('id', createdByIds);
+        for (final p in (profilesRes as List)) {
+          final id = p['id']?.toString() ?? '';
+          final name = p['full_name']?.toString() ?? '';
+          if (id.isNotEmpty && name.isNotEmpty) submitterNames[id] = name;
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Attach resolved submitter name to each row
+  return rows.map((row) {
+    final createdBy = row['created_by']?.toString() ?? '';
+    return {
+      ...row,
+      '_submitter_name': submitterNames[createdBy] ?? 'Unknown Staff',
+    };
+  }).toList();
 });
 
 class QuotationApprovalScreen extends ConsumerWidget {
@@ -67,8 +116,7 @@ class QuotationApprovalScreen extends ConsumerWidget {
 
               final customerName = customerData['company_name'] as String? ?? 'Customer';
               final productName = productData['name'] as String? ?? 'Product';
-              final profileData = item['profiles'] as Map<String, dynamic>? ?? {};
-              final submittedBy = profileData['full_name'] as String? ?? 'Unknown Staff';
+              final submittedBy = item['_submitter_name'] as String? ?? 'Unknown Staff';
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
@@ -76,7 +124,7 @@ class QuotationApprovalScreen extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

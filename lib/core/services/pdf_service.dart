@@ -2804,10 +2804,19 @@ class PdfService {
       dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
     }
 
-    final pdfTheme = pw.ThemeData.withFont(
-      base: await PdfGoogleFonts.interRegular(),
-      bold: await PdfGoogleFonts.interBold(),
-    );
+    pw.ThemeData pdfTheme;
+    try {
+      pdfTheme = pw.ThemeData.withFont(
+        base: await PdfGoogleFonts.interRegular(),
+        bold: await PdfGoogleFonts.interBold(),
+      );
+    } catch (_) {
+      // Fallback to built-in fonts if Google Fonts download fails
+      pdfTheme = pw.ThemeData.withFont(
+        base: pw.Font.helvetica(),
+        bold: pw.Font.helveticaBold(),
+      );
+    }
 
     pw.Widget buildHeader() {
       return pw.Row(
@@ -3137,10 +3146,18 @@ class PdfService {
       dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
     }
 
-    final pdfTheme = pw.ThemeData.withFont(
-      base: await PdfGoogleFonts.interRegular(),
-      bold: await PdfGoogleFonts.interBold(),
-    );
+    pw.ThemeData pdfTheme;
+    try {
+      pdfTheme = pw.ThemeData.withFont(
+        base: await PdfGoogleFonts.interRegular(),
+        bold: await PdfGoogleFonts.interBold(),
+      );
+    } catch (_) {
+      pdfTheme = pw.ThemeData.withFont(
+        base: pw.Font.helvetica(),
+        bold: pw.Font.helveticaBold(),
+      );
+    }
 
     pw.Widget buildHeader() {
       return pw.Row(

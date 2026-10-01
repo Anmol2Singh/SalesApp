@@ -55,7 +55,7 @@ class PipelineDetailScreen extends ConsumerWidget {
                   final db = ref.read(supabaseClientProvider);
                   await db.from('sales_pipelines').update({'status': 'in_progress'}).eq('id', pipelineId);
                   ref.invalidate(pipelineDetailProvider(pipelineId));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deal unlocked')));
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deal unlocked')));
                 },
                 icon: const Icon(Icons.lock_open, color: Colors.white),
                 label: const Text('Unlock', style: TextStyle(color: Colors.white)),
@@ -69,9 +69,11 @@ class PipelineDetailScreen extends ConsumerWidget {
                     'status': 'completed',
                   }).eq('id', pipelineId);
                   ref.invalidate(pipelineDetailProvider(pipelineId));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Deal marked 100% Complete!'), backgroundColor: AppColors.success),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Deal marked 100% Complete!'), backgroundColor: AppColors.success),
+                    );
+                  }
                 },
                 icon: const Icon(Icons.check_circle, color: Colors.white),
                 label: const Text('Mark 100% Complete', style: TextStyle(color: Colors.white)),
@@ -364,9 +366,9 @@ class _PipelineDetailContent extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: const [
@@ -662,7 +664,7 @@ class _HeaderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.inventory_2_outlined,
@@ -686,7 +688,7 @@ class _HeaderCard extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isPendingApproval ? const Color(0xFFD97706) : Colors.white.withOpacity(0.15),
+                      color: isPendingApproval ? const Color(0xFFD97706) : Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -812,10 +814,13 @@ class _StepActionCard extends ConsumerWidget {
     final isStepBlockedByApproval = step.stepIndex > PipelineStep.quotation.stepIndex && !isQuotationApproved;
     final isLocked = (!hasData && (stepIndex > currentStepIndex)) || isStepBlockedByApproval;
 
-    final displayCompleted = (isCompleted && (step != PipelineStep.quotation || hasData)) || hasData;
-    final displayActive = (isActive || (step == PipelineStep.quotation && !hasData)) && !hasData && !isLocked;
+    // A step is only visually "completed" if it actually has data filled in
+    final displayCompleted = hasData && (step != PipelineStep.quotation || !isQuotationPending);
+    final displayActive = !hasData && !isLocked && (isActive || isCompleted);
 
-    final showActionSection = (isActive || displayCompleted) && !isLocked;
+    // Show action section when: the step is the current active step OR step has data (completed)
+    // Or when the step is earlier than current (so Sales Head/Admin can fill missing steps)
+    final showActionSection = !isLocked && (isActive || isCompleted || hasData);
     
     // Post-Approval Lock and 100% Completion Lock
     final isAdmin = userRole == UserRole.admin;
@@ -1521,7 +1526,7 @@ class _AmcActionCard extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: amc.status.color.withOpacity(0.1),
+                      color: amc.status.color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -1649,7 +1654,7 @@ class _WarrantyCardActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2397,6 +2402,7 @@ Future<void> _executeApprovalFlow(
     } catch (_) {}
   }
   if (quotationId == null) return;
+  if (!context.mounted) return;
 
   String? rejectionRemark;
   if (!isApprove) {
