@@ -114,6 +114,23 @@ class StepTrackerWidget extends ConsumerWidget {
     );
   }
 
+Color _getTrackerStepColor(int stepNum) {
+  switch (stepNum) {
+    case 1:
+      return const Color(0xFFD97706); // Amber - Quotation
+    case 2:
+      return const Color(0xFF2563EB); // Royal Blue - Sales Order
+    case 3:
+      return const Color(0xFF0D9488); // Teal - BOQ
+    case 4:
+      return const Color(0xFF7C3AED); // Purple - Factory Order
+    case 5:
+      return const Color(0xFF059669); // Emerald - Material / Purchase
+    default:
+      return const Color(0xFF10B981); // Green - Completed
+  }
+}
+
   Widget _buildStep(Map<String, dynamic> step, int index, int currentIndex) {
     final isCompleted = index < currentIndex;
     final isActive = index == currentIndex;
@@ -122,6 +139,24 @@ class StepTrackerWidget extends ConsumerWidget {
     final stepName = step['name'] ?? '';
     final stepEnum = _mapToEnum(stepId);
     final hasPdf = stepEnum != null && pdfUrls?[stepEnum] != null;
+
+    String displayName = stepName;
+    final lower = stepName.toLowerCase().trim();
+    if (lower == 'quotation') {
+      displayName = 'Quote';
+    } else if (lower == 'sales order') {
+      displayName = 'Sales\nOrder';
+    } else if (lower == 'boq' || lower == 'bill of quantities') {
+      displayName = 'BOQ';
+    } else if (lower == 'factory order') {
+      displayName = 'Factory';
+    } else if (lower == 'purchase order') {
+      displayName = 'Purchase';
+    } else if (lower == 'material requisition') {
+      displayName = 'Material';
+    }
+
+    final activeColor = _getTrackerStepColor(index + 1);
 
     Color circleColor;
     Color textColor;
@@ -132,8 +167,8 @@ class StepTrackerWidget extends ConsumerWidget {
       textColor = AppColors.stepCompleted;
       icon = const Icon(Icons.check, color: Colors.white, size: 14);
     } else if (isActive) {
-      circleColor = AppColors.stepActive;
-      textColor = AppColors.stepActive;
+      circleColor = activeColor;
+      textColor = activeColor;
       icon = Text(
         '${index + 1}',
         style: const TextStyle(
@@ -208,13 +243,14 @@ class StepTrackerWidget extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            stepName,
+            displayName,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: 10,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              fontSize: 9.5,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
               color: textColor,
+              height: 1.15,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,

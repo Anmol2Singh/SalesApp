@@ -11,6 +11,7 @@ import 'package:salesapp/features/customer_app/data/providers/app_providers.dart
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/features/dashboard/widgets/product_card.dart';
 import 'package:salesapp/features/amc/providers/amc_provider.dart';
+import 'package:salesapp/core/widgets/network_status_chip.dart';
 
 class ActivityEvent {
   final String title;
@@ -183,22 +184,7 @@ class MainDashboard extends ConsumerWidget {
                                       ),
                                     ),
                                   ),
-                                  Positioned(
-                                    bottom: 0,
-                                    right: 0,
-                                    child: Container(
-                                      width: 13,
-                                      height: 13,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF22C55E),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: const Color(0xFF1E1B4B),
-                                          width: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                                  const Positioned(bottom: 0, right: 0, child: NetworkAvatarDot(size: 13, borderColor: Color(0xFF1E1B4B)))
                                 ],
                               ),
                               const SizedBox(width: 14),
@@ -255,38 +241,7 @@ class MainDashboard extends ConsumerWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF22C55E),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: const BoxDecoration(
-                                            color: Colors.white,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        const Text(
-                                          'ONLINE',
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white,
-                                            letterSpacing: 0.4,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                   const NetworkStatusChip(),
                                 ],
                               ),
                             ],
@@ -1292,3 +1247,4 @@ class _TimelineEventTile extends StatelessWidget {
     );
   }
 }
+

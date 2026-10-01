@@ -14,6 +14,7 @@ import '../../../core/models/user_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../complaints/widgets/signature_pad_widget.dart';
 
 class InstallationDetailsScreen extends ConsumerStatefulWidget {
   final String installationId;
@@ -160,13 +161,215 @@ class _InstallationDetailsScreenState
     }
   }
 
+  Future<void> _takeTechnicianSignature(Installation installation) async {
+    final signatureData = await showDialog<String>(
+      context: context,
+      builder: (ctx) => const SignaturePadDialog(title: 'Technician Digital Signature'),
+    );
+
+    if (signatureData != null && signatureData.isNotEmpty) {
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final publicUrl = await StorageService.uploadImage(
+          supabase: supabase,
+          base64OrPath: signatureData,
+          folder: 'signatures',
+        );
+
+        if (publicUrl != null) {
+          await ref.read(installationsProvider.notifier).saveTechnicianSignature(installation.id, publicUrl);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Technician signature saved successfully!'), backgroundColor: Color(0xFF10B981)),
+            );
+          }
+        } else {
+          throw Exception('Failed to upload technician signature');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error saving signature: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _takeCustomerSignature(Installation installation) async {
+    final signatureData = await showDialog<String>(
+      context: context,
+      builder: (ctx) => const SignaturePadDialog(title: 'Customer Digital Signature'),
+    );
+
+    if (signatureData != null && signatureData.isNotEmpty) {
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final publicUrl = await StorageService.uploadImage(
+          supabase: supabase,
+          base64OrPath: signatureData,
+          folder: 'signatures',
+        );
+
+        if (publicUrl != null) {
+          await ref.read(installationsProvider.notifier).saveCustomerSignature(installation.id, publicUrl);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Customer signature saved successfully!'), backgroundColor: Color(0xFF10B981)),
+            );
+          }
+        } else {
+          throw Exception('Failed to upload customer signature');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error saving signature: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _editSealNumberAfter(Installation installation) async {
+    final controller = TextEditingController(text: installation.sealNumberAfter ?? '');
+    final seal = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Post-Installation Seal Number', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the new seal number placed after installation completion:',
+              style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Seal Number (After)',
+                hintText: 'e.g. SL-984210',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.security_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+            child: const Text('Save Seal', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (seal != null && seal.isNotEmpty) {
+      await ref.read(installationsProvider.notifier).updateSealNumberAfter(installation.id, seal);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Post-installation seal number saved!'), backgroundColor: Color(0xFF10B981)),
+        );
+      }
+    }
+  }
+
   void _markAsCompleted(Installation installation) async {
+    final List<String> missing = [];
+    if (installation.technicianSignatureUrl == null || installation.technicianSignatureUrl!.isEmpty) {
+      missing.add('Technician Signature');
+    }
+    if (installation.customerSignatureUrl == null || installation.customerSignatureUrl!.isEmpty) {
+      missing.add('Customer Signature');
+    }
+    if (installation.afterImageUrl == null || installation.afterImageUrl!.isEmpty) {
+      missing.add('After-Installation Photo');
+    }
+    if (installation.sealNumberAfter == null || installation.sealNumberAfter!.trim().isEmpty) {
+      missing.add('Seal Number (After)');
+    }
+
+    if (missing.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 26),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Required Steps Missing',
+                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Please complete the following mandatory items before confirming installation completion:',
+                style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              ...missing.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, color: Color(0xFFEF4444), size: 14),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(item,
+                          style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Use the action buttons below on this screen to take signatures, upload photos, and record the seal number.',
+                style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F172A),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Understood', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Complete Installation'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm Installation Completion', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
         content: const Text(
-            'Are you sure you want to mark this installation as completed?'),
+            'All verification requirements (Technician signature, Customer signature, After photo, Seal number) have been verified.\n\nAre you sure you want to confirm and mark this installation as completed?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -174,10 +377,12 @@ class _InstallationDetailsScreenState
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981)),
+              backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child:
-                const Text('Complete', style: TextStyle(color: Colors.white)),
+                const Text('Confirm & Complete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -190,7 +395,7 @@ class _InstallationDetailsScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Installation marked as completed!'),
+            content: Text('✓ Installation marked as completed!'),
             backgroundColor: Color(0xFF10B981),
           ),
         );
@@ -623,6 +828,136 @@ class _InstallationDetailsScreenState
                 ),
               ),
             ),
+            const SizedBox(height: 14),
+
+            // Sign-off & Post-Installation Verification Card
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(
+                  color: isClosed
+                      ? Colors.grey.shade200
+                      : const Color(0xFF0284C7).withValues(alpha: 0.35),
+                  width: isClosed ? 1 : 1.5,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.verified_user_outlined,
+                                  size: 18, color: Color(0xFF0284C7)),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Sign-off & Verification',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (!isClosed)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'REQUIRED FOR CLOSURE',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFD97706),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 1. Post-Installation Seal Number
+                    _buildVerificationRow(
+                      icon: Icons.security_outlined,
+                      title: 'Seal Number (After)',
+                      subtitle: (installation.sealNumberAfter != null &&
+                              installation.sealNumberAfter!.trim().isNotEmpty)
+                          ? 'Seal #: ${installation.sealNumberAfter}'
+                          : 'Not recorded yet',
+                      isCompleted: installation.sealNumberAfter != null &&
+                          installation.sealNumberAfter!.trim().isNotEmpty,
+                      actionLabel: (installation.sealNumberAfter != null &&
+                              installation.sealNumberAfter!.trim().isNotEmpty)
+                          ? 'Edit Seal #'
+                          : 'Enter Seal # (After)',
+                      onAction: !isClosed
+                          ? () => _editSealNumberAfter(installation)
+                          : null,
+                    ),
+                    const Divider(height: 18),
+
+                    // 2. Post-Installation Photos
+                    _buildVerificationRow(
+                      icon: Icons.add_a_photo_outlined,
+                      title: 'After-Installation Photo',
+                      subtitle: (installation.afterImageUrl != null &&
+                              installation.afterImageUrl!.isNotEmpty)
+                          ? '${installation.afterImageUrl!.split('|||').where((u) => u.trim().isNotEmpty).length} photo(s) attached'
+                          : 'Mandatory proof of completed site work',
+                      isCompleted: installation.afterImageUrl != null &&
+                          installation.afterImageUrl!.isNotEmpty,
+                      actionLabel: (installation.afterImageUrl != null &&
+                              installation.afterImageUrl!.isNotEmpty)
+                          ? 'Upload More'
+                          : 'Upload After Photo',
+                      onAction: !isClosed
+                          ? () => _pickAndUploadPhoto(installation, true)
+                          : null,
+                    ),
+                    const Divider(height: 18),
+
+                    // 3. Technician Signature
+                    _buildSignatureVerificationRow(
+                      context: context,
+                      title: 'Technician Signature',
+                      signatureUrl: installation.technicianSignatureUrl,
+                      isClosed: isClosed,
+                      onTakeSignature: () =>
+                          _takeTechnicianSignature(installation),
+                    ),
+                    const Divider(height: 18),
+
+                    // 4. Customer Signature
+                    _buildSignatureVerificationRow(
+                      context: context,
+                      title: 'Customer Signature',
+                      signatureUrl: installation.customerSignatureUrl,
+                      isClosed: isClosed,
+                      onTakeSignature: () =>
+                          _takeCustomerSignature(installation),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
 
             // Complete Action Button
@@ -653,6 +988,171 @@ class _InstallationDetailsScreenState
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildVerificationRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isCompleted,
+    required String actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFF0284C7)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (isCompleted)
+                    const Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981))
+                  else
+                    const Icon(Icons.error_outline, size: 14, color: Color(0xFFF59E0B)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: isCompleted ? Colors.grey.shade700 : const Color(0xFFD97706),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onAction != null)
+          OutlinedButton(
+            onPressed: onAction,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: const Size(0, 32),
+              side: BorderSide(
+                color: isCompleted ? Colors.grey.shade400 : const Color(0xFF0284C7),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            child: Text(
+              actionLabel,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isCompleted ? const Color(0xFF0F172A) : const Color(0xFF0284C7),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSignatureVerificationRow({
+    required BuildContext context,
+    required String title,
+    required String? signatureUrl,
+    required bool isClosed,
+    required VoidCallback onTakeSignature,
+  }) {
+    final hasSignature = signatureUrl != null && signatureUrl.isNotEmpty;
+    return Row(
+      children: [
+        const Icon(Icons.draw_outlined, size: 20, color: Color(0xFF0284C7)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (hasSignature)
+                    const Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981))
+                  else
+                    const Icon(Icons.error_outline, size: 14, color: Color(0xFFF59E0B)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                hasSignature ? 'Digital signature captured' : 'Missing signature',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: hasSignature ? Colors.grey.shade700 : const Color(0xFFD97706),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (hasSignature) ...[
+          GestureDetector(
+            onTap: () => _showImagePreview(context, signatureUrl),
+            child: Container(
+              width: 50,
+              height: 30,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(4),
+                color: Colors.white,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: _buildImage(signatureUrl, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        if (!isClosed)
+          OutlinedButton(
+            onPressed: onTakeSignature,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: const Size(0, 32),
+              side: BorderSide(
+                color: hasSignature ? Colors.grey.shade400 : const Color(0xFF0284C7),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            child: Text(
+              hasSignature ? 'Re-sign' : 'Take Signature',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: hasSignature ? const Color(0xFF0F172A) : const Color(0xFF0284C7),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

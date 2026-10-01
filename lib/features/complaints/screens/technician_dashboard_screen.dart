@@ -11,6 +11,7 @@ import 'complaints_leaderboard_screen.dart';
 import '../data/models/complaint_model.dart';
 import '../../../features/installations/providers/installations_provider.dart';
 import '../../../features/installations/data/models/installation_model.dart';
+import '../../../core/widgets/network_status_chip.dart';
 
 class TechnicianDashboardScreen extends ConsumerWidget {
   const TechnicianDashboardScreen({super.key});
@@ -214,17 +215,12 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                                     ),
                                   ),
                                 ),
-                                Positioned(
+                                const Positioned(
                                   bottom: 0,
                                   right: 0,
-                                  child: Container(
-                                    width: 14,
-                                    height: 14,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF22C55E),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
-                                    ),
+                                  child: NetworkAvatarDot(
+                                    size: 14,
+                                    borderColor: Colors.white,
                                   ),
                                 ),
                               ],
@@ -283,31 +279,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF22C55E),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.circle, color: Colors.white, size: 7),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'ONLINE',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                const NetworkStatusChip(),
                               ],
                             ),
                           ],

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/customer.dart';
+import '../../../core/models/quotation.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/widgets/pipeline_card.dart';
 import '../../../core/widgets/shimmer_loader.dart';
@@ -29,10 +30,14 @@ class PipelineListScreen extends ConsumerStatefulWidget {
 
 class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
   String _selectedStep = '';
   String _selectedStatus = '';
 
-  bool _showCompletedDeals = false;
+  // 0: Needs Action, 1: Active, 2: Completed
+  int _selectedTabIndex = 1;
+  String _quickFilter = 'all'; // 'all', 'needs_approval', 'quotation', 'boq', 'factory_order'
 
   @override
   void initState() {
@@ -40,7 +45,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
     _selectedStep = widget.initialStep;
     _selectedStatus = widget.initialStatus;
     if (_selectedStatus == 'completed') {
-      _showCompletedDeals = true;
+      _selectedTabIndex = 2;
+    } else if (_selectedStatus == 'needs_approval' || widget.initialStep == 'quotation_approval') {
+      _selectedTabIndex = 0;
+      _quickFilter = 'needs_approval';
     }
     _scrollController.addListener(_onScroll);
     if (_selectedStep.isNotEmpty || _selectedStatus.isNotEmpty) {
@@ -55,6 +63,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -71,7 +80,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
     ref.watch(dealsStreamProvider);
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = profile?.primaryRole == UserRole.admin;
+    final canViewAll = profile?.primaryRole == UserRole.admin ||
+        profile?.primaryRole == UserRole.manager ||
+        profile?.primaryRole == UserRole.salesHead ||
+        profile?.roles.contains(UserRole.admin) == true ||
+        profile?.roles.contains(UserRole.salesHead) == true;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -86,7 +99,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
             }
           },
         ),
-        title: Text(isAdmin ? 'All Deals' : 'My Deals'),
+        title: Text(canViewAll ? 'All Deals' : 'My Deals'),
         actions: [
           const SyncStatusIndicator(),
           Consumer(
@@ -117,7 +130,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               );
             },
           ),
-          if (isAdmin)
+          if (canViewAll)
             IconButton(
               icon: const Icon(Icons.download_outlined),
               tooltip: 'Export to Excel',
@@ -165,7 +178,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               }
             },
             itemBuilder: (ctx) => [
-              if (isAdmin)
+              if (canViewAll)
                 const PopupMenuItem(
                   value: 'export',
                   child: Row(
@@ -197,93 +210,159 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // Segmented Control Tabs & Quick Filter Chips
+            pipelinesAsync.maybeWhen(
+              data: (allPipelines) {
+                final needsActionCount = allPipelines
+                    .where((p) =>
+                        p.quotation?.status == QuotationStatus.pendingApproval)
+                    .length;
+                final activeCount = allPipelines
+                    .where((p) => p.status != PipelineStatus.completed)
+                    .length;
+                final completedCount = allPipelines
+                    .where((p) => p.status == PipelineStatus.completed)
+                    .length;
 
-            // Toggle Bar: Active Deals vs Completed Deals
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() => _showCompletedDeals = false);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: !_showCompletedDeals ? AppColors.primary : Colors.transparent,
-                              borderRadius: BorderRadius.circular(9),
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Search Bar at Top
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val.trim().toLowerCase();
+                              });
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search by customer, product, quote #...',
+                              hintStyle: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                color: Colors.grey.shade400,
+                              ),
+                              prefixIcon: const Icon(Icons.search,
+                                  size: 20, color: AppColors.textSecondary),
+                              suffixIcon: _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear,
+                                          size: 18,
+                                          color: AppColors.textSecondary),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.alt_route_outlined,
-                                  size: 16,
-                                  color: !_showCompletedDeals ? Colors.white : AppColors.textSecondary,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Active Deals',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: !_showCompletedDeals ? Colors.white : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13.5,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() => _showCompletedDeals = true);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: _showCompletedDeals ? const Color(0xFF10B981) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(9),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_outline,
-                                  size: 16,
-                                  color: _showCompletedDeals ? Colors.white : AppColors.textSecondary,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Completed Deals',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: _showCompletedDeals ? Colors.white : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
+
+                        // Segmented Control Tabs: Needs Action (#) | Active (#) | Completed (#)
+                        Container(
+                          padding: const EdgeInsets.all(3.5),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              // 1. Needs Action
+                              _buildSegmentedTab(
+                                index: 0,
+                                label: 'Needs Action ($needsActionCount)',
+                                icon: Icons.warning_amber_rounded,
+                                activeBg: const Color(0xFFFEF3C7),
+                                activeFg: const Color(0xFFB45309),
+                              ),
+                              const SizedBox(width: 4),
+                              // 2. Active
+                              _buildSegmentedTab(
+                                index: 1,
+                                label: 'Active ($activeCount)',
+                                icon: Icons.alt_route_outlined,
+                                activeBg: AppColors.primary,
+                                activeFg: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              // 3. Completed
+                              _buildSegmentedTab(
+                                index: 2,
+                                label: 'Completed ($completedCount)',
+                                icon: Icons.check_circle_outline,
+                                activeBg: const Color(0xFF10B981),
+                                activeFg: Colors.white,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+
+                        const SizedBox(height: 10),
+
+                        // Horizontally scrollable quick filter chips row
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              _buildQuickChip('All', 'all'),
+                              const SizedBox(width: 6),
+                              _buildQuickChip(
+                                '⚠️ Needs Approval ($needsActionCount)',
+                                'needs_approval',
+                                isAlert: true,
+                              ),
+                              const SizedBox(width: 6),
+                              _buildQuickChip('Quotation', 'quotation'),
+                              const SizedBox(width: 6),
+                              _buildQuickChip('BOQ', 'boq'),
+                              const SizedBox(width: 6),
+                              _buildQuickChip('Factory Order', 'factory_order'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
+              orElse: () => const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ),
 
             if (_selectedStep.isNotEmpty || _selectedStatus.isNotEmpty)
@@ -305,57 +384,127 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                   },
                 ),
               ),
+
             pipelinesAsync.when(
               data: (allPipelines) {
                 final pipelines = allPipelines.where((p) {
-                  if (_showCompletedDeals) {
-                    return p.status == PipelineStatus.completed;
-                  } else {
-                    return p.status != PipelineStatus.completed;
+                  // Tab selection
+                  if (_selectedTabIndex == 0) {
+                    if (p.quotation?.status != QuotationStatus.pendingApproval) {
+                      return false;
+                    }
+                  } else if (_selectedTabIndex == 1) {
+                    if (p.status == PipelineStatus.completed) return false;
+                  } else if (_selectedTabIndex == 2) {
+                    if (p.status != PipelineStatus.completed) return false;
                   }
+
+                  // Quick filter chips
+                  if (_quickFilter == 'needs_approval') {
+                    if (p.quotation?.status != QuotationStatus.pendingApproval) {
+                      return false;
+                    }
+                  } else if (_quickFilter == 'quotation') {
+                    if (p.currentStep != PipelineStep.quotation) return false;
+                  } else if (_quickFilter == 'boq') {
+                    if (p.currentStep != PipelineStep.boq) return false;
+                  } else if (_quickFilter == 'factory_order') {
+                    if (p.currentStep != PipelineStep.factoryOrder) return false;
+                  }
+
+                  // Search query filter
+                  if (_searchQuery.isNotEmpty) {
+                    final q = _searchQuery;
+                    final custName = (p.customer?.customerName ?? '').toLowerCase();
+                    final compName = (p.customer?.companyName ?? '').toLowerCase();
+                    final phone = (p.customer?.phone ?? '').toLowerCase();
+                    final prod = (p.product?.name ?? '').toLowerCase();
+                    final salesman = (p.createdByProfile?.fullName ?? p.quotation?.salesman ?? '').toLowerCase();
+                    final quoteNo = (p.quotation?.quotationNumber ?? '').toLowerCase();
+
+                    final matches = custName.contains(q) ||
+                        compName.contains(q) ||
+                        phone.contains(q) ||
+                        prod.contains(q) ||
+                        salesman.contains(q) ||
+                        quoteNo.contains(q);
+
+                    if (!matches) return false;
+                  }
+
+                  return true;
                 }).toList();
 
                 if (pipelines.isEmpty) {
                   return SliverFillRemaining(
-                    child: _showCompletedDeals
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.check_circle_outline, size: 48, color: Color(0xFF10B981)),
-                                  SizedBox(height: 12),
-                                  Text(
-                                    'No completed deals yet.',
-                                    style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary),
-                                  ),
-                                ],
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _selectedTabIndex == 0
+                                  ? Icons.verified_outlined
+                                  : (_selectedTabIndex == 2
+                                      ? Icons.check_circle_outline
+                                      : Icons.search_off_outlined),
+                              size: 46,
+                              color: _selectedTabIndex == 0
+                                  ? const Color(0xFF10B981)
+                                  : AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _selectedTabIndex == 0
+                                  ? 'No deals requiring approval'
+                                  : (_selectedTabIndex == 2
+                                      ? 'No completed deals yet'
+                                      : 'No deals match this filter'),
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
                               ),
                             ),
-                          )
-                        : _EmptyPipelinesState(
-                            onAdd: profile?.primaryRole.canCreateCustomers == true
-                                ? () => context.go(AppRoutes.customers)
-                                : null,
-                          ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _selectedTabIndex == 0
+                                  ? 'All quotations have been approved or reviewed.'
+                                  : 'Try adjusting your filters or search terms.',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12.5,
+                                color: AppColors.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   );
                 }
+
+                // List of compact deal cards with responsive centering and FAB padding
                 return SliverPadding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 88),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
-                        if (index == pipelines.length) {
-                          return const SizedBox(height: 80);
-                        }
-                        return PipelineCard(
-                          pipeline: pipelines[index],
-                          showCustomer: true,
-                          showSalesperson: isAdmin,
+                        return Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 850),
+                            child: PipelineCard(
+                              pipeline: pipelines[index],
+                              showCustomer: true,
+                              showSalesperson: canViewAll,
+                            ),
+                          ),
                         );
                       },
-                      childCount: pipelines.length + 1,
+                      childCount: pipelines.length,
                     ),
                   ),
                 );
@@ -392,6 +541,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
       ),
       floatingActionButton: profile?.primaryRole.canCreateCustomers == true
           ? FloatingActionButton.extended(
+              heroTag: 'new_deal_fab',
               onPressed: () => context.push(AppRoutes.customers),
               icon: const Icon(Icons.add),
               label: const Text(
@@ -401,6 +551,102 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  Widget _buildSegmentedTab({
+    required int index,
+    required String label,
+    required IconData icon,
+    required Color activeBg,
+    required Color activeFg,
+  }) {
+    final isSelected = _selectedTabIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedTabIndex = index;
+            _quickFilter = 'all';
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? activeFg : Colors.grey.shade600,
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    fontSize: 11.5,
+                    color: isSelected ? activeFg : Colors.grey.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickChip(String label, String value, {bool isAlert = false}) {
+    final isSelected = _quickFilter == value;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _quickFilter = value;
+          if (value == 'needs_approval') {
+            _selectedTabIndex = 0;
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5.5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isAlert ? const Color(0xFFFEF3C7) : AppColors.primary)
+              : (isAlert
+                  ? const Color(0xFFFFFBEB)
+                  : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? (isAlert ? const Color(0xFFF59E0B) : AppColors.primary)
+                : (isAlert ? const Color(0xFFFDE68A) : Colors.grey.shade300),
+            width: isSelected ? 1.2 : 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected
+                ? (isAlert ? const Color(0xFFB45309) : Colors.white)
+                : (isAlert ? const Color(0xFFD97706) : Colors.grey.shade700),
+          ),
+        ),
+      ),
     );
   }
 
@@ -655,64 +901,6 @@ class _FilterSheetState extends State<_FilterSheet> {
           ),
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-class _EmptyPipelinesState extends StatelessWidget {
-  final VoidCallback? onAdd;
-
-  const _EmptyPipelinesState({this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.primarySurface,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.handshake_outlined,
-                  size: 40, color: AppColors.primary),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'No Deals Yet',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Create a customer and start a new deal to begin tracking the sales lifecycle.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                color: AppColors.textSecondary,
-                height: 1.6,
-              ),
-            ),
-            if (onAdd != null) ...[
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add),
-                label: const Text('Go to Customers'),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

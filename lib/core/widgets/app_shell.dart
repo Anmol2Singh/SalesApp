@@ -349,6 +349,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                   ),
 
+                // Quotation Approvals (Admin / Manager / Sales Head)
+                if (roles.any((r) => r.canApproveQuotations))
+                  _buildNavItemTile(
+                    route: '/approvals',
+                    label: 'Approvals',
+                    icon: const Icon(Icons.verified_outlined),
+                    selectedIcon: const Icon(Icons.verified),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
                 // 4. Alerts / Notifications
                 _buildNavItemTile(
                   route: AppRoutes.notifications,

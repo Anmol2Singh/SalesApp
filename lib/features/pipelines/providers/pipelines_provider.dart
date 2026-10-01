@@ -51,9 +51,9 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
       var query = _supabase.from('sales_pipelines').select('''
             *,
             customers(*),
-            products(id, name, category),
+            products(*),
             profiles!sales_pipelines_created_by_fkey(id, full_name),
-            quotations(id, status),
+            quotations(*),
             sales_orders(id, status),
             boqs(id, status),
             factory_orders(id, status),

@@ -12,6 +12,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/widgets/sync_status_indicator.dart';
 import '../../reports/widgets/daily_report_modal.dart';
 import '../../dashboard/screens/recent_deals_screen.dart';
+import '../../../core/widgets/network_status_chip.dart';
 
 final factoryQueueProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -133,17 +134,12 @@ class FactoryQueueScreen extends ConsumerWidget {
                                     ),
                                   ),
                                 ),
-                                Positioned(
+                                const Positioned(
                                   bottom: 0,
                                   right: 0,
-                                  child: Container(
-                                    width: 14,
-                                    height: 14,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF22C55E),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
-                                    ),
+                                  child: NetworkAvatarDot(
+                                    size: 14,
+                                    borderColor: Colors.white,
                                   ),
                                 ),
                               ],
@@ -202,31 +198,7 @@ class FactoryQueueScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF22C55E),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.circle, color: Colors.white, size: 7),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'ONLINE',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                const NetworkStatusChip(),
                               ],
                             ),
                           ],

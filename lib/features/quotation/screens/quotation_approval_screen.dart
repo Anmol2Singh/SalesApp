@@ -43,11 +43,11 @@ class QuotationApprovalScreen extends ConsumerWidget {
                   Icon(Icons.verified_outlined, size: 48, color: AppColors.success),
                   SizedBox(height: 12),
                   Text(
-                    'All Quotations Approved',
+                    'All Quotations Reviewed',
                     style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    'No pending quotations requiring Service Head approval.',
+                    'No pending quotations requiring Sales Head / Admin approval.',
                     style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ],
@@ -122,15 +122,15 @@ class QuotationApprovalScreen extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => _handleApproval(context, ref, quotation.id, false),
+                              onPressed: () => _handleApproval(context, ref, quotation.id, false, quotation.pipelineId),
                               style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
-                              child: const Text('Reject'),
+                              child: const Text('Reject / Request Changes'),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () => _handleApproval(context, ref, quotation.id, true),
+                              onPressed: () => _handleApproval(context, ref, quotation.id, true, quotation.pipelineId),
                               style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
                               child: const Text('Approve Quote'),
                             ),
@@ -138,7 +138,7 @@ class QuotationApprovalScreen extends ConsumerWidget {
                         ],
                       )
                     else
-                      const Text('Requires Service Head / Admin approval permission.', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary)),
+                      const Text('Requires Sales Head / Admin approval permission.', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary)),
                   ],
                 ),
               );
@@ -151,23 +151,102 @@ class QuotationApprovalScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleApproval(BuildContext context, WidgetRef ref, String quotationId, bool isApproved) async {
+  Future<void> _handleApproval(BuildContext context, WidgetRef ref, String quotationId, bool isApproved, String pipelineId) async {
+    String? rejectionRemark;
+    if (!isApproved) {
+      final controller = TextEditingController();
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text('Reject Quotation', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Please provide the reason / remarks for rejection. The sales executive will see this and will be able to edit and resubmit.',
+                style: TextStyle(fontFamily: 'Inter', fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLines: 3,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Rejection Reason / Remarks',
+                  hintText: 'e.g. Please update discount terms to 5%',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+              onPressed: () {
+                if (controller.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Please enter a rejection reason.')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Confirm Rejection', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return;
+      rejectionRemark = controller.text.trim();
+    }
+
     try {
       final supabase = ref.read(supabaseClientProvider);
-      final status = isApproved ? 'confirmed' : 'rejected';
+      final profile = ref.read(currentProfileProvider);
+      final currentUserId = supabase.auth.currentUser!.id;
 
-      await supabase.from('quotations').update({
-        'status': status,
-        'approved_by': supabase.auth.currentUser!.id,
-        'approved_at': DateTime.now().toIso8601String(),
-      }).eq('id', quotationId);
+      if (isApproved) {
+        await supabase.from('quotations').update({
+          'status': 'confirmed',
+          'approved_by': currentUserId,
+          'approved_at': DateTime.now().toIso8601String(),
+          'confirmed_by': currentUserId,
+          'confirmed_at': DateTime.now().toIso8601String(),
+        }).eq('id', quotationId);
+
+        if (pipelineId.isNotEmpty) {
+          await supabase.from('sales_pipelines').update({
+            'current_step': 'sales_order',
+            'notes': 'Quotation approved by ${profile?.fullName ?? "Sales Head / Admin"}.',
+          }).eq('id', pipelineId);
+        }
+      } else {
+        await supabase.from('quotations').update({
+          'status': 'rejected',
+          'approved_by': currentUserId,
+          'approved_at': DateTime.now().toIso8601String(),
+        }).eq('id', quotationId);
+
+        if (pipelineId.isNotEmpty) {
+          await supabase.from('sales_pipelines').update({
+            'notes': 'Changes requested: $rejectionRemark',
+          }).eq('id', pipelineId);
+        }
+      }
 
       ref.invalidate(pendingQuotationsProvider);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isApproved ? '✓ Quotation approved successfully' : 'Quotation rejected'),
+            content: Text(isApproved ? '✓ Quotation approved successfully' : 'Quotation rejected and feedback saved.'),
             backgroundColor: isApproved ? AppColors.success : AppColors.error,
           ),
         );

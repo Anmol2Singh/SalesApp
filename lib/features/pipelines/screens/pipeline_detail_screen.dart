@@ -19,6 +19,7 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/breadcrumbs.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/models/amc_contract.dart';
+import '../../quotation/screens/quotation_approval_screen.dart';
 
 class PipelineDetailScreen extends ConsumerWidget {
   final String pipelineId;
@@ -84,7 +85,47 @@ class PipelineDetailScreen extends ConsumerWidget {
             ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(pipelineDetailProvider(pipelineId)),
+            tooltip: 'Refresh Deal',
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      ),
+                      SizedBox(width: 10),
+                      Text('Refreshing deal...'),
+                    ],
+                  ),
+                  duration: Duration(milliseconds: 600),
+                ),
+              );
+              try {
+                ref.invalidate(pipelineDetailProvider(pipelineId));
+                await ref.read(pipelineDetailProvider(pipelineId).future);
+                ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
+                ref.invalidate(pendingQuotationsProvider);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✓ Deal refreshed'),
+                      duration: Duration(seconds: 1),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Refresh failed: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            },
           ),
         ],
       ),
@@ -285,9 +326,18 @@ class _PipelineDetailContent extends ConsumerWidget {
       });
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Center(
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: () async {
+        ref.invalidate(pipelineDetailProvider(pipeline.id));
+        await ref.read(pipelineDetailProvider(pipeline.id).future);
+        ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
+        ref.invalidate(pendingQuotationsProvider);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
           child: Column(
@@ -296,7 +346,21 @@ class _PipelineDetailContent extends ConsumerWidget {
           // Header card
           _HeaderCard(pipeline: pipeline),
           const SizedBox(height: 16),
-          if (pipeline.status == PipelineStatus.suspended) ...[
+          // Approval Alert Banner (when quotation pending approval)
+          if (pipeline.quotation?.status == QuotationStatus.pendingApproval) ...[
+            _ApprovalAlertBanner(
+              pipeline: pipeline,
+              canApprove: profile?.roles.any((r) => r.canApproveQuotations) ?? false,
+            ),
+            const SizedBox(height: 16),
+          ]
+          // Rejection Feedback Banner (when quotation rejected)
+          else if (pipeline.quotation?.status == QuotationStatus.rejected) ...[
+            _RejectionFeedbackBanner(pipeline: pipeline),
+            const SizedBox(height: 16),
+          ]
+          // Suspended Banner (only for non-rejection suspension)
+          else if (pipeline.status == PipelineStatus.suspended) ...[
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -305,14 +369,14 @@ class _PipelineDetailContent extends ConsumerWidget {
                 border: Border.all(color: AppColors.error.withOpacity(0.3)),
               ),
               child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.error),
-                  const SizedBox(width: 12),
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: AppColors.error),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Deal Suspended',
                           style: TextStyle(
                             fontFamily: 'Inter',
@@ -321,12 +385,10 @@ class _PipelineDetailContent extends ConsumerWidget {
                             color: AppColors.error,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Text(
-                          pipeline.quotation?.status == QuotationStatus.rejected
-                              ? 'This deal has been suspended because the quotation was rejected by the Sales Head.'
-                              : 'This deal has been suspended and cannot be proceeded further.',
-                          style: const TextStyle(
+                          'This deal has been suspended and cannot be proceeded further.',
+                          style: TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 12,
                             color: AppColors.textPrimary,
@@ -409,7 +471,7 @@ class _PipelineDetailContent extends ConsumerWidget {
                   stepsConfig: pipeline.stepsConfig,
                   pdfUrls: {
                     if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.sales || profile?.primaryRole == UserRole.salesHead) ...{
-                      PipelineStep.quotation: pipeline.quotation != null ? 'available' : null,
+                      PipelineStep.quotation: (pipeline.quotation != null && (profile?.primaryRole != UserRole.sales || pipeline.quotation?.status == QuotationStatus.confirmed)) ? 'available' : null,
                       PipelineStep.salesOrder: pipeline.salesOrder != null ? 'available' : null,
                       PipelineStep.boq: pipeline.boq != null ? 'available' : null,
                       PipelineStep.factoryOrder: pipeline.factoryOrder != null ? 'available' : null,
@@ -424,6 +486,16 @@ class _PipelineDetailContent extends ConsumerWidget {
                     }
                   },
                   onStepTap: (step) async {
+                    if (step == PipelineStep.quotation && profile?.primaryRole == UserRole.sales && pipeline.quotation?.status != QuotationStatus.confirmed) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Quotation PDF is locked until approved by Sales Head / Admin.'),
+                          backgroundColor: AppColors.warning,
+                        ),
+                      );
+                      return;
+                    }
+
                     bool isAvailable = false;
                     switch (step) {
                       case PipelineStep.quotation:
@@ -555,12 +627,13 @@ class _PipelineDetailContent extends ConsumerWidget {
             const SizedBox(height: 12),
             _WarrantyCardActionCard(pipeline: pipeline),
           ],
-          const SizedBox(height: 40),
-        ],
-      ),
+            const SizedBox(height: 40),
+          ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }
 
@@ -607,23 +680,30 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  (_checkAllStepsCompleted(pipeline) || pipeline.status == PipelineStatus.completed)
-                      ? 'Completed (100%)'
-                      : pipeline.status.displayName,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  final isPendingApproval = pipeline.quotation?.status == QuotationStatus.pendingApproval;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isPendingApproval ? const Color(0xFFD97706) : Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isPendingApproval
+                          ? '⚠️ Needs Approval'
+                          : ((_checkAllStepsCompleted(pipeline) || pipeline.status == PipelineStatus.completed)
+                              ? 'Completed (100%)'
+                              : pipeline.status.displayName),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -724,22 +804,50 @@ class _StepActionCard extends ConsumerWidget {
         hasData = false;
     }
 
-    final displayCompleted = (isCompleted && (step != PipelineStep.quotation || hasData)) || hasData;
-    final displayActive = (isActive || (step == PipelineStep.quotation && !hasData)) && !hasData;
+    final isQuotationApproved = pipeline.quotation?.status == QuotationStatus.confirmed;
+    final isQuotationPending = pipeline.quotation?.status == QuotationStatus.pendingApproval;
+    final isQuotationRejected = pipeline.quotation?.status == QuotationStatus.rejected;
 
-    final isLocked = !hasData && (stepIndex > currentStepIndex);
-    final showActionSection = isActive || displayCompleted;
+    // Subsequent steps are strictly locked if quotation is not confirmed
+    final isStepBlockedByApproval = step.stepIndex > PipelineStep.quotation.stepIndex && !isQuotationApproved;
+    final isLocked = (!hasData && (stepIndex > currentStepIndex)) || isStepBlockedByApproval;
+
+    final displayCompleted = (isCompleted && (step != PipelineStep.quotation || hasData)) || hasData;
+    final displayActive = (isActive || (step == PipelineStep.quotation && !hasData)) && !hasData && !isLocked;
+
+    final showActionSection = (isActive || displayCompleted) && !isLocked;
     
     // Post-Approval Lock and 100% Completion Lock
     final isAdmin = userRole == UserRole.admin;
     final is100PercentComplete = pipeline.status == PipelineStatus.completed;
-    final isApproved = pipeline.quotation?.status == QuotationStatus.confirmed;
+    final canApproveQuotations = ref.watch(currentProfileProvider)?.roles.any((r) => r.canApproveQuotations) ?? false;
     
     bool isButtonEnabled = !isLocked;
-    if (is100PercentComplete && !isAdmin) {
-      isButtonEnabled = false; // Hide edit option
-    } else if (isApproved && hasData && !isAdmin) {
-      isButtonEnabled = false; // Disable editing of completed steps post-approval for standard roles
+    String buttonText = hasData ? 'View / Edit' : 'Fill In';
+
+    if (step == PipelineStep.quotation) {
+      if (isQuotationPending) {
+        if (!canApproveQuotations) {
+          isButtonEnabled = false;
+          buttonText = 'Under Review';
+        } else {
+          buttonText = 'Review Quotation';
+        }
+      } else if (isQuotationRejected) {
+        isButtonEnabled = true;
+        buttonText = 'Edit & Resubmit';
+      } else if (isQuotationApproved) {
+        if (!isAdmin) {
+          isButtonEnabled = false;
+          buttonText = 'Approved (Locked)';
+        }
+      }
+    } else {
+      if (is100PercentComplete && !isAdmin) {
+        isButtonEnabled = false;
+      } else if (isQuotationApproved && hasData && !isAdmin) {
+        isButtonEnabled = false;
+      }
     }
 
     // Determine if this user can act on this step
@@ -753,7 +861,12 @@ class _StepActionCard extends ConsumerWidget {
     } else {
       switch (step) {
         case PipelineStep.quotation:
-          isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead);
+          // Sales executive cannot view PDF before quotation approval
+          if (roles.contains(UserRole.sales) && !canApproveQuotations) {
+            isPdfVisible = isQuotationApproved;
+          } else {
+            isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead);
+          }
           break;
         case PipelineStep.salesOrder:
           isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead) || roles.contains(UserRole.boq) || roles.contains(UserRole.factory);
@@ -777,7 +890,17 @@ class _StepActionCard extends ConsumerWidget {
     IconData statusIcon;
     Color iconColor;
 
-    if (displayCompleted) {
+    if (step == PipelineStep.quotation && isQuotationPending) {
+      borderColor = const Color(0xFFF59E0B);
+      bgColor = const Color(0xFFFFFDF5);
+      statusIcon = Icons.hourglass_top_rounded;
+      iconColor = const Color(0xFFD97706);
+    } else if (step == PipelineStep.quotation && isQuotationRejected) {
+      borderColor = const Color(0xFFFCA5A5);
+      bgColor = const Color(0xFFFFF1F2);
+      statusIcon = Icons.error_outline_rounded;
+      iconColor = const Color(0xFFEF4444);
+    } else if (displayCompleted) {
       borderColor = AppColors.stepCompleted;
       bgColor = AppColors.successLight;
       statusIcon = Icons.check_circle;
@@ -803,31 +926,81 @@ class _StepActionCard extends ConsumerWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 Icon(statusIcon, color: iconColor, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    _getStepTitle(),
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isLocked
-                          ? AppColors.textDisabled
-                          : AppColors.textPrimary,
-                    ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _getStepTitle(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                            color: isLocked
+                                ? AppColors.textDisabled
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (step == PipelineStep.quotation && isQuotationPending) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFF59E0B)),
+                          ),
+                          child: const Text(
+                            'Pending Approval',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFB45309),
+                            ),
+                          ),
+                        ),
+                      ] else if (step == PipelineStep.quotation && isQuotationRejected) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.error),
+                          ),
+                          child: const Text(
+                            'Changes Requested',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 if (isLocked)
-                  const Text(
-                    'Locked',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: AppColors.textDisabled,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Text(
+                      isStepBlockedByApproval ? 'Requires Approval' : 'Locked',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11.5,
+                        color: AppColors.textDisabled,
+                      ),
                     ),
                   ),
               ],
@@ -988,10 +1161,54 @@ class _StepActionCard extends ConsumerWidget {
                     ),
                   ],
                   const Spacer(),
-                  if (canAct)
+                  if (step == PipelineStep.quotation && isQuotationPending && canApproveQuotations) ...[
+                    OutlinedButton(
+                      onPressed: () => _navigate(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 36),
+                      ),
+                      child: const Text(
+                        'View Form',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _showReviewAndApproveModal(context, ref, pipeline),
+                      icon: const Icon(Icons.rate_review_outlined, size: 14),
+                      label: const Text(
+                        'Review & Approve',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 36),
+                      ),
+                    ),
+                  ] else if (canAct) ...[
                     ElevatedButton(
                       onPressed: isButtonEnabled ? () => _navigate(context) : null,
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: (step == PipelineStep.quotation && isQuotationRejected)
+                            ? const Color(0xFFEA580C)
+                            : null,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 8,
@@ -999,13 +1216,14 @@ class _StepActionCard extends ConsumerWidget {
                         minimumSize: const Size(0, 36),
                       ),
                       child: Text(
-                        hasData ? 'View / Edit' : 'Fill In',
+                        buttonText,
                         style: const TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 13,
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -1035,7 +1253,7 @@ class _StepActionCard extends ConsumerWidget {
   bool _canUserAct(WidgetRef ref) {
     final roles = ref.read(currentProfileProvider)?.roles ?? [];
     if (roles.isEmpty) return false;
-    if (pipeline.status == PipelineStatus.suspended) return false;
+    if (pipeline.status == PipelineStatus.suspended && pipeline.quotation?.status != QuotationStatus.rejected) return false;
 
     bool hasRole(UserRole r) => roles.contains(r);
     
@@ -1472,5 +1690,821 @@ class _WarrantyCardActionCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
+  WidgetRef ref,
+  SalesPipeline pipeline,
+) async {
+  try {
+    final supabase = ref.read(supabaseClientProvider);
+    Map<String, dynamic>? qData;
+    if (pipeline.quotation?.id != null) {
+      final res = await supabase
+          .from('quotations')
+          .select()
+          .eq('id', pipeline.quotation!.id)
+          .maybeSingle();
+      if (res != null) qData = res;
+    }
+    if (qData == null) {
+      final res = await supabase
+          .from('quotations')
+          .select()
+          .eq('pipeline_id', pipeline.id)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res != null) qData = res;
+    }
+
+    String productName = pipeline.product?.name ?? '';
+    if (productName.isEmpty && pipeline.productId.isNotEmpty) {
+      final pRes = await supabase
+          .from('products')
+          .select('name')
+          .eq('id', pipeline.productId)
+          .maybeSingle();
+      if (pRes != null && pRes['name'] != null) {
+        productName = pRes['name'].toString();
+      }
+    }
+
+    String customerName = pipeline.customer?.companyName ??
+        pipeline.customer?.customerName ??
+        '';
+    if (customerName.isEmpty && pipeline.customerId.isNotEmpty) {
+      final cRes = await supabase
+          .from('customers')
+          .select('company_name, customer_name')
+          .eq('id', pipeline.customerId)
+          .maybeSingle();
+      if (cRes != null) {
+        customerName = (cRes['company_name'] as String?)?.isNotEmpty == true
+            ? cRes['company_name']
+            : (cRes['customer_name'] ?? '');
+      }
+    }
+
+    final grandTotal = (qData?['grand_total'] as num?)?.toDouble() ??
+        (pipeline.quotation?.grandTotal ?? 0.0);
+    final quoteNumber = qData?['quotation_number']?.toString() ??
+        pipeline.quotation?.quotationNumber ??
+        '';
+    final salesman = qData?['salesman']?.toString() ??
+        pipeline.quotation?.salesman ??
+        pipeline.createdByProfile?.fullName ??
+        'Sales Executive';
+
+    return {
+      'quotationId': qData?['id']?.toString() ?? pipeline.quotation?.id,
+      'productName': productName.isNotEmpty ? productName : 'Standard System',
+      'customerName': customerName.isNotEmpty ? customerName : 'Customer',
+      'quoteNumber': quoteNumber,
+      'grandTotal': grandTotal,
+      'salesman': salesman,
+    };
+  } catch (_) {
+    return {
+      'quotationId': pipeline.quotation?.id,
+      'productName': pipeline.product?.name ?? 'Standard System',
+      'customerName': pipeline.customer?.companyName ??
+          pipeline.customer?.customerName ??
+          'Customer',
+      'quoteNumber': pipeline.quotation?.quotationNumber ?? '',
+      'grandTotal': pipeline.quotation?.grandTotal ?? 0.0,
+      'salesman': pipeline.quotation?.salesman ??
+          pipeline.createdByProfile?.fullName ??
+          'Sales Executive',
+    };
+  }
+}
+
+class _ApprovalAlertBanner extends ConsumerWidget {
+  final SalesPipeline pipeline;
+  final bool canApprove;
+
+  const _ApprovalAlertBanner({
+    required this.pipeline,
+    required this.canApprove,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _fetchLiveQuotationInfo(ref, pipeline),
+      initialData: {
+        'quotationId': pipeline.quotation?.id,
+        'productName': pipeline.product?.name ?? 'Standard System',
+        'customerName': pipeline.customer?.companyName ??
+            pipeline.customer?.customerName ??
+            'Customer',
+        'quoteNumber': pipeline.quotation?.quotationNumber ?? '',
+        'grandTotal': pipeline.quotation?.grandTotal ?? 0.0,
+        'salesman': pipeline.quotation?.salesman ??
+            pipeline.createdByProfile?.fullName ??
+            'Sales Executive',
+      },
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {};
+        final submitter = data['salesman']?.toString() ?? 'Sales Executive';
+        final productName = data['productName']?.toString() ?? 'Standard System';
+        final customerName = data['customerName']?.toString() ?? 'Customer';
+        final quoteNumber = data['quoteNumber']?.toString() ?? '';
+        final grandTotal = (data['grandTotal'] as num?)?.toDouble() ?? 0.0;
+        final totalStr = '₹${NumberFormat('#,##,##0.00', 'en_IN').format(grandTotal)}';
+
+        final quotation = pipeline.quotation;
+        final dateStr = quotation != null
+            ? DateFormat('dd MMM yyyy, hh:mm a').format(quotation.createdAt)
+            : '';
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD97706).withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.pending_actions_rounded,
+                        color: Color(0xFFD97706), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Approval Required: Quotation Review',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Submitted by $submitter${dateStr.isNotEmpty ? " • $dateStr" : ""}',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD97706),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Pending Approval',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Executive Detail Summary Card
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Customer',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            )),
+                        Flexible(
+                          child: Text(
+                            customerName,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E293B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Product',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            )),
+                        Flexible(
+                          child: Text(
+                            productName,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E293B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (quoteNumber.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Quotation #',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              )),
+                          Text(
+                            quoteNumber,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Quotation Value',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            )),
+                        Text(
+                          totalStr,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (canApprove) ...[
+                const Text(
+                  'Please review the quotation details and pricing terms before advancing the pipeline to Sales Order.',
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 12.5, color: Color(0xFF78350F)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _executeApprovalFlow(context, ref, pipeline, isApprove: false),
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: const Text('Reject / Request Changes'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                          side: const BorderSide(color: AppColors.error),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _executeApprovalFlow(context, ref, pipeline, isApprove: true),
+                        icon: const Icon(Icons.check_rounded, size: 16),
+                        label: const Text('Approve Quotation'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                Row(
+                  children: const [
+                    Icon(Icons.hourglass_top_rounded, size: 16, color: Color(0xFFB45309)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Waiting for Admin / Sales Head approval. Quotation cannot proceed to Sales Order until approved.',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RejectionFeedbackBanner extends StatelessWidget {
+  final SalesPipeline pipeline;
+
+  const _RejectionFeedbackBanner({required this.pipeline});
+
+  @override
+  Widget build(BuildContext context) {
+    final remarks = pipeline.notes ?? 'Changes were requested by the reviewer.';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDBA74), width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEA580C).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.assignment_return_rounded, color: Color(0xFFEA580C), size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Changes Requested by Approver',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF9A3412),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  remarks,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    color: Color(0xFFC2410C),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'The sales executive can edit the quotation step below and resubmit it for approval.',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void _showReviewAndApproveModal(
+  BuildContext context,
+  WidgetRef ref,
+  SalesPipeline pipeline,
+) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      return FutureBuilder<Map<String, dynamic>>(
+        future: _fetchLiveQuotationInfo(ref, pipeline),
+        initialData: {
+          'quotationId': pipeline.quotation?.id,
+          'productName': pipeline.product?.name ?? 'Standard System',
+          'customerName': pipeline.customer?.companyName ??
+              pipeline.customer?.customerName ??
+              'Customer',
+          'quoteNumber': pipeline.quotation?.quotationNumber ?? '',
+          'grandTotal': pipeline.quotation?.grandTotal ?? 0.0,
+          'salesman': pipeline.quotation?.salesman ??
+              pipeline.createdByProfile?.fullName ??
+              'Sales Executive',
+        },
+        builder: (context, snapshot) {
+          final data = snapshot.data ?? {};
+          final cust = data['customerName']?.toString() ?? 'Customer';
+          final prodName = data['productName']?.toString() ?? 'Standard System';
+          final salesman = data['salesman']?.toString() ?? 'Sales Executive';
+          final quoteNum = data['quoteNumber']?.toString() ?? '';
+          final grandTotal = (data['grandTotal'] as num?)?.toDouble() ?? 0.0;
+          final totalStr = '₹${NumberFormat('#,##,##0.00', 'en_IN').format(grandTotal)}';
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+                20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.rate_review_outlined,
+                              size: 20, color: Color(0xFFD97706)),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Review Quotation',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Customer',
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                          Flexible(
+                            child: Text(cust,
+                                style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Product',
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                          Flexible(
+                            child: Text(prodName,
+                                style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                      if (quoteNum.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Quotation #',
+                                style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary)),
+                            Text(quoteNum,
+                                style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Salesperson',
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                          Text(salesman,
+                              style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Grand Total',
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                          Text(totalStr,
+                              style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F172A))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _executeApprovalFlow(context, ref, pipeline, isApprove: false);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                          side: const BorderSide(color: AppColors.error),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Reject / Request Changes'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _executeApprovalFlow(context, ref, pipeline, isApprove: true);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Approve Quotation'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<void> _executeApprovalFlow(
+  BuildContext context,
+  WidgetRef ref,
+  SalesPipeline pipeline, {
+  required bool isApprove,
+}) async {
+  String? quotationId = pipeline.quotation?.id;
+  if (quotationId == null) {
+    try {
+      final res = await ref
+          .read(supabaseClientProvider)
+          .from('quotations')
+          .select('id')
+          .eq('pipeline_id', pipeline.id)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res != null) {
+        quotationId = res['id']?.toString();
+      }
+    } catch (_) {}
+  }
+  if (quotationId == null) return;
+
+  String? rejectionRemark;
+  if (!isApprove) {
+    final controller = TextEditingController();
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Reject Quotation / Request Changes',
+            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Please provide the reason / remarks for rejection. The sales executive will see this and will be able to edit and resubmit.',
+              style: TextStyle(fontFamily: 'Inter', fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Rejection Reason / Remarks',
+                hintText: 'e.g. Please update discount terms to 5%',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () {
+              if (controller.text.trim().isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please enter a rejection reason.')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Confirm Rejection', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (proceed != true) return;
+    rejectionRemark = controller.text.trim();
+  }
+
+  try {
+    final supabase = ref.read(supabaseClientProvider);
+    final profile = ref.read(currentProfileProvider);
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    if (isApprove) {
+      await supabase.from('quotations').update({
+        'status': 'confirmed',
+        'approved_by': currentUserId,
+        'approved_at': DateTime.now().toIso8601String(),
+        'confirmed_by': currentUserId,
+        'confirmed_at': DateTime.now().toIso8601String(),
+      }).eq('id', quotationId);
+
+      await supabase.from('sales_pipelines').update({
+        'current_step': 'sales_order',
+        'status': 'in_progress',
+        'notes': 'Quotation approved by ${profile?.fullName ?? "Sales Head / Admin"}.',
+      }).eq('id', pipeline.id);
+    } else {
+      await supabase.from('quotations').update({
+        'status': 'rejected',
+        'approved_by': currentUserId,
+        'approved_at': DateTime.now().toIso8601String(),
+      }).eq('id', quotationId);
+
+      await supabase.from('sales_pipelines').update({
+        'status': 'in_progress',
+        'notes': 'Changes requested: $rejectionRemark',
+      }).eq('id', pipeline.id);
+    }
+
+    ref.invalidate(pipelineDetailProvider(pipeline.id));
+    ref.invalidate(pipelinesNotifierProvider);
+    ref.invalidate(pendingQuotationsProvider);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isApprove
+              ? '✓ Quotation approved successfully'
+              : 'Quotation rejected and feedback saved.'),
+          backgroundColor: isApprove ? AppColors.success : AppColors.error,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+      );
+    }
   }
 }

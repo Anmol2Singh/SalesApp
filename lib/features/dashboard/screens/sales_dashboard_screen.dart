@@ -11,6 +11,7 @@ import '../../pipelines/providers/pipelines_provider.dart';
 import '../../../core/models/customer.dart';
 import '../../crm/providers/crm_providers.dart';
 import '../../../core/widgets/dashboard_switcher_button.dart';
+import '../../../core/widgets/network_status_chip.dart';
 
 class SalesDashboardScreen extends ConsumerWidget {
   const SalesDashboardScreen({super.key});
@@ -115,18 +116,12 @@ class SalesDashboardScreen extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              Positioned(
+                              const Positioned(
                                 bottom: 1,
                                 right: 1,
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF22C55E),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                        color: const Color(0xFF1E1B4B), width: 2),
-                                  ),
+                                child: NetworkAvatarDot(
+                                  size: 14,
+                                  borderColor: Color(0xFF1E1B4B),
                                 ),
                               ),
                             ],
@@ -185,31 +180,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF22C55E),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.circle, color: Colors.white, size: 7),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'ONLINE',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const NetworkStatusChip(),
                             ],
                           ),
                         ],

@@ -17,6 +17,7 @@ import '../../crm/providers/crm_providers.dart';
 import '../../complaints/providers/complaints_provider.dart';
 import 'product_interests_screen.dart';
 import '../providers/product_inquiries_provider.dart';
+import '../../../core/widgets/network_status_chip.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
@@ -177,19 +178,11 @@ class AdminDashboardScreen extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              Positioned(
+                              const Positioned(
                                 bottom: 0,
                                 right: 0,
-                                child: Container(
-                                  width: 13,
-                                  height: 13,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF22C55E),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                        color: const Color(0xFF1E1B4B),
-                                        width: 2),
-                                  ),
+                                child: NetworkAvatarDot(
+                                  borderColor: Color(0xFF1E1B4B),
                                 ),
                               ),
                             ],
@@ -249,38 +242,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF22C55E),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    const Text(
-                                      'ONLINE',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                        letterSpacing: 0.4,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const NetworkStatusChip(),
                             ],
                           ),
                         ],

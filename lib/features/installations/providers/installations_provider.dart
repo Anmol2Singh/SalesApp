@@ -219,6 +219,25 @@ class InstallationsNotifier extends StateNotifier<List<Installation>> {
     } catch (_) {}
   }
 
+  Future<void> updateSealNumberAfter(
+      String installationId, String sealNumber) async {
+    state = state.map((i) {
+      if (i.id == installationId) {
+        return i.copyWith(
+          sealNumberAfter: sealNumber,
+        );
+      }
+      return i;
+    }).toList();
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('installations').update({
+        'seal_number_after': sealNumber,
+      }).eq('id', installationId);
+    } catch (_) {}
+  }
+
   Future<void> updateAfterPhoto(String installationId, String photoUrl) async {
     String? publicUrl = photoUrl;
     try {
