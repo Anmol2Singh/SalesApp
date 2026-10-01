@@ -19,7 +19,7 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/breadcrumbs.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/models/amc_contract.dart';
-import '../../quotation/screens/quotation_approval_screen.dart';
+import '../../quotation/providers/quotation_provider.dart';
 
 class PipelineDetailScreen extends ConsumerWidget {
   final String pipelineId;

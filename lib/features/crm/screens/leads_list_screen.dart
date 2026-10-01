@@ -97,45 +97,59 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  _buildFilters(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    color: AppColors.surface,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.leaderboard_outlined, size: 18, color: AppColors.primary),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Total Leads: ${leadsAsync.value?.length ?? 0}',
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              automaticallyImplyLeading: false,
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 2,
+              shadowColor: Colors.black.withOpacity(0.08),
+              toolbarHeight: 0,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(170),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFilters(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: AppColors.surface,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.leaderboard_outlined, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Total Leads: ${leadsAsync.value?.length ?? 0}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          'All Stages',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
+                            ],
                           ),
-                        ),
-                      ],
+                          Text(
+                            'All Stages',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1, color: AppColors.border),
-                ],
+                    const Divider(height: 1, color: AppColors.border),
+                  ],
+                ),
               ),
             ),
             leadsAsync.when(
@@ -179,7 +193,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                 }
 
                 return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -357,11 +371,15 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     ),
       floatingActionButton: isCrmStaff
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _showAddLeadForm(context),
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Add Lead', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              backgroundColor: AppColors.primary,
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: FloatingActionButton.extended(
+                heroTag: 'add_lead_fab',
+                onPressed: () => _showAddLeadForm(context),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('Add Lead', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                backgroundColor: AppColors.primary,
+              ),
             ),
     );
   }
@@ -369,7 +387,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
   Widget _buildFilters() {
     return Container(
       color: AppColors.surface,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         children: [
           TextField(
@@ -392,11 +410,11 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
               ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             ),
             onChanged: (val) => setState(() => _searchQuery = val),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -434,6 +452,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
   void _showAddLeadForm(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
@@ -441,7 +460,10 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-          child: const AddDirectLeadForm(),
+          child: const SafeArea(
+            bottom: true,
+            child: AddDirectLeadForm(),
+          ),
         );
       },
     );
@@ -615,9 +637,13 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                   onTap: () async {
                     final picked = await showModalBottomSheet<Prospect>(
                       context: context,
+                      useRootNavigator: true,
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
-                      builder: (ctx) => SearchableProspectSheet(prospects: prospectsList),
+                      builder: (ctx) => SafeArea(
+                        bottom: true,
+                        child: SearchableProspectSheet(prospects: prospectsList),
+                      ),
                     );
                     if (picked != null) {
                       setState(() {

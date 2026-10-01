@@ -218,7 +218,24 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
                   Expanded(child: widget.child),
                 ],
               )
-            : widget.child,
+            : Builder(
+                builder: (context) {
+                  final mq = MediaQuery.of(context);
+                  final bottomInset = mq.viewPadding.bottom;
+                  final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
+                  return MediaQuery(
+                    data: mq.copyWith(
+                      padding: mq.padding.copyWith(
+                        bottom: topOfNavBar + 20,
+                      ),
+                      viewPadding: mq.viewPadding.copyWith(
+                        bottom: topOfNavBar + 4,
+                      ),
+                    ),
+                    child: widget.child,
+                  );
+                },
+              ),
         bottomNavigationBar: isDesktop ? null : Builder(
           builder: (context) {
             final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -263,7 +280,7 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                   child: Container(
-                    height: 66,
+                    height: 69,
                     decoration: BoxDecoration(
                       color: isDark
                           ? const Color(0xFF0F172A).withValues(alpha: 0.78)

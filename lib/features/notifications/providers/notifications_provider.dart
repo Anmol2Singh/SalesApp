@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/models/notification.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/notification_service.dart';
@@ -17,7 +17,7 @@ class NotificationsNotifier
 
   NotificationsNotifier(this._supabase, this._userId)
       : super(const AsyncValue.loading()) {
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    const supabaseUrl = AppConfig.supabaseUrl;
     if (supabaseUrl.contains('your-project-ref')) {
       state = const AsyncValue.data([]);
       return;

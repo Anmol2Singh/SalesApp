@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
@@ -39,7 +39,7 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
 
     if (!_hasMore && !refresh) return;
 
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    const supabaseUrl = AppConfig.supabaseUrl;
     if (supabaseUrl.contains('your-project-ref')) {
       final mock = _getMockCustomers();
       state = AsyncValue.data(mock);
@@ -524,7 +524,7 @@ final customerSearchProvider =
   if (query.isEmpty) return [];
 
   final supabase = ref.watch(supabaseClientProvider);
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     return [];
   }
@@ -557,7 +557,7 @@ final customerDetailProvider =
     FutureProvider.family<Customer, String>((ref, customerId) async {
   final supabase = ref.watch(supabaseClientProvider);
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     final mockList = _getMockCustomers();
     return mockList.firstWhere(

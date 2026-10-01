@@ -6,8 +6,8 @@ import 'dart:io' show Platform;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,9 +29,9 @@ class PaymentService {
   PaymentSuccessCallback? _onSuccess;
   PaymentFailureCallback? _onFailure;
 
-  String get _keyId => dotenv.env['RAZORPAY_KEY_ID']?.trim() ?? '';
-  String get _keySecret => dotenv.env['RAZORPAY_KEY_SECRET']?.trim() ?? '';
-  String get backendApiUrl => dotenv.env['BACKEND_API_URL']?.trim() ?? '';
+  String get _keyId => AppConfig.razorpayKeyId;
+  String get _keySecret => AppConfig.razorpayKeySecret;
+  String get backendApiUrl => AppConfig.backendApiUrl;
 
   bool get isConfigured => _keyId.isNotEmpty;
 

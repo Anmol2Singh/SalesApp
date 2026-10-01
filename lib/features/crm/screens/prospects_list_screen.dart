@@ -95,45 +95,59 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  _buildFilters(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    color: AppColors.surface,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              automaticallyImplyLeading: false,
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 2,
+              shadowColor: Colors.black.withOpacity(0.08),
+              toolbarHeight: 0,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(170),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFilters(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: AppColors.surface,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          'Active Pipeline',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
+                            ],
                           ),
-                        ),
-                      ],
+                          Text(
+                            'Active Pipeline',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1, color: AppColors.border),
-                ],
+                    const Divider(height: 1, color: AppColors.border),
+                  ],
+                ),
               ),
             ),
             prospectsAsync.when(
@@ -174,7 +188,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                 }
 
                 return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -448,13 +462,17 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
         ],
       ),
     ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          _showAddProspectForm(context);
-        },
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Prospect', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.primary,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: FloatingActionButton.extended(
+          heroTag: 'add_prospect_fab',
+          onPressed: () {
+            _showAddProspectForm(context);
+          },
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('Add Prospect', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          backgroundColor: AppColors.primary,
+        ),
       ),
     );
   }
@@ -462,10 +480,15 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
   void _showTransferModal(BuildContext context, WidgetRef ref, Prospect prospect) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return _AssignProspectSheet(prospect: prospect);
+        return SafeArea(
+          bottom: true,
+          child: _AssignProspectSheet(prospect: prospect),
+        );
       },
     );
   }
@@ -475,7 +498,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
   Widget _buildFilters() {
     return Container(
       color: AppColors.surface,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         children: [
           TextField(
@@ -498,11 +521,11 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
               ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             ),
             onChanged: (val) => setState(() => _searchQuery = val),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -564,6 +587,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
   void _showAddProspectForm(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
@@ -571,7 +595,10 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-          child: const AddProspectForm(),
+          child: const SafeArea(
+            bottom: true,
+            child: AddProspectForm(),
+          ),
         );
       },
     );

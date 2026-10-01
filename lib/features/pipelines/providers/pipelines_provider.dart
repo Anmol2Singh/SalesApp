@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
@@ -40,7 +40,7 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
 
     _isLoading = true;
 
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    const supabaseUrl = AppConfig.supabaseUrl;
     if (supabaseUrl.contains('your-project-ref')) {
       final mock = _getMockPipelines();
       state = AsyncValue.data(mock);
@@ -149,7 +149,7 @@ final pipelineDetailProvider =
     FutureProvider.family<SalesPipeline, String>((ref, pipelineId) async {
   final supabase = ref.watch(supabaseClientProvider);
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     final mockList = _getMockPipelines();
     return mockList.firstWhere(

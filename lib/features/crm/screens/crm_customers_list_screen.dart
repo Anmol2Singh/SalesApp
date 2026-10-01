@@ -87,45 +87,59 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  _buildFilters(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    color: AppColors.surface,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.verified_outlined, size: 18, color: AppColors.primary),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Total Converted Customers: $wonLeadsCount',
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              automaticallyImplyLeading: false,
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 2,
+              shadowColor: Colors.black.withOpacity(0.08),
+              toolbarHeight: 0,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(115),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFilters(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: AppColors.surface,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.verified_outlined, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Total Converted Customers: $wonLeadsCount',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const Text(
-                          'Won Leads',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
+                            ],
                           ),
-                        ),
-                      ],
+                          const Text(
+                            'Won Leads',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1, color: AppColors.border),
-                ],
+                    const Divider(height: 1, color: AppColors.border),
+                  ],
+                ),
               ),
             ),
             leadsAsync.when(
@@ -156,7 +170,7 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
                 }
 
                 return SliverPadding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -226,7 +240,7 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
   Widget _buildFilters() {
     return Container(
       color: AppColors.surface,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: TextField(
         style: const TextStyle(color: AppColors.textPrimary),
         decoration: InputDecoration(
@@ -247,7 +261,7 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
         ),
         onChanged: (val) => setState(() => _searchQuery = val),
       ),

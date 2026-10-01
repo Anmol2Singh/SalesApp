@@ -36,7 +36,6 @@ import '../../features/admin/screens/pdf_template_screen.dart';
 import '../../features/amc/screens/amc_list_screen.dart';
 import '../../features/amc/screens/amc_detail_screen.dart';
 import '../../features/amc/screens/amc_setup_form_screen.dart';
-import '../../features/quotation/screens/quotation_approval_screen.dart';
 import '../../features/daily_tasks/screens/daily_tasks_screen.dart';
 import '../../features/amc/screens/service_visit_form_screen.dart';
 import '../../features/amc/screens/warranty_card_screen.dart';
@@ -576,10 +575,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             pipelineId: pipelineId,
           );
         },
-      ),
-      GoRoute(
-        path: '/approvals',
-        builder: (context, state) => const QuotationApprovalScreen(),
       ),
       GoRoute(
         path: '/service-visit/:customerId',

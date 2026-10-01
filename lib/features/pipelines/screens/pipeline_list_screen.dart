@@ -519,7 +519,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
                 // List of compact deal cards with responsive centering and FAB padding
                 return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 88),
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 110),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -570,14 +570,17 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         ),
       ),
       floatingActionButton: profile?.primaryRole.canCreateCustomers == true
-          ? FloatingActionButton.extended(
-              heroTag: 'new_deal_fab',
-              onPressed: () => context.push(AppRoutes.customers),
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'New Deal',
-                style:
-                    TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: FloatingActionButton.extended(
+                heroTag: 'new_deal_fab',
+                onPressed: () => context.push(AppRoutes.customers),
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  'New Deal',
+                  style:
+                      TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                ),
               ),
             )
           : null,
@@ -683,9 +686,9 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => _FilterSheet(
         selectedStep: _selectedStep,
         selectedStatus: _selectedStatus,
@@ -812,12 +815,24 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        bottom: true,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           const Text(
             'Filter Deals',
             style: TextStyle(
@@ -931,6 +946,8 @@ class _FilterSheetState extends State<_FilterSheet> {
           ),
           const SizedBox(height: 8),
         ],
+      ),
+        ),
       ),
     );
   }

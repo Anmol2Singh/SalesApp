@@ -241,7 +241,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
               // Bottom Add Item Button
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.fromLTRB(16, 12, 16, widget.isEmbedded ? 96 : 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border(top: BorderSide(color: Colors.grey.shade200)),

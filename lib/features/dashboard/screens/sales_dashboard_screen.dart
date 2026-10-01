@@ -256,17 +256,18 @@ class SalesDashboardScreen extends ConsumerWidget {
                                 ? 4
                                 : 2;
                         final childAspectRatio = constraints.maxWidth >= 900
-                            ? 2.1
+                            ? 2.3
                             : constraints.maxWidth >= 550
-                                ? 1.6
-                                : 1.34;
+                                ? 2.0
+                                : 1.85;
 
                         return GridView.count(
                           crossAxisCount: crossAxisCount,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
+                          padding: EdgeInsets.zero,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
                           childAspectRatio: childAspectRatio,
                           children: [
                             _SalesStatCard(
@@ -310,7 +311,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                   ),
                   error: (_, __) => const SizedBox.shrink(),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
 
                 // Quick actions
                 const Text(
@@ -485,7 +486,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // Recent activity
                 Row(
@@ -611,7 +612,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                   ),
                   error: (e, _) => Center(child: Text('$e')),
                 ),
-                const SizedBox(height: 80),
+                const SizedBox(height: 110),
               ]),
             ),
           ),
@@ -736,12 +737,12 @@ class _SalesStatCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
               width: 1.2,
@@ -749,46 +750,46 @@ class _SalesStatCard extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 34,
+                    height: 34,
                     decoration: BoxDecoration(
                       color: color,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, color: Colors.white, size: 22),
+                    child: Icon(icon, color: Colors.white, size: 18),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       title,
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: isDark
                             ? Colors.grey.shade300
                             : const Color(0xFF1E293B),
-                        height: 1.2,
+                        height: 1.15,
                       ),
                       maxLines: 2,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
@@ -796,7 +797,7 @@ class _SalesStatCard extends StatelessWidget {
                   value,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 26,
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: isDark ? Colors.white : const Color(0xFF0F172A),
                     letterSpacing: -0.5,

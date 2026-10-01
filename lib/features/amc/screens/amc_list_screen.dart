@@ -20,6 +20,8 @@ class AmcListScreen extends ConsumerStatefulWidget {
 
 class _AmcListScreenState extends ConsumerState<AmcListScreen> {
   String _selectedFilter = '';
+  late final TextEditingController _searchController;
+  String _searchQuery = '';
 
   final _filterOptions = const [
     {'label': 'All', 'value': ''},
@@ -29,6 +31,18 @@ class _AmcListScreenState extends ConsumerState<AmcListScreen> {
     {'label': 'Interested', 'value': 'interested'},
     {'label': 'Pending', 'value': 'pending_setup'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +69,55 @@ class _AmcListScreenState extends ConsumerState<AmcListScreen> {
       ),
       body: Column(
         children: [
+          // Top Search Bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search by customer, phone, product, or AMC #...',
+                  hintStyle: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+          ),
+
           // Filter chips
           SizedBox(
             height: 48,
@@ -131,18 +194,63 @@ class _AmcListScreenState extends ConsumerState<AmcListScreen> {
                   );
                 }
 
+                final query = _searchQuery.toLowerCase();
+                final filteredContracts = contracts.where((c) {
+                  if (query.isEmpty) return true;
+                  final amcNum = c.amcNumber.toLowerCase();
+                  final custName = (c.customer?.contactPerson ?? '').toLowerCase();
+                  final compName = (c.customer?.companyName ?? '').toLowerCase();
+                  final phone = (c.customer?.phone ?? '').toLowerCase();
+                  final prodName = (c.product?.name ?? '').toLowerCase();
+                  return amcNum.contains(query) ||
+                      custName.contains(query) ||
+                      compName.contains(query) ||
+                      phone.contains(query) ||
+                      prodName.contains(query);
+                }).toList();
+
+                if (filteredContracts.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off_rounded,
+                            size: 56, color: AppColors.textDisabled),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No contracts matching "$_searchQuery"',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                          child: const Text('Clear Search'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 return RefreshIndicator(
                   onRefresh: () =>
                       ref.read(amcNotifierProvider.notifier).refresh(),
                   child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                    itemCount: contracts.length,
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                    itemCount: filteredContracts.length,
                     itemBuilder: (context, index) {
                       return _AmcContractCard(
-                        contract: contracts[index],
+                        contract: filteredContracts[index],
                         onTap: () => context.push(
                           AppRoutes.amcDetail
-                              .replaceAll(':id', contracts[index].id),
+                              .replaceAll(':id', filteredContracts[index].id),
                         ),
                       );
                     },

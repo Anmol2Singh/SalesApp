@@ -259,7 +259,7 @@ class _InstallationDashboardScreenState
     final totalCount = installations.length;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 96.0),
+      padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 80.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -272,7 +272,7 @@ class _InstallationDashboardScreenState
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           LayoutBuilder(
             builder: (context, constraints) {
@@ -281,9 +281,9 @@ class _InstallationDashboardScreenState
                 crossAxisCount: isWide ? 4 : 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: isWide ? 1.6 : 1.34,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: isWide ? 1.75 : 1.52,
                 children: [
                   _buildKpiCard(
                     title: 'Total\nInstallations',
@@ -314,7 +314,7 @@ class _InstallationDashboardScreenState
             },
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
           // Action navigation shortcuts
           Row(
@@ -340,7 +340,7 @@ class _InstallationDashboardScreenState
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -365,7 +365,7 @@ class _InstallationDashboardScreenState
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
           // Recently Added Installations
           Row(
@@ -387,7 +387,7 @@ class _InstallationDashboardScreenState
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           if (isLoading) ...[
             const ShimmerListLoader(),
@@ -449,10 +449,10 @@ class _InstallationDashboardScreenState
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: Colors.grey.shade200,
             width: 1.2,
@@ -473,21 +473,21 @@ class _InstallationDashboardScreenState
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: badgeColor,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: Colors.white, size: 22),
+                  child: Icon(icon, color: Colors.white, size: 18),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1E293B),
                       height: 1.2,
@@ -497,7 +497,7 @@ class _InstallationDashboardScreenState
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -505,7 +505,7 @@ class _InstallationDashboardScreenState
                 value,
                 style: const TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 26,
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF0F172A),
                   letterSpacing: -0.5,

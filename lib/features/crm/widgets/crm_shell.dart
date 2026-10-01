@@ -91,7 +91,26 @@ class CrmShell extends ConsumerWidget {
                 canAccessLeads: canAccessLeads,
                 canAccessCustomers: canAccessCustomers,
               ),
-            Expanded(child: child),
+            Expanded(
+              child: Builder(
+                builder: (context) {
+                  if (!isWide && canAccessCrmDashboard) {
+                    final mq = MediaQuery.of(context);
+                    final bottomInset = mq.viewPadding.bottom;
+                    final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
+                    return MediaQuery(
+                      data: mq.copyWith(
+                        viewPadding: mq.viewPadding.copyWith(
+                          bottom: topOfNavBar + 4,
+                        ),
+                      ),
+                      child: child,
+                    );
+                  }
+                  return child;
+                },
+              ),
+            ),
           ],
         ),
         bottomNavigationBar: (isWide || !canAccessCrmDashboard)
@@ -232,7 +251,7 @@ class CrmShell extends ConsumerWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            height: 66,
+            height: 69,
             decoration: BoxDecoration(
               color: isDark
                   ? const Color(0xFF0F172A).withValues(alpha: 0.78)

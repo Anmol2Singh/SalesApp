@@ -160,7 +160,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 245,
+            expandedHeight: 200,
             pinned: true,
             backgroundColor: const Color(0xFF0F172A),
             elevation: 0,
@@ -207,7 +207,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 68),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -372,7 +372,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
 
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 96.0),
+      padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 80.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -386,7 +386,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           LayoutBuilder(
             builder: (context, constraints) {
@@ -395,9 +395,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 crossAxisCount: isWide ? 4 : 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: isWide ? 1.6 : 1.34,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: isWide ? 1.75 : 1.52,
                 children: [
                   _buildKpiCard(
                     title: 'Total\nTickets',
@@ -483,12 +483,12 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             ),
           ],
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
 
           // Product Complaints Frequency Chart
           _buildProductComplaintsChart(complaints),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
 
           // Recently Added Complaints Header
           const Text(
@@ -500,7 +500,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
           if (isLoading) ...[
             const ShimmerListLoader(),
@@ -556,10 +556,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: Colors.grey.shade200,
             width: 1.2,
@@ -580,21 +580,21 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: badgeColor,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: Colors.white, size: 22),
+                  child: Icon(icon, color: Colors.white, size: 18),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1E293B),
                       height: 1.2,
@@ -604,7 +604,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -612,7 +612,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 value,
                 style: const TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 26,
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF0F172A),
                   letterSpacing: -0.5,
@@ -904,7 +904,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
     ];
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -951,12 +951,12 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             'Distribution of complaints by product line',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           ...sortedEntries.take(5).toList().asMap().entries.map((entry) {
             final idx = entry.key;
             final pName = entry.value.key;
@@ -966,7 +966,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             final color = palette[idx % palette.length];
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
+              padding: const EdgeInsets.only(bottom: 8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

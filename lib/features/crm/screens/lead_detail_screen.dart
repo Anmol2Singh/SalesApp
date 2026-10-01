@@ -841,11 +841,15 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
   void _showEditLeadModal(BuildContext context, WidgetRef ref, Lead lead) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: _EditLeadSheet(lead: lead),
+      builder: (ctx) => SafeArea(
+        bottom: true,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: _EditLeadSheet(lead: lead),
+        ),
       ),
     );
   }
@@ -1066,10 +1070,15 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
   void _showAssignLeadSheet(BuildContext context, WidgetRef ref, Lead lead) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return _AssignLeadDetailSheet(lead: lead);
+        return SafeArea(
+          bottom: true,
+          child: _AssignLeadDetailSheet(lead: lead),
+        );
       },
     );
   }
@@ -1095,6 +1104,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -1285,6 +1295,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
     final addCtrl = TextEditingController();
     await showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
@@ -1404,6 +1415,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {

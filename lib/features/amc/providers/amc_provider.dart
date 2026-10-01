@@ -3,7 +3,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/models/amc_contract.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -32,7 +32,7 @@ class AmcNotifier extends StateNotifier<AsyncValue<List<AmcContract>>> {
     }
     if (!_hasMore && !refresh) return;
 
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    const supabaseUrl = AppConfig.supabaseUrl;
     if (supabaseUrl.contains('your-project-ref')) {
       state = const AsyncValue.data([]);
       _hasMore = false;
@@ -118,7 +118,7 @@ final amcForCustomerProductProvider = FutureProvider.family<AmcContract?,
     ({String customerId, String productId})>((ref, params) async {
   final supabase = ref.watch(supabaseClientProvider);
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     return null;
   }
@@ -141,7 +141,7 @@ final amcForCustomerProvider =
     FutureProvider.family<List<AmcContract>, String>((ref, customerId) async {
   final supabase = ref.watch(supabaseClientProvider);
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     return [];
   }
@@ -161,7 +161,7 @@ final amcForCustomerProvider =
 final amcExpiringSoonCountProvider = FutureProvider<int>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     return 0;
   }

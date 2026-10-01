@@ -726,11 +726,15 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
   void _showEditProspectModal(BuildContext context, WidgetRef ref, Prospect prospect) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: _EditProspectSheet(prospect: prospect),
+      builder: (ctx) => SafeArea(
+        bottom: true,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: _EditProspectSheet(prospect: prospect),
+        ),
       ),
     );
   }
@@ -738,12 +742,16 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
   void _showConvertToLeadSheet(BuildContext context, WidgetRef ref, Prospect prospect) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: ConvertToLeadForm(prospect: prospect),
+        return SafeArea(
+          bottom: true,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: ConvertToLeadForm(prospect: prospect),
+          ),
         );
       },
     );
@@ -752,10 +760,15 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
   void _showTransferModal(BuildContext context, WidgetRef ref, Prospect prospect) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return _AssignProspectDetailSheet(prospect: prospect);
+        return SafeArea(
+          bottom: true,
+          child: _AssignProspectDetailSheet(prospect: prospect),
+        );
       },
     );
   }

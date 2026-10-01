@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
@@ -21,7 +21,7 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
   final supabase = ref.watch(supabaseClientProvider);
 
   // Demo fallback
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     yield Profile(
       id: '00000000-0000-0000-0000-000000000000',

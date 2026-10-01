@@ -57,8 +57,10 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
       final list = jsonDecode(raw) as List;
       for (final item in list) {
         if (item is Map) {
+          final id = item['id']?.toString() ?? '';
+          if (id.startsWith('fallback')) continue;
           loaded.add(ProductInterestItem(
-            id: item['id']?.toString() ?? '',
+            id: id,
             customerName: item['customer_name']?.toString() ?? 'Valued Customer',
             customerPhone: item['customer_phone']?.toString() ?? '',
             productName: item['product_name']?.toString() ?? 'Solar System',
@@ -76,7 +78,8 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
     final res = await supabase
         .from('product_inquiries')
         .select()
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(const Duration(seconds: 3));
 
     for (final item in (res as List? ?? [])) {
       final id = item['inquiry_id']?.toString() ?? item['id']?.toString() ?? '';
@@ -100,7 +103,8 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
         .from('crm_leads')
         .select()
         .eq('source', 'Customer Product Interest')
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(const Duration(seconds: 3));
 
     for (final item in (res as List? ?? [])) {
       final id = item['id']?.toString() ?? '';
@@ -126,8 +130,8 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
     }
   } catch (_) {}
 
-  // Filter out any cancelled requests completely
-  loaded.removeWhere((e) => e.status.toLowerCase() == 'cancelled');
+  // Filter out any cancelled or fake fallback requests completely
+  loaded.removeWhere((e) => e.status.toLowerCase() == 'cancelled' || e.id.startsWith('fallback'));
   loaded.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   return loaded;

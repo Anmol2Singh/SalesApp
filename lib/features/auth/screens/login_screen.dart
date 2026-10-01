@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import '../../customer_app/core/theme/app_theme.dart' as cust_colors;
 import '../../customer_app/shared/widgets/glass_card.dart';
 import '../../customer_app/shared/widgets/gradient_button.dart';
@@ -118,7 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final rawPhone = _phoneController.text.trim();
 
       // Check if customer is registered in the system
-      final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+      const supabaseUrl = AppConfig.supabaseUrl;
       final isDemoMode = supabaseUrl.contains('your-project-ref');
 
       if (!isDemoMode) {

@@ -244,17 +244,17 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
       onRefresh: () async => _refreshAll(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Filter Pills Row
             _buildDateFilterRow(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             // Top KPI Metrics Bento Grid
             _buildKpiSection(prospectsAsync, leadsAsync, isCrmStaff: isCrmStaff),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
 
             if (isCrmStaff) ...[
               Row(
@@ -444,18 +444,18 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
             ],
 
             // Monthly Trend Chart Card (Hidden for CRM staff)
             if (!isCrmStaff) ...[
               _buildTrendChartCard(leadsAsync),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
             ],
 
             // Pipeline & Status Distribution
             _buildDistributionSection(leadsAsync, prospectsAsync),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
 
             // Recent Leads / Follow-up list
             _buildRecentLeadsSection(leadsAsync),
@@ -556,9 +556,9 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
 
         return GridView.count(
           crossAxisCount: count,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: (isCrmStaff && isWide) ? 2.2 : (isWide ? 1.5 : 1.15),
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: (isCrmStaff && isWide) ? 2.2 : (isWide ? 1.65 : 1.35),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
@@ -728,7 +728,7 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
     final maxVal = ([...leadCounts, ...wonCounts, 5.0].reduce((a, b) => a > b ? a : b) * 1.2).ceilToDouble();
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -774,9 +774,9 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 200,
+            height: 180,
             child: LineChart(
               LineChartData(
                 gridData: FlGridData(

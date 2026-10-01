@@ -4,8 +4,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 enum AppOtpChannel { sms, whatsapp }
 typedef OtpChannel = AppOtpChannel;
@@ -39,10 +39,10 @@ class AuthService {
   AuthService._internal();
 
   // Environment credentials
-  String get _fast2SmsApiKey => dotenv.env['FAST2SMS_API_KEY']?.trim() ?? '';
-  String get _whatsappPhoneId => dotenv.env['WHATSAPP_PHONE_ID']?.trim() ?? '';
-  String get _whatsappAccessToken => dotenv.env['WHATSAPP_ACCESS_TOKEN']?.trim() ?? '';
-  String get _whatsappTemplateName => dotenv.env['WHATSAPP_TEMPLATE_NAME']?.trim() ?? 'otp_verification';
+  String get _fast2SmsApiKey => AppConfig.fast2SmsApiKey;
+  String get _whatsappPhoneId => AppConfig.whatsappPhoneId;
+  String get _whatsappAccessToken => AppConfig.whatsappAccessToken;
+  String get _whatsappTemplateName => AppConfig.whatsappTemplateName;
 
   // Security & Token Reveal Prevention State
   // [NOTE FOR PRODUCTION ARCHITECTURE]:

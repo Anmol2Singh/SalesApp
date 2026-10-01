@@ -419,7 +419,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                           );
                         } else {
                           return const SizedBox(
-                              height: 80); // Bottom padding for FAB
+                              height: 100); // Bottom padding for elevated FAB
                         }
                       }
                       return _CustomerTile(customer: customers[index]);
@@ -459,13 +459,17 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
         ],
       ),
       floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
-              onPressed: _navigateToCreate,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'New Customer',
-                style:
-                    TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: FloatingActionButton.extended(
+                heroTag: 'new_customer_fab',
+                onPressed: _navigateToCreate,
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  'New Customer',
+                  style:
+                      TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                ),
               ),
             )
           : null,
@@ -479,17 +483,19 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
     final notifier = ref.read(customersNotifierProvider.notifier);
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return _CustomerFilterSheet(
-          currentFilter: notifier.filterBy,
-          currentSort: notifier.sortBy,
-          onApply: (filter, sort) {
-            notifier.setFilterAndSort(filter: filter, sort: sort);
-          },
+        return SafeArea(
+          bottom: true,
+          child: _CustomerFilterSheet(
+            currentFilter: notifier.filterBy,
+            currentSort: notifier.sortBy,
+            onApply: (filter, sort) {
+              notifier.setFilterAndSort(filter: filter, sort: sort);
+            },
+          ),
         );
       },
     );

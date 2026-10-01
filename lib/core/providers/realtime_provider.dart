@@ -18,9 +18,9 @@ import '../../features/admin/providers/manage_boq_items_provider.dart';
 import '../../features/pipelines/providers/pipelines_provider.dart';
 import '../../features/customers/providers/customers_provider.dart';
 import '../../features/amc/providers/amc_provider.dart';
-import '../../features/quotation/screens/quotation_approval_screen.dart';
 import '../../features/factory_order/screens/factory_queue_screen.dart';
 import '../../features/purchase_order/screens/purchase_queue_screen.dart';
+import '../../features/quotation/providers/quotation_provider.dart';
 
 // CRM
 import '../../features/crm/providers/crm_providers.dart';

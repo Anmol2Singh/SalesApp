@@ -3,7 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../core/config/app_config.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -40,7 +40,7 @@ final productDealCountsProvider = FutureProvider<Map<String, int>>((ref) async {
 final productsProvider = FutureProvider<List<Product>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  const supabaseUrl = AppConfig.supabaseUrl;
   if (supabaseUrl.contains('your-project-ref')) {
     final now = DateTime.now();
     return [
@@ -113,7 +113,7 @@ class ProductCatalogScreen extends ConsumerWidget {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             itemCount: products.length,
             itemBuilder: (context, index) {
               final product = products[index];

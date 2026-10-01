@@ -199,7 +199,7 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
     return Form(
       key: _formKey,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         children: [
           Container(
             padding: const EdgeInsets.all(16),

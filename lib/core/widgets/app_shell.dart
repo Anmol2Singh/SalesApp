@@ -112,6 +112,15 @@ class _AppShellState extends ConsumerState<AppShell> {
         body: LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 800;
+            final showsNavBar = !isWide &&
+                profile.primaryRole != UserRole.customer &&
+                !widget.currentRoute.startsWith('/inventory') &&
+                widget.currentRoute != AppRoutes.inventory &&
+                (!widget.currentRoute.startsWith('/crm') ||
+                    profile.primaryRole == UserRole.boq ||
+                    profile.primaryRole == UserRole.factory ||
+                    profile.primaryRole == UserRole.purchase);
+
             if (isWide && profile.primaryRole != UserRole.customer) {
               return Row(
                 children: [
@@ -120,6 +129,24 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ],
               );
             }
+
+            // On mobile with the floating nav bar, inject extra bottom padding
+            // into MediaQuery so inner Scaffold FABs and scrollable content
+            // automatically clear the ~90px floating glass nav bar.
+            if (showsNavBar) {
+              final mq = MediaQuery.of(context);
+              final bottomInset = mq.viewPadding.bottom;
+              final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
+              return MediaQuery(
+                data: mq.copyWith(
+                  viewPadding: mq.viewPadding.copyWith(
+                    bottom: topOfNavBar + 4,
+                  ),
+                ),
+                child: widget.child,
+              );
+            }
+
             return widget.child;
           },
         ),
@@ -374,17 +401,6 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                   ),
 
-                // Quotation Approvals (Admin / Manager / Sales Head)
-                if (roles.any((r) => r.canApproveQuotations))
-                  _buildNavItemTile(
-                    route: '/approvals',
-                    label: 'Approvals',
-                    icon: const Icon(Icons.verified_outlined),
-                    selectedIcon: const Icon(Icons.verified),
-                    selectedTextColor: selectedTextColor,
-                    unselectedTextColor: unselectedTextColor,
-                    selectedBgColor: selectedBgColor,
-                  ),
 
                 // 4. Alerts / Notifications
                 _buildNavItemTile(
@@ -811,7 +827,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            height: 66,
+            height: 69,
             decoration: BoxDecoration(
               color: isDark
                   ? const Color(0xFF0F172A).withValues(alpha: 0.78)
