@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -42,12 +43,12 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
   }
 
   Widget _buildNavRail(BuildContext context, int selectedIndex, bool hasActiveComplaints) {
-    Color navBgColor = AppColors.primary;
+    Color navBgColor = const Color(0xFF1E1B4B);
     Color selectedTextColor = Colors.white;
     Color unselectedTextColor = Colors.white70;
-    Color selectedBgColor = Colors.white.withOpacity(0.2);
+    Color selectedBgColor = Colors.white.withOpacity(0.18);
     Color logoColor = Colors.white;
-    Color logoIconBg = Colors.white.withOpacity(0.2);
+    Color logoIconBg = Colors.white.withOpacity(0.18);
     Color logoIcon = Colors.white;
 
     final items = [
@@ -105,38 +106,43 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
                 final showBadge = item['hasBadge'] == true;
 
                 return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
                   decoration: BoxDecoration(
                     color: isSelected ? selectedBgColor : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: ListTile(
-                    dense: true,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    leading: Badge(
-                      isLabelVisible: showBadge,
-                      backgroundColor: Colors.amberAccent,
-                      smallSize: 8,
-                      child: IconTheme(
-                        data: IconThemeData(
-                          color: isSelected ? selectedTextColor : unselectedTextColor,
-                          size: 20,
-                        ),
-                        child: Icon(
-                          isSelected ? item['selectedIcon'] as IconData : item['icon'] as IconData,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      item['label'] as String,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: isSelected ? selectedTextColor : unselectedTextColor,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                    ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
                     onTap: () => context.go(item['route'] as String),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      child: Row(
+                        children: [
+                          Badge(
+                            isLabelVisible: showBadge,
+                            backgroundColor: Colors.amberAccent,
+                            smallSize: 8,
+                            child: Icon(
+                              isSelected ? item['selectedIcon'] as IconData : item['icon'] as IconData,
+                              color: isSelected ? selectedTextColor : unselectedTextColor,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              item['label'] as String,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: isSelected ? selectedTextColor : unselectedTextColor,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },
@@ -153,10 +159,7 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
     final int selectedIndex = _getSelectedIndex(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final navBg = isDark ? AppColors.bgSecondary : Colors.white;
     final borderCol = isDark ? AppColors.borderColor : const Color(0xFFE5E7EB);
-    final selectedCol = isDark ? AppColors.accent : AppColors.primary;
-    final unselectedCol = isDark ? AppColors.textSecondary : const Color(0xFF9CA3AF);
     final scaffoldBg = isDark ? AppColors.bgPrimary : AppColors.bgPrimaryLight;
     final isDesktop = MediaQuery.of(context).size.width >= 800;
 
@@ -216,63 +219,176 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
                 ],
               )
             : widget.child,
-        bottomNavigationBar: isDesktop ? null : Container(
-          decoration: BoxDecoration(
-            color: navBg,
-            border: Border(
-              top: BorderSide(color: borderCol, width: 1),
-            ),
-            boxShadow: isDark ? [] : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
+        bottomNavigationBar: isDesktop ? null : Builder(
+          builder: (context) {
+            final bottomInset = MediaQuery.of(context).padding.bottom;
+            final screenWidth = MediaQuery.of(context).size.width;
+            final navItems = [
+              {
+                'icon': Icons.home_outlined,
+                'activeIcon': Icons.home_rounded,
+                'label': 'Home',
+                'hasBadge': false,
+              },
+              {
+                'icon': Icons.assignment_outlined,
+                'activeIcon': Icons.assignment_rounded,
+                'label': 'Complaints',
+                'hasBadge': hasActiveComplaints,
+              },
+              {
+                'icon': Icons.receipt_long_outlined,
+                'activeIcon': Icons.receipt_long_rounded,
+                'label': 'Invoices',
+                'hasBadge': false,
+              },
+              {
+                'icon': Icons.chat_bubble_outline_rounded,
+                'activeIcon': Icons.chat_bubble_rounded,
+                'label': 'Support',
+                'hasBadge': false,
+              },
+            ];
+
+            return Container(
+              color: Colors.transparent,
+              padding: EdgeInsets.fromLTRB(
+                screenWidth > 500 ? (screenWidth - 480) / 2 : 16,
+                6,
+                screenWidth > 500 ? (screenWidth - 480) / 2 : 16,
+                bottomInset > 0 ? bottomInset + 4 : 12,
               ),
-            ],
-          ),
-          child: BottomNavigationBar(
-            currentIndex: selectedIndex,
-            onTap: (index) => _onItemTapped(index, context),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            selectedItemColor: selectedCol,
-            unselectedItemColor: unselectedCol,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            unselectedLabelStyle: const TextStyle(fontSize: 11),
-            items: [
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home, color: selectedCol),
-                label: 'Home',
-              ),
-              BottomNavigationBarItem(
-                icon: Badge(
-                  isLabelVisible: hasActiveComplaints,
-                  backgroundColor: AppColors.accent,
-                  smallSize: 8,
-                  child: const Icon(Icons.assignment_outlined),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: Container(
+                    height: 66,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F172A).withValues(alpha: 0.78)
+                          : Colors.white.withValues(alpha: 0.84),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : Colors.white.withValues(alpha: 0.6),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.45)
+                              : const Color(0xFF1E3A5F).withValues(alpha: 0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(navItems.length, (index) {
+                        final item = navItems[index];
+                        final isSelected = index == selectedIndex;
+                        final showBadge = item['hasBadge'] == true;
+
+                        return Expanded(
+                          child: InkWell(
+                            onTap: () => _onItemTapped(index, context),
+                            borderRadius: BorderRadius.circular(22),
+                            splashColor: AppColors.primary.withValues(alpha: 0.1),
+                            highlightColor: Colors.transparent,
+                            child: Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 280),
+                                curve: Curves.easeOutCubic,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSelected ? 12 : 8,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? (isDark
+                                          ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
+                                          : const Color(0xFF1E3A5F).withValues(alpha: 0.1))
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                              .withValues(alpha: 0.25),
+                                          width: 1,
+                                        )
+                                      : null,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    AnimatedScale(
+                                      scale: isSelected ? 1.15 : 1.0,
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeOutBack,
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 220),
+                                        transitionBuilder: (child, anim) => FadeTransition(
+                                          opacity: anim,
+                                          child: ScaleTransition(scale: anim, child: child),
+                                        ),
+                                        child: KeyedSubtree(
+                                          key: ValueKey<bool>(isSelected),
+                                          child: Badge(
+                                            isLabelVisible: showBadge,
+                                            backgroundColor: isDark
+                                                ? const Color(0xFFF59E0B)
+                                                : const Color(0xFFE8A020),
+                                            smallSize: 8,
+                                            child: Icon(
+                                              (isSelected
+                                                  ? item['activeIcon']
+                                                  : item['icon']) as IconData,
+                                              size: 21,
+                                              color: isSelected
+                                                  ? (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                                  : (isDark ? Colors.white60 : AppColors.textSecondary),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    AnimatedDefaultTextStyle(
+                                      duration: const Duration(milliseconds: 200),
+                                      curve: Curves.easeInOut,
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: isSelected ? 10.5 : 9.5,
+                                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                        letterSpacing: -0.2,
+                                        color: isSelected
+                                            ? (isDark ? const Color(0xFF93C5FD) : AppColors.primary)
+                                            : (isDark ? Colors.white60 : AppColors.textSecondary),
+                                      ),
+                                      child: Text(
+                                        item['label'] as String,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
                 ),
-                activeIcon: Badge(
-                  isLabelVisible: hasActiveComplaints,
-                  backgroundColor: AppColors.accent,
-                  smallSize: 8,
-                  child: Icon(Icons.assignment, color: selectedCol),
-                ),
-                label: 'Complaints',
               ),
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.receipt_long_outlined),
-                activeIcon: Icon(Icons.receipt_long, color: selectedCol),
-                label: 'Invoices',
-              ),
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.chat_bubble_outline),
-                activeIcon: Icon(Icons.chat_bubble, color: selectedCol),
-                label: 'Support',
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

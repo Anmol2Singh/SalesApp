@@ -27,6 +27,7 @@ class PipelineDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(singleDealStreamProvider(pipelineId));
     final pipelineAsync = ref.watch(pipelineDetailProvider(pipelineId));
     final profile = ref.watch(currentProfileProvider);
 
@@ -742,7 +743,7 @@ class _StepActionCard extends ConsumerWidget {
     }
 
     // Determine if this user can act on this step
-    final canAct = _canUserAct();
+    final canAct = _canUserAct(ref);
 
     // PDF visibility: role-based
     bool isPdfVisible = false;
@@ -1031,25 +1032,25 @@ class _StepActionCard extends ConsumerWidget {
     }
   }
 
-  bool _canUserAct() {
-    if (userRole == null) return false;
+  bool _canUserAct(WidgetRef ref) {
+    final roles = ref.read(currentProfileProvider)?.roles ?? [];
+    if (roles.isEmpty) return false;
     if (pipeline.status == PipelineStatus.suspended) return false;
+
+    bool hasRole(UserRole r) => roles.contains(r);
+    
+    if (hasRole(UserRole.admin) || hasRole(UserRole.manager) || hasRole(UserRole.salesHead)) return true;
+
     switch (step) {
       case PipelineStep.quotation:
       case PipelineStep.salesOrder:
-        return userRole == UserRole.sales || userRole == UserRole.admin || userRole == UserRole.salesHead;
+        return hasRole(UserRole.sales);
       case PipelineStep.boq:
-        return userRole == UserRole.boq ||
-            userRole == UserRole.sales ||
-            userRole == UserRole.admin ||
-            userRole == UserRole.salesHead;
+        return hasRole(UserRole.boq) || hasRole(UserRole.sales);
       case PipelineStep.factoryOrder:
-        return userRole == UserRole.factory ||
-            userRole == UserRole.sales ||
-            userRole == UserRole.admin ||
-            userRole == UserRole.salesHead;
+        return hasRole(UserRole.factory) || hasRole(UserRole.sales);
       case PipelineStep.purchaseOrder:
-        return userRole == UserRole.purchase || userRole == UserRole.admin || userRole == UserRole.salesHead;
+        return hasRole(UserRole.purchase);
       case PipelineStep.completed:
         return false;
     }

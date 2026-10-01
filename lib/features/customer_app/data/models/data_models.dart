@@ -13,6 +13,8 @@ class Product {
   final DateTime warrantyExpiryDate;
   final String amcStatus; // active, expired, none
   final DateTime? amcExpiryDate;
+  final String? amcContractId;
+  final String? amcPlanTitle;
   final String serialNumber;
   final String category; // boiler, heat_pump, thermostat, radiator, other
   final int numberOfVisitsIncluded;
@@ -37,6 +39,8 @@ class Product {
     required this.warrantyExpiryDate,
     required this.amcStatus,
     this.amcExpiryDate,
+    this.amcContractId,
+    this.amcPlanTitle,
     required this.serialNumber,
     required this.category,
     this.numberOfVisitsIncluded = 0,
@@ -66,6 +70,8 @@ class Product {
       warrantyExpiryDate: parseDate(json['warrantyExpiryDate']),
       amcStatus: json['amcStatus'] ?? 'none',
       amcExpiryDate: json['amcExpiryDate'] != null ? parseDate(json['amcExpiryDate']) : null,
+      amcContractId: json['amcContractId'] as String?,
+      amcPlanTitle: json['amcPlanTitle'] as String?,
       serialNumber: json['serialNumber'] ?? '',
       category: json['category'] ?? 'other',
       numberOfVisitsIncluded: json['numberOfVisitsIncluded'] ?? 0,
@@ -95,6 +101,8 @@ class Product {
       'warrantyExpiryDate': warrantyExpiryDate.toIso8601String(),
       'amcStatus': amcStatus,
       'amcExpiryDate': amcExpiryDate?.toIso8601String(),
+      'amcContractId': amcContractId,
+      'amcPlanTitle': amcPlanTitle,
       'serialNumber': serialNumber,
       'category': category,
       'numberOfVisitsIncluded': numberOfVisitsIncluded,
@@ -117,6 +125,8 @@ class Product {
     DateTime? warrantyExpiryDate,
     String? amcStatus,
     DateTime? amcExpiryDate,
+    String? amcContractId,
+    String? amcPlanTitle,
     String? serialNumber,
     String? category,
     int? numberOfVisitsIncluded,
@@ -140,6 +150,8 @@ class Product {
       warrantyExpiryDate: warrantyExpiryDate ?? this.warrantyExpiryDate,
       amcStatus: amcStatus ?? this.amcStatus,
       amcExpiryDate: amcExpiryDate ?? this.amcExpiryDate,
+      amcContractId: amcContractId ?? this.amcContractId,
+      amcPlanTitle: amcPlanTitle ?? this.amcPlanTitle,
       serialNumber: serialNumber ?? this.serialNumber,
       category: category ?? this.category,
       numberOfVisitsIncluded: numberOfVisitsIncluded ?? this.numberOfVisitsIncluded,

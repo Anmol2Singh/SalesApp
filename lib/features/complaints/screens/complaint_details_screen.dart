@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../data/models/complaint_model.dart';
+import '../data/models/complaint_part_order.dart';
 import '../providers/complaints_provider.dart';
 import '../providers/part_orders_provider.dart';
 import '../services/complaint_pdf_service.dart';
@@ -501,7 +502,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
     return DateTime.now().subtract(const Duration(days: 60));
   }
 
-  void _showAddDefectedPartsDialog(Complaint complaint) async {
+  void _showAddDefectedPartsDialog(Complaint complaint, {ComplaintPartOrder? existingOrder}) async {
     List<InventoryItem> inventoryItems = ref.read(inventoryProvider).valueOrNull ?? [];
 
     if (inventoryItems.isEmpty) {
@@ -556,6 +557,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
         inventoryItems: inventoryItems,
         purchaseDate: purchaseDate,
         techName: techName,
+        existingOrder: existingOrder,
       ),
     );
   }
@@ -612,6 +614,59 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
     );
   }
 
+  void _confirmDeletePartOrder(BuildContext context, ComplaintPartOrder order, String complaintId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Part Order', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Order #${order.id.substring(0, 8).toUpperCase()}? This action cannot be undone.',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref.read(partOrdersServiceProvider).deletePartOrder(
+                  orderId: order.id,
+                  complaintId: complaintId,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Part order deleted successfully.'),
+                      backgroundColor: Color(0xFF10B981),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete order: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPartOrdersSection(Complaint complaint, bool canOrder) {
     final partOrdersAsync = ref.watch(partOrdersForComplaintProvider(complaint.id));
 
@@ -628,14 +683,23 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.inventory_2_outlined, color: Color(0xFF6D28D9), size: 20),
-                  SizedBox(width: 8),
-                  Text('Defected Parts & Orders', style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.bold)),
-                ],
+              const Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, color: Color(0xFF6D28D9), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Defected Parts & Orders',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              if (canOrder)
+              if (canOrder) ...[
+                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6D28D9),
@@ -646,6 +710,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                   label: const Text('Order Parts', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () => _showAddDefectedPartsDialog(complaint),
                 ),
+              ],
             ],
           ),
           const Divider(height: 20),
@@ -685,6 +750,8 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                     statusIcon = Icons.verified;
                   }
 
+                  final canModify = canOrder && ord.paymentStatus != 'paid';
+
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -696,12 +763,15 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Order #${ord.id.substring(0, 8).toUpperCase()}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            Expanded(
+                              child: Text(
+                                'Order #${ord.id.substring(0, 8).toUpperCase()}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
@@ -720,6 +790,23 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                                 ],
                               ),
                             ),
+                            if (canModify) ...[
+                              const SizedBox(width: 4),
+                              IconButton(
+                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF6D28D9)),
+                                tooltip: 'Edit Order',
+                                onPressed: () => _showAddDefectedPartsDialog(complaint, existingOrder: ord),
+                              ),
+                              IconButton(
+                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                tooltip: 'Delete Order',
+                                onPressed: () => _confirmDeletePartOrder(context, ord, complaint.id),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -1393,12 +1480,14 @@ class _DefectedPartsOrderSheet extends ConsumerStatefulWidget {
   final List<InventoryItem> inventoryItems;
   final DateTime purchaseDate;
   final String techName;
+  final ComplaintPartOrder? existingOrder;
 
   const _DefectedPartsOrderSheet({
     required this.complaint,
     required this.inventoryItems,
     required this.purchaseDate,
     required this.techName,
+    this.existingOrder,
   });
 
   @override
@@ -1426,6 +1515,11 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
     super.initState();
     if (widget.inventoryItems.isNotEmpty) {
       _selectedItem = widget.inventoryItems.first;
+    }
+    if (widget.existingOrder != null) {
+      for (final item in widget.existingOrder!.items) {
+        _orderItems.add(Map<String, dynamic>.from(item));
+      }
     }
   }
 
@@ -1487,26 +1581,46 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
     );
 
     try {
-      await ref.read(partOrdersServiceProvider).createPartOrder(
-        complaintId: widget.complaint.id,
-        customerId: widget.complaint.customerId.isNotEmpty ? widget.complaint.customerId : null,
-        customerName: widget.complaint.customerName,
-        items: _orderItems,
-        totalAmount: grandTotal,
-        isWarranty: grandTotal <= 0,
-        createdBy: widget.techName,
-      );
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(grandTotal <= 0
-                ? 'Defected item order submitted! Covered under warranty.'
-                : 'Defected item order submitted! Total: ₹${grandTotal.toStringAsFixed(2)} - Sent to customer for payment.'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
+      if (widget.existingOrder != null) {
+        await ref.read(partOrdersServiceProvider).updatePartOrder(
+          orderId: widget.existingOrder!.id,
+          complaintId: widget.complaint.id,
+          items: _orderItems,
+          totalAmount: grandTotal,
+          isWarranty: grandTotal <= 0,
         );
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Order #${widget.existingOrder!.id.substring(0, 8).toUpperCase()} updated successfully!'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
+      } else {
+        await ref.read(partOrdersServiceProvider).createPartOrder(
+          complaintId: widget.complaint.id,
+          customerId: widget.complaint.customerId.isNotEmpty ? widget.complaint.customerId : null,
+          customerName: widget.complaint.customerName,
+          items: _orderItems,
+          totalAmount: grandTotal,
+          isWarranty: grandTotal <= 0,
+          createdBy: widget.techName,
+        );
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(grandTotal <= 0
+                  ? 'Defected item order submitted! Covered under warranty.'
+                  : 'Defected item order submitted! Total: ₹${grandTotal.toStringAsFixed(2)} - Sent to customer for payment.'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1525,6 +1639,7 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
       (sum, i) => sum + ((i['total_price'] as num?)?.toDouble() ?? 0.0),
     );
     final inWarranty = _selectedItem != null ? _checkItemWarranty(_selectedItem!) : false;
+    final isEditing = widget.existingOrder != null;
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1547,14 +1662,14 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
                           color: const Color(0xFF6D28D9).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.build_circle_outlined, color: Color(0xFF6D28D9), size: 24),
+                        child: Icon(isEditing ? Icons.edit_note_rounded : Icons.build_circle_outlined, color: const Color(0xFF6D28D9), size: 24),
                       ),
                       const SizedBox(width: 10),
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Defected Item & Parts Order', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('Order genuine parts from company inventory', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(isEditing ? 'Edit Part Order #${widget.existingOrder!.id.substring(0, 8).toUpperCase()}' : 'Defected Item & Parts Order', style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
+                          Text(isEditing ? 'Update replacement items in this order' : 'Order genuine parts from company inventory', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                     ],
@@ -1859,8 +1974,8 @@ class _DefectedPartsOrderSheetState extends ConsumerState<_DefectedPartsOrderShe
                         ),
                         icon: _isSubmitting
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                        label: const Text('Place Order to Company', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            : Icon(isEditing ? Icons.check_circle_outline : Icons.send_rounded, color: Colors.white, size: 18),
+                        label: Text(isEditing ? 'Update Order' : 'Place Order to Company', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                         onPressed: (_orderItems.isEmpty || _isSubmitting) ? null : _submitOrder,
                       ),
                     ),

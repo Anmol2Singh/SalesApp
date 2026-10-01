@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -48,15 +50,96 @@ class ReportFilter {
 final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
   final List<Profile> list = [];
+  final Set<String> seenIds = {};
 
+  void addProfile(Profile p) {
+    if (p.id.isNotEmpty && !seenIds.contains(p.id)) {
+      seenIds.add(p.id);
+      list.add(p);
+    }
+  }
+
+  // 1. Try RPC get_all_staff_profiles (bypasses RLS with SECURITY DEFINER)
   try {
-    final response = await supabase.from('profiles').select().order('full_name');
-    final profiles = (response as List).map((json) => Profile.fromJson(json)).toList();
-    list.addAll(profiles);
+    final rpcRes = await supabase.rpc('get_all_staff_profiles');
+    if (rpcRes is List && rpcRes.isNotEmpty) {
+      for (final item in rpcRes) {
+        try {
+          addProfile(Profile.fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {}
+      }
+    }
   } catch (_) {}
 
+  // 2. Direct select from profiles table
+  if (list.isEmpty) {
+    try {
+      final response = await supabase.from('profiles').select().order('full_name');
+      final profiles = (response as List).map((json) => Profile.fromJson(json)).toList();
+      for (final p in profiles) {
+        addProfile(p);
+      }
+    } catch (_) {}
+  }
+
+  // 3. Fallback: Check local cache in SharedPreferences
   try {
-    // Also include technicians from technicians table if not already in profiles
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('cached_staff_profiles_v1');
+    if (cached != null && cached.isNotEmpty) {
+      final decoded = jsonDecode(cached) as List<dynamic>;
+      for (final item in decoded) {
+        try {
+          addProfile(Profile.fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  // 4. Fallback: Query distinct staff users from sales_pipelines & crm_leads
+  if (list.length <= 1) {
+    try {
+      final pipes = await supabase
+          .from('sales_pipelines')
+          .select('assigned_to, profiles!sales_pipelines_assigned_to_fkey(id, full_name, email, phone, role, roles)')
+          .not('assigned_to', 'is', null)
+          .limit(100);
+      for (final row in (pipes as List)) {
+        if (row['profiles'] != null) {
+          try {
+            addProfile(Profile.fromJson(Map<String, dynamic>.from(row['profiles'])));
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final leads = await supabase
+          .from('crm_leads')
+          .select('assigned_to, profiles!crm_leads_assigned_to_fkey(id, full_name, email, phone, role, roles)')
+          .not('assigned_to', 'is', null)
+          .limit(100);
+      for (final row in (leads as List)) {
+        if (row['profiles'] != null) {
+          try {
+            addProfile(Profile.fromJson(Map<String, dynamic>.from(row['profiles'])));
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 5. If we have profiles, persist to SharedPreferences cache
+  if (list.isNotEmpty) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enc = jsonEncode(list.map((p) => p.toJson()).toList());
+      await prefs.setString('cached_staff_profiles_v1', enc);
+    } catch (_) {}
+  }
+
+  // 6. Also include technicians from technicians table if not already in profiles
+  try {
     final techsRes = await supabase.from('technicians').select();
     for (final t in (techsRes as List? ?? [])) {
       final tId = t['id']?.toString() ?? '';
@@ -64,7 +147,6 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
       final tEmail = t['email']?.toString() ?? '';
       final tPhone = t['phone']?.toString();
 
-      // Check if already present by ID or email
       final exists = list.any((p) =>
           (tId.isNotEmpty && p.id == tId) ||
           (tEmail.isNotEmpty && p.email.toLowerCase() == tEmail.toLowerCase()));
@@ -168,12 +250,12 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
   }
 
   try {
-    final cmpRes = await supabase.from('complaints').select('id, ticket_number, title, customer_name, status, created_at, created_by, technician_id').gte('created_at', start.toIso8601String()).lte('created_at', end.toIso8601String());
+    final cmpRes = await supabase.from('complaints').select('id, ticket_number, title, customer_name, status, created_at, technician_id').gte('created_at', start.toIso8601String()).lte('created_at', end.toIso8601String());
     final allCmp = List<Map<String, dynamic>>.from(cmpRes);
     if (isAll) {
       complaints = allCmp;
     } else {
-      complaints = allCmp.where((c) => c['technician_id'] == userId || c['created_by'] == userId).toList();
+      complaints = allCmp.where((c) => c['technician_id'] == userId).toList();
     }
   } catch (e) {
     debugPrint("Error fetching complaints for report: $e");
@@ -363,7 +445,231 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
     }
   }
 
-  void _downloadReport(BuildContext context, ActivityReportData data) async {
+  static const List<Map<String, dynamic>> _reportSections = [
+    {'key': 'prospects', 'title': 'Prospects', 'icon': Icons.person_search_outlined},
+    {'key': 'leads', 'title': 'Leads', 'icon': Icons.insights_outlined},
+    {'key': 'customers', 'title': 'Customers', 'icon': Icons.people_outline},
+    {'key': 'deals', 'title': 'Deals (Pipelines)', 'icon': Icons.alt_route_outlined},
+    {'key': 'steps', 'title': 'Deal Steps Completed', 'icon': Icons.fact_check_outlined},
+    {'key': 'comms', 'title': 'Communications', 'icon': Icons.chat_bubble_outline},
+    {'key': 'complaints', 'title': 'Complaints', 'icon': Icons.support_agent_outlined},
+    {'key': 'conversions', 'title': 'Conversions', 'icon': Icons.check_circle_outline},
+  ];
+
+  void _showPdfSectionPicker(BuildContext context, ActivityReportData data) {
+    final selectedKeys = _reportSections.map((s) => s['key'] as String).toSet();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setPickerState) {
+            final isAllSelected = selectedKeys.length == _reportSections.length;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Select Sections to Export",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "Choose which items to include in the PDF report",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.grey),
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${selectedKeys.length} of ${_reportSections.length} selected',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selectedKeys.isEmpty ? AppColors.error : AppColors.primary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setPickerState(() {
+                            if (isAllSelected) {
+                              selectedKeys.clear();
+                            } else {
+                              selectedKeys.addAll(_reportSections.map((s) => s['key'] as String));
+                            }
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          isAllSelected ? 'Deselect All' : 'Select All',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _reportSections.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final section = _reportSections[index];
+                        final key = section['key'] as String;
+                        final isChecked = selectedKeys.contains(key);
+
+                        return InkWell(
+                          onTap: () {
+                            setPickerState(() {
+                              if (isChecked) {
+                                selectedKeys.remove(key);
+                              } else {
+                                selectedKeys.add(key);
+                              }
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isChecked ? AppColors.primary.withValues(alpha: 0.05) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isChecked ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade200,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: isChecked,
+                                  activeColor: AppColors.primary,
+                                  onChanged: (val) {
+                                    setPickerState(() {
+                                      if (val == true) {
+                                        selectedKeys.add(key);
+                                      } else {
+                                        selectedKeys.remove(key);
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  section['icon'] as IconData,
+                                  size: 20,
+                                  color: isChecked ? AppColors.primary : Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    section['title'] as String,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: isChecked ? FontWeight.bold : FontWeight.w500,
+                                      color: isChecked ? AppColors.textPrimary : Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                      label: Text(
+                        selectedKeys.isEmpty ? 'Select at least 1 section' : 'Generate PDF (${selectedKeys.length} selected)',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: selectedKeys.isEmpty
+                          ? null
+                          : () {
+                              Navigator.pop(sheetCtx);
+                              _downloadReport(context, data, selectedKeys);
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _downloadReport(BuildContext context, ActivityReportData data, [Set<String>? selectedSections]) async {
     final filter = ref.read(reportFilterProvider);
     final profile = ref.read(currentProfileProvider);
     if (profile == null) return;
@@ -383,20 +689,13 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             .where((u) => u.primaryRole != UserRole.customer)
             .toList();
 
-        final users = (isSalesHead && !isAdmin
-                ? rawUsers.where((u) =>
-                    u.primaryRole == UserRole.sales ||
-                    u.primaryRole == UserRole.salesHead ||
-                    u.roles.contains(UserRole.sales) ||
-                    u.roles.contains(UserRole.salesHead))
-                : rawUsers)
-            .toList()
+        final users = rawUsers
           ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
         final userEntries = users.map((u) {
           final uCustomers = data.customers.where((c) => c['created_by'] == u.id).toList();
           final uPipelines = data.pipelines.where((p) => p['created_by'] == u.id).toList();
-          final uComplaints = data.complaints.where((c) => c['technician_id'] == u.id || c['created_by'] == u.id).toList();
+          final uComplaints = data.complaints.where((c) => c['technician_id'] == u.id).toList();
           final uStepLogs = data.stepAuditLogs.where((s) => s['performed_by'] == u.id).toList();
           final uComms = data.communications.where((c) => c['logged_by'] == u.id).toList();
           final uLeads = data.leads.where((l) => l['created_by'] == u.id).toList();
@@ -425,10 +724,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
           dateRangeType: filter.dateRangeType,
           customStartDate: filter.customStartDate,
           customEndDate: filter.customEndDate,
+          selectedSections: selectedSections,
         );
-        fileName = isSalesHead
-            ? 'Sales_Executives_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf'
-            : 'All_Users_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
+        fileName = 'All_Users_Activity_Report_${DateFormat("yyyyMMdd").format(DateTime.now())}.pdf';
       } else {
         String userName = profile.fullName;
         if ((isAdmin || isSalesHead) && filter.selectedUserId != null) {
@@ -446,6 +744,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
           dateRangeType: filter.dateRangeType,
           customStartDate: filter.customStartDate,
           customEndDate: filter.customEndDate,
+          selectedSections: selectedSections,
         );
         fileName = 'User_Activity_Report_${userName.replaceAll(" ", "_")}.pdf';
       }
@@ -515,16 +814,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setPickerState) {
-            // For sales head: only sales executives and sales head
+            // Allow all non-customer profiles (all roles) for Sales Head and Admin
             final eligibleUsers = users.where((u) {
-              if (u.primaryRole == UserRole.customer) return false;
-              if (isSalesHead) {
-                return u.primaryRole == UserRole.sales ||
-                    u.primaryRole == UserRole.salesHead ||
-                    u.roles.contains(UserRole.sales) ||
-                    u.roles.contains(UserRole.salesHead);
-              }
-              return true;
+              return u.primaryRole != UserRole.customer;
             }).toList()
               ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
@@ -538,10 +830,8 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             }).toList();
 
             final isAllSelected = currentUserId == 'ALL';
-            final allOptionTitle = isSalesHead ? 'All Sales Executives' : 'All Users (All Staff)';
-            final allOptionSubtitle = isSalesHead
-                ? 'Generate consolidated report for all sales executives'
-                : 'Generate complete report with each user on a new page';
+            const allOptionTitle = 'All Users (All Staff)';
+            const allOptionSubtitle = 'Generate complete report with each user on a new page';
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.75,
@@ -552,9 +842,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        isSalesHead ? 'Select Sales Person' : 'Select User for Report',
-                        style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                      const Text(
+                        'Select User for Report',
+                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -732,9 +1022,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                       final usersAsync = ref.watch(allUsersProvider);
                       return usersAsync.when(
                         data: (users) {
-                          String selectedUserDisplay = isSalesHead ? 'Select Sales Person' : 'Select User';
+                          String selectedUserDisplay = 'Select User';
                           if (filter.selectedUserId == 'ALL') {
-                            selectedUserDisplay = isSalesHead ? 'All Sales Executives' : 'All Users (All Staff)';
+                            selectedUserDisplay = 'All Users (All Staff)';
                           } else if (filter.selectedUserId != null) {
                             final found = users.where((u) => u.id == filter.selectedUserId).toList();
                             if (found.isNotEmpty) {
@@ -769,9 +1059,9 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          isSalesHead && !isAdmin ? 'Sales Executive' : 'Report User',
-                                          style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+                                        const Text(
+                                          'Staff Member / Report User',
+                                          style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -953,7 +1243,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             const SizedBox(width: 12),
             FloatingActionButton.extended(
               heroTag: 'download_pdf_fab',
-              onPressed: () => _downloadReport(context, data),
+              onPressed: () => _showPdfSectionPicker(context, data),
               icon: const Icon(Icons.picture_as_pdf, size: 18),
               label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               backgroundColor: AppColors.primary,

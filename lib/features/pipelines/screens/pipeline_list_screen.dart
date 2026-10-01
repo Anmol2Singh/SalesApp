@@ -68,6 +68,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(dealsStreamProvider);
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
     final profile = ref.watch(currentProfileProvider);
     final isAdmin = profile?.primaryRole == UserRole.admin;

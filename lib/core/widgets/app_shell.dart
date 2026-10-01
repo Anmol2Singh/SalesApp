@@ -1,6 +1,7 @@
 // lib/core/widgets/app_shell.dart
 // Main navigation shell for authenticated users
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +26,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   bool? _crmExpanded;
   bool? _complaintsExpanded;
+  bool? _installationsExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +155,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.sales || r == UserRole.salesHead);
     final hasComplaints = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead);
+    final hasInstallations = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead || r == UserRole.salesHead);
     final isTechnician = roles.any((r) => r == UserRole.technician);
     final isBoq = roles.any((r) => r == UserRole.boq);
     final isFactory = roles.any((r) => r == UserRole.factory);
@@ -167,8 +170,16 @@ class _AppShellState extends ConsumerState<AppShell> {
         widget.currentRoute == AppRoutes.assignTechnician ||
         widget.currentRoute == AppRoutes.serviceHistory;
 
+    final isInstallationsActive = widget.currentRoute.startsWith('/installations') ||
+        widget.currentRoute == AppRoutes.installationsDashboard ||
+        widget.currentRoute == AppRoutes.installationsList ||
+        widget.currentRoute == AppRoutes.bookInstallation ||
+        widget.currentRoute == AppRoutes.assignInstallation ||
+        widget.currentRoute == AppRoutes.installationHistory;
+
     final crmExpanded = _crmExpanded ?? isCrmActive;
     final complaintsExpanded = _complaintsExpanded ?? isComplaintsActive;
+    final installationsExpanded = _installationsExpanded ?? isInstallationsActive;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -247,29 +258,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
                   )
-                else if (isBoq)
+                else if (isBoq || isFactory || isPurchase)
                   _buildNavItemTile(
                     route: AppRoutes.boqDashboard,
-                    label: 'Dashboard',
-                    icon: const Icon(Icons.dashboard_outlined),
-                    selectedIcon: const Icon(Icons.dashboard),
-                    selectedTextColor: selectedTextColor,
-                    unselectedTextColor: unselectedTextColor,
-                    selectedBgColor: selectedBgColor,
-                  )
-                else if (isFactory)
-                  _buildNavItemTile(
-                    route: AppRoutes.factoryQueue,
-                    label: 'Dashboard',
-                    icon: const Icon(Icons.dashboard_outlined),
-                    selectedIcon: const Icon(Icons.dashboard),
-                    selectedTextColor: selectedTextColor,
-                    unselectedTextColor: unselectedTextColor,
-                    selectedBgColor: selectedBgColor,
-                  )
-                else if (isPurchase)
-                  _buildNavItemTile(
-                    route: AppRoutes.purchaseQueue,
                     label: 'Dashboard',
                     icon: const Icon(Icons.dashboard_outlined),
                     selectedIcon: const Icon(Icons.dashboard),
@@ -493,6 +484,58 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ],
                 ],
 
+                // 5.5 Cascaded Installations Section
+                if (hasInstallations) ...[
+                  _buildGroupHeader(
+                    label: 'Installations',
+                    icon: isInstallationsActive ? Icons.build_circle : Icons.build_circle_outlined,
+                    isExpanded: installationsExpanded,
+                    isActive: isInstallationsActive,
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                    onTap: () {
+                      setState(() {
+                        _installationsExpanded = !installationsExpanded;
+                      });
+                    },
+                  ),
+                  if (installationsExpanded) ...[
+                    _buildChildTile(
+                      label: 'Dashboard',
+                      route: AppRoutes.installationsDashboard,
+                      icon: const Icon(Icons.dashboard_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Installations',
+                      route: AppRoutes.installationsList,
+                      icon: const Icon(Icons.assignment_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'Assign',
+                      route: AppRoutes.assignInstallation,
+                      icon: const Icon(Icons.assignment_ind_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                    _buildChildTile(
+                      label: 'History',
+                      route: AppRoutes.installationHistory,
+                      icon: const Icon(Icons.history_outlined),
+                      selectedTextColor: selectedTextColor,
+                      unselectedTextColor: unselectedTextColor,
+                      selectedBgColor: selectedBgColor,
+                    ),
+                  ],
+                ],
+
                 // 6. Technician Specific items (if technician role only)
                 if (isTechnician && !hasComplaints) ...[
                   _buildNavItemTile(
@@ -699,41 +742,138 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget _buildNavBar(BuildContext context, List<UserRole> roles, int unreadCount, bool isWide) {
     final items = _getNavItems(roles, isWide);
     final currentIndex = _getCurrentIndex(items);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final screenWidth = MediaQuery.of(context).size.width;
 
-    return NavigationBarTheme(
-      data: NavigationBarThemeData(
-        height: 64,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.2,
-              color: AppColors.primary,
-            );
-          }
-          return const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-            letterSpacing: -0.2,
-            color: AppColors.textSecondary,
-          );
-        }),
+    return Container(
+      color: Colors.transparent,
+      padding: EdgeInsets.fromLTRB(
+        screenWidth > 500 ? (screenWidth - 480) / 2 : 16,
+        6,
+        screenWidth > 500 ? (screenWidth - 480) / 2 : 16,
+        bottomInset > 0 ? bottomInset + 4 : 12,
       ),
-      child: NavigationBar(
-        selectedIndex: currentIndex.clamp(0, items.length - 1),
-        onDestinationSelected: (index) {
-          context.go(items[index].route);
-        },
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primarySurface,
-        destinations: items.map((item) {
-          return NavigationDestination(
-            icon: item.icon,
-            selectedIcon: item.selectedIcon,
-            label: item.label,
-          );
-        }).toList(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            height: 66,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF0F172A).withValues(alpha: 0.78)
+                  : Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.6),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.45)
+                      : const Color(0xFF1E3A5F).withValues(alpha: 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(items.length, (index) {
+                final item = items[index];
+                final isSelected = index == currentIndex;
+
+                return Expanded(
+                  child: InkWell(
+                    onTap: () => context.go(item.route),
+                    borderRadius: BorderRadius.circular(22),
+                    splashColor: AppColors.primary.withValues(alpha: 0.1),
+                    highlightColor: Colors.transparent,
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOutCubic,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSelected ? 12 : 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? (isDark
+                                  ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
+                                  : const Color(0xFF1E3A5F).withValues(alpha: 0.1))
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                          border: isSelected
+                              ? Border.all(
+                                  color: (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                      .withValues(alpha: 0.25),
+                                  width: 1,
+                                )
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            AnimatedScale(
+                              scale: isSelected ? 1.15 : 1.0,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutBack,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                transitionBuilder: (child, anim) => FadeTransition(
+                                  opacity: anim,
+                                  child: ScaleTransition(scale: anim, child: child),
+                                ),
+                                child: KeyedSubtree(
+                                  key: ValueKey<bool>(isSelected),
+                                  child: IconTheme(
+                                    data: IconThemeData(
+                                      size: 21,
+                                      color: isSelected
+                                          ? (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                          : (isDark ? Colors.white60 : AppColors.textSecondary),
+                                    ),
+                                    child: isSelected ? item.selectedIcon : item.icon,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: isSelected ? 10.5 : 9.5,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                letterSpacing: -0.2,
+                                color: isSelected
+                                    ? (isDark ? const Color(0xFF93C5FD) : AppColors.primary)
+                                    : (isDark ? Colors.white60 : AppColors.textSecondary),
+                              ),
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -754,13 +894,18 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   List<_NavItem> _getNavItems(List<UserRole> roles, bool isWide) {
-    final bool isComplaintsRoute = widget.currentRoute.contains('complaint') ||
-        widget.currentRoute.contains('technician') ||
-        widget.currentRoute.contains('history') ||
-        widget.currentRoute.contains('service') ||
+    final bool isComplaintsRoute = widget.currentRoute.startsWith('/complaints') ||
+        widget.currentRoute.startsWith('/technician') ||
         widget.currentRoute == AppRoutes.complaintsDashboard ||
         widget.currentRoute == AppRoutes.assignTechnician ||
         widget.currentRoute == AppRoutes.serviceHistory;
+
+    final bool isInstallationsRoute = widget.currentRoute.startsWith('/installations') ||
+        widget.currentRoute == AppRoutes.installationsDashboard ||
+        widget.currentRoute == AppRoutes.installationsList ||
+        widget.currentRoute == AppRoutes.bookInstallation ||
+        widget.currentRoute == AppRoutes.assignInstallation ||
+        widget.currentRoute == AppRoutes.installationHistory;
 
     final Map<String, _NavItem> uniqueItems = {};
 
@@ -774,6 +919,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final bool hasCrm = roles.any((r) => r == UserRole.crmStaff);
     final bool hasComplaints = roles.any((r) => r == UserRole.serviceHead);
+    final bool hasInstallations = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead || r == UserRole.salesHead);
     final bool isBoq = roles.any((r) => r == UserRole.boq);
     final bool isFactory = roles.any((r) => r == UserRole.factory);
     final bool isPurchase = roles.any((r) => r == UserRole.purchase);
@@ -789,16 +935,21 @@ class _AppShellState extends ConsumerState<AppShell> {
         addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
       } else if (hasSales) {
         addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Sales', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
-      } else if (isFactory) {
-        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
-      } else if (isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
-      } else if (isBoq) {
-        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'BOQ', icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate)));
+      } else if (isBoq || isFactory || isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Operations', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       } else {
         addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
       }
       addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      return uniqueItems.values.toList();
+    }
+
+    // 1.5 Installations routes
+    if (!isWide && hasInstallations && isInstallationsRoute) {
+      addItem(const _NavItem(route: AppRoutes.installationsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(route: AppRoutes.installationsList, label: 'Installations', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(route: AppRoutes.assignInstallation, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
+      addItem(const _NavItem(route: AppRoutes.installationHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
 
@@ -833,12 +984,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       addItem(const _NavItem(route: '/crm/leads', label: 'Leads', icon: Icon(Icons.trending_up_outlined), selectedIcon: Icon(Icons.trending_up)));
       if (hasComplaints) {
         addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
-      } else if (isFactory) {
-        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
-      } else if (isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
-      } else if (isBoq) {
-        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'BOQ', icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate)));
+      } else if (isBoq || isFactory || isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Operations', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       } else {
         addItem(const _NavItem(route: '/reports/activity', label: "Today's Report", icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment)));
       }
@@ -851,12 +998,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
       addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
-      if (isFactory) {
-        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
-      } else if (isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
-      } else if (isBoq) {
-        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'BOQ', icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate)));
+      if (isBoq || isFactory || isPurchase) {
+        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Operations', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       } else {
         addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
       }
@@ -872,39 +1015,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       return uniqueItems.values.toList();
     }
 
-    // 7. BOQ
-    if (isBoq) {
+    // 7. Operations (BOQ/Factory/Purchase)
+    if (isBoq || isFactory || isPurchase) {
       addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
       addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-      if (isFactory) {
-        addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Factory', icon: Icon(Icons.precision_manufacturing_outlined), selectedIcon: Icon(Icons.precision_manufacturing)));
-      } else if (isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
-      } else {
-        addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-      }
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-      return uniqueItems.values.take(5).toList();
-    }
-
-    // 8. Factory
-    if (isFactory) {
-      addItem(const _NavItem(route: AppRoutes.factoryQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      if (isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Purchase', icon: Icon(Icons.shopping_cart_outlined), selectedIcon: Icon(Icons.shopping_cart)));
-      }
-      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-      return uniqueItems.values.take(5).toList();
-    }
-
-    // 9. Purchase
-    if (isPurchase) {
-      addItem(const _NavItem(route: AppRoutes.purchaseQueue, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
       addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
       return uniqueItems.values.take(5).toList();
     }

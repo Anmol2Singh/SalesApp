@@ -112,6 +112,7 @@ class SalesOrder {
   final String? paymentTerms;
   final String? billingAddress;
   final String? shippingAddress;
+  final DateTime? expectedDispatchDate;
   final String? ewayBillNo;
   final String? ewayBillDate;
   final String? billType;
@@ -147,6 +148,7 @@ class SalesOrder {
     this.paymentTerms,
     this.billingAddress,
     this.shippingAddress,
+    this.expectedDispatchDate,
     this.ewayBillNo,
     this.ewayBillDate,
     this.billType,
@@ -186,6 +188,9 @@ class SalesOrder {
       paymentTerms: json['payment_terms'] as String?,
       billingAddress: json['billing_address'] as String?,
       shippingAddress: json['shipping_address'] as String?,
+      expectedDispatchDate: json['expected_dispatch_date'] != null
+          ? DateTime.tryParse(json['expected_dispatch_date'] as String? ?? '')
+          : null,
       ewayBillNo: json['eway_bill_no'] as String?,
       ewayBillDate: json['eway_bill_date'] as String?,
       billType: json['bill_type'] as String?,
@@ -228,6 +233,7 @@ class SalesOrder {
     'payment_terms': paymentTerms,
     'billing_address': billingAddress,
     'shipping_address': shippingAddress,
+    'expected_dispatch_date': expectedDispatchDate?.toIso8601String(),
     'eway_bill_no': ewayBillNo,
     'eway_bill_date': ewayBillDate,
     'bill_type': billType,

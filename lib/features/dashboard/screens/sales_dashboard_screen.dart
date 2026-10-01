@@ -37,7 +37,7 @@ class SalesDashboardScreen extends ConsumerWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: 154,
             pinned: true,
             backgroundColor: const Color(0xFF1E1B4B),
             elevation: 0,
@@ -45,7 +45,7 @@ class SalesDashboardScreen extends ConsumerWidget {
             automaticallyImplyLeading: false,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(32),
+                bottom: Radius.circular(28),
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
@@ -86,7 +86,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -276,43 +276,58 @@ class SalesDashboardScreen extends ConsumerWidget {
                         .where((p) => p.status == PipelineStatus.completed)
                         .length;
 
-                    return GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.34,
-                      children: [
-                        _SalesStatCard(
-                          title: 'Active\nDeals',
-                          value: '$inProgress',
-                          icon: Icons.alt_route,
-                          color: const Color(0xFF2563EB),
-                          onTap: () => context.go(AppRoutes.pipelines),
-                        ),
-                        _SalesStatCard(
-                          title: 'Completed\nDeals',
-                          value: '$completed',
-                          icon: Icons.verified_outlined,
-                          color: const Color(0xFF10B981),
-                          onTap: () => context.go(AppRoutes.pipelines),
-                        ),
-                        _SalesStatCard(
-                          title: 'Customer\nLeads',
-                          value: '$activeLeadsCount',
-                          icon: Icons.person,
-                          color: const Color(0xFF06B6D4),
-                          onTap: () => context.push('/crm/prospects'),
-                        ),
-                        _SalesStatCard(
-                          title: 'Total\nDeals',
-                          value: '$total',
-                          icon: Icons.handshake_outlined,
-                          color: const Color(0xFF8B5CF6),
-                          onTap: () => context.go(AppRoutes.pipelines),
-                        ),
-                      ],
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final crossAxisCount = constraints.maxWidth >= 900
+                            ? 4
+                            : constraints.maxWidth >= 550
+                                ? 4
+                                : 2;
+                        final childAspectRatio = constraints.maxWidth >= 900
+                            ? 2.1
+                            : constraints.maxWidth >= 550
+                                ? 1.6
+                                : 1.34;
+
+                        return GridView.count(
+                          crossAxisCount: crossAxisCount,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: childAspectRatio,
+                          children: [
+                            _SalesStatCard(
+                              title: 'Active\nDeals',
+                              value: '$inProgress',
+                              icon: Icons.alt_route,
+                              color: const Color(0xFF2563EB),
+                              onTap: () => context.go(AppRoutes.pipelines),
+                            ),
+                            _SalesStatCard(
+                              title: 'Completed\nDeals',
+                              value: '$completed',
+                              icon: Icons.verified_outlined,
+                              color: const Color(0xFF10B981),
+                              onTap: () => context.go(AppRoutes.pipelines),
+                            ),
+                            _SalesStatCard(
+                              title: 'Customer\nLeads',
+                              value: '$activeLeadsCount',
+                              icon: Icons.person,
+                              color: const Color(0xFF06B6D4),
+                              onTap: () => context.push('/crm/prospects'),
+                            ),
+                            _SalesStatCard(
+                              title: 'Total\nDeals',
+                              value: '$total',
+                              icon: Icons.handshake_outlined,
+                              color: const Color(0xFF8B5CF6),
+                              onTap: () => context.go(AppRoutes.pipelines),
+                            ),
+                          ],
+                        );
+                      },
                     );
                   },
                   loading: () => const Center(
@@ -376,6 +391,15 @@ class SalesDashboardScreen extends ConsumerWidget {
                         label: 'Today\'s Report',
                         color: AppColors.success,
                         onTap: () => context.push('/reports/activity'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ActionCard(
+                        icon: Icons.contact_page_outlined,
+                        label: 'Customer 360',
+                        color: const Color(0xFFF59E0B),
+                        onTap: () => context.push('/reports/customer'),
                       ),
                     ),
                     const SizedBox(width: 12),

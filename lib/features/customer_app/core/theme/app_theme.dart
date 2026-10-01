@@ -11,13 +11,15 @@ class AppColors {
   static const Color textPrimary = Color(0xFFF3F4F6);
   static const Color textSecondary = Color(0xFF9CA3AF);
 
-  // Gradient accents
-  static const Color primary = Color(0xFF8B5CF6); // violet
-  static const Color accent = Color(0xFF06B6D4);  // cyan
+  // Primary brand palette — deep navy inspired by industrial reliability
+  static const Color primary = Color(0xFF1E3A5F); // Deep Navy
+  static const Color primaryLight = Color(0xFF2E5490);
+  static const Color primaryDark = Color(0xFF0D2240);
+  static const Color accent = Color(0xFFE8A020);  // Warm Amber CTA
   
   static const Color success = Color(0xFF10B981); // emerald
   static const Color warning = Color(0xFFF59E0B); // amber
-  static const Color danger = Color(0xFFF43F5E);  // rose
+  static const Color danger = Color(0xFFEF4444);  // red
 
   // Light mode equivalents for flexibility
   static const Color bgPrimaryLight = Color(0xFFF3F4F6);

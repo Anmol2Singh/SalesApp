@@ -7,6 +7,7 @@ import '../data/models/lead_model.dart';
 import '../data/models/communication_model.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/services/notification_backend_helper.dart';
 import '../../auth/providers/auth_provider.dart';
 
 // --- PROSPECTS ---
@@ -114,9 +115,9 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         });
       }).toList();
 
-      state = AsyncValue.data(prospects);
+      if (mounted) state = AsyncValue.data(prospects);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
     }
   }
 
@@ -154,13 +155,19 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     }
 
     try {
-      await _supabase.from('notifications').insert({
-        'user_id': salesUserId,
-        'title': 'New Prospect Assigned 🎯',
-        'body': 'A prospect has been assigned to you. Check CRM to follow up.',
-        'type': 'prospect_assigned',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      String assignerName = 'Admin/Sales Head';
+      if (_userId != null) {
+        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId!).maybeSingle();
+        if (p != null && p['full_name'] != null) assignerName = p['full_name'] as String;
+      }
+
+      NotificationBackendHelper.notifyUser(
+        supabase: _supabase,
+        userId: salesUserId,
+        title: 'New Prospect Assigned',
+        body: 'New prospect/lead/customer is assigned to you by $assignerName.',
+        type: 'assigned',
+      );
     } catch (_) {}
 
     await load();
@@ -510,9 +517,9 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
           'assignee_name': assigneeProf?['full_name'],
         });
       }).toList();
-      state = AsyncValue.data(leads);
+      if (mounted) state = AsyncValue.data(leads);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
     }
   }
 
@@ -649,13 +656,19 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
     }
 
     try {
-      await _supabase.from('notifications').insert({
-        'user_id': salesUserId,
-        'title': 'New Lead Assigned 🎯',
-        'body': 'A lead has been assigned to you. Check CRM to follow up.',
-        'type': 'lead_assigned',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      String assignerName = 'Admin/Sales Head';
+      if (_userId != null) {
+        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId!).maybeSingle();
+        if (p != null && p['full_name'] != null) assignerName = p['full_name'] as String;
+      }
+      
+      NotificationBackendHelper.notifyUser(
+        supabase: _supabase,
+        userId: salesUserId,
+        title: 'New Lead Assigned',
+        body: 'New prospect/lead/customer is assigned to you by $assignerName.',
+        type: 'assigned',
+      );
     } catch (_) {}
 
     await load();
@@ -1117,6 +1130,17 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
           }).select().single();
           pipelineId = pipelineRes['id'] as String;
         } catch (_) {}
+      }
+
+      if (pipelineId != null) {
+        NotificationBackendHelper.notifyRoles(
+          supabase: _supabase,
+          roles: const ['boq', 'factory', 'purchase'],
+          title: 'New Deal Added',
+          body: 'Recent deal added for product: ${currentLead?.productName ?? "Product"}.',
+          type: 'assigned',
+          relatedPipelineId: pipelineId,
+        );
       }
 
       // 5. Link quotation to deal if one existed

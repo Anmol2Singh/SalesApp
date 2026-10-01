@@ -1,5 +1,7 @@
 // lib/core/models/quotation.dart
 
+import 'supplementary_item.dart';
+
 class LineItem {
   final String description;
   final String? hsnSac;
@@ -175,6 +177,8 @@ class Quotation {
   final String? leadId;
   final int revision;
   final List<Map<String, dynamic>>? paymentTerms;
+  final List<SupplementaryItem>? supplementaryTerms;
+  final double supplementarySubtotal;
 
   const Quotation({
     required this.id,
@@ -217,6 +221,8 @@ class Quotation {
     this.leadId,
     this.revision = 1,
     this.paymentTerms,
+    this.supplementaryTerms,
+    this.supplementarySubtotal = 0.0,
   });
 
   factory Quotation.fromJson(Map<String, dynamic> json) {
@@ -275,6 +281,10 @@ class Quotation {
       paymentTerms: (json['payment_terms'] as List<dynamic>?)
           ?.map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
+      supplementaryTerms: (json['supplementary_terms'] as List<dynamic>?)
+          ?.map((e) => SupplementaryItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      supplementarySubtotal: (json['supplementary_subtotal'] as num? ?? 0.0).toDouble(),
     );
   }
 
@@ -312,6 +322,9 @@ class Quotation {
     if (leadId != null) 'lead_id': leadId,
     'revision': revision,
     if (paymentTerms != null) 'payment_terms': paymentTerms,
+    if (supplementaryTerms != null)
+      'supplementary_terms': supplementaryTerms!.map((item) => item.toJson()).toList(),
+    'supplementary_subtotal': supplementarySubtotal,
   };
 
   bool get isConfirmed => status == QuotationStatus.confirmed;

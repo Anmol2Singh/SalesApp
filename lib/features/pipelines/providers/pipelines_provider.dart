@@ -98,10 +98,11 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
       if (pipelines.length < _pageSize) _hasMore = false;
       _page++;
 
+      if (!mounted) return;
       final existing = refresh ? <SalesPipeline>[] : (state.value ?? []);
       state = AsyncValue.data([...existing, ...pipelines]);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
     }
   }
 
@@ -153,6 +154,38 @@ final pipelineDetailProvider =
       ''').eq('id', pipelineId).isFilter('deleted_at', null).single();
 
   return SalesPipeline.fromJson(response);
+});
+
+/// Real-time stream provider on sales_pipelines table.
+/// Subscribes directly to Supabase stream and invalidates/notifies active providers.
+final dealsStreamProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return supabase
+      .from('sales_pipelines')
+      .stream(primaryKey: ['id'])
+      .map((data) {
+        // Invalidate active pipeline lists when changes occur
+        ref.read(pipelinesNotifierProvider.notifier).refresh();
+        return data;
+      });
+});
+
+/// Real-time single deal stream provider
+final singleDealStreamProvider =
+    StreamProvider.autoDispose.family<Map<String, dynamic>?, String>((ref, pipelineId) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return supabase
+      .from('sales_pipelines')
+      .stream(primaryKey: ['id'])
+      .eq('id', pipelineId)
+      .map((events) {
+        if (events.isNotEmpty) {
+          ref.invalidate(pipelineDetailProvider(pipelineId));
+          ref.invalidate(workflowStepsProvider(pipelineId));
+          return events.first;
+        }
+        return null;
+      });
 });
 
 // Pipeline audit log

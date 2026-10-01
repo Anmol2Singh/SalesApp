@@ -251,9 +251,10 @@ class DailyTasksNotifier extends StateNotifier<AsyncValue<List<DailyTask>>> {
         }).toList();
       }
 
+      if (!mounted) return;
       state = AsyncValue.data(tasks);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
     }
   }
 

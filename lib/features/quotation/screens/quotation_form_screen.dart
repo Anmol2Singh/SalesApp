@@ -1,11 +1,10 @@
-// lib/features/quotation/screens/quotation_form_screen.dart
-// Step 1: Dynamic quotation form with line items, CGST/SGST/IGST, confirm gate
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/quotation.dart';
@@ -14,12 +13,14 @@ import '../../../core/models/product.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/widgets/inventory_autocomplete.dart';
+import '../../../core/widgets/searchable_dropdown.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../crm/providers/crm_providers.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
+import '../../admin/providers/inventory_provider.dart';
 
 class QuotationFormScreen extends ConsumerStatefulWidget {
   final String? pipelineId;
@@ -33,7 +34,8 @@ class QuotationFormScreen extends ConsumerStatefulWidget {
     this.leadId,
     this.initialQuotation,
     this.revisionNumber,
-  }) : assert(pipelineId != null || leadId != null, 'Either pipelineId or leadId must be provided');
+  }) : assert(pipelineId != null || leadId != null,
+            'Either pipelineId or leadId must be provided');
 
   @override
   ConsumerState<QuotationFormScreen> createState() =>
@@ -74,6 +76,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
 
   // Line items
   final List<Map<String, dynamic>> _lineItems = [];
+  final List<Map<String, dynamic>> _supplementaryItems = [];
 
   // GST rates
   double _cgstRate = 9.0;
@@ -123,7 +126,53 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   ];
 
   static final List<Map<String, dynamic>> _customPaymentTemplates = [];
+  static String _defaultPaymentTemplateName = 'Standard (50 / 40 / 5 / 5)';
   bool _isCustomTermsEditing = false;
+
+  Future<void> _loadPaymentTemplatesAndDefault() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedDef = prefs.getString('default_payment_template_name');
+      if (savedDef != null && savedDef.isNotEmpty) {
+        _defaultPaymentTemplateName = savedDef;
+      }
+      final customJson = prefs.getString('custom_payment_templates_v1');
+      if (customJson != null && customJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(customJson);
+        _customPaymentTemplates.clear();
+        for (final item in decoded) {
+          _customPaymentTemplates.add(Map<String, dynamic>.from(item as Map));
+        }
+      }
+
+      if (widget.initialQuotation == null) {
+        final all = [..._defaultPaymentTemplates, ..._customPaymentTemplates];
+        final match = all.firstWhere(
+          (t) => t['name'] == _defaultPaymentTemplateName,
+          orElse: () => _defaultPaymentTemplates.first,
+        );
+        _applyPaymentTemplate(match);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _setDefaultPaymentTemplate(String templateName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('default_payment_template_name', templateName);
+      setState(() {
+        _defaultPaymentTemplateName = templateName;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Set "$templateName" as default template for new quotations.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
 
   void _applyPaymentTemplate(Map<String, dynamic> template) {
     final terms = template['terms'] as List<dynamic>;
@@ -134,10 +183,89 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _paymentTerms.add({
           'term': t['term'].toString(),
           'percent': pct,
-          'amount': _grandTotal * (pct / 100.0),
+          'amount': (_grandTotal * (pct / 100.0)).roundToDouble(),
         });
       }
     });
+  }
+
+  bool _validatePaymentTerms() {
+    final totalTermsPct = _paymentTerms.fold<double>(
+      0.0,
+      (sum, item) => sum + ((item['percent'] as num?)?.toDouble() ?? 0.0),
+    );
+    if ((totalTermsPct - 100.0).abs() > 0.05) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Payment Terms Incomplete',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Quotation cannot be saved because total payment milestone percentage does not equal 100%.',
+                style: TextStyle(fontFamily: 'Inter', height: 1.4, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorLight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '• Current Total: ${totalTermsPct.toStringAsFixed(1)}%',
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.error),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      totalTermsPct < 100.0
+                          ? '• Deficit: ${(100.0 - totalTermsPct).toStringAsFixed(1)}% more needed to reach 100%.'
+                          : '• Excess: ${(totalTermsPct - 100.0).toStringAsFixed(1)}% extra above 100%.',
+                      style: const TextStyle(fontSize: 13, color: AppColors.error),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Please adjust your stage percentages under "Payment Terms & Milestones" so they total exactly 100% before saving.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Adjust Payment Terms'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+    return true;
   }
 
   void _showManageTemplatesDialog() {
@@ -145,13 +273,18 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final allTemplates = [..._defaultPaymentTemplates, ..._customPaymentTemplates];
+          final allTemplates = [
+            ..._defaultPaymentTemplates,
+            ..._customPaymentTemplates
+          ];
           return AlertDialog(
             title: Row(
               children: const [
                 Icon(Icons.tune, color: AppColors.primary),
                 SizedBox(width: 8),
-                Text('Manage Payment Templates', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Manage Payment Templates',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
             content: SizedBox(
@@ -166,28 +299,80 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, idx) {
                         final t = allTemplates[idx];
-                        final isDefault = idx < _defaultPaymentTemplates.length;
+                        final isSystemPreset = idx < _defaultPaymentTemplates.length;
+                        final isCurrentDefault = t['name'] == _defaultPaymentTemplateName;
                         final terms = (t['terms'] as List<dynamic>)
-                            .map((e) => '${e['term']}: ${(e['percent'] as num).toInt()}%')
+                            .map((e) =>
+                                '${e['term']}: ${(e['percent'] as num).toInt()}%')
                             .join(', ');
                         return ListTile(
-                          title: Text(t['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          subtitle: Text(terms, style: const TextStyle(fontSize: 12)),
-                          trailing: isDefault
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(4)),
-                                  child: const Text('Default', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                )
-                              : IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
-                                  onPressed: () {
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(t['name'] as String,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                              if (isCurrentDefault)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                      color: AppColors.success.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppColors.success)),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star, size: 11, color: AppColors.success),
+                                      SizedBox(width: 3),
+                                      Text('Default',
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.success)),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          subtitle:
+                              Text(terms, style: const TextStyle(fontSize: 12)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!isCurrentDefault)
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  icon: const Icon(Icons.star_outline, size: 14, color: AppColors.primary),
+                                  label: const Text('Set as Default', style: TextStyle(fontSize: 11)),
+                                  onPressed: () async {
+                                    await _setDefaultPaymentTemplate(t['name'] as String);
+                                    setDialogState(() {});
+                                  },
+                                ),
+                              if (!isSystemPreset)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: AppColors.error, size: 20),
+                                  onPressed: () async {
                                     setDialogState(() {
-                                      _customPaymentTemplates.removeAt(idx - _defaultPaymentTemplates.length);
+                                      _customPaymentTemplates.removeAt(idx -
+                                          _defaultPaymentTemplates.length);
                                     });
+                                    final prefs = await SharedPreferences.getInstance();
+                                    await prefs.setString('custom_payment_templates_v1',
+                                        jsonEncode(_customPaymentTemplates));
                                     setState(() {});
                                   },
                                 ),
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -196,11 +381,15 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                      label: const Text('Create New Template', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary),
+                      icon:
+                          const Icon(Icons.add, size: 16, color: Colors.white),
+                      label: const Text('Create New Template',
+                          style: TextStyle(color: Colors.white)),
                       onPressed: () async {
-                        await _showCreateTemplateDialog(ctx, () => setDialogState(() {}));
+                        await _showCreateTemplateDialog(
+                            ctx, () => setDialogState(() {}));
                       },
                     ),
                   ),
@@ -208,7 +397,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close')),
             ],
           );
         },
@@ -216,14 +407,16 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     );
   }
 
-  Future<void> _showCreateTemplateDialog(BuildContext parentCtx, VoidCallback onAdded) async {
+  Future<void> _showCreateTemplateDialog(
+      BuildContext parentCtx, VoidCallback onAdded) async {
     final nameCtrl = TextEditingController();
     final pctCtrl = TextEditingController();
 
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('New Template', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        title: const Text('New Template',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -246,25 +439,40 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () {
+            onPressed: () async {
               final name = nameCtrl.text.trim();
-              final rawPcts = pctCtrl.text.split(',').map((e) => double.tryParse(e.trim()) ?? 0.0).where((p) => p >= 0).toList();
+              final rawPcts = pctCtrl.text
+                  .split(',')
+                  .map((e) => double.tryParse(e.trim()) ?? 0.0)
+                  .where((p) => p >= 0)
+                  .toList();
               if (name.isEmpty || rawPcts.isEmpty) return;
 
               final sum = rawPcts.fold<double>(0.0, (s, p) => s + p);
-              if (sum > 100.0) {
+              if ((sum - 100.0).abs() > 0.05) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Total cannot exceed 100%'), backgroundColor: AppColors.error),
+                  SnackBar(
+                      content: Text('Template total percentages must equal exactly 100% (currently ${sum.toStringAsFixed(1)}%).'),
+                      backgroundColor: AppColors.error),
                 );
                 return;
               }
 
               final terms = rawPcts.asMap().entries.map((e) {
-                final defaultNames = ['Advance', 'Delivery', 'Installation', 'Commissioning', 'Final Handover'];
-                final sName = e.key < defaultNames.length ? defaultNames[e.key] : 'Stage ${e.key + 1}';
+                final defaultNames = [
+                  'Advance',
+                  'Delivery',
+                  'Installation',
+                  'Commissioning',
+                  'Final Handover'
+                ];
+                final sName = e.key < defaultNames.length
+                    ? defaultNames[e.key]
+                    : 'Stage ${e.key + 1}';
                 return {'term': sName, 'percent': e.value};
               }).toList();
 
@@ -272,11 +480,17 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 'name': name.startsWith('[') ? name : '[$name]',
                 'terms': terms,
               });
+
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString(
+                  'custom_payment_templates_v1', jsonEncode(_customPaymentTemplates));
+
               Navigator.pop(ctx);
               onAdded();
               setState(() {});
             },
-            child: const Text('Add Template', style: TextStyle(color: Colors.white)),
+            child: const Text('Add Template',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -294,7 +508,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+        padding: EdgeInsets.fromLTRB(
+            20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -339,13 +554,15 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF1E3A5F).withValues(alpha: 0.25),
+                          color:
+                              const Color(0xFF1E3A5F).withValues(alpha: 0.25),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
+                    child: const Icon(Icons.verified_user_rounded,
+                        color: Colors.white, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -365,11 +582,14 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFEF3C7),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                                border: Border.all(
+                                    color: const Color(0xFFF59E0B)
+                                        .withValues(alpha: 0.4)),
                               ),
                               child: const Text(
                                 'ADD-ON',
@@ -398,9 +618,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(ctx, 'cancel'),
-                    icon: const Icon(Icons.close, color: AppColors.textSecondary, size: 20),
+                    icon: const Icon(Icons.close,
+                        color: AppColors.textSecondary, size: 20),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                 ],
               ),
@@ -408,7 +630,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
 
               // Explanatory banner
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
@@ -416,7 +639,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
+                    Icon(Icons.info_outline_rounded,
+                        size: 16, color: AppColors.primary),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -445,10 +669,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0FDF4),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+                      border: Border.all(
+                          color: const Color(0xFF10B981), width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                          color:
+                              const Color(0xFF10B981).withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -462,7 +688,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                             color: const Color(0xFF059669),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 20),
+                          child: const Icon(Icons.flash_on_rounded,
+                              color: Colors.white, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -482,7 +709,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF059669),
                                       borderRadius: BorderRadius.circular(4),
@@ -514,7 +742,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF059669)),
+                        const Icon(Icons.arrow_forward_ios_rounded,
+                            size: 14, color: Color(0xFF059669)),
                       ],
                     ),
                   ),
@@ -533,7 +762,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                      border: Border.all(
+                          color: const Color(0xFFCBD5E1), width: 1.2),
                     ),
                     child: Row(
                       children: [
@@ -544,7 +774,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
-                          child: const Icon(Icons.schedule_rounded, color: Color(0xFF475569), size: 20),
+                          child: const Icon(Icons.schedule_rounded,
+                              color: Color(0xFF475569), size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -574,7 +805,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                        const Icon(Icons.arrow_forward_ios_rounded,
+                            size: 14, color: Color(0xFF94A3B8)),
                       ],
                     ),
                   ),
@@ -587,7 +819,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 child: TextButton(
                   onPressed: () => Navigator.pop(ctx, 'cancel'),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   child: const Text(
                     'Cancel & Disable AMC',
@@ -611,7 +844,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✓ Customer marked as interested in AMC. You can finalize it later from AMC actions.'),
+            content: Text(
+                '✓ Customer marked as interested in AMC. You can finalize it later from AMC actions.'),
             backgroundColor: AppColors.info,
           ),
         );
@@ -645,6 +879,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       setState(() => _amcInterested = false);
     }
   }
+
   Map<String, dynamic>? _leadData;
 
   bool _isLoading = false;
@@ -738,8 +973,20 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     // Prefill payment terms
     if (q.paymentTerms != null && q.paymentTerms!.isNotEmpty) {
       _paymentTerms.clear();
-      _paymentTerms.addAll(
-          q.paymentTerms!.map((e) => Map<String, dynamic>.from(e)));
+      _paymentTerms
+          .addAll(q.paymentTerms!.map((e) => Map<String, dynamic>.from(e)));
+      _syncPaymentTermAmounts();
+    }
+
+    if (q.supplementaryTerms != null) {
+      _supplementaryItems.clear();
+      _supplementaryItems.addAll(q.supplementaryTerms!.map((t) => {
+            'name': TextEditingController(text: t.name),
+            'qty': TextEditingController(text: t.qty.toString()),
+            'rate': TextEditingController(text: t.rate.toString()),
+            'gst_percent': TextEditingController(text: t.gstPercent.toString()),
+            'type': TextEditingController(text: t.type),
+          }));
     }
   }
 
@@ -750,10 +997,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       final supabase = ref.read(supabaseClientProvider);
       final profile = ref.read(currentProfileProvider);
 
+      await _loadPaymentTemplatesAndDefault();
+
       if (widget.initialQuotation != null) {
         // Mode 1: Revising an existing quotation (creates a new revision row)
         _populateFromQuotation(widget.initialQuotation!);
-        _currentRevision = widget.revisionNumber ?? (widget.initialQuotation!.revision + 1);
+        _currentRevision =
+            widget.revisionNumber ?? (widget.initialQuotation!.revision + 1);
         _isEditing = true;
         _existingQuotation = null; // Create new revision record on save
       } else if (widget.leadId != null) {
@@ -774,7 +1024,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 barrierDismissible: false,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Quotations Locked'),
-                  content: Text('This lead is marked as $status. Quotations cannot be created or modified for Won or Lost leads.'),
+                  content: Text(
+                      'This lead is marked as $status. Quotations cannot be created or modified for Won or Lost leads.'),
                   actions: [
                     ElevatedButton(
                       onPressed: () {
@@ -841,7 +1092,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             .limit(1);
 
         if (leadQuots.isNotEmpty) {
-          _currentRevision = ((leadQuots.first['revision'] as num?)?.toInt() ?? 1) + 1;
+          _currentRevision =
+              ((leadQuots.first['revision'] as num?)?.toInt() ?? 1) + 1;
         } else {
           _currentRevision = 1;
         }
@@ -854,17 +1106,23 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             for (final item in prevLineItems) {
               if (item is Map) {
                 _lineItems.add({
-                  'description': TextEditingController(text: item['description']?.toString() ?? ''),
-                  'hsn_sac': TextEditingController(text: item['hsn_sac']?.toString() ?? '84191920'),
-                  'qty': TextEditingController(text: ((item['qty'] as num?)?.toInt() ?? 1).toString()),
+                  'description': TextEditingController(
+                      text: item['description']?.toString() ?? ''),
+                  'hsn_sac': TextEditingController(
+                      text: item['hsn_sac']?.toString() ?? '84191920'),
+                  'qty': TextEditingController(
+                      text: ((item['qty'] as num?)?.toInt() ?? 1).toString()),
                   'gst_percent': TextEditingController(
-                      text: ((item['gst_percent'] as num?)?.toDouble() ?? 18.0).toStringAsFixed(0)),
-                  'uom': TextEditingController(text: item['uom']?.toString() ?? 'NOS'),
+                      text: ((item['gst_percent'] as num?)?.toDouble() ?? 18.0)
+                          .toStringAsFixed(0)),
+                  'uom': TextEditingController(
+                      text: item['uom']?.toString() ?? 'NOS'),
                   'unit_price': TextEditingController(
                       text: InventoryAutocomplete.formatIndianPrice(
                           (item['unit_price'] as num?)?.toDouble() ?? 0.0)),
                   'disc_percent': TextEditingController(
-                      text: (item['disc_percent'] as num?)?.toString() ?? '0.0'),
+                      text:
+                          (item['disc_percent'] as num?)?.toString() ?? '0.0'),
                 });
               }
             }
@@ -877,22 +1135,29 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               for (final comp in rawComponents) {
                 if (comp is Map) {
                   final displayName = comp['display_name']?.toString() ??
-                      (comp['capacity'] != null && comp['capacity'].toString().isNotEmpty
+                      (comp['capacity'] != null &&
+                              comp['capacity'].toString().isNotEmpty
                           ? '${comp['product_name']} - ${comp['capacity']}'
                           : comp['product_name']?.toString() ?? '');
                   final price = (comp['price'] as num?)?.toDouble() ?? 0.0;
                   final hsn = comp['hsn_sac']?.toString() ?? '84191920';
                   final uom = comp['uom']?.toString() ?? 'SET';
-                  final gst = ((comp['gst_percent'] as num?)?.toDouble() ?? 18.0).toStringAsFixed(0);
+                  final gst =
+                      ((comp['gst_percent'] as num?)?.toDouble() ?? 18.0)
+                          .toStringAsFixed(0);
 
                   _lineItems.add({
                     'description': TextEditingController(text: displayName),
-                    'hsn_sac': TextEditingController(text: hsn.isNotEmpty ? hsn : '84191920'),
+                    'hsn_sac': TextEditingController(
+                        text: hsn.isNotEmpty ? hsn : '84191920'),
                     'qty': TextEditingController(text: '1'),
                     'gst_percent': TextEditingController(text: gst),
-                    'uom': TextEditingController(text: uom.isNotEmpty ? uom : 'SET'),
+                    'uom': TextEditingController(
+                        text: uom.isNotEmpty ? uom : 'SET'),
                     'unit_price': TextEditingController(
-                        text: price > 0 ? InventoryAutocomplete.formatIndianPrice(price) : '0'),
+                        text: price > 0
+                            ? InventoryAutocomplete.formatIndianPrice(price)
+                            : '0'),
                     'disc_percent': TextEditingController(text: '0.0'),
                   });
                 }
@@ -901,11 +1166,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
 
             if (_lineItems.isEmpty) {
               // Fallback: Revision 1 single product / legacy pre-fill
-              final prodName = leadData['product_name'] as String? ?? 'Solar System';
+              final prodName =
+                  leadData['product_name'] as String? ?? 'Solar System';
               final cap = leadData['capacity'] as String?;
-              final desc = (cap != null && cap.isNotEmpty && !prodName.contains(cap))
-                  ? '$prodName ($cap)'
-                  : prodName;
+              final desc =
+                  (cap != null && cap.isNotEmpty && !prodName.contains(cap))
+                      ? '$prodName ($cap)'
+                      : prodName;
 
               double unitPrice = 0.0;
               try {
@@ -914,12 +1181,14 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     .select('selling_price')
                     .ilike('item_name', '%$prodName%')
                     .limit(1);
-                if (invRes.isNotEmpty && invRes.first['selling_price'] != null) {
+                if (invRes.isNotEmpty &&
+                    invRes.first['selling_price'] != null) {
                   unitPrice = (invRes.first['selling_price'] as num).toDouble();
                 }
               } catch (_) {}
 
-              if (unitPrice == 0.0 && (leadData['estimated_value'] as num?) != null) {
+              if (unitPrice == 0.0 &&
+                  (leadData['estimated_value'] as num?) != null) {
                 unitPrice = (leadData['estimated_value'] as num).toDouble();
               }
 
@@ -930,7 +1199,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 'gst_percent': TextEditingController(text: '18'),
                 'uom': TextEditingController(text: 'SET'),
                 'unit_price': TextEditingController(
-                    text: unitPrice > 0 ? InventoryAutocomplete.formatIndianPrice(unitPrice) : '0'),
+                    text: unitPrice > 0
+                        ? InventoryAutocomplete.formatIndianPrice(unitPrice)
+                        : '0'),
                 'disc_percent': TextEditingController(text: '0.0'),
               });
             }
@@ -984,17 +1255,20 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           if (_pipeline?.customer != null) {
             _customerNameController.text = _pipeline!.customer!.companyName;
             _billingAddressController.text = _pipeline!.customer!.address ?? '';
-            _customerGstinController.text = _pipeline!.customer!.gstNumber ?? '';
+            _customerGstinController.text =
+                _pipeline!.customer!.gstNumber ?? '';
             _customerPhoneController.text = _pipeline!.customer!.phone ?? '';
             _partyContactPersonController.text =
                 _pipeline!.customer!.contactPerson ?? '';
 
             _shippingNameController.text = _pipeline!.customer!.companyName;
-            _shippingAddressController.text = _pipeline!.customer!.address ?? '';
+            _shippingAddressController.text =
+                _pipeline!.customer!.address ?? '';
 
             final gstin = _pipeline!.customer!.gstNumber;
-            _stateCodeController.text =
-                gstin != null && gstin.length >= 2 ? gstin.substring(0, 2) : '27';
+            _stateCodeController.text = gstin != null && gstin.length >= 2
+                ? gstin.substring(0, 2)
+                : '27';
           }
 
           if (profile != null) {
@@ -1057,18 +1331,57 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     });
   }
 
+  void _addSupplementaryItem(
+      {String name = '', double rate = 0, double gst = 18.0}) {
+    setState(() {
+      _supplementaryItems.add({
+        'name': TextEditingController(text: name),
+        'qty': TextEditingController(text: '1'),
+        'rate': TextEditingController(text: rate.toString()),
+        'gst_percent': TextEditingController(text: gst.toString()),
+        'type': TextEditingController(text: 'Extra'),
+      });
+    });
+  }
+
+  void _removeSupplementaryItem(int index) {
+    setState(() {
+      final item = _supplementaryItems.removeAt(index);
+      (item['name'] as TextEditingController).dispose();
+      (item['qty'] as TextEditingController).dispose();
+      (item['rate'] as TextEditingController).dispose();
+      (item['gst_percent'] as TextEditingController).dispose();
+    });
+  }
+
   double _calcSubtotal() {
     double total = 0;
     for (final item in _lineItems) {
       final qty =
           int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
-      final price =
-          double.tryParse((item['unit_price'] as TextEditingController).text.replaceAll(',', '')) ??
-              0;
+      final price = double.tryParse(
+              (item['unit_price'] as TextEditingController)
+                  .text
+                  .replaceAll(',', '')) ??
+          0;
       final disc = double.tryParse(
               (item['disc_percent'] as TextEditingController).text) ??
           0;
       total += (qty * price) * (1 - disc / 100);
+    }
+    return total;
+  }
+
+  double _calcSupplementarySubtotal() {
+    double total = 0;
+    for (final item in _supplementaryItems) {
+      final type = (item['type'] as TextEditingController).text.trim();
+      if (type == 'Included') continue;
+      final qty =
+          int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final rate =
+          double.tryParse((item['rate'] as TextEditingController).text) ?? 0;
+      total += qty * rate;
     }
     return total;
   }
@@ -1082,27 +1395,48 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   double get _totalGstAmount {
     double gstSum = 0;
     for (final item in _lineItems) {
-      final qty = int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
-      final price = double.tryParse((item['unit_price'] as TextEditingController).text.replaceAll(',', '')) ?? 0;
-      final disc = double.tryParse((item['disc_percent'] as TextEditingController).text) ?? 0;
-      final gst = double.tryParse((item['gst_percent'] as TextEditingController).text) ?? (_cgstRate + _sgstRate);
+      final qty =
+          int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final price = double.tryParse(
+              (item['unit_price'] as TextEditingController)
+                  .text
+                  .replaceAll(',', '')) ??
+          0;
+      final disc = double.tryParse(
+              (item['disc_percent'] as TextEditingController).text) ??
+          0;
+      final gst = double.tryParse(
+              (item['gst_percent'] as TextEditingController).text) ??
+          (_cgstRate + _sgstRate);
       final taxable = (qty * price) * (1 - disc / 100);
       gstSum += taxable * (gst / 100);
+    }
+    for (final item in _supplementaryItems) {
+      final type = (item['type'] as TextEditingController).text.trim();
+      if (type == 'Included') continue;
+      final qty =
+          int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final rate =
+          double.tryParse((item['rate'] as TextEditingController).text) ?? 0;
+      final gst = double.tryParse(
+              (item['gst_percent'] as TextEditingController).text) ??
+          (_cgstRate + _sgstRate);
+      gstSum += (qty * rate) * (gst / 100);
     }
     return gstSum;
   }
 
-  double get _cgstAmount =>
-      _isInterstate ? 0.0 : _totalGstAmount / 2;
-  double get _sgstAmount =>
-      _isInterstate ? 0.0 : _totalGstAmount / 2;
-  double get _igstAmount =>
-      _isInterstate ? _totalGstAmount : 0.0;
-  double get _grandTotal =>
-      _calcSubtotal() + _totalGstAmount;
+  double get _cgstAmount => _isInterstate ? 0.0 : _totalGstAmount / 2;
+  double get _sgstAmount => _isInterstate ? 0.0 : _totalGstAmount / 2;
+  double get _igstAmount => _isInterstate ? _totalGstAmount : 0.0;
+  double get _unroundedTotal =>
+      _calcSubtotal() + _calcSupplementarySubtotal() + _totalGstAmount;
+  double get _grandTotal => _unroundedTotal.roundToDouble();
+  double get _roundOffAmount => _grandTotal - _unroundedTotal;
 
   Future<void> _saveDraft() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_validatePaymentTerms()) return;
     setState(() => _isSaving = true);
 
     try {
@@ -1176,7 +1510,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           'user_id': _pipeline!.createdBy,
           'title': 'Quotation Approved',
           'body':
-              'Your quotation has been approved. Sales Order step is now unlocked.',
+              'Quotation for ${_pipeline!.customer?.companyName ?? "customer"} is approved by ${profile?.fullName ?? "Admin/Sales Head"}, Proceed with Sales Order.',
           'type': 'step_unlocked',
           'related_pipeline_id': widget.pipelineId,
         });
@@ -1195,7 +1529,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           ),
         );
         if (widget.pipelineId != null) {
-          context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+          context.go(
+              AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
         } else {
           context.pop();
         }
@@ -1304,11 +1639,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   Future<void> _confirmQuotation() async {
     final profile = ref.read(currentProfileProvider);
     if (profile?.primaryRole == UserRole.crmStaff) {
-      _showError('CRM Staff is not authorized to issue quotations. Quotations must be given by sales personnel or administrators.');
+      _showError(
+          'CRM Staff is not authorized to issue quotations. Quotations must be given by sales personnel or administrators.');
       return;
     }
 
     if (!_formKey.currentState!.validate()) return;
+    if (!_validatePaymentTerms()) return;
 
     final lineItemsValid = _lineItems.every((item) {
       final desc = (item['description'] as TextEditingController).text.trim();
@@ -1351,6 +1688,16 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             ] else ...[
               _TotalRow('IGST (${_cgstRate + _sgstRate}%)', _igstAmount),
             ],
+            if (_calcSupplementarySubtotal() > 0)
+              _TotalRow('Supplementary Terms', _calcSupplementarySubtotal()),
+            if (_roundOffAmount.abs() >= 0.005) ...[
+              _TotalRow(
+                'Round Off',
+                _roundOffAmount,
+                customValue:
+                    'Rs. ${_roundOffAmount > 0 ? '+' : ''}${_roundOffAmount.toStringAsFixed(2)}',
+              ),
+            ],
             const Divider(),
             _TotalRow('Grand Total', _grandTotal, bold: true),
           ],
@@ -1374,7 +1721,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     try {
       // First save/upsert
       final quotationId = await _upsertQuotation(confirmed: true);
-      final supabase = ref.read(supabaseClientProvider);      if (isSales) {
+      final supabase = ref.read(supabaseClientProvider);
+      if (isSales) {
         if (widget.pipelineId != null) {
           // Write audit log for submission
           await supabase.from('step_audit_log').insert({
@@ -1417,7 +1765,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             ),
           );
           if (widget.pipelineId != null) {
-            context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+            context.go(
+                AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
           } else {
             context.pop();
           }
@@ -1449,6 +1798,28 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           // Handle AMC
           await _handleAmcInterest();
 
+          // Notify the pipeline creator (salesperson) that quotation was approved & sales order is unlocked
+          try {
+            final pipelineData = await supabase
+                .from('sales_pipelines')
+                .select('created_by')
+                .eq('id', widget.pipelineId!)
+                .maybeSingle();
+            final creatorId = pipelineData?['created_by'] as String?;
+            if (creatorId != null &&
+                creatorId != supabase.auth.currentUser!.id) {
+              await supabase.from('notifications').insert({
+                'user_id': creatorId,
+                'title': 'Quotation Approved ✅',
+                'body':
+                    'Your quotation (₹$_grandTotal) has been approved. Sales Order step is now unlocked.',
+                'type': 'step_unlocked',
+                'related_pipeline_id': widget.pipelineId,
+                'created_at': DateTime.now().toIso8601String(),
+              });
+            }
+          } catch (_) {}
+
           ref.invalidate(pipelineDetailProvider(widget.pipelineId!));
         }
 
@@ -1458,13 +1829,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                  '✓ Quotation (Rev $_currentRevision) confirmed!'),
+              content: Text('✓ Quotation (Rev $_currentRevision) confirmed!'),
               backgroundColor: AppColors.success,
             ),
           );
           if (widget.pipelineId != null) {
-            context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+            context.go(
+                AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
           } else {
             context.pop();
           }
@@ -1479,6 +1850,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
 
   Future<void> _updateConfirmedQuotation() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_validatePaymentTerms()) return;
 
     final lineItemsValid = _lineItems.every((item) {
       final desc = (item['description'] as TextEditingController).text.trim();
@@ -1528,7 +1900,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           ),
         );
         if (widget.pipelineId != null) {
-          context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
+          context.go(
+              AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId!));
         } else {
           context.pop();
         }
@@ -1557,21 +1930,23 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       0.0,
       (sum, item) => sum + ((item['percent'] as num?)?.toDouble() ?? 0.0),
     );
-    if (totalTermsPct > 100.0) {
+    if ((totalTermsPct - 100.0).abs() > 0.05) {
       throw Exception(
-          'Payment terms total percentage cannot exceed 100% (currently ${totalTermsPct.toStringAsFixed(1)}%).');
+          'Cannot save quotation: Payment terms total must equal 100% (currently ${totalTermsPct.toStringAsFixed(1)}%). Please adjust milestone percentages.');
     }
 
     // Build line items
     final lineItemsJson = _lineItems.map((item) {
       final qty =
           int.tryParse((item['qty'] as TextEditingController).text) ?? 1;
-      final gstPercent =
-          double.tryParse((item['gst_percent'] as TextEditingController).text) ??
-              18.0;
-      final price =
-          double.tryParse((item['unit_price'] as TextEditingController).text.replaceAll(',', '')) ??
-              0;
+      final gstPercent = double.tryParse(
+              (item['gst_percent'] as TextEditingController).text) ??
+          18.0;
+      final price = double.tryParse(
+              (item['unit_price'] as TextEditingController)
+                  .text
+                  .replaceAll(',', '')) ??
+          0;
       final disc = double.tryParse(
               (item['disc_percent'] as TextEditingController).text) ??
           0;
@@ -1597,11 +1972,31 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       if (widget.pipelineId != null) 'pipeline_id': widget.pipelineId,
       if (widget.leadId != null) 'lead_id': widget.leadId,
       'revision': _currentRevision,
-      'payment_terms': _paymentTerms.map((t) => {
-        'term': t['term']?.toString() ?? '',
-        'percent': (t['percent'] as num?)?.toDouble() ?? 0.0,
-        'amount': _grandTotal * (((t['percent'] as num?)?.toDouble() ?? 0.0) / 100.0),
-      }).toList(),
+      'payment_terms': _paymentTerms
+          .map((t) => {
+                'term': t['term']?.toString() ?? '',
+                'percent': (t['percent'] as num?)?.toDouble() ?? 0.0,
+                'amount': (_grandTotal *
+                        (((t['percent'] as num?)?.toDouble() ?? 0.0) / 100.0))
+                    .roundToDouble(),
+              })
+          .toList(),
+      'supplementary_terms': _supplementaryItems
+          .map((item) => {
+                'name': (item['name'] as TextEditingController).text.trim(),
+                'qty':
+                    int.tryParse((item['qty'] as TextEditingController).text) ??
+                        1,
+                'rate': double.tryParse(
+                        (item['rate'] as TextEditingController).text) ??
+                    0,
+                'gst_percent': double.tryParse(
+                        (item['gst_percent'] as TextEditingController).text) ??
+                    18.0,
+                'type': (item['type'] as TextEditingController).text.trim().isEmpty ? 'Extra' : (item['type'] as TextEditingController).text.trim(),
+              })
+          .toList(),
+      'supplementary_subtotal': _calcSupplementarySubtotal(),
       if (_pipeline?.productId != null) 'product_id': _pipeline!.productId,
       'line_items': lineItemsJson,
       'product_specs': specs,
@@ -1713,10 +2108,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         String? newStatus;
         if (currentLeadRes != null) {
           final curStatus = currentLeadRes['status'] as String? ?? 'New';
-          final curEst = (currentLeadRes['estimated_value'] as num?)?.toDouble() ?? 0.0;
+          final curEst =
+              (currentLeadRes['estimated_value'] as num?)?.toDouble() ?? 0.0;
           if (curStatus == 'New') {
             newStatus = 'In Progress';
-          } else if (curStatus != 'Won' && curStatus != 'Lost' && (curEst - _grandTotal).abs() > 0.01) {
+          } else if (curStatus != 'Won' &&
+              curStatus != 'Lost' &&
+              (curEst - _grandTotal).abs() > 0.01) {
             newStatus = 'Negotiating';
           }
         }
@@ -1807,7 +2205,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             Product(
               id: 'prod',
               name: _lineItems.isNotEmpty
-                  ? (_lineItems.first['description'] as TextEditingController).text
+                  ? (_lineItems.first['description'] as TextEditingController)
+                      .text
                   : 'Solar System',
               category: 'Solar',
               baseSpecs: const ProductBaseSpecs(
@@ -1857,8 +2256,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             ? (_lineItems.first['description'] as TextEditingController).text
             : 'Solar System',
         category: 'Solar',
-        baseSpecs: const ProductBaseSpecs(
-            quotationFields: [], boqRequiredFields: []),
+        baseSpecs:
+            const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
         isActive: true,
         createdAt: quotation.createdAt,
         updatedAt: quotation.updatedAt,
@@ -1992,6 +2391,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 customerName: _pipeline!.customer!.companyName,
                 productName: _product?.name ?? '',
                 quotationNumber: _existingQuotation?.quotationNumber,
+                customerPhone: _pipeline!.customer!.phone,
                 status: _existingQuotation?.status,
               )
             else if (_leadData != null)
@@ -2006,7 +2406,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   children: [
                     CircleAvatar(
                       backgroundColor: AppColors.primary.withOpacity(0.1),
-                      child: const Icon(Icons.description_outlined, color: AppColors.primary),
+                      child: const Icon(Icons.description_outlined,
+                          color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -2015,11 +2416,15 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         children: [
                           Text(
                             _leadData!['prospect_name'] ?? 'Lead Customer',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           Text(
                             'Lead Deal: ${_leadData!['product_name'] ?? ''} • Revision $_currentRevision',
-                            style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -2063,6 +2468,28 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               ),
             const SizedBox(height: 16),
 
+            // Supplementary Terms
+            _SectionHeader('Supplementary Terms'),
+            const SizedBox(height: 12),
+            ..._supplementaryItems.asMap().entries.map(
+                  (entry) => _SupplementaryItemRow(
+                    index: entry.key,
+                    item: entry.value,
+                    onRemove: !enabled
+                        ? null
+                        : () => _removeSupplementaryItem(entry.key),
+                    onChanged: () => setState(() {}),
+                    enabled: enabled,
+                  ),
+                ),
+            if (enabled)
+              TextButton.icon(
+                onPressed: () => _addSupplementaryItem(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Supplementary Term'),
+              ),
+            const SizedBox(height: 16),
+
             // Totals Card
             Container(
               padding: const EdgeInsets.all(14),
@@ -2092,36 +2519,44 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         Expanded(
                           child: DropdownButtonFormField<double>(
                             isExpanded: true,
-                            initialValue: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
+                            initialValue: [0.0, 5.0, 12.0, 18.0, 28.0]
+                                    .contains(_cgstRate + _sgstRate)
                                 ? (_cgstRate + _sgstRate)
                                 : null,
                             isDense: true,
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
                               hintText: 'Select GST %',
                             ),
                             items: [
                               const DropdownMenuItem(
                                 value: 18.0,
-                                child: Text('18% (Standard 9% + 9%)', overflow: TextOverflow.ellipsis),
+                                child: Text('18% (Standard 9% + 9%)',
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               const DropdownMenuItem(
                                 value: 12.0,
-                                child: Text('12% (6% + 6%)', overflow: TextOverflow.ellipsis),
+                                child: Text('12% (6% + 6%)',
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               const DropdownMenuItem(
                                 value: 5.0,
-                                child: Text('5% (2.5% + 2.5%)', overflow: TextOverflow.ellipsis),
+                                child: Text('5% (2.5% + 2.5%)',
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               const DropdownMenuItem(
                                 value: 28.0,
-                                child: Text('28% (14% + 14%)', overflow: TextOverflow.ellipsis),
+                                child: Text('28% (14% + 14%)',
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               const DropdownMenuItem(
                                 value: 0.0,
-                                child: Text('0% (Exempted)', overflow: TextOverflow.ellipsis),
+                                child: Text('0% (Exempted)',
+                                    overflow: TextOverflow.ellipsis),
                               ),
-                              if (![0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate))
+                              if (![0.0, 5.0, 12.0, 18.0, 28.0]
+                                  .contains(_cgstRate + _sgstRate))
                                 DropdownMenuItem(
                                   value: _cgstRate + _sgstRate,
                                   child: Text(
@@ -2143,20 +2578,26 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         const SizedBox(width: 6),
                         IconButton(
                           tooltip: 'Custom GST %',
-                          icon: const Icon(Icons.edit_note, size: 22, color: AppColors.primary),
+                          icon: const Icon(Icons.edit_note,
+                              size: 22, color: AppColors.primary),
                           onPressed: () async {
                             final totalGst = _cgstRate + _sgstRate;
                             final customVal = await showDialog<double>(
                               context: context,
                               builder: (ctx) {
                                 final controller = TextEditingController(
-                                  text: totalGst.toStringAsFixed(totalGst == totalGst.roundToDouble() ? 0 : 2),
+                                  text: totalGst.toStringAsFixed(
+                                      totalGst == totalGst.roundToDouble()
+                                          ? 0
+                                          : 2),
                                 );
                                 return AlertDialog(
                                   title: const Text('Custom GST Rate (%)'),
                                   content: TextField(
                                     controller: controller,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
                                     decoration: const InputDecoration(
                                       labelText: 'Enter Total GST %',
                                       suffixText: '%',
@@ -2170,7 +2611,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                     ),
                                     ElevatedButton(
                                       onPressed: () {
-                                        final parsed = double.tryParse(controller.text.trim());
+                                        final parsed = double.tryParse(
+                                            controller.text.trim());
                                         if (parsed != null && parsed >= 0) {
                                           Navigator.pop(ctx, parsed);
                                         }
@@ -2207,6 +2649,20 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     _TotalRowWidget(
                       'IGST (${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}%)',
                       '₹${currencyFormat.format(_igstAmount)}',
+                    ),
+                  ],
+                  if (_calcSupplementarySubtotal() > 0) ...[
+                    const SizedBox(height: 10),
+                    _TotalRowWidget(
+                      'Supplementary Terms',
+                      '₹${currencyFormat.format(_calcSupplementarySubtotal())}',
+                    ),
+                  ],
+                  if (_roundOffAmount.abs() >= 0.005) ...[
+                    const SizedBox(height: 4),
+                    _TotalRowWidget(
+                      'Round Off',
+                      'Rs. ${_roundOffAmount > 0 ? '+' : ''}${_roundOffAmount.toStringAsFixed(2)}',
                     ),
                   ],
                   const Divider(height: 16),
@@ -2271,8 +2727,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 ),
                 child: SwitchListTile(
                   secondary: Icon(
-                    _amcInterested ? Icons.verified_user_rounded : Icons.shield_outlined,
-                    color: _amcInterested ? const Color(0xFF059669) : AppColors.primary,
+                    _amcInterested
+                        ? Icons.verified_user_rounded
+                        : Icons.shield_outlined,
+                    color: _amcInterested
+                        ? const Color(0xFF059669)
+                        : AppColors.primary,
                   ),
                   title: const Text(
                     'Is the customer willing to avail AMC for this product?',
@@ -2289,7 +2749,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 12,
-                      color: _amcInterested ? const Color(0xFF047857) : AppColors.textSecondary,
+                      color: _amcInterested
+                          ? const Color(0xFF047857)
+                          : AppColors.textSecondary,
                     ),
                   ),
                   value: _amcInterested,
@@ -2541,7 +3003,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     final gt = _grandTotal;
     for (final term in _paymentTerms) {
       final p = (term['percent'] as num?)?.toDouble() ?? 0.0;
-      term['amount'] = gt * (p / 100.0);
+      term['amount'] = (gt * (p / 100.0)).roundToDouble();
     }
   }
 
@@ -2553,7 +3015,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     );
     final bool isFull100 = (totalPercent - 100.0).abs() < 0.01;
 
-    final defaultStageNames = ['Advance', 'Dispatch', 'Installation', 'Completion'];
+    final defaultStageNames = [
+      'Advance',
+      'Dispatch',
+      'Installation',
+      'Completion'
+    ];
 
     return Container(
       decoration: BoxDecoration(
@@ -2583,7 +3050,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.account_balance_wallet_outlined, size: 20, color: AppColors.primary),
+                  child: const Icon(Icons.account_balance_wallet_outlined,
+                      size: 20, color: AppColors.primary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2618,7 +3086,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 const SizedBox(width: 8),
                 // 100% Status Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: isFull100
                         ? const Color(0xFFECFDF5)
@@ -2634,9 +3103,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isFull100 ? Icons.check_circle : Icons.pie_chart_outline,
+                        isFull100
+                            ? Icons.check_circle
+                            : Icons.pie_chart_outline,
                         size: 13,
-                        color: isFull100 ? const Color(0xFF059669) : const Color(0xFFD97706),
+                        color: isFull100
+                            ? const Color(0xFF059669)
+                            : const Color(0xFFD97706),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -2647,7 +3120,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           fontFamily: 'Inter',
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: isFull100 ? const Color(0xFF059669) : const Color(0xFFD97706),
+                          color: isFull100
+                              ? const Color(0xFF059669)
+                              : const Color(0xFFD97706),
                         ),
                       ),
                     ],
@@ -2669,7 +3144,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.auto_awesome, size: 14, color: AppColors.primary),
+                      Icon(Icons.auto_awesome,
+                          size: 14, color: AppColors.primary),
                       SizedBox(width: 6),
                       Text(
                         'Payment Templates:',
@@ -2687,7 +3163,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        ...[..._defaultPaymentTemplates, ..._customPaymentTemplates].map((t) {
+                        ...[
+                          ..._defaultPaymentTemplates,
+                          ..._customPaymentTemplates
+                        ].map((t) {
                           final name = t['name'] as String;
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
@@ -2695,11 +3174,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                               onTap: () => _applyPaymentTemplate(t),
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey.shade300),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withOpacity(0.02),
@@ -2711,7 +3192,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.check_circle_outline, size: 13, color: AppColors.primary),
+                                    const Icon(Icons.check_circle_outline,
+                                        size: 13, color: AppColors.primary),
                                     const SizedBox(width: 5),
                                     Text(
                                       name,
@@ -2738,23 +3220,29 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                             },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
                                 color: AppColors.primary.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+                                border: Border.all(
+                                    color: AppColors.primary.withOpacity(0.4)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    _isCustomTermsEditing ? Icons.check : Icons.edit_note,
+                                    _isCustomTermsEditing
+                                        ? Icons.check
+                                        : Icons.edit_note,
                                     size: 14,
                                     color: AppColors.primary,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    _isCustomTermsEditing ? 'Done' : 'Custom Edit',
+                                    _isCustomTermsEditing
+                                        ? 'Done'
+                                        : 'Custom Edit',
                                     style: const TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 12,
@@ -2772,16 +3260,21 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                             onTap: _showManageTemplatesDialog,
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6D28D9).withOpacity(0.08),
+                                color:
+                                    const Color(0xFF6D28D9).withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFF6D28D9).withOpacity(0.4)),
+                                border: Border.all(
+                                    color: const Color(0xFF6D28D9)
+                                        .withOpacity(0.4)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: const [
-                                  Icon(Icons.tune, size: 14, color: Color(0xFF6D28D9)),
+                                  Icon(Icons.tune,
+                                      size: 14, color: Color(0xFF6D28D9)),
                                   SizedBox(width: 4),
                                   Text(
                                     'Manage Templates',
@@ -2812,7 +3305,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
               children: [
                 // Table header
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F2744),
                     borderRadius: BorderRadius.circular(8),
@@ -2872,11 +3366,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   final item = entry.value;
                   final termName = item['term']?.toString() ?? '';
                   final pct = (item['percent'] as num?)?.toDouble() ?? 0.0;
-                  final amt = _grandTotal * (pct / 100.0);
+                  final amt = (_grandTotal * (pct / 100.0)).roundToDouble();
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
@@ -2911,29 +3406,41 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                   initialValue: termName,
                                   decoration: InputDecoration(
                                     isDense: true,
-                                    hintText: idx < defaultStageNames.length ? defaultStageNames[idx] : 'Stage ${idx + 1}',
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    hintText: idx < defaultStageNames.length
+                                        ? defaultStageNames[idx]
+                                        : 'Stage ${idx + 1}',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                      borderSide: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
                                     ),
                                   ),
-                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
                                   onChanged: (val) {
                                     item['term'] = val;
                                   },
                                 )
                               : Text(
                                   termName,
-                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
                                 ),
                         ),
                         const SizedBox(width: 8),
@@ -2941,27 +3448,37 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           flex: 3,
                           child: enabled
                               ? TextFormField(
-                                  initialValue: pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1),
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  initialValue: pct.toStringAsFixed(
+                                      pct == pct.roundToDouble() ? 0 : 1),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
                                   textAlign: TextAlign.center,
                                   decoration: InputDecoration(
                                     isDense: true,
                                     suffixText: '%',
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 8),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                      borderSide: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
                                     ),
                                   ),
-                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
                                   onChanged: (val) {
                                     final parsed = double.tryParse(val);
                                     if (parsed != null) {
@@ -2969,10 +3486,20 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                           .asMap()
                                           .entries
                                           .where((e) => e.key != idx)
-                                          .fold<double>(0.0, (s, e) => s + ((e.value['percent'] as num?)?.toDouble() ?? 0.0));
-                                      final capped = (parsed + otherTotal > 100.0) ? (100.0 - otherTotal) : parsed;
+                                          .fold<double>(
+                                              0.0,
+                                              (s, e) =>
+                                                  s +
+                                                  ((e.value['percent'] as num?)
+                                                          ?.toDouble() ??
+                                                      0.0));
+                                      final capped =
+                                          (parsed + otherTotal > 100.0)
+                                              ? (100.0 - otherTotal)
+                                              : parsed;
                                       setState(() {
-                                        item['percent'] = capped < 0 ? 0.0 : capped;
+                                        item['percent'] =
+                                            capped < 0 ? 0.0 : capped;
                                         _syncPaymentTermAmounts();
                                       });
                                     }
@@ -2981,7 +3508,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                               : Text(
                                   '${pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1)}%',
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
                                 ),
                         ),
                         const SizedBox(width: 8),
@@ -3000,7 +3530,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         ),
                         if (enabled) ...[
                           IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.error),
+                            icon: const Icon(Icons.remove_circle_outline,
+                                size: 20, color: AppColors.error),
                             tooltip: 'Remove stage',
                             onPressed: _paymentTerms.length <= 1
                                 ? null
@@ -3027,15 +3558,20 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: const BorderSide(color: AppColors.primary, width: 1.2),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        side: const BorderSide(
+                            color: AppColors.primary, width: 1.2),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
                       ),
                       onPressed: () {
-                        final remaining = (100.0 - totalPercent).clamp(0.0, 100.0);
-                        final nextName = _paymentTerms.length < defaultStageNames.length
-                            ? defaultStageNames[_paymentTerms.length]
-                            : 'Stage ${_paymentTerms.length + 1}';
+                        final remaining =
+                            (100.0 - totalPercent).clamp(0.0, 100.0);
+                        final nextName =
+                            _paymentTerms.length < defaultStageNames.length
+                                ? defaultStageNames[_paymentTerms.length]
+                                : 'Stage ${_paymentTerms.length + 1}';
                         setState(() {
                           _paymentTerms.add({
                             'term': nextName,
@@ -3048,7 +3584,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                       icon: const Icon(Icons.add_circle_outline, size: 18),
                       label: Text(
                         'Add Stage (${_paymentTerms.length < defaultStageNames.length ? defaultStageNames[_paymentTerms.length] : "Stage ${_paymentTerms.length + 1}"}) • ${(100.0 - totalPercent).toStringAsFixed(0)}% Left',
-                        style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -3341,12 +3880,14 @@ class _PipelineHeader extends StatelessWidget {
   final String customerName;
   final String productName;
   final String? quotationNumber;
+  final String? customerPhone;
   final QuotationStatus? status;
 
   const _PipelineHeader({
     required this.customerName,
     required this.productName,
     this.quotationNumber,
+    this.customerPhone,
     this.status,
   });
 
@@ -3382,6 +3923,23 @@ class _PipelineHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
+          if (customerPhone != null && customerPhone!.isNotEmpty) ...[
+            Row(
+              children: [
+                const Icon(Icons.phone_outlined, size: 14, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  customerPhone!,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
           Text(
             productName,
             style: const TextStyle(
@@ -3481,12 +4039,18 @@ class _LineItemRow extends StatelessWidget {
             onItemSelected: (selection) {
               final hsnController = item['hsn_sac'] as TextEditingController;
               final uomController = item['uom'] as TextEditingController;
-              final priceController = item['unit_price'] as TextEditingController;
-              
-              if (hsnController.text.isEmpty) hsnController.text = selection.hsnSac ?? '';
-              if (uomController.text.isEmpty) uomController.text = selection.uom ?? '';
-              if (priceController.text.isEmpty || priceController.text == '0.00' || priceController.text == '0') {
-                priceController.text = InventoryAutocomplete.formatIndianPrice(selection.price);
+              final priceController =
+                  item['unit_price'] as TextEditingController;
+
+              if (hsnController.text.isEmpty)
+                hsnController.text = selection.hsnSac ?? '';
+              if (uomController.text.isEmpty)
+                uomController.text = selection.uom ?? '';
+              if (priceController.text.isEmpty ||
+                  priceController.text == '0.00' ||
+                  priceController.text == '0') {
+                priceController.text =
+                    InventoryAutocomplete.formatIndianPrice(selection.price);
               }
               onChanged();
             },
@@ -3540,7 +4104,8 @@ class _LineItemRow extends StatelessWidget {
                 child: TextFormField(
                   controller: item['gst_percent'] as TextEditingController,
                   enabled: enabled,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(
@@ -3560,7 +4125,8 @@ class _LineItemRow extends StatelessWidget {
                 child: TextFormField(
                   controller: item['disc_percent'] as TextEditingController,
                   enabled: enabled,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Disc %'),
@@ -3662,8 +4228,9 @@ class _TotalRow extends StatelessWidget {
   final String label;
   final double amount;
   final bool bold;
+  final String? customValue;
 
-  const _TotalRow(this.label, this.amount, {this.bold = false});
+  const _TotalRow(this.label, this.amount, {this.bold = false, this.customValue});
 
   @override
   Widget build(BuildContext context) {
@@ -3675,11 +4242,180 @@ class _TotalRow extends StatelessWidget {
             style: TextStyle(
                 fontFamily: 'Inter',
                 fontWeight: bold ? FontWeight.w700 : null)),
-        Text('₹${f.format(amount)}',
+        Text(customValue ?? '₹${f.format(amount)}',
             style: TextStyle(
                 fontFamily: 'Inter',
                 fontWeight: bold ? FontWeight.w700 : null)),
       ],
+    );
+  }
+}
+
+class _SupplementaryItemRow extends ConsumerWidget {
+  final int index;
+  final Map<String, dynamic> item;
+  final VoidCallback? onRemove;
+  final VoidCallback onChanged;
+  final bool enabled;
+
+  const _SupplementaryItemRow({
+    required this.index,
+    required this.item,
+    this.onRemove,
+    required this.onChanged,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final qtyCtrl = item['qty'] as TextEditingController;
+    final rateCtrl = item['rate'] as TextEditingController;
+    final gstCtrl = item['gst_percent'] as TextEditingController;
+    final nameCtrl = item['name'] as TextEditingController;
+    final typeCtrl = item['type'] as TextEditingController;
+
+    final isIncluded = typeCtrl.text == 'Included';
+    final isEnabled = enabled && !isIncluded;
+
+    final q = double.tryParse(qtyCtrl.text) ?? 0;
+    final r = double.tryParse(rateCtrl.text) ?? 0;
+    final total = isIncluded ? 0.0 : q * r;
+
+    final suppAsync = ref.watch(supplementaryItemsProvider);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Term #${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const Spacer(),
+              if (onRemove != null)
+                IconButton(
+                  icon: const Icon(Icons.delete,
+                      color: AppColors.error, size: 20),
+                  onPressed: onRemove,
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: DropdownButtonFormField<String>(
+                  value: typeCtrl.text.isEmpty ? 'Extra' : typeCtrl.text,
+                  decoration: const InputDecoration(
+                    labelText: 'Type',
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Extra', child: Text('Extra')),
+                    DropdownMenuItem(value: 'Included', child: Text('Included')),
+                  ],
+                  onChanged: enabled ? (val) {
+                    if (val != null) {
+                      typeCtrl.text = val;
+                      onChanged();
+                    }
+                  } : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: SearchableDropdown<String>(
+                  label: 'Supplementary Term',
+                  hint: 'Search term...',
+                  value: nameCtrl.text.isEmpty ? null : nameCtrl.text,
+                  items: (suppAsync.value ?? []).map((e) => e.name).toList(),
+                  itemLabel: (item) => item,
+                  enabled: enabled,
+                  decoration: const InputDecoration(
+                    labelText: 'Supplementary Term',
+                    hintText: 'Search term...',
+                    isDense: true,
+                  ),
+                  onChanged: (val) {
+                    if (val != null) {
+                      nameCtrl.text = val;
+                      final suppList = suppAsync.value ?? [];
+                      final found = suppList
+                          .cast()
+                          .firstWhere((e) => e.name == val, orElse: () => null);
+                      if (found != null) {
+                        rateCtrl.text = found.rate.toString();
+                        gstCtrl.text = found.gstPercent.toString();
+                      }
+                      onChanged();
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: TextFormField(
+                  controller: qtyCtrl,
+                  enabled: isEnabled,
+                  decoration:
+                      const InputDecoration(labelText: 'Qty', isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  controller: rateCtrl,
+                  enabled: isEnabled,
+                  decoration:
+                      const InputDecoration(labelText: 'Rate', isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: TextFormField(
+                  controller: gstCtrl,
+                  enabled: isEnabled,
+                  decoration:
+                      const InputDecoration(labelText: 'GST %', isDense: true),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'Total: ₹${NumberFormat('#,##,##0.00', 'en_IN').format(total)}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, color: AppColors.primary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

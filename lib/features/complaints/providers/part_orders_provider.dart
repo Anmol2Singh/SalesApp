@@ -56,7 +56,7 @@ class PartOrdersService {
     );
     final paymentStatus = finalAmount <= 0 ? 'not_required' : 'pending';
 
-    final res = await supabase.from('complaint_part_orders').insert({
+    await supabase.from('complaint_part_orders').insert({
       'complaint_id': complaintId,
       'customer_id': customerId,
       'customer_name': customerName,
@@ -94,6 +94,40 @@ class PartOrdersService {
     ref.invalidate(partOrdersForComplaintProvider(complaintId));
   }
 
+  Future<void> updatePartOrder({
+    required String orderId,
+    required String complaintId,
+    required List<Map<String, dynamic>> items,
+    required double totalAmount,
+    required bool isWarranty,
+  }) async {
+    final supabase = ref.read(supabaseClientProvider);
+    final mergedItems = mergeDuplicateItems(items);
+    final finalAmount = mergedItems.fold<double>(
+      0.0,
+      (sum, i) => sum + ((i['total_price'] as num?)?.toDouble() ?? 0.0),
+    );
+    final paymentStatus = finalAmount <= 0 ? 'not_required' : 'pending';
+
+    await supabase.from('complaint_part_orders').update({
+      'items': mergedItems,
+      'total_amount': finalAmount,
+      'is_warranty': finalAmount <= 0 || isWarranty,
+      'payment_status': paymentStatus,
+    }).eq('id', orderId);
+
+    ref.invalidate(partOrdersForComplaintProvider(complaintId));
+  }
+
+  Future<void> deletePartOrder({
+    required String orderId,
+    required String complaintId,
+  }) async {
+    final supabase = ref.read(supabaseClientProvider);
+    await supabase.from('complaint_part_orders').delete().eq('id', orderId);
+    ref.invalidate(partOrdersForComplaintProvider(complaintId));
+  }
+
   Future<void> _recordReplacedItems(String complaintId, List<Map<String, dynamic>> newItems) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
@@ -123,3 +157,4 @@ class PartOrdersService {
 final partOrdersServiceProvider = Provider<PartOrdersService>((ref) {
   return PartOrdersService(ref);
 });
+

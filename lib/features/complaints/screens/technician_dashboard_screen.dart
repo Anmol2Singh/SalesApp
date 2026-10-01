@@ -9,6 +9,8 @@ import '../providers/complaints_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import 'complaints_leaderboard_screen.dart';
 import '../data/models/complaint_model.dart';
+import '../../../features/installations/providers/installations_provider.dart';
+import '../../../features/installations/data/models/installation_model.dart';
 
 class TechnicianDashboardScreen extends ConsumerWidget {
   const TechnicianDashboardScreen({super.key});
@@ -64,24 +66,51 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Filter assigned complaints for this technician (Robust matching by ID, Name, and Email)
+    // Filter assigned complaints for this technician (Robust matching by ID, Name, Email, Phone, and Notes)
     final assignedComplaints = complaints.where((c) {
       if (profile == null) return true;
       final pName = profile.fullName.trim().toLowerCase();
       final pEmail = profile.email.trim().toLowerCase();
+      final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d+]'), '');
       final tName = (c.technicianName ?? '').trim().toLowerCase();
       final tId = (c.technicianId ?? '').trim();
+      final notes = (c.notes ?? '').toLowerCase();
       
       final matchesId = tId.isNotEmpty && (tId == profile.id);
       final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
-      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || (c.notes?.toLowerCase().contains(pEmail) ?? false));
+      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || notes.contains(pEmail));
+      final matchesNotes = pName.isNotEmpty && notes.contains(pName);
+      final matchesPhone = pPhone.isNotEmpty && (notes.contains(pPhone) || (c.customerPhone.isNotEmpty && notes.contains(pPhone)));
       
-      return matchesId || matchesName || matchesEmail;
+      return matchesId || matchesName || matchesEmail || matchesNotes || matchesPhone;
     }).toList();
 
     final myActiveTasks = assignedComplaints.where((c) => c.status == 'assigned' || c.status == 'in_progress').toList();
     final activeTask = myActiveTasks.isNotEmpty ? myActiveTasks.first : null;
     final recentComplaints = assignedComplaints.take(5).toList();
+
+    final installations = ref.watch(installationsProvider);
+    final assignedInstallations = installations.where((i) {
+      if (profile == null) return true;
+      final pName = profile.fullName.trim().toLowerCase();
+      final pEmail = profile.email.trim().toLowerCase();
+      final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d+]'), '');
+      final tName = (i.technicianName ?? '').trim().toLowerCase();
+      final tId = (i.technicianId ?? '').trim();
+      final notes = (i.notes ?? '').toLowerCase();
+      
+      final matchesId = tId.isNotEmpty && (tId == profile.id);
+      final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
+      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || notes.contains(pEmail));
+      final matchesNotes = pName.isNotEmpty && notes.contains(pName);
+      final matchesPhone = pPhone.isNotEmpty && (notes.contains(pPhone) || (i.customerPhone.isNotEmpty && notes.contains(pPhone)));
+      
+      return matchesId || matchesName || matchesEmail || matchesNotes || matchesPhone;
+    }).toList();
+    
+    final myActiveInstallations = assignedInstallations.where((i) => i.status == 'assigned' || i.status == 'in_progress' || i.status == 'pending' || i.status == 'scheduled').toList();
+    final recentInstallations = assignedInstallations.take(5).toList();
+
     final isWide = MediaQuery.of(context).size.width >= 800;
 
     final rawName = profile?.fullName.trim() ?? '';
@@ -109,14 +138,14 @@ class TechnicianDashboardScreen extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-              expandedHeight: 180,
+              expandedHeight: 154,
               pinned: true,
               backgroundColor: const Color(0xFF0F172A),
               elevation: 0,
               clipBehavior: Clip.antiAlias,
               automaticallyImplyLeading: false,
               shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
               flexibleSpace: FlexibleSpaceBar(
                 background: Stack(
@@ -156,7 +185,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -292,7 +321,10 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   tooltip: 'Refresh',
-                  onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
+                  onPressed: () {
+                    ref.read(complaintsProvider.notifier).load(refresh: true);
+                    ref.read(installationsProvider.notifier).load(refresh: true);
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.logout, color: Colors.white),
@@ -306,7 +338,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               padding: EdgeInsets.all(isWide ? 32.0 : 16.0),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  // 1. Quick Actions Section (Leaderboard, View Products)
+                  // 1. Quick Actions Section (Leaderboard, View Products, Installations)
                   const Text(
                     'Quick Actions',
                     style: TextStyle(
@@ -364,6 +396,18 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           onTap: () => context.push('/products'),
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      // Quick Action 4: Installations
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'Installations',
+                          subtitle: '${assignedInstallations.length} assigned',
+                          icon: Icons.build_circle_outlined,
+                          gradientColors: const [Color(0xFF0284C7), Color(0xFF0EA5E9)],
+                          onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -378,31 +422,31 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                     childAspectRatio: isWide ? 1.6 : 1.34,
                     children: [
                       _buildTechStatCard(
-                        title: 'Active\nTasks',
+                        title: 'Active\nComplaints',
                         value: '${assignedComplaints.where((c) => c.status == "assigned" || c.status == "in_progress").length}',
-                        icon: Icons.directions_run,
+                        icon: Icons.support_agent_outlined,
                         color: const Color(0xFF2563EB),
                         isDark: isDark,
                       ),
                       _buildTechStatCard(
+                        title: 'Active\nInstallations',
+                        value: '${myActiveInstallations.length}',
+                        icon: Icons.build_circle_outlined,
+                        color: const Color(0xFF0D9488),
+                        isDark: isDark,
+                      ),
+                      _buildTechStatCard(
                         title: 'Pending\nApproval',
-                        value: '${assignedComplaints.where((c) => c.status == "pending_approval").length}',
+                        value: '${assignedComplaints.where((c) => c.status == "pending_approval").length + assignedInstallations.where((i) => i.status == "pending_approval").length}',
                         icon: Icons.hourglass_top,
                         color: const Color(0xFFF59E0B),
                         isDark: isDark,
                       ),
                       _buildTechStatCard(
                         title: 'Completed\nJobs',
-                        value: '${assignedComplaints.where((c) => c.status == "closed" || c.status == "resolved").length}',
+                        value: '${assignedComplaints.where((c) => c.status == "closed" || c.status == "resolved").length + assignedInstallations.where((i) => i.status == "closed" || i.status == "resolved" || i.status == "completed").length}',
                         icon: Icons.check_circle_outline,
                         color: const Color(0xFF10B981),
-                        isDark: isDark,
-                      ),
-                      _buildTechStatCard(
-                        title: 'Total\nAssigned',
-                        value: '${assignedComplaints.length}',
-                        icon: Icons.assignment_outlined,
-                        color: const Color(0xFF8B5CF6),
                         isDark: isDark,
                       ),
                     ],
@@ -626,6 +670,94 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                         ),
                       ),
                     ],
+                  ],
+                  const SizedBox(height: 24),
+                  
+                  // --- INSTALLATIONS SECTION ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'My Installations',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: const Color(0xFF2563EB),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'View All (${assignedInstallations.length})',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.arrow_forward_ios, size: 12),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  if (assignedInstallations.isEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.handyman, size: 48, color: Colors.grey),
+                          SizedBox(height: 10),
+                          Text(
+                            'No Installations Assigned',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'You currently have no installations assigned to your roster.',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: recentInstallations.length,
+                      itemBuilder: (context, idx) {
+                        final i = recentInstallations[idx];
+                        return _buildInstallationTile(context, i, isDark);
+                      },
+                    ),
                   ],
                   const SizedBox(height: 40),
                 ]),
@@ -899,6 +1031,124 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   ),
                   child: Text(
                     c.status.replaceAll('_', ' ').toUpperCase(),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstallationTile(BuildContext context, Installation i, bool isDark) {
+    Color statusColor = const Color(0xFF2563EB);
+    if (i.status == 'closed' || i.status == 'resolved') statusColor = const Color(0xFF10B981);
+    if (i.status == 'in_progress') statusColor = const Color(0xFF0284C7);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push('/installations/details/${i.id}'), 
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: statusColor.withValues(alpha: 0.12),
+                  child: Icon(Icons.solar_power, color: statusColor, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            i.ticketNumber,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (i.priority.toLowerCase().contains('high')) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'HIGH',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        i.title,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Customer: ${i.customerName}',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Colors.grey.shade600,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    i.status.replaceAll('_', ' ').toUpperCase(),
                     style: TextStyle(
                       fontFamily: 'Inter',
                       color: statusColor,

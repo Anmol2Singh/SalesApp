@@ -232,6 +232,7 @@ class TechnicianInfo {
   final String name;
   final String? email;
   final String? phone;
+  final String? plainPassword;
   final String avatarUrl;
   final String status; // Available, On Job, Offline
   final String distance;
@@ -243,6 +244,7 @@ class TechnicianInfo {
     required this.name,
     this.email,
     this.phone,
+    this.plainPassword,
     required this.avatarUrl,
     required this.status,
     required this.distance,

@@ -262,7 +262,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final isSmallScreen = size.height < 700;
     final headerHeight =
-        isSmallScreen ? 210.0 : (size.height * 0.32).clamp(220.0, 290.0);
+        isSmallScreen ? 180.0 : (size.height * 0.26).clamp(190.0, 240.0);
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -338,19 +338,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
-                            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                            width: isSmallScreen ? 62 : 72,
+                            height: isSmallScreen ? 62 : 72,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
                               shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.1),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.12),
-                                width: 1,
+                                color: Colors.white.withValues(alpha: 0.2),
+                                width: 1.5,
                               ),
                             ),
-                            child: Icon(
-                              Icons.whatshot_rounded,
-                              size: isSmallScreen ? 42 : 52,
-                              color: cust_colors.AppColors.accent,
+                            child: const Center(
+                              child: Icon(
+                                Icons.whatshot_rounded,
+                                size: 38,
+                                color: Color(0xFF00E5FF),
+                              ),
                             ),
                           ),
                           SizedBox(height: isSmallScreen ? 10 : 14),
@@ -383,7 +386,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             // Bottom Form
             Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
               child: Column(
                 children: [
                   Center(
@@ -546,6 +549,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           label: 'Send OTP',
           isLoading: _isLoading,
           onTap: _handleCustomerLogin,
+          gradientColors: const [
+            Color(0xFF7C3AED),
+            Color(0xFF06B6D4),
+          ],
           icon: const Icon(Icons.arrow_forward_rounded,
               color: Colors.white, size: 20),
         ),
@@ -558,12 +565,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 _formKey.currentState?.reset();
               });
             },
-            child: Text(
+            child: const Text(
               'Office Staff? Login here',
               style: TextStyle(
-                color: isDark
-                    ? cust_colors.AppColors.accent
-                    : cust_colors.AppColors.primary,
+                color: Color(0xFF7C3AED),
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -737,6 +742,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           label: 'Sign In',
           isLoading: _isLoading,
           onTap: _handleOfficeLogin,
+          gradientColors: const [
+            Color(0xFF7C3AED),
+            Color(0xFF06B6D4),
+          ],
           icon: const Icon(Icons.login_rounded, color: Colors.white, size: 20),
         ),
         const SizedBox(height: 20),
@@ -748,12 +757,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 _formKey.currentState?.reset();
               });
             },
-            child: Text(
+            child: const Text(
               'Customer? Login here',
               style: TextStyle(
-                color: isDark
-                    ? cust_colors.AppColors.accent
-                    : cust_colors.AppColors.primary,
+                color: Color(0xFF7C3AED),
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),

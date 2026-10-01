@@ -2,14 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide OtpChannel;
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:salesapp/core/services/auth_service.dart';
 
 abstract class AuthRepository {
   Stream<String?> get authStateChanges;
   String? get currentUid;
-  Future<void> sendOtp(String phone);
+  Future<void> sendOtp(String phone, [OtpChannel channel = OtpChannel.sms]);
   Future<bool> verifyOtp(String otp);
   Future<void> logout();
   Future<Map<String, dynamic>> getUserProfile();
@@ -36,6 +37,7 @@ abstract class CustomerRepository {
   Future<void> requestAmc({required String packageTitle, String? productId});
   Future<void> requestAmcService({required String productId, String? pipelineId});
   Future<List<Map<String, dynamic>>> getActivityLogs();
+  Future<String> resolveCustomerId();
 }
 
 class MockAuthRepository implements AuthRepository {
@@ -65,22 +67,23 @@ class MockAuthRepository implements AuthRepository {
   String? get currentUid => _uid;
 
   @override
-  Future<void> sendOtp(String phone) async {
+  Future<void> sendOtp(String phone, [OtpChannel channel = OtpChannel.sms]) async {
     _pendingPhone = phone;
-    await Future.delayed(const Duration(seconds: 1)); // Simulate delay
+    await AuthService().requestOtp(phone: phone, channel: channel);
   }
 
   @override
   Future<bool> verifyOtp(String otp) async {
-    await Future.delayed(const Duration(milliseconds: 1500)); // Simulate delay
-    if (otp == '123456' ||
-        _pendingPhone == '+919999999999' ||
-        _pendingPhone == '9999999999') {
+    if (_pendingPhone == null) {
+      throw Exception('Phone number not set. Please request OTP again.');
+    }
+    final isValid = AuthService().verifyOtp(phone: _pendingPhone!, enteredOtp: otp);
+    if (isValid) {
       _uid = 'mock_user_123';
       _controller.add(_uid);
       return true;
     }
-    throw Exception('Invalid OTP entered. Please try again.');
+    return false;
   }
 
   @override
@@ -479,6 +482,11 @@ class MockCustomerRepository implements CustomerRepository {
       }
     ];
   }
+
+  @override
+  Future<String> resolveCustomerId() async {
+    return '00000000-0000-0000-0000-000000000001';
+  }
 }
 
 class SupabaseAuthRepository implements AuthRepository {
@@ -539,7 +547,7 @@ class SupabaseAuthRepository implements AuthRepository {
   String? get currentUid => _isMockMode ? _mockUid : _supabase.auth.currentUser?.id;
 
   @override
-  Future<void> sendOtp(String phone) async {
+  Future<void> sendOtp(String phone, [OtpChannel channel = OtpChannel.sms]) async {
     _pendingPhone = phone;
     loggedInPhone = phone;
     try {
@@ -548,8 +556,9 @@ class SupabaseAuthRepository implements AuthRepository {
     } catch (e) {
       final errStr = e.toString();
       if (errStr.contains("phone_provider_disabled") || errStr.contains("Unsupported phone provider")) {
-        print("Supabase phone provider is disabled. Falling back to local mock authentication.");
+        // Fallback to Dual-Channel AuthService (Fast2SMS & WhatsApp)
         _isMockMode = true;
+        await AuthService().requestOtp(phone: phone, channel: channel);
       } else {
         rethrow;
       }
@@ -562,7 +571,8 @@ class SupabaseAuthRepository implements AuthRepository {
       throw Exception('Phone number not set. Please request OTP again.');
     }
     if (_isMockMode) {
-      if (otp == '123456' || otp.length == 6) {
+      final isValid = AuthService().verifyOtp(phone: _pendingPhone!, enteredOtp: otp);
+      if (isValid) {
         _mockUid = 'mock-user-${_pendingPhone!.replaceAll(RegExp(r'\D'), '')}';
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -869,6 +879,11 @@ class SupabaseCustomerRepository implements CustomerRepository {
   }
 
   @override
+  Future<String> resolveCustomerId() async {
+    return _resolveCustomerId();
+  }
+
+  @override
   Future<List<Product>> getProducts() async {
     // Try restoring from disk cache if memory cache is empty
     if (_cachedProducts == null) {
@@ -932,6 +947,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
       } catch (_) {}
 
       final allCustomerIds = <String>{};
+      String? matchedCustomerName = userName;
 
       // 1. Match from customers table by phone, email, or profile name
       try {
@@ -959,6 +975,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           }
           if (isMatch) {
             allCustomerIds.add(row['id'] as String);
+            matchedCustomerName ??= (row['customer_name'] as String? ?? row['company_name'] as String?)?.trim().toLowerCase();
           }
         }
       } catch (e) {
@@ -981,6 +998,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 created_at,
                 customer_id,
                 status,
+                current_step,
                 product_id,
                 products (id, name, category, image_urls, brochure_urls),
                 customers (id, address, company_name, customer_name),
@@ -989,7 +1007,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 warranty_cards (start_date, end_date)
               ''')
               .inFilter('customer_id', allCustomerIds.toList())
-              .or('status.eq.completed,current_step.eq.completed,status.eq.won,stage.eq.won');
+              .or('status.eq.completed,current_step.eq.completed');
         } catch (e) {
           print("Primary pipelines query fallback: $e");
           try {
@@ -997,7 +1015,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 .from('sales_pipelines')
                 .select('*, products(*), customers(*)')
                 .inFilter('customer_id', allCustomerIds.toList())
-                .or('status.eq.completed,current_step.eq.completed,status.eq.won,stage.eq.won');
+                .or('status.eq.completed,current_step.eq.completed');
           } catch (_) {
             response = [];
           }
@@ -1009,8 +1027,8 @@ class SupabaseCustomerRepository implements CustomerRepository {
         try {
           final allPipes = await _supabase
               .from('sales_pipelines')
-              .select('id, created_at, customer_id, status, product_id, products(*), customers(*)')
-              .or('status.eq.completed,current_step.eq.completed,status.eq.won,stage.eq.won');
+              .select('id, created_at, customer_id, status, current_step, product_id, products(*), customers(*)')
+              .or('status.eq.completed,current_step.eq.completed');
           final matchingPipes = <Map<String, dynamic>>[];
           for (final p in (allPipes as List? ?? [])) {
             final cust = p['customers'] as Map<String, dynamic>?;
@@ -1228,6 +1246,18 @@ class SupabaseCustomerRepository implements CustomerRepository {
           }
         } catch (_) {}
 
+        // Strict verification: only genuinely purchased/completed systems are displayed
+        final pStatus = (item['status'] as String? ?? '').toLowerCase();
+        final pStep = (item['current_step'] as String? ?? '').toLowerCase();
+        final isCompleted = pStatus == 'completed' || pStep == 'completed';
+        final hasConfirmedOrder = soData != null && (soData['status'] == 'confirmed' || soData['status'] == 'completed' || soData['status'] == 'dispatched');
+        final hasWarranty = warrantyData != null;
+        final hasAmc = amcStatus == 'active';
+
+        if (!isCompleted && !hasConfirmedOrder && !hasWarranty && !hasAmc) {
+          continue; // Skip deals/inquiries in progress that have not been purchased
+        }
+
         list.add(Product(
           productId: pipelineId,
           productName: productName,
@@ -1252,57 +1282,6 @@ class SupabaseCustomerRepository implements CustomerRepository {
           requestedServicesCount: requestedCount,
         ));
       }
-
-      // Query direct confirmed quotations / orders for this customer
-      try {
-        final directQuotes = await _supabase
-            .from('quotations')
-            .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, status, pipeline_id')
-            .or('customer_phone.eq.$cleanDigits,customer_phone.ilike.%$last10')
-            .eq('status', 'confirmed');
-        for (final q in (directQuotes as List? ?? [])) {
-          final qPipeId = q['pipeline_id'] as String?;
-          if (qPipeId != null && list.any((p) => p.productId == qPipeId)) {
-            continue;
-          }
-          final qId = q['id'] as String;
-          if (list.any((p) => p.productId == qId)) continue;
-          
-          final lineItems = (q['line_items'] as List?) ?? [];
-          final firstItem = lineItems.isNotEmpty ? lineItems.first as Map : {};
-          final qProdName = firstItem['description'] as String? ?? 'IZYHEAT Solar System';
-          final grandTotal = (q['grand_total'] as num?)?.toDouble() ?? 0.0;
-          final qCreatedAt = DateTime.tryParse(q['created_at'] ?? '') ?? DateTime.now();
-
-          final matchedCp = findCatalogProduct(qProdName);
-          final cpImgs = List<String>.from(matchedCp?['image_urls'] ?? []);
-          final String resolvedCat = (matchedCp?['name'] as String?)
-              ?? (matchedCp?['category'] as String?)
-              ?? qProdName;
-          final quoteImg = cpImgs.isNotEmpty ? cpImgs.first : _getDefaultProductImage(resolvedCat);
-
-          list.add(Product(
-            productId: qId,
-            productName: qProdName,
-            modelNumber: (matchedCp?['category'] as String?)?.toUpperCase() ?? 'COMMERCIAL',
-            imageUrl: quoteImg,
-            imageUrls: cpImgs.isNotEmpty ? cpImgs : [quoteImg],
-            purchasedDate: qCreatedAt,
-            sellerName: 'IZYHEAT Industry',
-            amountPaid: grandTotal,
-            currencyCode: 'INR',
-            warrantyStartDate: qCreatedAt,
-            warrantyExpiryDate: qCreatedAt.add(const Duration(days: 365)),
-            amcStatus: 'none',
-            serialNumber: q['quotation_number'] ?? qId,
-            category: resolvedCat,
-            brochureUrls: const [],
-            installationAddress: null,
-            amcVisits: const [],
-            requestedServicesCount: requestedCount,
-          ));
-        }
-      } catch (_) {}
 
       // Link any active AMC contract for this customer
       try {
@@ -1347,16 +1326,51 @@ class SupabaseCustomerRepository implements CustomerRepository {
         }
       } catch (_) {}
 
-      if (list.isNotEmpty) {
-        _cachedProducts = list;
-        try {
-          final prefs = await SharedPreferences.getInstance();
+      // Also link any recently paid / availed AMCs from local session storage
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final rawAvailed = prefs.getString('customer_availed_amcs_json');
+        if (rawAvailed != null && rawAvailed.isNotEmpty) {
+          final availedList = jsonDecode(rawAvailed) as List;
+          for (final record in availedList) {
+            final pId = record['product_id'] as String?;
+            final pName = (record['product_name'] as String? ?? '').toLowerCase();
+            final endDate = DateTime.tryParse(record['end_date'] ?? '');
+            final amcNum = record['amc_number'] as String?;
+            final planTitle = record['plan_title'] as String? ?? 'Standard Plan';
+            final visitsIncluded = record['visits_included'] as int? ?? 2;
+
+            for (int i = 0; i < list.length; i++) {
+              final matchesId = (pId != null && pId.isNotEmpty && list[i].productId == pId);
+              final matchesName = (pName.isNotEmpty && list[i].productName.toLowerCase().contains(pName));
+              if (matchesId || matchesName || list.length == 1) {
+                list[i] = list[i].copyWith(
+                  amcStatus: 'active',
+                  amcExpiryDate: endDate ?? list[i].amcExpiryDate ?? DateTime.now().add(const Duration(days: 365)),
+                  amcContractId: amcNum,
+                  amcPlanTitle: planTitle,
+                  serialNumber: (amcNum != null && amcNum.isNotEmpty) ? amcNum : list[i].serialNumber,
+                  numberOfVisitsIncluded: visitsIncluded,
+                  numberOfVisitsCompleted: 0,
+                );
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error linking locally availed AMCs: $e');
+      }
+
+      _cachedProducts = list;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (list.isNotEmpty) {
           final jsonList = list.map((p) => p.toJson()).toList();
           await prefs.setString('customer_cached_products_json', jsonEncode(jsonList));
-        } catch (_) {}
-      } else if (_cachedProducts != null && _cachedProducts!.isNotEmpty) {
-        return _cachedProducts!;
-      }
+        } else {
+          await prefs.remove('customer_cached_products_json');
+        }
+      } catch (_) {}
 
       return list;
     } catch (e) {

@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import 'user_management_screen.dart';
 
 class UserRolesEditorScreen extends ConsumerStatefulWidget {
@@ -71,9 +72,13 @@ class _UserRolesEditorScreenState extends ConsumerState<UserRolesEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show all available roles (excluding customer and technician), sorted A->Z
+    final currentProfile = ref.watch(currentProfileProvider);
+    final isCurrentAdmin = currentProfile?.roles.contains(UserRole.admin) == true ||
+        currentProfile?.primaryRole == UserRole.admin;
+
+    // Show available roles (excluding customer, and excluding admin if current user is not admin), sorted A->Z
     final availableRoles = UserRole.values
-        .where((r) => r != UserRole.customer && r != UserRole.technician)
+        .where((r) => r != UserRole.customer && (isCurrentAdmin || r != UserRole.admin))
         .toList()
       ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
 

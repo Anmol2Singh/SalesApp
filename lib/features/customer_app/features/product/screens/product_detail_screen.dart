@@ -1167,6 +1167,140 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                   ],
                                 ),
                               ),
+                            ] else if (isPurchased && product.amcStatus == 'active') ...[
+                              const SizedBox(height: 24),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xFF10B981).withOpacity(isDark ? 0.25 : 0.12),
+                                      const Color(0xFF047857).withOpacity(isDark ? 0.3 : 0.1),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: const Color(0xFF10B981).withOpacity(0.4),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFF10B981),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(Icons.verified_user, color: Colors.white, size: 20),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '${product.amcPlanTitle ?? 'Standard'} AMC Active',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                    color: Color(0xFF065F46),
+                                                  ),
+                                                ),
+                                                if (product.amcExpiryDate != null)
+                                                  Text(
+                                                    'Coverage valid until ${DateFormat('dd MMM yyyy').format(product.amcExpiryDate!)}',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: isDark ? Colors.white70 : const Color(0xFF047857),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF10B981).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${product.numberOfVisitsIncluded > 0 ? product.numberOfVisitsIncluded : 2} Visits/Yr',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF065F46),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Your system is fully protected with priority support, discounted spare parts, and certified technician maintenance checkups.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () {
+                                              context.push(
+                                                '/amc_avail?productId=${product.productId}&mode=extend',
+                                              );
+                                            },
+                                            icon: const Icon(Icons.update_rounded, size: 16),
+                                            label: const Text(
+                                              'Extend Year',
+                                              style: TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: const Color(0xFF047857),
+                                              side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              context.push(
+                                                '/amc_avail?productId=${product.productId}&mode=upgrade',
+                                              );
+                                            },
+                                            icon: const Icon(Icons.upgrade_rounded, size: 16),
+                                            label: const Text(
+                                              'Upgrade Plan',
+                                              style: TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF059669),
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ] else if (!isPurchased) ...[
                               const SizedBox(height: 24),
                               Container(

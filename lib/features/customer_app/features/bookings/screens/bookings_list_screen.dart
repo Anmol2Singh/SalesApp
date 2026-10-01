@@ -16,6 +16,7 @@ import 'package:salesapp/features/complaints/data/models/complaint_model.dart';
 import 'package:salesapp/features/complaints/providers/part_orders_provider.dart';
 import 'package:salesapp/features/complaints/services/complaint_pdf_service.dart';
 import 'package:salesapp/core/widgets/pdf_preview_screen.dart';
+import 'package:salesapp/core/services/payment_service.dart';
 
 class BookingsListScreen extends ConsumerWidget {
   const BookingsListScreen({super.key});
@@ -1142,32 +1143,52 @@ class BookingsListScreen extends ConsumerWidget {
                           : () async {
                               setModalState(() => isPaying = true);
                               try {
-                                final paymentRef = 'PAY_${DateTime.now().millisecondsSinceEpoch}';
-                                await ref.read(partOrdersServiceProvider).markOrderPaid(
-                                  orderId: order.id,
-                                  complaintId: req.requestId,
-                                  paymentRef: paymentRef,
-                                  items: order.items,
+                                await PaymentService().startPayment(
+                                  context,
+                                  amountInRupees: order.totalAmount,
+                                  description: 'Replacement Parts - ${req.problemCode}',
+                                  customerName: req.productId.isNotEmpty ? req.productId : req.problemCode,
+                                  onSuccess: (paymentId, razorpayOrderId) async {
+                                    try {
+                                      await ref.read(partOrdersServiceProvider).markOrderPaid(
+                                        orderId: order.id,
+                                        complaintId: req.requestId,
+                                        paymentRef: paymentId,
+                                        items: order.items,
+                                      );
+                                      if (ctx.mounted) {
+                                        Navigator.pop(ctx);
+                                        ToastService.show(
+                                          context,
+                                          'Payment of ₹${order.totalAmount.toStringAsFixed(2)} Successful! (ID: $paymentId)',
+                                          type: ToastType.success,
+                                        );
+                                      }
+                                    } catch (err) {
+                                      if (ctx.mounted) {
+                                        ToastService.show(context, 'Payment succeeded but status update failed: $err', type: ToastType.error);
+                                      }
+                                    } finally {
+                                      if (ctx.mounted) setModalState(() => isPaying = false);
+                                    }
+                                  },
+                                  onFailure: (code, message) {
+                                    if (ctx.mounted) {
+                                      setModalState(() => isPaying = false);
+                                      ToastService.show(context, 'Payment failed/cancelled: $message', type: ToastType.error);
+                                    }
+                                  },
                                 );
-                                if (ctx.mounted) {
-                                  Navigator.pop(ctx);
-                                  ToastService.show(
-                                    context,
-                                    'Payment of ₹${order.totalAmount.toStringAsFixed(2)} Successful! Replacement recorded.',
-                                    type: ToastType.success,
-                                  );
-                                }
                               } catch (e) {
                                 if (ctx.mounted) {
-                                  ToastService.show(context, 'Payment failed: $e', type: ToastType.error);
+                                  setModalState(() => isPaying = false);
+                                  ToastService.show(context, 'Payment error: $e', type: ToastType.error);
                                 }
-                              } finally {
-                                if (ctx.mounted) setModalState(() => isPaying = false);
                               }
                             },
                       child: isPaying
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : Text('Confirm & Pay ₹${order.totalAmount.toStringAsFixed(2)}',
+                          : Text('Pay ₹${order.totalAmount.toStringAsFixed(2)}',
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                     ),
                   ),

@@ -80,7 +80,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
     final prospect = lead?.prospectId != null ? ref.watch(prospectByIdProvider(lead!.prospectId!)) : null;
     final profile = ref.watch(currentProfileProvider);
     final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
-    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
+    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || profile?.roles.contains(UserRole.admin) == true || profile?.roles.contains(UserRole.salesHead) == true || profile?.roles.contains(UserRole.manager) == true;
     final isSalesRole = profile?.primaryRole == UserRole.sales ||
         profile?.roles.contains(UserRole.sales) == true ||
         (!isAdmin && (lead?.assignedTo == profile?.id || lead?.createdBy == profile?.id));
@@ -2401,29 +2401,33 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
         final name = (r['full_name'] as String? ?? '').toLowerCase();
         final email = (r['email'] as String? ?? '').toLowerCase();
 
-        // 1. Exclude Admin, Managers, and Sales Heads (supervisors who have company-wide access)
-        final isSupervisorOrAdmin = role == 'admin' ||
+        // 1. Exclude Admin and General Managers (supervisors who have company-wide access)
+        // Keep Sales Heads and Sales Executives
+        final isAdminOrManager = role == 'admin' ||
             role == 'administrator' ||
             role == 'manager' ||
-            role == 'sales_head' ||
-            role == 'saleshead' ||
             rolesList.contains('admin') ||
             rolesList.contains('administrator') ||
             rolesList.contains('manager') ||
-            rolesList.contains('sales_head') ||
-            rolesList.contains('saleshead') ||
             name.contains('admin') ||
             email.contains('admin');
-        if (isSupervisorOrAdmin) continue;
+        if (isAdminOrManager) continue;
 
-        // 2. MUST be Sales Executive only (no other department roles)
+        // 2. MUST be Sales Executive or Sales Head
+        final isSalesHead = role == 'sales_head' ||
+            role == 'saleshead' ||
+            rolesList.contains('sales_head') ||
+            rolesList.contains('saleshead');
         final isSalesExecutive = role == 'sales' ||
             role == 'sales_executive' ||
             rolesList.contains('sales') ||
             rolesList.contains('sales_executive');
-        if (!isSalesExecutive) continue;
 
-        list.add(r as Map<String, dynamic>);
+        if (!isSalesExecutive && !isSalesHead) continue;
+
+        final userCopy = Map<String, dynamic>.from(r as Map<String, dynamic>);
+        userCopy['is_sales_head'] = isSalesHead;
+        list.add(userCopy);
       }
 
       if (mounted) {
@@ -2518,10 +2522,35 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
                 prefixIcon: Icon(Icons.person_pin_outlined),
               ),
               items: _salesStaff.map((s) {
-                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Sales Executive';
+                final name = s['full_name'] as String? ?? s['email'] as String? ?? 'Sales Staff';
+                final isHead = s['is_sales_head'] == true;
                 return DropdownMenuItem<String>(
                   value: s['id'] as String,
-                  child: Text('$name (Sales Executive)'),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isHead ? Colors.teal.withOpacity(0.12) : AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isHead ? 'SALES HEAD' : 'SALES EXECUTIVE',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isHead ? Colors.teal.shade800 : AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
               onChanged: (val) => setState(() => _selectedSalesUserId = val),

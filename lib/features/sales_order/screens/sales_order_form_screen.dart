@@ -44,6 +44,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
 
   final _ewayBillNoController = TextEditingController();
   final _ewayBillDateController = TextEditingController();
+  final _expectedDispatchDateController = TextEditingController();
   final _salesmanController = TextEditingController();
   final _partyContactPersonController = TextEditingController();
   String _billType = 'Credit';
@@ -83,6 +84,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     _remarksController.dispose();
     _ewayBillNoController.dispose();
     _ewayBillDateController.dispose();
+    _expectedDispatchDateController.dispose();
     _salesmanController.dispose();
     _partyContactPersonController.dispose();
     for (final item in _lineItems) {
@@ -153,6 +155,11 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
         _remarksController.text = _existingSalesOrder!.remarks ?? '';
         _ewayBillNoController.text = _existingSalesOrder!.ewayBillNo ?? '';
         _ewayBillDateController.text = _existingSalesOrder!.ewayBillDate ?? '';
+        _expectedDispatchDateController.text =
+            _existingSalesOrder!.expectedDispatchDate != null
+                ? DateFormat('dd/MM/yyyy')
+                    .format(_existingSalesOrder!.expectedDispatchDate!)
+                : '';
         _salesmanController.text = _existingSalesOrder!.salesman ?? '';
         _partyContactPersonController.text =
             _existingSalesOrder!.partyContactPerson ?? '';
@@ -259,7 +266,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     double total = 0;
     for (final item in _lineItems) {
       final qty =
-          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
+          num.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim())?.toInt() ?? 0;
       final rate =
           double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final disc = double.tryParse(
@@ -278,8 +285,10 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
   double get _cgstAmount => _isLocalGst ? _calcSubtotal() * (_cgstRate / 100) : 0.0;
   double get _sgstAmount => _isLocalGst ? _calcSubtotal() * (_sgstRate / 100) : 0.0;
   double get _igstAmount => !_isLocalGst ? _calcSubtotal() * ((_cgstRate + _sgstRate) / 100) : 0.0;
-  double get _grandTotal =>
+  double get _unroundedTotal =>
       _calcSubtotal() + _cgstAmount + _sgstAmount + _igstAmount;
+  double get _grandTotal => _unroundedTotal.roundToDouble();
+  double get _roundOffAmount => _grandTotal - _unroundedTotal;
 
   Future<void> _saveDraft() async {
     if (!_formKey.currentState!.validate()) return;
@@ -305,7 +314,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     final lineItemsValid = _lineItems.every((item) {
       final desc = (item['description'] as TextEditingController).text.trim();
       final qty =
-          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
+          num.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim())?.toInt() ?? 0;
       final rate =
           double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? -1;
       return desc.isNotEmpty && qty > 0 && rate >= 0;
@@ -359,7 +368,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     final lineItemsValid = _lineItems.every((item) {
       final desc = (item['description'] as TextEditingController).text.trim();
       final qty =
-          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
+          num.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim())?.toInt() ?? 0;
       final rate =
           double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? -1;
       return desc.isNotEmpty && qty > 0 && rate >= 0;
@@ -390,6 +399,14 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
               _SummaryRow('SGST (${_sgstRate.toStringAsFixed(_sgstRate == _sgstRate.roundToDouble() ? 0 : 2)}%)', _sgstAmount),
             ] else ...[
               _SummaryRow('IGST (${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}%)', _igstAmount),
+            ],
+            if (_roundOffAmount.abs() >= 0.005) ...[
+              _SummaryRow(
+                'Round Off',
+                _roundOffAmount,
+                customValue:
+                    'Rs. ${_roundOffAmount > 0 ? '+' : ''}${_roundOffAmount.toStringAsFixed(2)}',
+              ),
             ],
             const Divider(),
             _SummaryRow('Grand Total', _grandTotal, bold: true),
@@ -580,14 +597,14 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
 
     final lineItemsJson = _lineItems.map((item) {
       final qty =
-          int.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
+          num.tryParse((item['qty'] as TextEditingController).text.replaceAll(',', '').trim())?.toInt() ?? 0;
       final rate =
           double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '').trim()) ?? 0;
       final gstPercent = double.tryParse(
               (item['gst_percent'] as TextEditingController?)?.text.replaceAll(',', '').trim() ?? '18') ??
           18.0;
       final freeQty =
-          int.tryParse((item['free_qty'] as TextEditingController?)?.text.replaceAll(',', '').trim() ?? '0') ??
+          num.tryParse((item['free_qty'] as TextEditingController?)?.text.replaceAll(',', '').trim() ?? '0')?.toInt() ??
               0;
       final disc = double.tryParse(
               (item['disc_percent'] as TextEditingController).text.replaceAll(',', '').trim()) ??
@@ -636,6 +653,17 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       'shipping_address': _shippingAddressController.text.trim().isEmpty
           ? null
           : _shippingAddressController.text.trim(),
+      'expected_dispatch_date': _expectedDispatchDateController.text.trim().isEmpty
+          ? null
+          : () {
+              try {
+                return DateFormat('dd/MM/yyyy')
+                    .parseStrict(_expectedDispatchDateController.text.trim())
+                    .toIso8601String();
+              } catch (_) {
+                return null;
+              }
+            }(),
       'eway_bill_no': _ewayBillNoController.text.trim().isEmpty
           ? null
           : _ewayBillNoController.text.trim(),
@@ -664,18 +692,46 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     };
 
     if (_existingSalesOrder != null) {
-      await supabase
-          .from('sales_orders')
-          .update(data)
-          .eq('id', _existingSalesOrder!.id);
+      try {
+        await supabase
+            .from('sales_orders')
+            .update(data)
+            .eq('id', _existingSalesOrder!.id);
+      } catch (err) {
+        final errStr = err.toString();
+        if (errStr.contains('expected_dispatch_date')) {
+          final fallbackData = Map<String, dynamic>.from(data)..remove('expected_dispatch_date');
+          await supabase
+              .from('sales_orders')
+              .update(fallbackData)
+              .eq('id', _existingSalesOrder!.id);
+        } else {
+          rethrow;
+        }
+      }
       return _existingSalesOrder!.id;
     } else {
-      final response = await supabase
-          .from('sales_orders')
-          .insert(data)
-          .select('id')
-          .single();
-      return (response as Map)['id'] as String;
+      try {
+        final response = await supabase
+            .from('sales_orders')
+            .insert(data)
+            .select('id')
+            .single();
+        return (response as Map)['id'] as String;
+      } catch (err) {
+        final errStr = err.toString();
+        if (errStr.contains('expected_dispatch_date')) {
+          final fallbackData = Map<String, dynamic>.from(data)..remove('expected_dispatch_date');
+          final response = await supabase
+              .from('sales_orders')
+              .insert(fallbackData)
+              .select('id')
+              .single();
+          return (response as Map)['id'] as String;
+        } else {
+          rethrow;
+        }
+      }
     }
   }
 
@@ -783,6 +839,25 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary),
                     ),
+                    if (_pipeline!.customer!.phone != null && _pipeline!.customer!.phone!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.phone_outlined, size: 14, color: AppColors.textSecondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              _pipeline!.customer!.phone!,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 4),
                     Text(_product?.name ?? '',
                         style: const TextStyle(
                             fontFamily: 'Inter',
@@ -915,6 +990,35 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             Row(
               children: [
                 Expanded(
+                  child: InkWell(
+                    onTap: !enabled
+                        ? null
+                        : () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2035),
+                            );
+                            if (date != null) {
+                              _expectedDispatchDateController.text =
+                                  DateFormat('dd/MM/yyyy').format(date);
+                            }
+                          },
+                    child: IgnorePointer(
+                      child: TextFormField(
+                        controller: _expectedDispatchDateController,
+                        enabled: enabled,
+                        decoration: const InputDecoration(
+                          labelText: 'Expected Dispatch Date',
+                          suffixIcon: Icon(Icons.event_available, size: 18),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: _billType,
                     decoration: const InputDecoration(labelText: 'Bill Type'),
@@ -931,7 +1035,11 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                           },
                   ),
                 ),
-                const SizedBox(width: 10),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
                 Expanded(
                   child: TextFormField(
                     controller: _salesmanController,
@@ -939,14 +1047,16 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                     decoration: const InputDecoration(labelText: 'Salesman'),
                   ),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _partyContactPersonController,
+                    enabled: enabled,
+                    decoration:
+                        const InputDecoration(labelText: 'Party Contact Person'),
+                  ),
+                ),
               ],
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _partyContactPersonController,
-              enabled: enabled,
-              decoration:
-                  const InputDecoration(labelText: 'Party Contact Person'),
             ),
             const SizedBox(height: 20),
 
@@ -1121,6 +1231,13 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                     _TotalRow(
                         'IGST (${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}%)', '₹${currencyFormat.format(_igstAmount)}'),
                   ],
+                  if (_roundOffAmount.abs() >= 0.005) ...[
+                    const SizedBox(height: 4),
+                    _TotalRow(
+                      'Round Off',
+                      'Rs. ${_roundOffAmount > 0 ? '+' : ''}${_roundOffAmount.toStringAsFixed(2)}',
+                    ),
+                  ],
                   const Divider(height: 16),
                   _TotalRow(
                       'Grand Total', '₹${currencyFormat.format(_grandTotal)}',
@@ -1227,7 +1344,8 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final double amount;
   final bool bold;
-  const _SummaryRow(this.label, this.amount, {this.bold = false});
+  final String? customValue;
+  const _SummaryRow(this.label, this.amount, {this.bold = false, this.customValue});
 
   @override
   Widget build(BuildContext context) {
@@ -1240,7 +1358,7 @@ class _SummaryRow extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: bold ? FontWeight.bold : null)),
         Text(
-          'Rs. ${NumberFormat('#,##,##0.00', 'en_IN').format(amount)}',
+          customValue ?? 'Rs. ${NumberFormat('#,##,##0.00', 'en_IN').format(amount)}',
           style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 12,
@@ -1361,13 +1479,13 @@ class _SalesOrderLineItemRow extends StatelessWidget {
                 child: TextFormField(
                   controller: item['qty'] as TextEditingController,
                   enabled: enabled,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Qty *'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    final val = int.tryParse(v);
+                    final val = num.tryParse(v);
                     if (val == null || val <= 0) return '> 0';
                     return null;
                   },

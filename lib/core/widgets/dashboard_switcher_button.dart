@@ -18,11 +18,30 @@ class DashboardSwitcherButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
-    if (profile == null || profile.roles.length <= 1) {
-      return const SizedBox.shrink();
-    }
+    if (profile == null) return const SizedBox.shrink();
 
     final uniqueRoles = profile.roles.toSet();
+
+    final hasAdmin = uniqueRoles.contains(UserRole.admin) || uniqueRoles.contains(UserRole.manager);
+    final hasSales = uniqueRoles.contains(UserRole.sales) || uniqueRoles.contains(UserRole.salesHead);
+    final hasService = uniqueRoles.contains(UserRole.serviceHead);
+    final hasCrm = uniqueRoles.contains(UserRole.crmStaff);
+    final hasTechnician = uniqueRoles.contains(UserRole.technician);
+    final hasOperations = uniqueRoles.contains(UserRole.boq) ||
+        uniqueRoles.contains(UserRole.factory) ||
+        uniqueRoles.contains(UserRole.purchase);
+
+    int distinctDashboards = 0;
+    if (hasAdmin) distinctDashboards++;
+    if (hasSales) distinctDashboards++;
+    if (hasService) distinctDashboards++;
+    if (hasCrm) distinctDashboards++;
+    if (hasTechnician) distinctDashboards++;
+    if (hasOperations) distinctDashboards++;
+
+    if (distinctDashboards <= 1) {
+      return const SizedBox.shrink();
+    }
 
     return PopupMenuButton<String>(
       icon: Icon(Icons.apps_rounded, color: iconColor, size: iconSize),
@@ -54,7 +73,7 @@ class DashboardSwitcherButton extends ConsumerWidget {
           ),
         );
 
-        if (uniqueRoles.contains(UserRole.admin) || uniqueRoles.contains(UserRole.manager)) {
+        if (hasAdmin) {
           items.add(
             const PopupMenuItem<String>(
               value: AppRoutes.adminDashboard,
@@ -69,7 +88,7 @@ class DashboardSwitcherButton extends ConsumerWidget {
           );
         }
 
-        if (uniqueRoles.contains(UserRole.serviceHead)) {
+        if (hasService) {
           items.add(
             const PopupMenuItem<String>(
               value: AppRoutes.complaintsDashboard,
@@ -82,9 +101,21 @@ class DashboardSwitcherButton extends ConsumerWidget {
               ),
             ),
           );
+          items.add(
+            const PopupMenuItem<String>(
+              value: AppRoutes.installationsDashboard,
+              child: Row(
+                children: [
+                  Icon(Icons.build_circle_outlined, color: Color(0xFF38BDF8), size: 18),
+                  SizedBox(width: 10),
+                  Text('Installation Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          );
         }
 
-        if (uniqueRoles.contains(UserRole.crmStaff)) {
+        if (hasCrm) {
           items.add(
             const PopupMenuItem<String>(
               value: '/crm/dashboard',
@@ -99,7 +130,7 @@ class DashboardSwitcherButton extends ConsumerWidget {
           );
         }
 
-        if (uniqueRoles.contains(UserRole.sales) || uniqueRoles.contains(UserRole.salesHead)) {
+        if (hasSales) {
           items.add(
             const PopupMenuItem<String>(
               value: AppRoutes.salesDashboard,
@@ -114,52 +145,22 @@ class DashboardSwitcherButton extends ConsumerWidget {
           );
         }
 
-        if (uniqueRoles.contains(UserRole.factory)) {
-          items.add(
-            const PopupMenuItem<String>(
-              value: AppRoutes.factoryQueue,
-              child: Row(
-                children: [
-                  Icon(Icons.precision_manufacturing_outlined, color: Color(0xFFF472B6), size: 18),
-                  SizedBox(width: 10),
-                  Text('Factory Queue', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (uniqueRoles.contains(UserRole.purchase)) {
-          items.add(
-            const PopupMenuItem<String>(
-              value: AppRoutes.purchaseQueue,
-              child: Row(
-                children: [
-                  Icon(Icons.shopping_cart_outlined, color: Color(0xFFFB923C), size: 18),
-                  SizedBox(width: 10),
-                  Text('Purchase Queue', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (uniqueRoles.contains(UserRole.boq)) {
+        if (hasOperations) {
           items.add(
             const PopupMenuItem<String>(
               value: AppRoutes.boqDashboard,
               child: Row(
                 children: [
-                  Icon(Icons.calculate_outlined, color: Color(0xFFA78BFA), size: 18),
+                  Icon(Icons.precision_manufacturing_outlined, color: Color(0xFFF59E0B), size: 18),
                   SizedBox(width: 10),
-                  Text('BOQ Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('Operations Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
           );
         }
 
-        if (uniqueRoles.contains(UserRole.technician)) {
+        if (hasTechnician) {
           items.add(
             const PopupMenuItem<String>(
               value: AppRoutes.technicianDashboard,

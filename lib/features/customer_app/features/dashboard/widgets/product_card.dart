@@ -302,6 +302,132 @@ class HeroProductCard extends StatelessWidget {
             ),
           ),
 
+          // 2b. Active AMC Banner with "Extend Year" and "Upgrade Plan" options
+          if (isAmcActive) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF10B981).withOpacity(isDark ? 0.2 : 0.1),
+                    const Color(0xFF047857).withOpacity(isDark ? 0.25 : 0.08),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.verified_user, color: Colors.white, size: 14),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${product.amcPlanTitle ?? 'Standard'} AMC Active',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFF065F46),
+                                ),
+                              ),
+                              if (product.amcExpiryDate != null)
+                                Text(
+                                  'Valid until: ${DateFormat('dd MMM yyyy').format(product.amcExpiryDate!)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.white70 : const Color(0xFF047857),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${product.numberOfVisitsIncluded > 0 ? product.numberOfVisitsIncluded : 2} Visits / yr',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF065F46),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Extend Year Button
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            context.push(
+                              '/amc_avail?productId=${product.productId}&mode=extend',
+                            );
+                          },
+                          icon: const Icon(Icons.update_rounded, size: 14),
+                          label: const Text(
+                            'Extend Year',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF047857),
+                            side: const BorderSide(color: Color(0xFF10B981), width: 1.2),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Upgrade Plan Button
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            context.push(
+                              '/amc_avail?productId=${product.productId}&mode=upgrade',
+                            );
+                          },
+                          icon: const Icon(Icons.upgrade_rounded, size: 15),
+                          label: const Text(
+                            'Upgrade Plan',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF059669),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // 3. Action Buttons Row
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

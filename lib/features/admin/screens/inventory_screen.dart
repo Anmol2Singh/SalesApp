@@ -27,16 +27,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   late TabController _tabController;
   final TextEditingController _itemSearchController = TextEditingController();
   final TextEditingController _productSearchController = TextEditingController();
+  final TextEditingController _suppSearchController = TextEditingController();
 
   String _itemSearchQuery = '';
   String _productSearchQuery = '';
+  String _suppSearchQuery = '';
   bool _itemsSortAscending = true;
   final Set<String> _selectedItemIds = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -47,6 +49,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     _tabController.dispose();
     _itemSearchController.dispose();
     _productSearchController.dispose();
+    _suppSearchController.dispose();
     super.dispose();
   }
 
@@ -126,6 +129,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               icon: Icon(Icons.inventory_2_outlined, size: 20),
               text: 'Items',
             ),
+            Tab(
+              icon: Icon(Icons.list_alt_outlined, size: 20),
+              text: 'Supplementary',
+            ),
           ],
         ),
       ),
@@ -134,6 +141,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         children: [
           _buildSellProductsTab(),
           _buildItemsTab(inventoryAsync),
+          _buildSupplementaryTab(),
         ],
       ),
       floatingActionButton: isProductsTab
@@ -146,15 +154,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
               ),
             )
-          : FloatingActionButton.extended(
-              onPressed: () => _showAddItemDialog(context, ref),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text(
-                'Add Item',
-                style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
-              ),
-            ),
+          : _tabController.index == 1
+              ? FloatingActionButton.extended(
+                  onPressed: () => _showAddItemDialog(context, ref),
+                  backgroundColor: AppColors.primary,
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text(
+                    'Add Item',
+                    style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                  ),
+                )
+              : FloatingActionButton.extended(
+                  onPressed: () => _showAddSupplementaryDialog(context, ref),
+                  backgroundColor: AppColors.primary,
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text(
+                    'Add Supplementary',
+                    style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                  ),
+                ),
     );
   }
 
@@ -2661,5 +2679,303 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         );
       }
     }
+  }
+
+  // ==========================================
+  // TAB 3: SUPPLEMENTARY
+  // ==========================================
+  Widget _buildSupplementaryTab() {
+    final suppAsync = ref.watch(supplementaryItemsProvider);
+
+    return suppAsync.when(
+      data: (items) {
+        final filteredItems = items.where((item) {
+          if (_suppSearchQuery.isEmpty) return true;
+          return item.name.toLowerCase().contains(_suppSearchQuery.toLowerCase());
+        }).toList();
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              color: Colors.white,
+              child: TextField(
+                controller: _suppSearchController,
+                decoration: InputDecoration(
+                  hintText: 'Search supplementary terms...',
+                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                  suffixIcon: _suppSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _suppSearchController.clear();
+                            setState(() => _suppSearchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: AppColors.background,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+                onChanged: (val) => setState(() => _suppSearchQuery = val.trim()),
+              ),
+            ),
+            Expanded(
+              child: filteredItems.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.list_alt_outlined, size: 54, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          Text(
+                            _suppSearchQuery.isEmpty
+                                ? 'No supplementary items found.'
+                                : 'No items matching "$_suppSearchQuery"',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: AppColors.textSecondary,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                            onPressed: () => _showAddSupplementaryDialog(context, ref),
+                            icon: const Icon(Icons.add, color: Colors.white),
+                            label: const Text('Add Item', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                      itemCount: filteredItems.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final item = filteredItems[index];
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.add_task, color: AppColors.primary, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      item.name,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        _buildBadge('Rate: ₹${item.rate}'),
+                                        const SizedBox(width: 8),
+                                        _buildBadge('GST: ${item.gstPercent}%'),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blueGrey, size: 20),
+                                onPressed: () => _showEditSupplementaryDialog(context, ref, item),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: AppColors.error, size: 20),
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Delete Item'),
+                                      content: Text('Are you sure you want to delete "${item.name}"?'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(ctx);
+                                            ref.read(supplementaryItemsServiceProvider).deleteItem(item.id!);
+                                          },
+                                          child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      error: (e, _) => Center(child: Text('Error: $e')),
+    );
+  }
+
+  void _showAddSupplementaryDialog(BuildContext context, WidgetRef ref) {
+    final nameCtrl = TextEditingController();
+    final rateCtrl = TextEditingController(text: '0');
+    final gstCtrl = TextEditingController(text: '18.0');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Supplementary Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Term/Item Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: rateCtrl,
+                decoration: const InputDecoration(labelText: 'Rate'),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: gstCtrl,
+                decoration: const InputDecoration(labelText: 'GST %'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isNotEmpty) {
+                try {
+                  await ref.read(supplementaryItemsServiceProvider).addItem(
+                        name: name,
+                        rate: double.tryParse(rateCtrl.text) ?? 0.0,
+                        gstPercent: double.tryParse(gstCtrl.text) ?? 18.0,
+                      );
+                  if (context.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Item added successfully'), backgroundColor: AppColors.success),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                    );
+                  }
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditSupplementaryDialog(BuildContext context, WidgetRef ref, dynamic item) {
+    final nameCtrl = TextEditingController(text: item.name);
+    final rateCtrl = TextEditingController(text: item.rate.toString());
+    final gstCtrl = TextEditingController(text: item.gstPercent.toString());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Supplementary Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Term/Item Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: rateCtrl,
+                decoration: const InputDecoration(labelText: 'Rate'),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: gstCtrl,
+                decoration: const InputDecoration(labelText: 'GST %'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isNotEmpty) {
+                try {
+                  await ref.read(supplementaryItemsServiceProvider).updateItem(
+                        id: item.id!,
+                        name: name,
+                        rate: double.tryParse(rateCtrl.text) ?? 0.0,
+                        gstPercent: double.tryParse(gstCtrl.text) ?? 18.0,
+                      );
+                  if (context.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Item updated successfully'), backgroundColor: AppColors.success),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                    );
+                  }
+                }
+              }
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
   }
 }

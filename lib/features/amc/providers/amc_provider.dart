@@ -1,6 +1,7 @@
 // lib/features/amc/providers/amc_provider.dart
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../core/models/amc_contract.dart';
@@ -171,4 +172,40 @@ final amcExpiringSoonCountProvider = FutureProvider<int>((ref) async {
       .eq('status', 'expiring_soon');
 
   return (response as List).length;
+});
+
+// Admin toggle: whether "Opt for AMC" button is visible in customer login
+class AmcOptEnabledNotifier extends StateNotifier<bool> {
+  static const String _key = 'amc_opt_enabled';
+
+  AmcOptEnabledNotifier() : super(true) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final val = prefs.getBool(_key);
+      if (val != null) {
+        state = val;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    state = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, enabled);
+    } catch (_) {}
+  }
+
+  Future<void> toggle() async {
+    await setEnabled(!state);
+  }
+}
+
+final amcOptEnabledProvider =
+    StateNotifierProvider<AmcOptEnabledNotifier, bool>((ref) {
+  return AmcOptEnabledNotifier();
 });

@@ -1,10 +1,12 @@
 // lib/features/factory_order/screens/factory_order_screen.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/factory_order.dart';
 import '../../../core/models/customer.dart';
@@ -17,6 +19,87 @@ import '../../../core/models/user_role.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/router/app_router.dart';
+
+enum FactoryCustomFieldType {
+  text,
+  integer,
+  dropdown;
+
+  String get label {
+    switch (this) {
+      case FactoryCustomFieldType.text:
+        return 'Text';
+      case FactoryCustomFieldType.integer:
+        return 'Integer';
+      case FactoryCustomFieldType.dropdown:
+        return 'Dropdown';
+    }
+  }
+
+  static FactoryCustomFieldType fromString(String? val) {
+    if (val == 'integer') return FactoryCustomFieldType.integer;
+    if (val == 'dropdown') return FactoryCustomFieldType.dropdown;
+    return FactoryCustomFieldType.text;
+  }
+}
+
+class FactoryCustomFieldDef {
+  final String id;
+  String label;
+  FactoryCustomFieldType type;
+  String placeholder;
+  bool isRequired;
+  List<String> options;
+
+  FactoryCustomFieldDef({
+    required this.id,
+    required this.label,
+    required this.type,
+    this.placeholder = '',
+    this.isRequired = false,
+    this.options = const [],
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'label': label,
+    'type': type.name,
+    'placeholder': placeholder,
+    'is_required': isRequired,
+    'options': options,
+  };
+
+  factory FactoryCustomFieldDef.fromJson(Map<String, dynamic> json) => FactoryCustomFieldDef(
+    id: json['id'] as String? ?? UniqueKey().toString(),
+    label: json['label'] as String? ?? '',
+    type: FactoryCustomFieldType.fromString(json['type'] as String?),
+    placeholder: json['placeholder'] as String? ?? '',
+    isRequired: json['is_required'] as bool? ?? false,
+    options: (json['options'] as List<dynamic>?)
+            ?.map((e) => e.toString().trim())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        [],
+  );
+
+  FactoryCustomFieldDef copyWith({
+    String? id,
+    String? label,
+    FactoryCustomFieldType? type,
+    String? placeholder,
+    bool? isRequired,
+    List<String>? options,
+  }) {
+    return FactoryCustomFieldDef(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      type: type ?? this.type,
+      placeholder: placeholder ?? this.placeholder,
+      isRequired: isRequired ?? this.isRequired,
+      options: options ?? List.from(this.options),
+    );
+  }
+}
 
 class FactoryOrderScreen extends ConsumerStatefulWidget {
   final String pipelineId;
@@ -41,6 +124,12 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
   List<FactoryOrderItem> _items = [];
   List<Map<String, dynamic>> _catalogItems = [];
 
+  // Custom Fields state
+  String _customSectionTitle = 'Additional Details';
+  List<FactoryCustomFieldDef> _customFieldDefs = [];
+  final Map<String, TextEditingController> _customControllers = {};
+  final Map<String, String> _customDropdownValues = {};
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +138,9 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
 
   @override
   void dispose() {
+    for (final controller in _customControllers.values) {
+      controller.dispose();
+    }
     _notesController.dispose();
     super.dispose();
   }
@@ -99,6 +191,9 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
         _isEditing = true;
         _items = [];
       }
+
+      // Load custom field template and values
+      await _loadCustomFields();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -108,6 +203,78 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadCustomFields() async {
+    final productId = _pipeline?.productId;
+    final prefs = await SharedPreferences.getInstance();
+
+    final existingSpecs = _existingOrder?.productionSpecs;
+    if (existingSpecs != null && existingSpecs.isNotEmpty) {
+      if (existingSpecs['custom_fields_title'] is String &&
+          (existingSpecs['custom_fields_title'] as String).trim().isNotEmpty) {
+        _customSectionTitle = (existingSpecs['custom_fields_title'] as String).trim();
+      }
+      if (existingSpecs['custom_fields_defs'] is List) {
+        _customFieldDefs = (existingSpecs['custom_fields_defs'] as List)
+            .map((e) => FactoryCustomFieldDef.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+    }
+
+    if (_customFieldDefs.isEmpty && productId != null) {
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final templateData = await supabase
+            .from('factory_custom_fields_templates')
+            .select()
+            .eq('product_id', productId)
+            .maybeSingle();
+
+        if (templateData != null) {
+          if (templateData['section_title'] != null &&
+              (templateData['section_title'] as String).trim().isNotEmpty) {
+            _customSectionTitle = (templateData['section_title'] as String).trim();
+          }
+          if (templateData['fields'] is List) {
+            _customFieldDefs = (templateData['fields'] as List)
+                .map((e) => FactoryCustomFieldDef.fromJson(
+                    Map<String, dynamic>.from(e as Map)))
+                .toList();
+          }
+        }
+      } catch (_) {
+        // Fallback to local SharedPreferences
+        final cached =
+            prefs.getString('factory_custom_fields_template_$productId');
+        if (cached != null) {
+          try {
+            final json = jsonDecode(cached) as Map<String, dynamic>;
+            _customSectionTitle =
+                json['section_title'] as String? ?? 'Additional Details';
+            if (json['fields'] is List) {
+              _customFieldDefs = (json['fields'] as List)
+                  .map((e) => FactoryCustomFieldDef.fromJson(
+                      Map<String, dynamic>.from(e as Map)))
+                  .toList();
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    // Populate controllers and dropdown values
+    for (final def in _customFieldDefs) {
+      final existingVal = existingSpecs?['custom_fields']?[def.label] ??
+          existingSpecs?[def.label];
+      if (def.type == FactoryCustomFieldType.dropdown) {
+        _customDropdownValues[def.id] = existingVal?.toString() ?? '';
+      } else {
+        _customControllers[def.id] =
+            TextEditingController(text: existingVal?.toString() ?? '');
+      }
     }
   }
 
@@ -140,7 +307,21 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
       return;
     }
 
-    final specs = <String, dynamic>{};
+    final customFieldsMap = <String, dynamic>{};
+    for (final def in _customFieldDefs) {
+      final val = def.type == FactoryCustomFieldType.dropdown
+          ? _customDropdownValues[def.id]
+          : _customControllers[def.id]?.text.trim();
+      if (val != null && val.toString().trim().isNotEmpty) {
+        customFieldsMap[def.label] = val;
+      }
+    }
+
+    final specs = <String, dynamic>{
+      'custom_fields': customFieldsMap,
+      'custom_fields_title': _customSectionTitle,
+      'custom_fields_defs': _customFieldDefs.map((d) => d.toJson()).toList(),
+    };
 
     setState(() => _isSaving = true);
 
@@ -280,6 +461,603 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Future<void> _saveCustomFieldsTemplate(
+      String newTitle, List<FactoryCustomFieldDef> newDefs) async {
+    final productId = _pipeline?.productId;
+    if (productId == null) return;
+
+    final finalTitle =
+        newTitle.trim().isEmpty ? 'Additional Details' : newTitle.trim();
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final prefs = await SharedPreferences.getInstance();
+
+      final payload = {
+        'product_id': productId,
+        'product_name': _pipeline?.product?.name ?? '',
+        'section_title': finalTitle,
+        'fields': newDefs.map((d) => d.toJson()).toList(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // Save locally
+      await prefs.setString(
+          'factory_custom_fields_template_$productId', jsonEncode(payload));
+
+      // Save to Supabase
+      try {
+        await supabase.from('factory_custom_fields_templates').upsert(
+              payload,
+              onConflict: 'product_id',
+            );
+      } catch (err) {
+        debugPrint('Supabase template upsert error (cached locally): $err');
+      }
+
+      if (mounted) {
+        setState(() {
+          _customSectionTitle = finalTitle;
+          _customFieldDefs = List.from(newDefs);
+
+          // Ensure controllers for each field
+          for (final def in _customFieldDefs) {
+            if (def.type == FactoryCustomFieldType.dropdown) {
+              _customDropdownValues.putIfAbsent(def.id, () => '');
+            } else {
+              _customControllers.putIfAbsent(
+                  def.id, () => TextEditingController());
+            }
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '✓ Custom fields saved for ${_pipeline?.product?.name ?? "product"}'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving template: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showManageCustomFieldsSheet() {
+    final titleController = TextEditingController(text: _customSectionTitle);
+    List<FactoryCustomFieldDef> tempDefs =
+        _customFieldDefs.map((d) => d.copyWith()).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Container(
+              height: MediaQuery.of(ctx).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Configure Custom Fields',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Product: ${_pipeline?.product?.name ?? "Current Product"}',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+
+                  // Section Title Setting
+                  const Text(
+                    'Section Title (In Form & PDF Export)',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. Additional Details, Technical Specs',
+                      isDense: true,
+                      prefixIcon: Icon(Icons.title, size: 18),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Fields List Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Fields (${tempDefs.length})',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          _showEditFieldDialog(
+                            onSave: (newField) {
+                              setSheetState(() {
+                                tempDefs.add(newField);
+                              });
+                            },
+                          );
+                        },
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add Field'),
+                      ),
+                    ],
+                  ),
+
+                  // Fields List
+                  Expanded(
+                    child: tempDefs.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.tune,
+                                      size: 48, color: Colors.grey.shade400),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'No custom fields configured for this product yet.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      _showEditFieldDialog(
+                                        onSave: (newField) {
+                                          setSheetState(() {
+                                            tempDefs.add(newField);
+                                          });
+                                        },
+                                      );
+                                    },
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text('Add First Field'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: tempDefs.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, idx) {
+                              final field = tempDefs[idx];
+                              IconData typeIcon;
+                              Color iconColor;
+                              switch (field.type) {
+                                case FactoryCustomFieldType.integer:
+                                  typeIcon = Icons.numbers;
+                                  iconColor = AppColors.info;
+                                  break;
+                                case FactoryCustomFieldType.dropdown:
+                                  typeIcon =
+                                      Icons.arrow_drop_down_circle_outlined;
+                                  iconColor = AppColors.accent;
+                                  break;
+                                case FactoryCustomFieldType.text:
+                                  typeIcon = Icons.text_fields;
+                                  iconColor = AppColors.primary;
+                                  break;
+                              }
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: iconColor.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(typeIcon,
+                                          size: 20, color: iconColor),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  field.label,
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Inter',
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppColors.textPrimary,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              if (field.isRequired) ...[
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.error
+                                                        .withValues(alpha: 0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(4),
+                                                  ),
+                                                  child: const Text(
+                                                    'Required',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: AppColors.error,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            field.type ==
+                                                    FactoryCustomFieldType.dropdown
+                                                ? 'Dropdown • ${field.options.join(", ")}'
+                                                : '${field.type.label}${field.placeholder.isNotEmpty ? " • Placeholder: ${field.placeholder}" : ""}',
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined,
+                                          size: 18, color: AppColors.primary),
+                                      tooltip: 'Edit Field',
+                                      onPressed: () {
+                                        _showEditFieldDialog(
+                                          fieldToEdit: field,
+                                          onSave: (updated) {
+                                            setSheetState(() {
+                                              tempDefs[idx] = updated;
+                                            });
+                                          },
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 18, color: AppColors.error),
+                                      tooltip: 'Delete Field',
+                                      onPressed: () {
+                                        setSheetState(() {
+                                          tempDefs.removeAt(idx);
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+
+                  // Bottom Save Action
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _saveCustomFieldsTemplate(
+                            titleController.text, tempDefs);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Save & Apply Configuration'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) => titleController.dispose());
+  }
+
+  void _showEditFieldDialog({
+    FactoryCustomFieldDef? fieldToEdit,
+    required Function(FactoryCustomFieldDef) onSave,
+  }) {
+    final labelCtrl = TextEditingController(text: fieldToEdit?.label ?? '');
+    final placeholderCtrl =
+        TextEditingController(text: fieldToEdit?.placeholder ?? '');
+    final optionsCtrl =
+        TextEditingController(text: fieldToEdit?.options.join(', ') ?? '');
+    var selectedType = fieldToEdit?.type ?? FactoryCustomFieldType.text;
+    var isRequired = fieldToEdit?.isRequired ?? false;
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDlgState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                fieldToEdit == null ? 'Add Custom Field' : 'Edit Custom Field',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SizedBox(
+                width: 380,
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Label
+                        const Text(
+                          'Field Label *',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: labelCtrl,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. Tank Capacity, Boom Length',
+                            isDense: true,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Field label is required';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Field Type
+                        const Text(
+                          'Field Type *',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<FactoryCustomFieldType>(
+                          initialValue: selectedType,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                          ),
+                          items: FactoryCustomFieldType.values.map((t) {
+                            return DropdownMenuItem(
+                              value: t,
+                              child: Text(t.label),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDlgState(() => selectedType = val);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Placeholder
+                        const Text(
+                          'Placeholder / Hint',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: placeholderCtrl,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. 500 Liters, 4 Meters',
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Options (if Dropdown)
+                        if (selectedType == FactoryCustomFieldType.dropdown) ...[
+                          const Text(
+                            'Dropdown Choices * (Comma Separated)',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: optionsCtrl,
+                            decoration: const InputDecoration(
+                              hintText: 'e.g. 3M, 4M, 6M, 8M',
+                              isDense: true,
+                            ),
+                            validator: (v) {
+                              if (selectedType ==
+                                      FactoryCustomFieldType.dropdown &&
+                                  (v == null || v.trim().isEmpty)) {
+                                return 'Please enter at least one choice';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Required Switch
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Required Field',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Must be filled before completing order',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          value: isRequired,
+                          onChanged: (v) => setDlgState(() => isRequired = v),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (!formKey.currentState!.validate()) return;
+                    final optionsList = optionsCtrl.text
+                        .split(',')
+                        .map((s) => s.trim())
+                        .where((s) => s.isNotEmpty)
+                        .toList();
+
+                    final newField = FactoryCustomFieldDef(
+                      id: fieldToEdit?.id ??
+                          'fld_${DateTime.now().millisecondsSinceEpoch}',
+                      label: labelCtrl.text.trim(),
+                      type: selectedType,
+                      placeholder: placeholderCtrl.text.trim(),
+                      isRequired: isRequired,
+                      options: optionsList,
+                    );
+
+                    onSave(newField);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Save Field'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showChangeQtyDialog(int idx, FactoryOrderItem item) {
@@ -966,6 +1744,188 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
               ),
             ],
             const SizedBox(height: 24),
+
+            // ─── Custom Product Fields Section ─────────────────────
+            Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _customSectionTitle,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (role == UserRole.admin)
+                        TextButton.icon(
+                          onPressed: _showManageCustomFieldsSheet,
+                          icon: const Icon(Icons.tune, size: 16),
+                          label: const Text(
+                            'Configure Fields',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_customFieldDefs.isEmpty && role == UserRole.admin)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppColors.border,
+                            style: BorderStyle.solid),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.tune,
+                                  size: 18, color: AppColors.primary),
+                              SizedBox(width: 8),
+                              Text(
+                                'No custom fields configured for this product',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Tap "Configure Fields" above to set up fields for ${_pipeline?.product?.name ?? "this product"} (e.g. Tank Capacity, Boom Length, Voltage, etc.).',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ..._customFieldDefs.map((field) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                field.label,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (field.isRequired)
+                                const Text(
+                                  ' *',
+                                  style: TextStyle(
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          if (field.type == FactoryCustomFieldType.dropdown)
+                            DropdownButtonFormField<String>(
+                              value: (_customDropdownValues[field.id]?.isNotEmpty ?? false) &&
+                                      field.options.contains(_customDropdownValues[field.id])
+                                  ? _customDropdownValues[field.id]
+                                  : null,
+                              decoration: InputDecoration(
+                                hintText: field.placeholder.isNotEmpty
+                                    ? field.placeholder
+                                    : 'Select ${field.label}...',
+                              ),
+                              items: field.options.map((opt) {
+                                return DropdownMenuItem(
+                                  value: opt,
+                                  child: Text(opt),
+                                );
+                              }).toList(),
+                              onChanged: enabled
+                                  ? (val) => setState(() =>
+                                      _customDropdownValues[field.id] =
+                                          val ?? '')
+                                  : null,
+                              validator: (val) {
+                                if (field.isRequired &&
+                                    (val == null || val.trim().isEmpty)) {
+                                  return 'Please select ${field.label}';
+                                }
+                                return null;
+                              },
+                            )
+                          else if (field.type == FactoryCustomFieldType.integer)
+                            TextFormField(
+                              controller: _customControllers[field.id],
+                              enabled: enabled,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: InputDecoration(
+                                hintText: field.placeholder.isNotEmpty
+                                    ? field.placeholder
+                                    : 'Enter ${field.label}...',
+                              ),
+                              validator: (val) {
+                                if (field.isRequired &&
+                                    (val == null || val.trim().isEmpty)) {
+                                  return 'Please enter ${field.label}';
+                                }
+                                return null;
+                              },
+                            )
+                          else
+                            TextFormField(
+                              controller: _customControllers[field.id],
+                              enabled: enabled,
+                              keyboardType: TextInputType.text,
+                              decoration: InputDecoration(
+                                hintText: field.placeholder.isNotEmpty
+                                    ? field.placeholder
+                                    : 'Enter ${field.label}...',
+                              ),
+                              validator: (val) {
+                                if (field.isRequired &&
+                                    (val == null || val.trim().isEmpty)) {
+                                  return 'Please enter ${field.label}';
+                                }
+                                return null;
+                              },
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
 
             // Notes
             const Text(

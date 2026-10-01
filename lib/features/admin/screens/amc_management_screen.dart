@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../amc/providers/amc_provider.dart';
 
 class AmcPlanItem {
   final String id;
@@ -533,6 +534,116 @@ class _AmcManagementScreenState extends ConsumerState<AmcManagementScreen> {
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Customer Opt-in Visibility Toggle Card
+                    Builder(
+                      builder: (context) {
+                        final isOptEnabled = ref.watch(amcOptEnabledProvider);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: (isOptEnabled ? const Color(0xFF10B981) : Colors.grey)
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.touch_app_outlined,
+                                  color: isOptEnabled ? const Color(0xFF10B981) : Colors.grey,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            'Customer "Opt for AMC" Button',
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? Colors.white : AppColors.textPrimary,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: (isOptEnabled ? const Color(0xFF10B981) : Colors.grey)
+                                                .withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            isOptEnabled ? 'VISIBLE' : 'HIDDEN',
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
+                                              color: isOptEnabled ? const Color(0xFF10B981) : Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'When turned ON, customers will see the "Opt for AMC" button on their customer dashboard. Turn OFF to hide it.',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: isDark ? const Color(0xFF94A3B8) : AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: isOptEnabled,
+                                activeColor: const Color(0xFF10B981),
+                                onChanged: (val) {
+                                  ref.read(amcOptEnabledProvider.notifier).setEnabled(val);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        val
+                                            ? 'Customer "Opt for AMC" button is now visible'
+                                            : 'Customer "Opt for AMC" button is now hidden',
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
 

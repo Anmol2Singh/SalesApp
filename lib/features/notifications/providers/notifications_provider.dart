@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../core/models/notification.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/services/notification_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 // Notifications list with realtime subscription
@@ -42,9 +43,9 @@ class NotificationsNotifier
           .map((json) => AppNotification.fromJson(json as Map<String, dynamic>))
           .toList();
 
-      state = AsyncValue.data(notifications);
+      if (mounted) state = AsyncValue.data(notifications);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
     }
   }
 
@@ -63,11 +64,20 @@ class NotificationsNotifier
             value: _userId!,
           ),
           callback: (payload) {
+            if (!mounted) return;
             final newNotif = AppNotification.fromJson(
               payload.newRecord,
             );
             final current = state.value ?? [];
             state = AsyncValue.data([newNotif, ...current]);
+            
+            // Trigger device push notification
+            NotificationService.showNotification(
+              id: newNotif.hashCode,
+              title: newNotif.title,
+              body: newNotif.body,
+              payload: newNotif.relatedPipelineId ?? newNotif.relatedAmcId,
+            );
           },
         )
         .subscribe();

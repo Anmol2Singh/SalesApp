@@ -102,8 +102,11 @@ class AdminDashboardScreen extends ConsumerWidget {
         .length;
 
     final rawName = profile?.fullName.trim() ?? '';
-    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Admin User');
-    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'A';
+    final displayName = rawName.isNotEmpty
+        ? rawName
+        : (profile?.primaryRole.displayName ?? 'Admin User');
+    final avatarInitial =
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'A';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -118,10 +121,11 @@ class AdminDashboardScreen extends ConsumerWidget {
             automaticallyImplyLeading: false,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(32),
+                bottom: Radius.circular(28),
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.none,
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -136,199 +140,213 @@ class AdminDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                   borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(32),
+                    bottom: Radius.circular(28),
                   ),
                 ),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Stack(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(0xFF5A6B8A),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.25),
-                                  width: 2,
+                child: SafeArea(
+                  bottom: false,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF5A6B8A),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    width: 2,
+                                  ),
                                 ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  avatarInitial,
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                child: Center(
+                                  child: Text(
+                                    avatarInitial,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 13,
+                                  height: 13,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: const Color(0xFF1E1B4B),
+                                        width: 2),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Good ${_getGreeting()},',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  displayName,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat("'Today 'd MMM")
+                                      .format(DateTime.now()),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12,
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                  ),
+                                ),
+                              ],
                             ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                width: 13,
-                                height: 13,
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                profile?.primaryRole.name.toUpperCase() ??
+                                    'ADMIN',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF22C55E),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: const Color(0xFF1E1B4B), width: 2),
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Good ${_getGreeting()},',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13,
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                displayName,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                DateFormat("'Today 'd MMM").format(DateTime.now()),
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 12,
-                                  color: Colors.white.withValues(alpha: 0.65),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    const Text(
+                                      'ONLINE',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          profile?.primaryRole.name.toUpperCase() ?? 'ADMIN',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white.withValues(alpha: 0.85),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF22C55E),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              const Text(
-                                'ONLINE',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
-                tooltip: 'Refresh Data',
-                onPressed: () {
-                  ref.invalidate(dashboardStatsProvider);
-                  ref.read(leadsProvider.notifier).load(refresh: true);
-                  ref.read(prospectsProvider.notifier).load(refresh: true);
-                },
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: IconButton(
+                  icon:
+                      const Icon(Icons.refresh, color: Colors.white, size: 22),
+                  tooltip: 'Refresh Data',
+                  onPressed: () {
+                    ref.invalidate(dashboardStatsProvider);
+                    ref.read(leadsProvider.notifier).load(refresh: true);
+                    ref.read(prospectsProvider.notifier).load(refresh: true);
+                  },
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white, size: 22),
-                tooltip: 'Logout',
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Logout'),
-                      content: const Text('Are you sure you want to sign out?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.error),
-                          child: const Text('Logout',
-                              style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    await ref.read(authControllerProvider.notifier).signOut();
-                  }
-                },
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.white, size: 22),
+                  tooltip: 'Logout',
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Logout'),
+                        content:
+                            const Text('Are you sure you want to sign out?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.error),
+                            child: const Text('Logout',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await ref.read(authControllerProvider.notifier).signOut();
+                    }
+                  },
+                ),
               ),
               const SizedBox(width: 4),
             ],
           ),
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // Date Range Filters
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 14),
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -810,6 +828,12 @@ class _QuickActionsGrid extends StatelessWidget {
         onTap: () => context.go('/complaints/dashboard'),
       ),
       _QuickActionBtn(
+        label: 'Installations',
+        icon: Icons.build_circle_outlined,
+        color: const Color(0xFF0284C7),
+        onTap: () => context.go('/installations/dashboard'),
+      ),
+      _QuickActionBtn(
         label: 'View Products',
         icon: Icons.grid_view_outlined,
         color: const Color(0xFF0D9488),
@@ -826,6 +850,12 @@ class _QuickActionsGrid extends StatelessWidget {
         icon: Icons.bar_chart_outlined,
         color: const Color(0xFF10B981),
         onTap: () => context.push('/reports/activity'),
+      ),
+      _QuickActionBtn(
+        label: 'Customer 360',
+        icon: Icons.contact_page_outlined,
+        color: const Color(0xFFF59E0B),
+        onTap: () => context.push('/reports/customer'),
       ),
       _QuickActionBtn(
         label: 'Daily Tasks',

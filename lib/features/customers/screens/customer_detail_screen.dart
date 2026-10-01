@@ -572,9 +572,9 @@ class _InfoCard extends ConsumerWidget {
       creatorId: customer.createdBy,
       assigneeId: customer.assignedTo,
     );
-    final canAssign = profile?.primaryRole == UserRole.admin ||
-        profile?.primaryRole == UserRole.salesHead ||
-        profile?.primaryRole == UserRole.manager;
+    final canAssign = (profile?.roles.contains(UserRole.admin) ?? false) ||
+        (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+        (profile?.roles.contains(UserRole.manager) ?? false);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1799,29 +1799,34 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
         final name = (r['full_name'] as String? ?? '').toLowerCase();
         final email = (r['email'] as String? ?? '').toLowerCase();
 
-        // 1. Exclude Admin, Managers, and Sales Heads (supervisors who have company-wide access)
-        final isSupervisorOrAdmin = role == 'admin' ||
+        // 1. Exclude Admin and General Managers (supervisors who have company-wide access)
+        // Keep Sales Heads and Sales Executives
+        final isAdminOrManager = role == 'admin' ||
             role == 'administrator' ||
             role == 'manager' ||
-            role == 'sales_head' ||
-            role == 'saleshead' ||
             rolesList.contains('admin') ||
             rolesList.contains('administrator') ||
             rolesList.contains('manager') ||
-            rolesList.contains('sales_head') ||
-            rolesList.contains('saleshead') ||
             name.contains('admin') ||
             email.contains('admin');
-        if (isSupervisorOrAdmin) continue;
+        if (isAdminOrManager) continue;
 
-        // 2. MUST be Sales Executive only (no other department roles)
+        // 2. MUST be Sales Executive or Sales Head
+        final isSalesHead = role == 'sales_head' ||
+            role == 'saleshead' ||
+            rolesList.contains('sales_head') ||
+            rolesList.contains('saleshead');
         final isSalesExecutive = role == 'sales' ||
             role == 'sales_executive' ||
             rolesList.contains('sales') ||
             rolesList.contains('sales_executive');
-        if (!isSalesExecutive) continue;
 
-        list.add(r as Map<String, dynamic>);
+        if (!isSalesExecutive && !isSalesHead) continue;
+
+        // Store role tag for display
+        final userCopy = Map<String, dynamic>.from(r as Map<String, dynamic>);
+        userCopy['is_sales_head'] = isSalesHead;
+        list.add(userCopy);
       }
 
       final finalList = list;
@@ -1995,12 +2000,17 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                   value: _selectedSalesUserId,
                   hint: const Text('Choose sales staff member'),
                   items: _salesStaff.map((staff) {
-                    final name = staff['full_name'] as String? ?? staff['email'] as String? ?? 'Sales Executive';
+                    final name = staff['full_name'] as String? ?? staff['email'] as String? ?? 'Sales Staff';
+                    final isHead = staff['is_sales_head'] == true;
                     return DropdownMenuItem<String>(
                       value: staff['id'] as String,
                       child: Row(
                         children: [
-                          const Icon(Icons.person_outline, size: 16, color: AppColors.textSecondary),
+                          Icon(
+                            isHead ? Icons.military_tech_rounded : Icons.person_outline,
+                            size: 16,
+                            color: isHead ? Colors.teal : AppColors.textSecondary,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -2015,15 +2025,15 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.08),
+                              color: isHead ? Colors.teal.withOpacity(0.12) : AppColors.primary.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: const Text(
-                              'SALES EXECUTIVE',
+                            child: Text(
+                              isHead ? 'SALES HEAD' : 'SALES EXECUTIVE',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
+                                color: isHead ? Colors.teal.shade800 : AppColors.primary,
                               ),
                             ),
                           ),

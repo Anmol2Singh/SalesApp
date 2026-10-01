@@ -3,6 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../models/profile.dart';
+import '../theme/app_theme.dart';
+
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
@@ -23,6 +26,7 @@ import '../../features/purchase_order/screens/purchase_queue_screen.dart';
 import '../../features/notifications/screens/notification_center_screen.dart';
 import '../../features/dashboard/screens/admin_dashboard_screen.dart';
 import '../../features/reports/screens/user_activity_report_screen.dart';
+import '../../features/reports/screens/customer_report_screen.dart';
 import '../../features/pdf_search/screens/search_pdf_screen.dart';
 import '../../features/dashboard/screens/sales_dashboard_screen.dart';
 import '../../features/admin/screens/admin_panel_screen.dart';
@@ -48,6 +52,12 @@ import '../../features/complaints/screens/complaints_list_screen.dart';
 import '../../features/complaints/screens/technicians_tab_screen.dart';
 import '../../features/complaints/screens/error_codes_configuration_screen.dart';
 import '../../features/complaints/screens/edit_complaint_screen.dart';
+import '../../features/installations/screens/installation_dashboard_screen.dart';
+import '../../features/installations/screens/installations_list_screen.dart';
+import '../../features/installations/screens/installation_history_screen.dart';
+import '../../features/installations/screens/assign_technician_screen.dart';
+import '../../features/installations/screens/book_installation_screen.dart';
+import '../../features/installations/screens/installation_details_screen.dart';
 import '../../features/crm/widgets/crm_shell.dart';
 import '../../features/crm/screens/crm_dashboard_screen.dart';
 import '../../features/crm/screens/prospects_list_screen.dart';
@@ -57,7 +67,6 @@ import '../../features/crm/screens/crm_customers_list_screen.dart';
 import '../../features/crm/screens/crm_customer_detail_screen.dart';
 import '../../features/crm/screens/prospect_detail_screen.dart';
 import '../models/user_role.dart';
-import '../theme/app_theme.dart';
 import '../widgets/app_shell.dart';
 
 // Customer app imports
@@ -73,6 +82,9 @@ import '../../features/customer_app/features/store/screens/request_product_scree
 import '../../features/customer_app/features/product/screens/product_detail_screen.dart';
 import '../../features/customer_app/features/service_request/screens/service_booking_flow.dart';
 import '../widgets/customer_app_shell.dart';
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 
 // Route names
 class AppRoutes {
@@ -107,19 +119,37 @@ class AppRoutes {
   static const String assignTechnician = '/complaints/assign';
   static const String serviceHistory = '/complaints/history';
   static const String complaintsList = '/complaints';
+  static const String installationsDashboard = '/installations/dashboard';
+  static const String installationsList = '/installations';
+  static const String bookInstallation = '/installations/book';
+  static const String assignInstallation = '/installations/assign';
+  static const String installationHistory = '/installations/history';
   static const String searchPdf = '/search-pdf';
   static const String boqDashboard = '/boq/dashboard';
   static const String manageBoqItems = '/boq/manage-items';
   static const String dailyTasks = '/daily-tasks';
 }
 
+class _AuthChangeNotifier extends ChangeNotifier {
+  _AuthChangeNotifier(Ref ref) {
+    ref.listen<AsyncValue<Profile?>>(authStateProvider, (prev, next) {
+      if (prev?.value != next.value) {
+        notifyListeners();
+      }
+    });
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final authNotifier = _AuthChangeNotifier(ref);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.splash,
+    refreshListenable: authNotifier,
     redirect: (context, state) {
       final location = state.matchedLocation;
+      final authState = ref.read(authStateProvider);
 
       // Customer app routes — guarded only by the customer auth (phone OTP).
       // Do NOT apply office-login redirect here.
@@ -222,7 +252,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/amc_avail',
-            builder: (context, state) => const AmcAvailScreen(),
+            builder: (context, state) => AmcAvailScreen(
+              initialProductId: state.uri.queryParameters['productId'],
+              mode: state.uri.queryParameters['mode'],
+            ),
           ),
           GoRoute(
             path: '/request_product',
@@ -387,7 +420,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.technicianTasks,
-            builder: (context, state) => const TechnicianTasksScreen(),
+            builder: (context, state) {
+              final tabParam = state.uri.queryParameters['tab'];
+              final initialTab = (tabParam == 'installations' || tabParam == '1') ? 1 : 0;
+              return TechnicianTasksScreen(initialTab: initialTab);
+            },
           ),
           GoRoute(
             path: AppRoutes.bookComplaint,
@@ -409,9 +446,36 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.complaintsList,
             builder: (context, state) => const ComplaintsListScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.installationsDashboard,
+            builder: (context, state) => const InstallationDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.installationsList,
+            builder: (context, state) => const InstallationsListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.assignInstallation,
+            builder: (context, state) => const AssignInstallationTechnicianScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.installationHistory,
+            builder: (context, state) => const InstallationHistoryScreen(),
+          ),
         ],
       ),
       // Detail/Form views (Full screen)
+      GoRoute(
+        path: AppRoutes.bookInstallation,
+        builder: (context, state) => const BookInstallationScreen(),
+      ),
+      GoRoute(
+        path: '/installations/details/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return InstallationDetailsScreen(installationId: id);
+        },
+      ),
       GoRoute(
         path: '/complaints/details/:id',
         builder: (context, state) {
@@ -539,6 +603,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const UserActivityReportScreen(),
       ),
       GoRoute(
+        path: '/reports/customer',
+        builder: (context, state) => const CustomerReportScreen(),
+      ),
+      GoRoute(
         path: '/products',
         builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
       ),
@@ -576,9 +644,7 @@ String getRoleHome(UserRole role) {
     case UserRole.salesHead:
       return AppRoutes.salesDashboard;
     case UserRole.factory:
-      return AppRoutes.factoryQueue;
     case UserRole.purchase:
-      return AppRoutes.purchaseQueue;
     case UserRole.boq:
       return AppRoutes.boqDashboard;
     case UserRole.serviceHead:

@@ -6,6 +6,7 @@ import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/gradient_button.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart';
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
+import 'package:salesapp/core/services/auth_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,20 +27,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _sendOtp([OtpChannel channel = OtpChannel.sms]) async {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() => _isLoading = true);
     try {
       final phone = '$_selectedCountryCode${_phoneController.text.trim()}';
-      await ref.read(authRepositoryProvider).sendOtp(phone);
+      await ref.read(authRepositoryProvider).sendOtp(phone, channel);
       if (mounted) {
-        ToastService.show(context, 'OTP Sent successfully!', type: ToastType.success);
+        final channelName = channel == OtpChannel.sms ? 'SMS' : 'WhatsApp';
+        ToastService.show(context, 'OTP sent via $channelName!', type: ToastType.success);
         context.push('/otp', extra: {'phone': phone});
       }
     } catch (e) {
       if (mounted) {
-        ToastService.show(context, e.toString(), type: ToastType.error);
+        ToastService.show(context, e.toString().replaceAll('Exception: ', ''), type: ToastType.error);
       }
     } finally {
       if (mounted) {
@@ -50,8 +52,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
       body: SafeArea(
@@ -66,37 +66,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   // Brand header
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     width: double.infinity,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(16),
+                          width: 66,
+                          height: 66,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
                             shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.1),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.12),
-                              width: 1,
+                              color: Colors.white.withValues(alpha: 0.2),
+                              width: 1.5,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.whatshot_rounded,
-                            size: 48,
-                            color: AppColors.accent,
+                          child: const Center(
+                            child: Icon(
+                              Icons.whatshot_rounded,
+                              size: 34,
+                              color: Color(0xFF00E5FF),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         Text(
                           'IZYHEAT',
                           style: Theme.of(context).textTheme.displayLarge?.copyWith(
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 2,
-                                fontSize: 30,
+                                fontSize: 28,
                               ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
                           'Premium Heating & HVAC Solutions',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -107,7 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
 
                   Form(
                     key: _formKey,
@@ -209,10 +212,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           const SizedBox(height: 24),
                           GradientButton(
-                            label: 'Send OTP',
+                            label: 'Get OTP via SMS',
                             isLoading: _isLoading,
-                            onTap: _sendOtp,
-                            icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                            onTap: () => _sendOtp(OtpChannel.sms),
+                            gradientColors: const [
+                              Color(0xFF7C3AED),
+                              Color(0xFF06B6D4),
+                            ],
+                            icon: const Icon(Icons.sms_rounded, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: OutlinedButton.icon(
+                              onPressed: _isLoading ? null : () => _sendOtp(OtpChannel.whatsapp),
+                              icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF25D366), size: 20),
+                              label: const Text(
+                                'Get OTP via WhatsApp',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF25D366),
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF25D366), width: 1.5),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),

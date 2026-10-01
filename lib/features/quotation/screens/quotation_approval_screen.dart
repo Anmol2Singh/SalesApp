@@ -12,7 +12,7 @@ final pendingQuotationsProvider = FutureProvider<List<Map<String, dynamic>>>((re
   final supabase = ref.watch(supabaseClientProvider);
   final response = await supabase
       .from('quotations')
-      .select('*, sales_pipelines(*, customers(*), products(*))')
+      .select('*, sales_pipelines(*, customers(*), products(*)), profiles!created_by(full_name)')
       .eq('status', 'pending_approval')
       .order('created_at', ascending: false);
 
@@ -67,6 +67,8 @@ class QuotationApprovalScreen extends ConsumerWidget {
 
               final customerName = customerData['company_name'] as String? ?? 'Customer';
               final productName = productData['name'] as String? ?? 'Product';
+              final profileData = item['profiles'] as Map<String, dynamic>? ?? {};
+              final submittedBy = profileData['full_name'] as String? ?? 'Unknown Staff';
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
@@ -100,6 +102,17 @@ class QuotationApprovalScreen extends ConsumerWidget {
                     Text(
                       'Total Amount: Rs. ${NumberFormat('#,##,##0.00', 'en_IN').format(quotation.grandTotal)}',
                       style: const TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.person_outline, size: 14, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Submitted by: $submittedBy',
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     const Divider(height: 1),

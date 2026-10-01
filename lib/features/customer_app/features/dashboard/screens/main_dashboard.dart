@@ -10,6 +10,7 @@ import 'package:salesapp/features/customer_app/data/repositories/app_repositorie
 import 'package:salesapp/features/customer_app/data/providers/app_providers.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/features/dashboard/widgets/product_card.dart';
+import 'package:salesapp/features/amc/providers/amc_provider.dart';
 
 class ActivityEvent {
   final String title;
@@ -29,7 +30,8 @@ class ActivityEvent {
   });
 }
 
-final customerActivityProvider = FutureProvider<List<ActivityEvent>>((ref) async {
+final customerActivityProvider =
+    FutureProvider<List<ActivityEvent>>((ref) async {
   try {
     final logs = await ref.watch(activityLogsProvider.future);
     return logs.map((log) {
@@ -75,6 +77,9 @@ final customerActivityProvider = FutureProvider<List<ActivityEvent>>((ref) async
   }
 });
 
+final customerDashboardTimeFilterProvider =
+    StateProvider<String>((ref) => 'month');
+
 class MainDashboard extends ConsumerWidget {
   const MainDashboard({super.key});
 
@@ -83,11 +88,27 @@ class MainDashboard extends ConsumerWidget {
     final productsAsync = ref.watch(productsProvider);
     final advProductsAsync = ref.watch(advertisementProductsProvider);
     final profileAsync = ref.watch(userProfileProvider);
+    final requestsAsync = ref.watch(serviceRequestsProvider);
+    final invoicesAsync = ref.watch(invoicesProvider);
+    final currentFilter = ref.watch(customerDashboardTimeFilterProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldBg = isDark ? AppColors.bgPrimary : AppColors.bgPrimaryLight;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+
+    final profile = profileAsync.valueOrNull;
+    final rawName = profile?['name']?.toString().trim() ?? '';
+    final displayName = rawName.isNotEmpty ? rawName : 'Customer';
+    final avatarInitial =
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'C';
+
+    final activeSystemsCount = productsAsync.value?.length ?? 0;
+    final activeAmcCount =
+        productsAsync.value?.where((p) => p.amcStatus == 'active').length ?? 0;
+    final complaintsCount = requestsAsync.value?.length ?? 0;
+    final invoicesCount = invoicesAsync.value?.length ?? 0;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -98,715 +119,730 @@ class MainDashboard extends ConsumerWidget {
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverAppBar(
-            expandedHeight: 185,
-            pinned: true,
-            backgroundColor: const Color(0xFF1E1B4B),
-            clipBehavior: Clip.antiAlias,
-            automaticallyImplyLeading: false,
-            actions: [
-              IconButton(
-                icon: ref.watch(notificationsViewedProvider)
-                    ? const Icon(Icons.notifications_outlined, color: Colors.white)
-                    : const Badge(
-                        smallSize: 8,
-                        backgroundColor: Colors.amberAccent,
-                        child: Icon(Icons.notifications_outlined, color: Colors.white),
-                      ),
-                tooltip: 'Alerts & Notifications',
-                onPressed: () => _showNotificationsSheet(context, ref),
-              ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, color: Colors.white),
-                tooltip: 'Logout',
-                onPressed: () => _showLogoutDialog(context, ref),
-              ),
-              const SizedBox(width: 8),
-            ],
-            title: const Text(
-              'IZYHEAT Portal',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(28),
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                children: [
-                  // Deep indigo → violet gradient
-                  Container(
+                expandedHeight: 180,
+                pinned: true,
+                backgroundColor: const Color(0xFF1E1B4B),
+                elevation: 0,
+                clipBehavior: Clip.antiAlias,
+                automaticallyImplyLeading: false,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(28),
+                  ),
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.none,
+                  background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Color(0xFF1E1B4B),
-                          Color(0xFF4C1D95),
-                          Color(0xFF6D28D9),
+                          Color(0xFF0F172A),
+                          Color(0xFF2E1065),
+                          Color(0xFF6B21A8),
+                          Color(0xFF4F46E5),
+                          Color(0xFF2563EB),
                         ],
                       ),
-                    ),
-                  ),
-                  // Radial glow top-right
-                  Positioned(
-                    top: -40,
-                    right: -30,
-                    child: Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            AppColors.primary.withOpacity(0.25),
-                            Colors.transparent,
-                          ],
-                        ),
+                      borderRadius: BorderRadius.vertical(
+                        bottom: Radius.circular(28),
                       ),
                     ),
-                  ),
-                  // Radial glow bottom-left
-                  Positioned(
-                    bottom: -20,
-                    left: -40,
-                    child: Container(
-                      width: 160,
-                      height: 160,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            const Color(0xFF06B6D4).withOpacity(0.15),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 50, 20, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () => context.push('/profile'),
-                              child: profileAsync.when(
-                                data: (profile) {
-                                  final name = profile['name'] ?? 'Customer';
-                                  final firstLetter = name.isNotEmpty ? name[0].toUpperCase() : 'C';
-                                  return Container(
-                                    width: 48,
-                                    height: 48,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Stack(
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
+                                      color: const Color(0xFF5A6B8A),
                                       border: Border.all(
-                                        color: Colors.white.withOpacity(0.3),
+                                        color: Colors.white.withOpacity(0.25),
                                         width: 2,
-                                      ),
-                                      gradient: const LinearGradient(
-                                        colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
                                       ),
                                     ),
                                     child: Center(
                                       child: Text(
-                                        firstLetter,
+                                        avatarInitial,
                                         style: const TextStyle(
                                           fontFamily: 'Inter',
-                                          fontSize: 20,
+                                          fontSize: 22,
                                           fontWeight: FontWeight.bold,
                                           color: Colors.white,
                                         ),
                                       ),
                                     ),
-                                  );
-                                },
-                                loading: () => Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withOpacity(0.1),
                                   ),
-                                ),
-                                error: (_, __) => Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withOpacity(0.1),
-                                  ),
-                                  child: const Icon(Icons.person, color: Colors.white),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Good ${_getGreeting()}',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 12,
-                                      color: Colors.white.withOpacity(0.6),
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  profileAsync.when(
-                                    data: (profile) => Text(
-                                      profile['name'] ?? 'Customer',
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 0,
+                                    child: Container(
+                                      width: 13,
+                                      height: 13,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF22C55E),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: const Color(0xFF1E1B4B),
+                                          width: 2,
+                                        ),
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    loading: () => const Text('Loading...', style: TextStyle(color: Colors.white)),
-                                    error: (_, __) => const Text('Customer 👋', style: TextStyle(color: Colors.white)),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // Mini stat pills row
-                        Row(
-                          children: [
-                            _buildHeaderStat(
-                              'Today',
-                              DateFormat('dd MMM').format(DateTime.now()),
-                              Icons.calendar_today_outlined,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildHeaderStat(
-                              'Portal',
-                              'CUSTOMER',
-                              Icons.person_pin_outlined,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildHeaderStat(
-                              'Status',
-                              'ONLINE',
-                              Icons.circle,
-                              iconColor: const Color(0xFF10B981),
-                              iconSize: 10,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // [A] STATUS SUMMARY STRIP
-                productsAsync.when(
-                  data: (products) {
-                    final activeCount = products.length;
-                    final amcCount = products
-                        .where((p) => p.amcStatus == 'active')
-                        .length;
-
-                    return _buildStatusStrip(
-                      context,
-                      activeCount,
-                      amcCount,
-                    );
-                  },
-                  loading: () => _buildStatusStrip(context, 0, 0),
-                  error: (_, __) => _buildStatusStrip(context, 0, 0),
-                ),
-
-                const SizedBox(height: 24),
-
-                // [B] MY PURCHASED PRODUCTS
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'My Products',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Good ${_getGreeting()},',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 13,
+                                        color: Colors.white.withOpacity(0.8),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      DateFormat("'Today 'd MMM")
+                                          .format(DateTime.now()),
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.65),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'CUSTOMER',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white.withOpacity(0.85),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF22C55E),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        const Text(
+                                          'ONLINE',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        productsAsync.maybeWhen(
-                          data: (prods) => prods.isNotEmpty
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      ),
+                    ),
+                  ),
+                ),
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: IconButton(
+                      icon: ref.watch(notificationsViewedProvider)
+                          ? const Icon(Icons.notifications_outlined,
+                              color: Colors.white, size: 22)
+                          : const Badge(
+                              smallSize: 8,
+                              backgroundColor: Colors.amberAccent,
+                              child: Icon(Icons.notifications_outlined,
+                                  color: Colors.white, size: 22),
+                            ),
+                      tooltip: 'Alerts & Notifications',
+                      onPressed: () => _showNotificationsSheet(context, ref),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: IconButton(
+                      icon: const Icon(Icons.refresh,
+                          color: Colors.white, size: 22),
+                      tooltip: 'Refresh Data',
+                      onPressed: () {
+                        ref.invalidate(productsProvider);
+                        ref.invalidate(userProfileProvider);
+                        ref.invalidate(serviceRequestsProvider);
+                        ref.invalidate(invoicesProvider);
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: IconButton(
+                      icon: const Icon(Icons.logout_rounded,
+                          color: Colors.white, size: 22),
+                      tooltip: 'Logout',
+                      onPressed: () => _showLogoutDialog(context, ref),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 14.0),
+                sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                  // Date Range Filters
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _CustomerFilterChip(
+                            label: 'Today',
+                            selected: currentFilter == 'today',
+                            onSelected: () => ref
+                                .read(customerDashboardTimeFilterProvider
+                                    .notifier)
+                                .state = 'today',
+                          ),
+                          const SizedBox(width: 8),
+                          _CustomerFilterChip(
+                            label: 'This Week',
+                            selected: currentFilter == 'week',
+                            onSelected: () => ref
+                                .read(customerDashboardTimeFilterProvider
+                                    .notifier)
+                                .state = 'week',
+                          ),
+                          const SizedBox(width: 8),
+                          _CustomerFilterChip(
+                            label: 'This Month',
+                            selected: currentFilter == 'month',
+                            onSelected: () => ref
+                                .read(customerDashboardTimeFilterProvider
+                                    .notifier)
+                                .state = 'month',
+                          ),
+                          const SizedBox(width: 8),
+                          _CustomerFilterChip(
+                            label: 'This Year',
+                            selected: currentFilter == 'year',
+                            onSelected: () => ref
+                                .read(customerDashboardTimeFilterProvider
+                                    .notifier)
+                                .state = 'year',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // 2x2 Stats Grid
+                  _buildCustomerStatsGrid(
+                    context,
+                    activeSystemsCount,
+                    activeAmcCount,
+                    complaintsCount,
+                    invoicesCount,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // [B] MY PURCHASED PRODUCTS
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'My Products',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          productsAsync.maybeWhen(
+                            data: (prods) => prods.isNotEmpty
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.primary.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${prods.length}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                            orElse: () {
+                              final cached =
+                                  SupabaseCustomerRepository.cachedProducts;
+                              if (cached != null && cached.isNotEmpty) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: AppColors.primary.withOpacity(0.12),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
-                                    '${prods.length}',
+                                    '${cached.length}',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.primary,
                                     ),
                                   ),
-                                )
-                              : const SizedBox.shrink(),
-                          orElse: () {
-                            final cached = SupabaseCustomerRepository.cachedProducts;
-                            if (cached != null && cached.isNotEmpty) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '${cached.length}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        tooltip: 'Refresh products',
+                        onPressed: () => ref.refresh(productsProvider),
+                        color: subtitleColor,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  productsAsync.when(
+                    data: (products) => _buildProductsList(context, ref,
+                        products, textColor, subtitleColor, isDark),
+                    loading: () {
+                      final cached =
+                          SupabaseCustomerRepository.cachedProducts ??
+                              productsAsync.valueOrNull;
+                      if (cached != null && cached.isNotEmpty) {
+                        return _buildProductsList(context, ref, cached,
+                            textColor, subtitleColor, isDark);
+                      }
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24.0),
+                          child: CircularProgressIndicator(
+                              color: AppColors.primary),
                         ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.refresh, size: 18),
-                      tooltip: 'Refresh products',
-                      onPressed: () => ref.refresh(productsProvider),
-                      color: subtitleColor,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                productsAsync.when(
-                  data: (products) => _buildProductsList(context, ref, products, textColor, subtitleColor, isDark),
-                  loading: () {
-                    final cached = SupabaseCustomerRepository.cachedProducts ?? productsAsync.valueOrNull;
-                    if (cached != null && cached.isNotEmpty) {
-                      return _buildProductsList(context, ref, cached, textColor, subtitleColor, isDark);
-                    }
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24.0),
-                        child: CircularProgressIndicator(color: AppColors.primary),
-                      ),
-                    );
-                  },
-                  error: (e, _) {
-                    final cached = SupabaseCustomerRepository.cachedProducts;
-                    if (cached != null && cached.isNotEmpty) {
-                      return _buildProductsList(context, ref, cached, textColor, subtitleColor, isDark);
-                    }
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: Text('Error loading products: $e', style: TextStyle(color: textColor)),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // [D] QUICK ACTIONS
-                _buildQuickActionCard(
-                  context,
-                  'Opt for AMC',
-                  'Secure your products with scheduled maintenance',
-                  Icons.verified_user,
-                  AppColors.accent,
-                  () => context.push('/amc_avail'),
-                ),
-
-            const SizedBox(height: 28),
-
-            // [C2] ALSO AVAILABLE (ADVERTISEMENT)
-            Text(
-              'Also Available',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: textColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Explore other high-performance heating solutions from our catalog',
-              style: TextStyle(
-                fontSize: 12,
-                color: subtitleColor,
-              ),
-            ),
-            const SizedBox(height: 12),
-            advProductsAsync.when(
-              data: (advProducts) {
-                if (advProducts.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return SizedBox(
-                  height: 280,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    clipBehavior: Clip.none,
-                    itemCount: advProducts.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 16),
-                    itemBuilder: (context, index) {
-                      return AdvProductCard(product: advProducts[index]);
+                      );
+                    },
+                    error: (e, _) {
+                      final cached = SupabaseCustomerRepository.cachedProducts;
+                      if (cached != null && cached.isNotEmpty) {
+                        return _buildProductsList(context, ref, cached,
+                            textColor, subtitleColor, isDark);
+                      }
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: Text('Error loading products: $e',
+                              style: TextStyle(color: textColor)),
+                        ),
+                      );
                     },
                   ),
-                );
-              },
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20.0),
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              ),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: Text('Error loading advertisement products: $e', style: TextStyle(color: textColor)),
-                ),
-              ),
-            ),
+                  const SizedBox(height: 24),
 
-            const SizedBox(height: 28),
-
-            // [D] RECENT ACTIVITY STRIP
-            Text(
-              'Recent Activity',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            ref.watch(customerActivityProvider).when(
-              data: (events) {
-                if (events.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Text(
-                        'No recent activity found.',
-                        style: TextStyle(color: subtitleColor, fontSize: 13),
-                      ),
+                  // [D] QUICK ACTIONS
+                  if (ref.watch(amcOptEnabledProvider)) ...[
+                    _buildQuickActionCard(
+                      context,
+                      'Opt for AMC',
+                      'Secure your products with scheduled maintenance',
+                      Icons.verified_user,
+                      AppColors.accent,
+                      () => context.push('/amc_avail'),
                     ),
-                  );
-                }
-                final recent = events.take(4).toList();
-                return Column(
-                  children: List.generate(recent.length, (index) {
-                    return _TimelineEventTile(
-                      event: recent[index],
-                      isFirst: index == 0,
-                      isLast: index == recent.length - 1,
-                    );
-                  }),
-                );
-              },
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: CircularProgressIndicator(color: AppColors.accent),
-                ),
-              ),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text('Error loading activity: $e', style: const TextStyle(color: AppColors.danger)),
-                ),
-              ),
-            ),
-                const SizedBox(height: 80), // extra padding for bottom bar
-              ])),
-            ),
-          ],
-        ),
-        ),
-        ),
-      );
-    }
-
-    void _showNotificationsSheet(BuildContext context, WidgetRef ref) {
-      ref.read(notificationsViewedProvider.notifier).state = true;
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      final invoices = ref.read(invoicesProvider).value ?? [];
-      final requests = ref.read(serviceRequestsProvider).value ?? [];
-      final advProducts = ref.read(advertisementProductsProvider).value ?? [];
-      final products = ref.read(productsProvider).value ?? [];
-
-      final List<Map<String, dynamic>> notifications = [];
-
-      // 1. Invoices
-      for (final inv in invoices.take(3)) {
-        notifications.add({
-          'icon': Icons.receipt_long,
-          'color': Colors.teal,
-          'title': 'Invoice Received',
-          'subtitle': 'Invoice #${inv.invoiceId.length > 8 ? inv.invoiceId.substring(0, 8) : inv.invoiceId} for ₹${inv.amount.toStringAsFixed(0)} (${inv.status.toUpperCase()})',
-          'route': '/invoices',
-        });
-      }
-
-      // 2. Complaints
-      for (final req in requests.take(3)) {
-        notifications.add({
-          'icon': Icons.assignment_outlined,
-          'color': const Color(0xFF6D28D9),
-          'title': 'Complaint Update',
-          'subtitle': 'Ticket ${req.problemCode}: ${req.status.toUpperCase()} (${req.productId})',
-          'route': '/bookings',
-        });
-      }
-
-      // 3. New Product Launches
-      for (final adv in advProducts.take(2)) {
-        notifications.add({
-          'icon': Icons.new_releases_outlined,
-          'color': Colors.deepOrange,
-          'title': 'New Product Introduced',
-          'subtitle': '${adv.productName} is now available in catalog. Tap to explore.',
-          'route': '/product/${adv.productId}',
-        });
-      }
-
-      // 4. AMC Approved
-      for (final p in products.where((p) => p.amcStatus == 'active').take(2)) {
-        notifications.add({
-          'icon': Icons.verified_user,
-          'color': Colors.green,
-          'title': 'AMC Contract Active',
-          'subtitle': 'Annual maintenance is active for ${p.productName}. Free service visits included.',
-          'route': '/profile',
-        });
-      }
-
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (ctx) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Alerts & Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                    const SizedBox(height: 28),
                   ],
-                ),
-                const SizedBox(height: 12),
-                if (notifications.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
-                    child: Center(child: Text('No new alerts or notifications at this time.')),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: notifications.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, idx) {
-                        final n = notifications[idx];
-                        return ListTile(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          tileColor: isDark ? Colors.white10 : Colors.grey.shade50,
-                          leading: CircleAvatar(
-                            backgroundColor: (n['color'] as Color).withOpacity(0.15),
-                            child: Icon(n['icon'] as IconData, color: n['color'] as Color, size: 20),
-                          ),
-                          title: Text(n['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          subtitle: Text(n['subtitle'] as String, style: const TextStyle(fontSize: 12)),
-                          trailing: const Icon(Icons.chevron_right, size: 18),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            final route = n['route'] as String;
-                            context.push(route);
+
+                  // [C2] ALSO AVAILABLE (ADVERTISEMENT)
+                  Text(
+                    'Also Available',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Explore other high-performance heating solutions from our catalog',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: subtitleColor,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  advProductsAsync.when(
+                    data: (advProducts) {
+                      if (advProducts.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return SizedBox(
+                        height: 280,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          clipBehavior: Clip.none,
+                          itemCount: advProducts.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(width: 16),
+                          itemBuilder: (context, index) {
+                            return AdvProductCard(product: advProducts[index]);
                           },
-                        );
-                      },
+                        ),
+                      );
+                    },
+                    loading: () => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20.0),
+                        child:
+                            CircularProgressIndicator(color: AppColors.primary),
+                      ),
+                    ),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        child: Text('Error loading advertisement products: $e',
+                            style: TextStyle(color: textColor)),
+                      ),
                     ),
                   ),
-              ],
-            ),
-          );
-        },
-      );
-    }
 
-    String _getGreeting() {
-      final hour = DateTime.now().hour;
-      if (hour < 12) return 'Morning';
-      if (hour < 17) return 'Afternoon';
-      return 'Evening';
-    }
+                  const SizedBox(height: 28),
 
-    static Widget _buildHeaderStat(
-      String label,
-      String value,
-      IconData icon, {
-      Color iconColor = Colors.white,
-      double iconSize = 14,
-    }) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: iconColor, size: iconSize),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 9,
-                        color: Colors.white.withOpacity(0.5),
+                  // [D] RECENT ACTIVITY STRIP
+                  Text(
+                    'Recent Activity',
+                    style: Theme.of(
+                      context,
+                    )
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  ref.watch(customerActivityProvider).when(
+                        data: (events) {
+                          if (events.isEmpty) {
+                            return Center(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 24),
+                                child: Text(
+                                  'No recent activity found.',
+                                  style: TextStyle(
+                                      color: subtitleColor, fontSize: 13),
+                                ),
+                              ),
+                            );
+                          }
+                          final recent = events.take(4).toList();
+                          return Column(
+                            children: List.generate(recent.length, (index) {
+                              return _TimelineEventTile(
+                                event: recent[index],
+                                isFirst: index == 0,
+                                isLast: index == recent.length - 1,
+                              );
+                            }),
+                          );
+                        },
+                        loading: () => const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: CircularProgressIndicator(
+                                color: AppColors.accent),
+                          ),
+                        ),
+                        error: (e, _) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Text('Error loading activity: $e',
+                                style:
+                                    const TextStyle(color: AppColors.danger)),
+                          ),
+                        ),
                       ),
-                    ),
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+                  const SizedBox(height: 80), // extra padding for bottom bar
+                ])),
               ),
             ],
           ),
         ),
-      );
-    }
-
-  Widget _buildStatusStrip(
-    BuildContext context,
-    int activeCount,
-    int amcCount,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            context,
-            'Active Systems',
-            activeCount.toString(),
-            Icons.dns_outlined,
-            AppColors.primary,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            context,
-            'Active AMC Contracts',
-            amcCount.toString(),
-            Icons.verified_user_outlined,
-            AppColors.success,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
-
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      borderRadius: 16,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: subtitleColor,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }
+
+  void _showNotificationsSheet(BuildContext context, WidgetRef ref) {
+    ref.read(notificationsViewedProvider.notifier).state = true;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final invoices = ref.read(invoicesProvider).value ?? [];
+    final requests = ref.read(serviceRequestsProvider).value ?? [];
+    final advProducts = ref.read(advertisementProductsProvider).value ?? [];
+    final products = ref.read(productsProvider).value ?? [];
+
+    final List<Map<String, dynamic>> notifications = [];
+
+    // 1. Invoices
+    for (final inv in invoices.take(3)) {
+      notifications.add({
+        'icon': Icons.receipt_long,
+        'color': Colors.teal,
+        'title': 'Invoice Received',
+        'subtitle':
+            'Invoice #${inv.invoiceId.length > 8 ? inv.invoiceId.substring(0, 8) : inv.invoiceId} for ₹${inv.amount.toStringAsFixed(0)} (${inv.status.toUpperCase()})',
+        'route': '/invoices',
+      });
+    }
+
+    // 2. Complaints
+    for (final req in requests.take(3)) {
+      notifications.add({
+        'icon': Icons.assignment_outlined,
+        'color': const Color(0xFF6D28D9),
+        'title': 'Complaint Update',
+        'subtitle':
+            'Ticket ${req.problemCode}: ${req.status.toUpperCase()} (${req.productId})',
+        'route': '/bookings',
+      });
+    }
+
+    // 3. New Product Launches
+    for (final adv in advProducts.take(2)) {
+      notifications.add({
+        'icon': Icons.new_releases_outlined,
+        'color': Colors.deepOrange,
+        'title': 'New Product Introduced',
+        'subtitle':
+            '${adv.productName} is now available in catalog. Tap to explore.',
+        'route': '/product/${adv.productId}',
+      });
+    }
+
+    // 4. AMC Approved
+    for (final p in products.where((p) => p.amcStatus == 'active').take(2)) {
+      notifications.add({
+        'icon': Icons.verified_user,
+        'color': Colors.green,
+        'title': 'AMC Contract Active',
+        'subtitle':
+            'Annual maintenance is active for ${p.productName}. Free service visits included.',
+        'route': '/profile',
+      });
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.bgSecondary : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Alerts & Notifications',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (notifications.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Center(
+                      child:
+                          Text('No new alerts or notifications at this time.')),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: notifications.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final n = notifications[idx];
+                      return ListTile(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        tileColor:
+                            isDark ? Colors.white10 : Colors.grey.shade50,
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              (n['color'] as Color).withOpacity(0.15),
+                          child: Icon(n['icon'] as IconData,
+                              color: n['color'] as Color, size: 20),
+                        ),
+                        title: Text(n['title'] as String,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Text(n['subtitle'] as String,
+                            style: const TextStyle(fontSize: 12)),
+                        trailing: const Icon(Icons.chevron_right, size: 18),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          final route = n['route'] as String;
+                          context.push(route);
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
+  Widget _buildCustomerStatsGrid(
+    BuildContext context,
+    int activeSystemsCount,
+    int activeAmcCount,
+    int complaintsCount,
+    int invoicesCount,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth >= 800 ? 4 : 2;
+        final childAspectRatio = constraints.maxWidth >= 800 ? 1.6 : 1.34;
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: childAspectRatio,
+          children: [
+            _CustomerStatCard(
+              title: 'Active\nSystems',
+              value: '$activeSystemsCount',
+              icon: Icons.alt_route,
+              color: const Color(0xFF2563EB),
+              onTap: () {},
+            ),
+            _CustomerStatCard(
+              title: 'Active AMC\nPlans',
+              value: '$activeAmcCount',
+              icon: Icons.verified_user_outlined,
+              color: const Color(0xFF10B981),
+              onTap: () => context.push('/amc_avail'),
+            ),
+            _CustomerStatCard(
+              title: 'Service\nComplaints',
+              value: '$complaintsCount',
+              icon: Icons.support_agent_outlined,
+              color: const Color(0xFF8B5CF6),
+              onTap: () => context.push('/bookings'),
+            ),
+            _CustomerStatCard(
+              title: 'Invoices &\nPayments',
+              value: '$invoicesCount',
+              icon: Icons.receipt_long_outlined,
+              color: const Color(0xFF06B6D4),
+              onTap: () => context.push('/invoices'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildQuickActionCard(
     BuildContext context,
     String title,
@@ -816,41 +852,76 @@ class MainDashboard extends ConsumerWidget {
     VoidCallback onTap,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withOpacity(0.08)
+        : Colors.black.withOpacity(0.06);
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: GlassCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withOpacity(0.25)
+                  : Colors.black.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 26),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: isDark
+                          ? AppColors.textSecondary
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : AppColors.textPrimaryLight,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                color: isDark ? AppColors.textSecondary : AppColors.textSecondaryLight,
-              ),
+              child:
+                  Icon(Icons.arrow_forward_ios_rounded, color: color, size: 14),
             ),
           ],
         ),
@@ -862,15 +933,18 @@ class MainDashboard extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to sign out of your customer portal?'),
+        title:
+            const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+            'Are you sure you want to sign out of your customer portal?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444)),
             onPressed: () async {
               Navigator.pop(ctx);
               await ref.read(authControllerProvider.notifier).signOut();
@@ -925,7 +999,8 @@ class MainDashboard extends ConsumerWidget {
             OutlinedButton.icon(
               onPressed: () => ref.refresh(productsProvider),
               icon: const Icon(Icons.refresh, size: 14),
-              label: const Text('Check for Updates', style: TextStyle(fontSize: 12)),
+              label: const Text('Check for Updates',
+                  style: TextStyle(fontSize: 12)),
             ),
           ],
         ),
@@ -940,6 +1015,159 @@ class MainDashboard extends ConsumerWidget {
           HeroProductCard(product: products[i]),
         ],
       ],
+    );
+  }
+}
+
+class _CustomerFilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _CustomerFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onSelected,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF0F172A)
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF0F172A)
+                : (isDark ? const Color(0xFF334155) : Colors.grey.shade300),
+            width: 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected
+                ? Colors.white
+                : (isDark ? Colors.grey.shade300 : const Color(0xFF334155)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerStatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _CustomerStatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : const Color(0xFF1E293B),
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -959,7 +1187,8 @@ class _TimelineEventTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -970,7 +1199,11 @@ class _TimelineEventTile extends StatelessWidget {
             Container(
               width: 2,
               height: 12,
-              color: isFirst ? Colors.transparent : (isDark ? AppColors.borderColor : AppColors.borderColorLight),
+              color: isFirst
+                  ? Colors.transparent
+                  : (isDark
+                      ? AppColors.borderColor
+                      : AppColors.borderColorLight),
             ),
             Container(
               width: 32,
@@ -978,14 +1211,19 @@ class _TimelineEventTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: event.iconColor.withOpacity(0.12),
                 shape: BoxShape.circle,
-                border: Border.all(color: event.iconColor.withOpacity(0.3), width: 1.5),
+                border: Border.all(
+                    color: event.iconColor.withOpacity(0.3), width: 1.5),
               ),
               child: Icon(event.icon, color: event.iconColor, size: 16),
             ),
             Container(
               width: 2,
               height: 32,
-              color: isLast ? Colors.transparent : (isDark ? AppColors.borderColor : AppColors.borderColorLight),
+              color: isLast
+                  ? Colors.transparent
+                  : (isDark
+                      ? AppColors.borderColor
+                      : AppColors.borderColorLight),
             ),
           ],
         ),
@@ -1012,7 +1250,8 @@ class _TimelineEventTile extends StatelessWidget {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: event.iconColor.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(4),
@@ -1053,4 +1292,3 @@ class _TimelineEventTile extends StatelessWidget {
     );
   }
 }
-

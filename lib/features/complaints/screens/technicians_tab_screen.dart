@@ -123,25 +123,53 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                           setModalState(() => isSaving = true);
                           try {
                             final supabase = ref.read(supabaseClientProvider);
-                            await supabase.from('technicians').insert({
-                              'name': name,
-                              'email': email,
-                              'phone': phone,
-                              'status': 'Available',
-                              'rating': 4.9,
-                              'active_tasks_count': 0,
-                            });
+                            
+                            // 1. Create Supabase Auth user via RPC
+                            final Map<String, dynamic> authResult = Map<String, dynamic>.from(
+                              await supabase.rpc(
+                                'create_new_user',
+                                params: {
+                                  'email': email,
+                                  'password': pwd.isNotEmpty ? pwd : 'Password123!',
+                                  'full_name': name,
+                                  'new_role': 'technician',
+                                },
+                              ) as Map,
+                            );
 
+                            if (authResult['success'] != true) {
+                              throw Exception(authResult['error'] ?? 'Failed to create Auth user');
+                            }
+                            
+                            final newUserId = authResult['user_id'];
+                            if (newUserId != null && phone.isNotEmpty) {
+                              await supabase.from('profiles').update({'phone': phone}).eq('id', newUserId);
+                            }
+
+                            // 2. Insert into technicians table
                             try {
-                              await supabase.from('profiles').insert({
-                                'full_name': name,
+                              await supabase.from('technicians').insert({
+                                'id': newUserId,
+                                'name': name,
                                 'email': email,
                                 'phone': phone,
-                                'role': 'technician',
-                                'roles': ['technician'],
-                                'is_active': true,
+                                'status': 'Available',
+                                'rating': 4.9,
+                                'active_tasks_count': 0,
+                                if (pwd.isNotEmpty) 'password': pwd,
                               });
-                            } catch (_) {}
+                            } catch (e) {
+                              // Gracefully fallback if 'password' column does not exist
+                              await supabase.from('technicians').insert({
+                                'id': newUserId,
+                                'name': name,
+                                'email': email,
+                                'phone': phone,
+                                'status': 'Available',
+                                'rating': 4.9,
+                                'active_tasks_count': 0,
+                              });
+                            }
 
                             ref.invalidate(availableTechniciansProvider);
                             if (mounted) {
@@ -244,6 +272,26 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                           setModalState(() => isSaving = true);
                           try {
                             final supabase = ref.read(supabaseClientProvider);
+                            
+                            // 1. Update Auth user via RPC if editing an existing UUID
+                            if (tech.id.isNotEmpty) {
+                              try {
+                                await supabase.rpc(
+                                  'edit_existing_user',
+                                  params: {
+                                    'target_user_id': tech.id,
+                                    'new_email': email,
+                                    'new_password': pwd.isNotEmpty ? pwd : null,
+                                    'new_full_name': name,
+                                    'new_role': 'technician',
+                                  },
+                                );
+                              } catch (_) {
+                                // Ignore if they don't have an auth profile
+                              }
+                            }
+
+                            // 2. Update technicians table
                             final updates = <String, dynamic>{
                               'name': name,
                               'email': email,
@@ -251,10 +299,20 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                             };
                             if (pwd.isNotEmpty) updates['password'] = pwd;
 
-                            if (tech.id.isNotEmpty) {
-                              await supabase.from('technicians').update(updates).eq('id', tech.id);
-                            } else {
-                              await supabase.from('technicians').update(updates).eq('name', tech.name);
+                            try {
+                              if (tech.id.isNotEmpty) {
+                                await supabase.from('technicians').update(updates).eq('id', tech.id);
+                              } else {
+                                await supabase.from('technicians').update(updates).eq('name', tech.name);
+                              }
+                            } catch (e) {
+                              // Fallback if password column does not exist
+                              updates.remove('password');
+                              if (tech.id.isNotEmpty) {
+                                await supabase.from('technicians').update(updates).eq('id', tech.id);
+                              } else {
+                                await supabase.from('technicians').update(updates).eq('name', tech.name);
+                              }
                             }
 
                             ref.invalidate(availableTechniciansProvider);
@@ -466,7 +524,8 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    'Status: ${tech.status} • Rating: ${tech.rating}',
+                                    'Status: ${tech.status} • Rating: ${tech.rating}' +
+                                    (tech.plainPassword != null && tech.plainPassword!.isNotEmpty ? ' • Password: ${tech.plainPassword}' : ''),
                                     style: const TextStyle(color: Colors.grey, fontSize: 11),
                                   ),
                                 ],

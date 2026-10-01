@@ -53,7 +53,285 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
   bool _isLoading = false;
   String _loadingMessage = '';
 
-  Future<void> _generatePdfReport() async {
+  static const List<Map<String, dynamic>> availableSections = [
+    {
+      'key': 'prospects',
+      'title': 'Prospects',
+      'icon': Icons.person_search_outlined,
+      'desc': 'Prospects added or engaged today',
+    },
+    {
+      'key': 'leads',
+      'title': 'Leads',
+      'icon': Icons.insights_outlined,
+      'desc': 'New leads & pipeline opportunities',
+    },
+    {
+      'key': 'customers',
+      'title': 'Customers',
+      'icon': Icons.people_outline,
+      'desc': 'New customer accounts created',
+    },
+    {
+      'key': 'deals',
+      'title': 'Deals (Pipelines)',
+      'icon': Icons.alt_route_outlined,
+      'desc': 'Active pipeline deals and statuses',
+    },
+    {
+      'key': 'steps',
+      'title': 'Deal Steps Completed',
+      'icon': Icons.fact_check_outlined,
+      'desc': 'Audit logs of pipeline steps finalized',
+    },
+    {
+      'key': 'comms',
+      'title': 'Communications',
+      'icon': Icons.chat_bubble_outline,
+      'desc': 'Call logs, follow-up messages & notes',
+    },
+    {
+      'key': 'complaints',
+      'title': 'Complaints',
+      'icon': Icons.support_agent_outlined,
+      'desc': 'Service complaints handled or assigned',
+    },
+    {
+      'key': 'conversions',
+      'title': 'Conversions',
+      'icon': Icons.check_circle_outline,
+      'desc': 'Prospect-to-Lead & Lead-to-Customer wins',
+    },
+  ];
+
+  void _showPdfSectionPicker() {
+    final selectedKeys = availableSections.map((s) => s['key'] as String).toSet();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setPickerState) {
+            final isAllSelected = selectedKeys.length == availableSections.length;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.78,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Select Sections to Export",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "Choose what to include in today's PDF report",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.grey),
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${selectedKeys.length} of ${availableSections.length} selected',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selectedKeys.isEmpty ? AppColors.error : AppColors.primary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setPickerState(() {
+                            if (isAllSelected) {
+                              selectedKeys.clear();
+                            } else {
+                              selectedKeys.addAll(availableSections.map((s) => s['key'] as String));
+                            }
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          isAllSelected ? 'Deselect All' : 'Select All',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: availableSections.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final section = availableSections[index];
+                        final key = section['key'] as String;
+                        final isChecked = selectedKeys.contains(key);
+
+                        return InkWell(
+                          onTap: () {
+                            setPickerState(() {
+                              if (isChecked) {
+                                selectedKeys.remove(key);
+                              } else {
+                                selectedKeys.add(key);
+                              }
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isChecked ? AppColors.primary.withValues(alpha: 0.05) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isChecked ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade200,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: isChecked,
+                                  activeColor: AppColors.primary,
+                                  onChanged: (val) {
+                                    setPickerState(() {
+                                      if (val == true) {
+                                        selectedKeys.add(key);
+                                      } else {
+                                        selectedKeys.remove(key);
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  section['icon'] as IconData,
+                                  size: 20,
+                                  color: isChecked ? AppColors.primary : Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        section['title'] as String,
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 13,
+                                          fontWeight: isChecked ? FontWeight.bold : FontWeight.w500,
+                                          color: isChecked ? AppColors.textPrimary : Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        section['desc'] as String,
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                      label: Text(
+                        selectedKeys.isEmpty ? 'Select at least 1 section' : 'Generate PDF (${selectedKeys.length} selected)',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: selectedKeys.isEmpty
+                          ? null
+                          : () {
+                              Navigator.pop(sheetCtx);
+                              _generatePdfReport(selectedKeys);
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _generatePdfReport([Set<String>? selectedSections]) async {
     final profile = ref.read(currentProfileProvider);
     if (profile == null) return;
 
@@ -77,6 +355,7 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
         data: reportData,
         userName: profile.fullName,
         dateRangeType: 'today',
+        selectedSections: selectedSections,
       );
 
       final fileName =
@@ -248,9 +527,9 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
               iconColor: const Color(0xFFDC2626),
               iconBgColor: const Color(0xFFFEE2E2),
               title: "Download Today's Report (PDF)",
-              subtitle: 'Generate branded PDF with summary & activities',
+              subtitle: 'Select sections & generate branded PDF report',
               badge: 'PDF',
-              onTap: _generatePdfReport,
+              onTap: _showPdfSectionPicker,
             ),
             const SizedBox(height: 10),
 

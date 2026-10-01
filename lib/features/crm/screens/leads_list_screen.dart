@@ -26,7 +26,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     final leadsAsync = ref.watch(leadsProvider);
     final prospectsAsync = ref.watch(prospectsProvider);
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false);
+    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || (profile?.roles.contains(UserRole.admin) ?? false);
     final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
 
     return Scaffold(
@@ -42,7 +42,29 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
             }
           },
         ),
-        title: const Text('Leads & Deals'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Leads & Deals'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${leadsAsync.value?.length ?? 0}',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.download),
@@ -70,6 +92,40 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
       body: Column(
         children: [
           _buildFilters(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: AppColors.surface,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.leaderboard_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Leads: ${leadsAsync.value?.length ?? 0}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  'All Stages',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {

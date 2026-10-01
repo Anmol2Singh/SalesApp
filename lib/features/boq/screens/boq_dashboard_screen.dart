@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -18,7 +19,7 @@ final boqDashboardDataProvider = FutureProvider.autoDispose<Map<String, dynamic>
   // 1. Fetch deals needing BOQ (current_step == 'boq')
   List<Map<String, dynamic>> pendingBoqDeals = [];
   try {
-    final response = await supabase
+    final query = supabase
         .from('sales_pipelines')
         .select('''
           id,
@@ -28,8 +29,16 @@ final boqDashboardDataProvider = FutureProvider.autoDispose<Map<String, dynamic>
           updated_at,
           customers(customer_name, company_name, phone),
           products(name, category)
-        ''')
-        .eq('current_step', 'boq')
+        ''');
+        
+    List<String> targetSteps = [];
+    if (profile?.roles.contains(UserRole.boq) == true) targetSteps.add('boq');
+    if (profile?.roles.contains(UserRole.factory) == true) targetSteps.add('factory_order');
+    if (profile?.roles.contains(UserRole.purchase) == true) targetSteps.add('purchase_order');
+    if (targetSteps.isEmpty) targetSteps.add('boq');
+
+    final response = await query
+        .inFilter('current_step', targetSteps)
         .isFilter('deleted_at', null)
         .order('updated_at', ascending: false)
         .limit(10);
@@ -44,8 +53,8 @@ final boqDashboardDataProvider = FutureProvider.autoDispose<Map<String, dynamic>
     final activeRes = await supabase
         .from('sales_pipelines')
         .select('id')
-        .neq('status', 'won')
-        .neq('status', 'lost')
+        .neq('status', 'cancelled')
+        .neq('status', 'suspended')
         .isFilter('deleted_at', null);
     activeDealsCount = (activeRes as List).length;
   } catch (_) {}
@@ -99,8 +108,16 @@ class BoqDashboardScreen extends ConsumerWidget {
     final dataAsync = ref.watch(boqDashboardDataProvider);
 
     final rawName = profile?.fullName.trim() ?? '';
-    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'BOQ Specialist');
-    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'B';
+    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Operations Staff');
+    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'O';
+
+    // Build header role label
+    final headerRoleLabels = [
+      if (profile?.roles.contains(UserRole.boq) == true) 'BOQ',
+      if (profile?.roles.contains(UserRole.factory) == true) 'Factory',
+      if (profile?.roles.contains(UserRole.purchase) == true) 'Purchase',
+    ];
+    final headerRoleLabel = headerRoleLabels.isEmpty ? 'OPERATIONS' : headerRoleLabels.join(' · ').toUpperCase();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -250,7 +267,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'BOQ',
+                                  headerRoleLabel,
                                   style: TextStyle(
                                     fontFamily: 'Inter',
                                     fontSize: 11,
@@ -350,6 +367,17 @@ class BoqDashboardScreen extends ConsumerWidget {
                   final activeDealsCount = data['activeDealsCount'] as int;
                   final totalBoqItems = data['totalBoqItems'] as int;
                   final todayProspectsCount = data['todayProspectsCount'] as int;
+                  final roles = profile?.roles ?? [];
+                  final hasBoqRole = roles.contains(UserRole.boq);
+                  final hasFactoryRole = roles.contains(UserRole.factory);
+                  final hasPurchaseRole = roles.contains(UserRole.purchase);
+
+                  // Build pending action label
+                  final pendingLabel = [
+                    if (hasBoqRole) 'BOQ',
+                    if (hasFactoryRole) 'Factory Orders',
+                    if (hasPurchaseRole) 'Purchase',
+                  ].join('/');
 
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -373,7 +401,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                               onTap: () => context.go(AppRoutes.pipelines),
                             ),
                             _buildMetricCard(
-                              title: 'Pending\nBOQ',
+                              title: 'Pending\n${pendingLabel.isEmpty ? "Actions" : pendingLabel}',
                               count: pendingBoqDeals.length.toString(),
                               icon: Icons.pending_actions_outlined,
                               color: const Color(0xFFF59E0B),
@@ -410,41 +438,47 @@ class BoqDashboardScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
 
-                        // Row 1: Deals & Configure BOQ
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildQuickActionButton(
+                        Builder(
+                          builder: (context) {
+                            final buttons = <Widget>[
+                              _buildQuickActionButton(
                                 context,
                                 title: 'Deals & Pipelines',
                                 subtitle: pendingBoqDeals.isNotEmpty
-                                    ? '${pendingBoqDeals.length} Needs BOQ'
+                                    ? '${pendingBoqDeals.length} Action Required'
                                     : 'View customer deals',
                                 icon: Icons.work_outline,
                                 gradientColors: const [Color(0xFF4F46E5), Color(0xFF6366F1)],
                                 onTap: () => context.go(AppRoutes.pipelines),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildQuickActionButton(
-                                context,
-                                title: 'Configure BOQ',
-                                subtitle: '$totalBoqItems BOM items',
-                                icon: Icons.format_list_bulleted,
-                                gradientColors: const [Color(0xFFD97706), Color(0xFFF59E0B)],
-                                onTap: () => context.push('/boq/manage-items'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Row 2: View Products & Daily Report
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildQuickActionButton(
+                              if (hasBoqRole)
+                                _buildQuickActionButton(
+                                  context,
+                                  title: 'Configure BOQ',
+                                  subtitle: '$totalBoqItems BOM items',
+                                  icon: Icons.format_list_bulleted,
+                                  gradientColors: const [Color(0xFFD97706), Color(0xFFF59E0B)],
+                                  onTap: () => context.push('/boq/manage-items'),
+                                ),
+                              if (hasFactoryRole)
+                                _buildQuickActionButton(
+                                  context,
+                                  title: 'Factory Queue',
+                                  subtitle: 'View factory orders',
+                                  icon: Icons.precision_manufacturing_outlined,
+                                  gradientColors: const [Color(0xFFEA580C), Color(0xFFF97316)],
+                                  onTap: () => context.push(AppRoutes.factoryQueue),
+                                ),
+                              if (hasPurchaseRole)
+                                _buildQuickActionButton(
+                                  context,
+                                  title: 'Material Queue',
+                                  subtitle: 'Purchase & requisitions',
+                                  icon: Icons.shopping_cart_outlined,
+                                  gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+                                  onTap: () => context.push(AppRoutes.purchaseQueue),
+                                ),
+                              _buildQuickActionButton(
                                 context,
                                 title: 'View Products',
                                 subtitle: 'Catalog & specs',
@@ -452,38 +486,23 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 gradientColors: const [Color(0xFF0D9488), Color(0xFF14B8A6)],
                                 onTap: () => context.push('/products'),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildQuickActionButton(
+                              _buildQuickActionButton(
                                 context,
                                 title: 'Daily Report',
                                 subtitle: 'PDF / Excel summary',
                                 icon: Icons.summarize_outlined,
-                                gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+                                gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
                                 onTap: () => DailyReportModal.show(context, ref),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Row 3: Customer Prospects & Daily Tasks
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildQuickActionButton(
+                              _buildQuickActionButton(
                                 context,
                                 title: 'Customer Prospects',
                                 subtitle: 'Track prospects',
                                 icon: Icons.person_search_outlined,
-                                gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
+                                gradientColors: const [Color(0xFF6366F1), Color(0xFF818CF8)],
                                 onTap: () => context.go('/crm/prospects'),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildQuickActionButton(
+                              _buildQuickActionButton(
                                 context,
                                 title: 'Daily Tasks',
                                 subtitle: 'Tasks completed',
@@ -491,18 +510,36 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
                                 onTap: () => context.push(AppRoutes.dailyTasks),
                               ),
-                            ),
-                          ],
+                            ];
+
+                            return Column(
+                              children: [
+                                for (int i = 0; i < buttons.length; i += 2) ...[
+                                  if (i > 0) const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(child: buttons[i]),
+                                      const SizedBox(width: 12),
+                                      if (i + 1 < buttons.length)
+                                        Expanded(child: buttons[i + 1])
+                                      else
+                                        const Expanded(child: SizedBox.shrink()),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
                         ),
 
                         const SizedBox(height: 24),
 
-                        // Section: Deals Pending BOQ
+                        // Section: Operations Deals
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'Deals Requiring BOQ',
+                              'Pending Deals',
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 17,
@@ -532,7 +569,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 Icon(Icons.check_circle_outline, size: 48, color: Colors.grey.shade400),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'No deals currently waiting for BOQ',
+                                  'No deals currently waiting for operations',
                                   style: TextStyle(
                                     fontFamily: 'Inter',
                                     fontSize: 15,
@@ -542,7 +579,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'All pipeline deals have their BOQ processed. You can view all deals or configure items.',
+                                  'All pipeline deals have their operations processed. You can view all deals or configure items.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                                 ),
@@ -658,7 +695,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
                                                   child: const Text(
-                                                    'BOQ Pending',
+                                                    'Action Pending',
                                                     style: TextStyle(
                                                       fontFamily: 'Inter',
                                                       fontSize: 10,

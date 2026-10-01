@@ -40,6 +40,7 @@ class Profile {
     if (roles.contains(UserRole.factory)) return UserRole.factory;
     if (roles.contains(UserRole.boq)) return UserRole.boq;
     if (roles.contains(UserRole.technician)) return UserRole.technician;
+    if (roles.contains(UserRole.crmStaff)) return UserRole.crmStaff;
     return roles.first;
   }
 
@@ -110,4 +111,27 @@ class Profile {
       updatedAt: updatedAt,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! Profile) return false;
+    if (id != other.id ||
+        fullName != other.fullName ||
+        email != other.email ||
+        phone != other.phone ||
+        isActive != other.isActive ||
+        themePreference != other.themePreference ||
+        roles.length != other.roles.length) {
+      return false;
+    }
+    for (int i = 0; i < roles.length; i++) {
+      if (roles[i] != other.roles[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hash(id, fullName, email, phone, isActive, themePreference);
 }
+

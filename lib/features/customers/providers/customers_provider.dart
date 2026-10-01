@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/services/notification_backend_helper.dart';
 import '../../auth/providers/auth_provider.dart';
 
 // Paginated customer list
@@ -142,13 +143,14 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
       
       _page++;
 
+      if (!mounted) return;
       if (refresh || _page == 1) {
         state = AsyncValue.data(customers);
       } else {
         state = AsyncValue.data([...state.value ?? [], ...customers]);
       }
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (mounted) state = AsyncValue.error(e, st);
     } finally {
       _isLoading = false;
     }
@@ -219,13 +221,19 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     }
 
     try {
-      await _supabase.from('notifications').insert({
-        'user_id': salesUserId,
-        'title': 'Customer Assigned 🤝',
-        'body': 'You have been assigned as the account representative (Deals mode: $transferDealsMode).',
-        'type': 'task_assigned',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      String assignerName = 'Admin/Sales Head';
+      if (_userId != null) {
+        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId!).maybeSingle();
+        if (p != null && p['full_name'] != null) assignerName = p['full_name'] as String;
+      }
+
+      NotificationBackendHelper.notifyUser(
+        supabase: _supabase,
+        userId: salesUserId,
+        title: 'New Customer Assigned',
+        body: 'New prospect/lead/customer is assigned to you by $assignerName.',
+        type: 'assigned',
+      );
     } catch (_) {}
 
     await refresh();
@@ -441,6 +449,10 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     try { await _supabase.from('amc_contracts').delete().eq('customer_id', customerId); } catch (_) {}
     try { await _supabase.from('warranty_cards').delete().eq('customer_id', customerId); } catch (_) {}
     try { await _supabase.from('product_inquiries').delete().eq('customer_id', customerId); } catch (_) {}
+    try { await _supabase.from('crm_leads').delete().eq('converted_to_customer_id', customerId); } catch (_) {}
+    for (final lid in leadIds) {
+      try { await _supabase.from('crm_leads').delete().eq('id', lid); } catch (_) {}
+    }
 
     // 9. Synchronize delete with customer_profiles
     try { await _supabase.from('customer_profiles').delete().eq('id', customerId); } catch (_) {}

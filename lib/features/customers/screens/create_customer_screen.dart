@@ -155,44 +155,106 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
       final phone = _phoneController.text.trim();
       final email = _emailController.text.trim();
 
-      // Block duplicate phone or email
-      if (phone.isNotEmpty || email.isNotEmpty) {
-        String filterStr = '';
-        if (phone.isNotEmpty && email.isNotEmpty) {
-          filterStr = 'phone.eq.$phone,email.eq.$email';
-        } else if (phone.isNotEmpty) {
-          filterStr = 'phone.eq.$phone';
-        } else {
-          filterStr = 'email.eq.$email';
-        }
-        final duplicateCheck = await supabase
-            .from('customers')
-            .select('id, customer_name, company_name')
-            .or(filterStr)
-            .isFilter('deleted_at', null)
-            .maybeSingle();
+      // Block duplicate mobile number or email
+      if (phone.isNotEmpty) {
+        final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+        final last10 = cleanPhone.length >= 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
 
-        if (duplicateCheck != null) {
+        List<dynamic> existingCustomers = [];
+        try {
+          if (last10.length >= 10) {
+            existingCustomers = await supabase
+                .from('customers')
+                .select('id, customer_name, company_name, phone, address')
+                .or('phone.eq.$phone,phone.ilike.%$last10%')
+                .isFilter('deleted_at', null)
+                .limit(1);
+          } else {
+            existingCustomers = await supabase
+                .from('customers')
+                .select('id, customer_name, company_name, phone, address')
+                .eq('phone', phone)
+                .isFilter('deleted_at', null)
+                .limit(1);
+          }
+        } catch (_) {}
+
+        if (existingCustomers.isNotEmpty) {
           setState(() => _isLoading = false);
+          final existing = existingCustomers.first as Map<String, dynamic>;
+          final existingName = existing['company_name'] ?? existing['customer_name'] ?? 'Existing Customer';
+          final existingPh = existing['phone'] ?? phone;
+
           if (mounted) {
             showDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Duplicate Blocked'),
-                content: Text(
-                  'A customer with this phone number or email already exists: "${duplicateCheck['customer_name'] ?? duplicateCheck['company_name']}". Duplicate entries are blocked.',
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Customer Already Exists'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'A customer with this mobile number already exists in the system:',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Name: $existingName',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Mobile: $existingPh',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                          if (existing['address'] != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Address: ${existing['address']}',
+                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Cannot create duplicate customer with the same mobile number.',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red, fontSize: 12),
+                    ),
+                  ],
                 ),
                 actions: [
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      context.go(AppRoutes.customerDetail.replaceAll(':id', duplicateCheck['id'] as String));
-                    },
-                    child: const Text('View Existing'),
-                  ),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.go(AppRoutes.customerDetail.replaceAll(':id', existing['id'] as String));
+                    },
+                    child: const Text('View Customer', style: TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
@@ -200,6 +262,46 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
           }
           return;
         }
+      }
+
+      if (email.isNotEmpty) {
+        try {
+          final emailDup = await supabase
+              .from('customers')
+              .select('id, customer_name, company_name, email')
+              .eq('email', email)
+              .isFilter('deleted_at', null)
+              .limit(1);
+
+          if ((emailDup as List).isNotEmpty) {
+            setState(() => _isLoading = false);
+            final existing = emailDup.first as Map<String, dynamic>;
+            final existingName = existing['company_name'] ?? existing['customer_name'] ?? 'Existing Customer';
+            if (mounted) {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Email Already Exists'),
+                  content: Text('A customer with this email address already exists: "$existingName".'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        context.go(AppRoutes.customerDetail.replaceAll(':id', existing['id'] as String));
+                      },
+                      child: const Text('View Customer'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return;
+          }
+        } catch (_) {}
       }
 
       final customerName = _companyNameController.text.trim();

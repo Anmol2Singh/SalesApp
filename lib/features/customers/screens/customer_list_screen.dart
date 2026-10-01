@@ -11,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/customers_provider.dart';
 import '../../../core/models/customer.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/services/excel_service.dart';
 
 class CustomerListScreen extends ConsumerStatefulWidget {
@@ -83,7 +84,29 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          title: const Text('Customers'),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Customers'),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${customersAsync.valueOrNull?.length ?? 0}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
           actions: [
             const SyncStatusIndicator(),
           Consumer(
@@ -281,6 +304,47 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
               );
             },
           ),
+          // Total Customers Count Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: AppColors.surface,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Customers: ${customersAsync.valueOrNull?.length ?? 0}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final notifier = ref.watch(customersNotifierProvider.notifier);
+                    final isArchived = notifier.filterBy == 'archived';
+                    return Text(
+                      isArchived ? 'Archived View' : 'All Accounts',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
           // Archived Customers Banner
           Consumer(
             builder: (context, ref, _) {
@@ -941,6 +1005,110 @@ class _CustomerTile extends ConsumerWidget {
                 },
               ),
               const SizedBox(width: 8),
+            ],
+            if (ref.watch(currentProfileProvider)?.roles.contains(UserRole.admin) == true ||
+                ref.watch(currentProfileProvider)?.roles.contains(UserRole.salesHead) == true ||
+                (ref.watch(currentProfileProvider)?.primaryRole.canDeleteCustomer ?? false)) ...[
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Customer Actions',
+                onSelected: (val) async {
+                  if (val == 'archive') {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Archive Customer'),
+                        content: Text('Archive "${customer.companyName}"? This hides the customer from active lists.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Archive', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await ref.read(customersNotifierProvider.notifier).deactivateCustomer(customer.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('✓ "${customer.companyName}" archived.'),
+                            backgroundColor: Colors.amber.shade800,
+                          ),
+                        );
+                      }
+                    }
+                  } else if (val == 'permanent_delete') {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Row(
+                          children: [
+                            Icon(Icons.delete_forever, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete All Records'),
+                          ],
+                        ),
+                        content: Text(
+                          'Permanently delete "${customer.companyName}" and all associated records?\n\n'
+                          'This will erase:\n'
+                          '• All sales pipelines, deals, and BOQs\n'
+                          '• All quotations, orders, and invoices\n'
+                          '• All warranty cards and AMC contracts\n'
+                          '• All service complaints and visit logs\n\n'
+                          'Warning: This action cannot be undone.',
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Delete All Records', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await ref.read(customersNotifierProvider.notifier).permanentlyDeleteCustomer(customer.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('✓ "${customer.companyName}" and all associated records deleted.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'archive',
+                    child: Row(
+                      children: [
+                        Icon(Icons.archive_outlined, size: 18, color: Colors.amber),
+                        SizedBox(width: 8),
+                        Text('Archive Customer'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'permanent_delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_forever, size: 18, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Delete All Records', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
             ],
             const Icon(Icons.chevron_right, color: AppColors.textDisabled),
           ],

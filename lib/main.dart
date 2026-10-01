@@ -6,9 +6,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'app.dart';
+import 'core/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
 
   // Catch unhandled asynchronous Flutter framework & platform errors gracefully
   // (e.g., Supabase Auth background token refresh when offline or host lookup fails)

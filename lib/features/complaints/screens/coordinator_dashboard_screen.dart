@@ -392,6 +392,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
   }
 
   Widget _buildOperationsTab(List<Complaint> complaints, bool isLoading, {bool isAdmin = false}) {
+    final profile = ref.watch(currentProfileProvider);
     final pendingCount = complaints.where((c) => c.status == 'pending').length;
     final inProgressCount = complaints.where((c) => c.status == 'in_progress' || c.status == 'assigned').length;
     final closedCount = complaints.where((c) => c.status == 'closed' || c.status == 'resolved').length;
@@ -494,6 +495,18 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                     onTap: () => DailyReportModal.show(context, ref),
                   ),
                 ),
+                if ((profile?.roles.length ?? 0) > 1) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildActionBtn(
+                      title: 'Technicians',
+                      subtitle: 'Add & Manage',
+                      icon: Icons.engineering_outlined,
+                      color: const Color(0xFF0D9488),
+                      onTap: () => context.push('/complaints/technicians'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],

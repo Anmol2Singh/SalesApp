@@ -22,10 +22,34 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
     final leadsAsync = ref.watch(leadsProvider);
     final prospectsAsync = ref.watch(prospectsProvider);
 
+    final wonLeadsCount = leadsAsync.value?.where((l) => l.convertedToCustomerId != null || l.status == 'Won').length ?? 0;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Converted Customers'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Converted Customers'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$wonLeadsCount',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.download),
@@ -58,6 +82,40 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
       body: Column(
         children: [
           _buildFilters(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: AppColors.surface,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.verified_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Converted Customers: $wonLeadsCount',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Won Leads',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {

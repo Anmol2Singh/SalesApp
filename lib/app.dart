@@ -11,6 +11,7 @@ import 'core/providers/theme_provider.dart';
 import 'core/providers/connectivity_provider.dart';
 import 'core/providers/realtime_provider.dart';
 import 'core/services/offline_queue_service.dart';
+import 'core/services/adaptive_notification_manager.dart';
 
 class IzyheatApp extends ConsumerWidget {
   const IzyheatApp({super.key});
@@ -34,7 +35,9 @@ class IzyheatApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'IZYHEAT',
+      scaffoldMessengerKey: notificationMessengerKey,
       debugShowCheckedModeBanner: false,
+
       theme: isCustomer
           ? cust_theme.AppTheme.lightTheme
           : AppTheme.light.copyWith(

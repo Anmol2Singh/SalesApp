@@ -14,6 +14,7 @@ import 'package:salesapp/features/customer_app/data/providers/app_providers.dart
 import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/gradient_button.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/status_chip.dart';
+import 'package:salesapp/core/services/payment_service.dart';
 import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart';
 
 class InvoiceListScreen extends ConsumerStatefulWidget {
@@ -47,7 +48,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
               Navigator.pop(context);
               ToastService.show(
                 context,
-                'Payment Successful via Razorpay!',
+                'Payment Successful!',
                 type: ToastType.success,
               );
             }
@@ -652,11 +653,27 @@ class _PaymentSheet extends StatefulWidget {
 class _PaymentSheetState extends State<_PaymentSheet> {
   bool _isProcessing = false;
 
-  void _processPayment() {
+  Future<void> _processPayment() async {
     setState(() => _isProcessing = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      widget.onSuccess();
-    });
+    await PaymentService().startPayment(
+      context,
+      amountInRupees: widget.invoice.amount,
+      description: 'Invoice #${widget.invoice.invoiceId} - ${widget.invoice.title}',
+      onSuccess: (paymentId, orderId) {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          Navigator.pop(context);
+          widget.onSuccess();
+          ToastService.show(context, 'Payment Successful! Ref: $paymentId', type: ToastType.success);
+        }
+      },
+      onFailure: (code, message) {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          ToastService.show(context, 'Payment Failed/Cancelled: $message', type: ToastType.error);
+        }
+      },
+    );
   }
 
   @override
@@ -694,7 +711,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Payment integrated via Razorpay Secure Gateway.',
+            'Secure encrypted payment gateway.',
             style: TextStyle(
               color: isDark ? AppColors.textSecondary : AppColors.textSecondaryLight,
             ),
@@ -725,7 +742,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
           GradientButton(
             label: _isProcessing
                 ? 'Connecting Gateway...'
-                : 'Pay with Razorpay',
+                : 'Proceed to Pay',
             isLoading: _isProcessing,
             onTap: _processPayment,
             icon: const Icon(Icons.payment, color: Colors.white),

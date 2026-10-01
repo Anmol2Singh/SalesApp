@@ -73,6 +73,7 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
           if (pipelineId != null) {
             ref.invalidate(pipelineDetailProvider(pipelineId.toString()));
             ref.invalidate(workflowStepsProvider(pipelineId.toString()));
+            ref.invalidate(pipelineAuditLogProvider(pipelineId.toString()));
           }
         },
       )
@@ -140,6 +141,12 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
           ref.invalidate(pendingQuotationsProvider);
           ref.invalidate(cust_providers.invoicesProvider);
           ref.invalidate(dashboardStatsProvider);
+          final pipeId = payload.newRecord['pipeline_id'] ?? payload.oldRecord['pipeline_id'];
+          if (pipeId != null) {
+            ref.invalidate(pipelineDetailProvider(pipeId.toString()));
+            ref.invalidate(workflowStepsProvider(pipeId.toString()));
+            ref.read(pipelinesNotifierProvider.notifier).refresh();
+          }
         },
       )
       .onPostgresChanges(
@@ -151,6 +158,26 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
           ref.invalidate(cust_providers.invoicesProvider);
           ref.invalidate(customerPurchasedProductsProvider);
           ref.invalidate(dashboardStatsProvider);
+          final pipeId = payload.newRecord['pipeline_id'] ?? payload.oldRecord['pipeline_id'];
+          if (pipeId != null) {
+            ref.invalidate(pipelineDetailProvider(pipeId.toString()));
+            ref.invalidate(workflowStepsProvider(pipeId.toString()));
+            ref.read(pipelinesNotifierProvider.notifier).refresh();
+          }
+        },
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'boqs',
+        callback: (payload) {
+          debugPrint('⚡ Realtime: boqs event: ${payload.eventType}');
+          final pipeId = payload.newRecord['pipeline_id'] ?? payload.oldRecord['pipeline_id'];
+          if (pipeId != null) {
+            ref.invalidate(pipelineDetailProvider(pipeId.toString()));
+            ref.invalidate(workflowStepsProvider(pipeId.toString()));
+            ref.read(pipelinesNotifierProvider.notifier).refresh();
+          }
         },
       )
       .subscribe();
@@ -281,6 +308,12 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
         callback: (payload) {
           debugPrint('⚡ Realtime: factory_orders event: ${payload.eventType}');
           ref.invalidate(factoryQueueProvider);
+          final pipeId = payload.newRecord['pipeline_id'] ?? payload.oldRecord['pipeline_id'];
+          if (pipeId != null) {
+            ref.invalidate(pipelineDetailProvider(pipeId.toString()));
+            ref.invalidate(workflowStepsProvider(pipeId.toString()));
+            ref.read(pipelinesNotifierProvider.notifier).refresh();
+          }
         },
       )
       .onPostgresChanges(
@@ -290,6 +323,12 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
         callback: (payload) {
           debugPrint('⚡ Realtime: purchase_orders event: ${payload.eventType}');
           ref.invalidate(purchaseQueueProvider);
+          final pipeId = payload.newRecord['pipeline_id'] ?? payload.oldRecord['pipeline_id'];
+          if (pipeId != null) {
+            ref.invalidate(pipelineDetailProvider(pipeId.toString()));
+            ref.invalidate(workflowStepsProvider(pipeId.toString()));
+            ref.read(pipelinesNotifierProvider.notifier).refresh();
+          }
         },
       )
       .onPostgresChanges(
@@ -318,6 +357,15 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
         callback: (payload) {
           debugPrint('⚡ Realtime: inventory_items event: ${payload.eventType}');
           ref.invalidate(inventoryProvider);
+        },
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'supplementary_items',
+        callback: (payload) {
+          debugPrint('⚡ Realtime: supplementary_items event: ${payload.eventType}');
+          ref.invalidate(supplementaryItemsProvider);
         },
       )
       .onPostgresChanges(
