@@ -30,7 +30,8 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+build/*
+!build/web/
 /coverage/
 
 # Symbolication related
@@ -65,3 +66,9 @@ analyze_output.txt
 
 #node_modules
 node_modules
+
+#build web
+build/web/**/*.symbols
+
+build/web/.last_build_id
+build/web/assets/NOTICES
