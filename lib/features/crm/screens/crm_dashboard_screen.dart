@@ -549,57 +549,92 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
 
     final convRate = leads.isNotEmpty ? ((wonLeads.length / leads.length) * 100).toStringAsFixed(1) : '0.0';
 
+    final card1 = _buildKpiCard(
+      title: 'Active Prospects',
+      value: '${prospects.where((p) => p.convertedToLeadId == null || !leads.any((l) => l.id == p.convertedToLeadId)).length}',
+      badge: '${prospects.where((p) => p.convertedToLeadId != null && leads.any((l) => l.id == p.convertedToLeadId)).length} converted',
+      isBadgePositive: true,
+      icon: Icons.people_alt_outlined,
+      color: const Color(0xFF3B82F6),
+      onTap: () => context.go('/crm/prospects'),
+    );
+
+    final card2 = _buildKpiCard(
+      title: 'Active Leads',
+      value: '${activeLeads.length}',
+      badge: currencyFormat.format(pipelineRevenue),
+      isBadgePositive: true,
+      icon: Icons.trending_up,
+      color: const Color(0xFFF59E0B),
+      onTap: () => context.go('/crm/leads'),
+    );
+
+    final card3 = _buildKpiCard(
+      title: 'Won Deals',
+      value: '${wonLeads.length}',
+      badge: '$convRate% win rate',
+      isBadgePositive: true,
+      icon: Icons.check_circle_outline,
+      color: const Color(0xFF10B981),
+      onTap: () => context.go('/crm/customers'),
+    );
+
+    final card4 = _buildKpiCard(
+      title: 'Won Revenue',
+      value: currencyFormat.format(wonRevenue),
+      badge: '${wonLeads.length} deals closed',
+      isBadgePositive: true,
+      icon: Icons.currency_rupee,
+      color: const Color(0xFF8B5CF6),
+      onTap: () => context.go('/crm/customers'),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 700;
-        final count = isCrmStaff ? 2 : (isWide ? 4 : 2);
 
-        return GridView.count(
-          crossAxisCount: count,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: (isCrmStaff && isWide) ? 2.2 : (isWide ? 1.65 : 1.35),
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _buildKpiCard(
-              title: 'Active Prospects',
-              value: '${prospects.where((p) => p.convertedToLeadId == null || !leads.any((l) => l.id == p.convertedToLeadId)).length}',
-              badge: '${prospects.where((p) => p.convertedToLeadId != null && leads.any((l) => l.id == p.convertedToLeadId)).length} converted',
-              isBadgePositive: true,
-              icon: Icons.people_alt_outlined,
-              color: const Color(0xFF3B82F6),
-              onTap: () => context.go('/crm/prospects'),
-            ),
-            _buildKpiCard(
-              title: 'Active Leads',
-              value: '${activeLeads.length}',
-              badge: currencyFormat.format(pipelineRevenue),
-              isBadgePositive: true,
-              icon: Icons.trending_up,
-              color: const Color(0xFFF59E0B),
-              onTap: () => context.go('/crm/leads'),
-            ),
-            if (!isCrmStaff) ...[
-              _buildKpiCard(
-                title: 'Won Deals',
-                value: '${wonLeads.length}',
-                badge: '$convRate% win rate',
-                isBadgePositive: true,
-                icon: Icons.check_circle_outline,
-                color: const Color(0xFF10B981),
-                onTap: () => context.go('/crm/customers'),
-              ),
-              _buildKpiCard(
-                title: 'Won Revenue',
-                value: currencyFormat.format(wonRevenue),
-                badge: '${wonLeads.length} deals closed',
-                isBadgePositive: true,
-                icon: Icons.currency_rupee,
-                color: const Color(0xFF8B5CF6),
-                onTap: () => context.go('/crm/customers'),
-              ),
+        if (isCrmStaff) {
+          return Row(
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: 10),
+              Expanded(child: card2),
             ],
+          );
+        }
+
+        if (isWide) {
+          return Row(
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: 10),
+              Expanded(child: card2),
+              const SizedBox(width: 10),
+              Expanded(child: card3),
+              const SizedBox(width: 10),
+              Expanded(child: card4),
+            ],
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(child: card1),
+                const SizedBox(width: 10),
+                Expanded(child: card2),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: card3),
+                const SizedBox(width: 10),
+                Expanded(child: card4),
+              ],
+            ),
           ],
         );
       },
@@ -619,7 +654,7 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
@@ -627,30 +662,30 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
-              blurRadius: 8,
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: Icon(icon, color: color, size: 18),
                 ),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(6),
@@ -670,31 +705,27 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                 ),
               ],
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),

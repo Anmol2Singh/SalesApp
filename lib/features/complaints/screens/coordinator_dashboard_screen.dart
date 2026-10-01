@@ -391,37 +391,62 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 800;
-              return GridView.count(
-                crossAxisCount: isWide ? 4 : 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: isWide ? 1.75 : 1.52,
+              final card1 = _buildKpiCard(
+                title: 'Total\nTickets',
+                value: '$totalCount',
+                badgeColor: const Color(0xFF2563EB),
+                icon: Icons.confirmation_number_outlined,
+              );
+              final card2 = _buildKpiCard(
+                title: 'Pending\nDispatch',
+                value: '$pendingCount',
+                badgeColor: const Color(0xFFEF4444),
+                icon: Icons.hourglass_empty_rounded,
+              );
+              final card3 = _buildKpiCard(
+                title: 'Active in\nField',
+                value: '$inProgressCount',
+                badgeColor: const Color(0xFF06B6D4),
+                icon: Icons.local_shipping_outlined,
+              );
+              final card4 = _buildKpiCard(
+                title: 'Closed\nTickets',
+                value: '$closedCount',
+                badgeColor: const Color(0xFF10B981),
+                icon: Icons.check_circle_outline,
+              );
+
+              if (isWide) {
+                return Row(
+                  children: [
+                    Expanded(child: card1),
+                    const SizedBox(width: 10),
+                    Expanded(child: card2),
+                    const SizedBox(width: 10),
+                    Expanded(child: card3),
+                    const SizedBox(width: 10),
+                    Expanded(child: card4),
+                  ],
+                );
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildKpiCard(
-                    title: 'Total\nTickets',
-                    value: '$totalCount',
-                    badgeColor: const Color(0xFF2563EB),
-                    icon: Icons.confirmation_number_outlined,
+                  Row(
+                    children: [
+                      Expanded(child: card1),
+                      const SizedBox(width: 10),
+                      Expanded(child: card2),
+                    ],
                   ),
-                  _buildKpiCard(
-                    title: 'Pending\nDispatch',
-                    value: '$pendingCount',
-                    badgeColor: const Color(0xFFEF4444),
-                    icon: Icons.hourglass_empty_rounded,
-                  ),
-                  _buildKpiCard(
-                    title: 'Active in\nField',
-                    value: '$inProgressCount',
-                    badgeColor: const Color(0xFF06B6D4),
-                    icon: Icons.local_shipping_outlined,
-                  ),
-                  _buildKpiCard(
-                    title: 'Closed\nTickets',
-                    value: '$closedCount',
-                    badgeColor: const Color(0xFF10B981),
-                    icon: Icons.check_circle_outline,
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: card3),
+                      const SizedBox(width: 10),
+                      Expanded(child: card4),
+                    ],
                   ),
                 ],
               );
@@ -574,7 +599,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -604,7 +629,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
