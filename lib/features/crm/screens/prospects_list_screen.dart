@@ -327,31 +327,6 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                     ],
                                   ),
                                 ),
-                              ] else if (!isConverted) ...[
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.amber.shade300),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.person_add_alt, size: 11, color: Color(0xFFB45309)),
-                                      SizedBox(width: 3),
-                                      Text(
-                                        'Needs Assignment to Sales',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFB45309),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ],
                               if (isAdmin && prospect.reassignmentRequested) ...[
                                 const SizedBox(height: 4),

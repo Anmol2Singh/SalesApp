@@ -105,78 +105,145 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                   ),
                 ),
               ),
+              const SizedBox(width: 6),
+              const SyncStatusIndicator(),
             ],
           ),
           actions: [
-            const SyncStatusIndicator(),
-          Consumer(
-            builder: (context, ref, _) {
-              final notifier = ref.watch(customersNotifierProvider.notifier);
-              final isArchived = notifier.filterBy == 'archived';
-              return IconButton(
-                icon: Icon(isArchived ? Icons.people_outline : Icons.archive_outlined),
-                tooltip: isArchived ? 'View Active Customers' : 'View Archived Customers',
-                color: isArchived ? Colors.amber.shade300 : null,
-                onPressed: () {
-                  notifier.setFilterAndSort(
-                    filter: isArchived ? '' : 'archived',
-                    sort: notifier.sortBy,
-                  );
-                },
-              );
-            },
-          ),
-          Consumer(
-            builder: (context, ref, _) {
-              final notifier = ref.watch(customersNotifierProvider.notifier);
-              final hasActive = notifier.filterBy.isNotEmpty || notifier.sortBy != 'recent';
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.filter_list),
-                    tooltip: 'Filter & Sort',
-                    onPressed: _showFilterSheet,
-                  ),
-                  if (hasActive)
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.accent,
-                          shape: BoxShape.circle,
+            // Filter & Sort (outside)
+            Consumer(
+              builder: (context, ref, _) {
+                final notifier = ref.watch(customersNotifierProvider.notifier);
+                final hasActive = notifier.filterBy.isNotEmpty || notifier.sortBy != 'recent';
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.filter_list),
+                      tooltip: 'Filter & Sort',
+                      onPressed: _showFilterSheet,
+                    ),
+                    if (hasActive)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppColors.accent,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
-                    ),
-                ],
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.download_outlined),
-            tooltip: 'Export to Excel',
-            onPressed: () {
-              final customers = customersAsync.valueOrNull ?? [];
-              if (customers.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('No customers to export')),
+                  ],
                 );
-                return;
-              }
-              ExcelService.exportCustomers(context, customers);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-            onPressed: () =>
-                ref.read(customersNotifierProvider.notifier).refresh(),
-          ),
-        ],
-      ),
+              },
+            ),
+
+            // Refresh (outside)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+              onPressed: () =>
+                  ref.read(customersNotifierProvider.notifier).refresh(),
+            ),
+
+            // 3-dots Menu containing all other actions
+            Consumer(
+              builder: (context, ref, _) {
+                final notifier = ref.watch(customersNotifierProvider.notifier);
+                final isArchived = notifier.filterBy == 'archived';
+                final profile = ref.watch(currentProfileProvider);
+                final isAdmin = profile?.primaryRole == UserRole.admin ||
+                    profile?.primaryRole == UserRole.manager ||
+                    (profile?.roles.contains(UserRole.admin) ?? false) ||
+                    (profile?.roles.contains(UserRole.manager) ?? false);
+
+                return PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: 'More Options',
+                  onSelected: (val) {
+                    final customers = customersAsync.valueOrNull ?? [];
+                    if (val == 'add_old') {
+                      context.push(AppRoutes.addOldCustomer);
+                    } else if (val == 'export_all') {
+                      if (customers.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No customers to export')),
+                        );
+                        return;
+                      }
+                      ExcelService.exportCustomers(context, customers);
+                    } else if (val == 'export_old') {
+                      final oldCusts = customers.where((c) => c.notes?.contains('[OLD_CUSTOMER_DATA:') == true).toList();
+                      if (oldCusts.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No Old Customers found in list.')),
+                        );
+                        return;
+                      }
+                      ExcelService.exportOldCustomers(context, oldCusts);
+                    } else if (val == 'toggle_archive') {
+                      notifier.setFilterAndSort(
+                        filter: isArchived ? '' : 'archived',
+                        sort: notifier.sortBy,
+                      );
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    if (isAdmin)
+                      const PopupMenuItem(
+                        value: 'add_old',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_add_alt_1, size: 20, color: Color(0xFF6D28D9)),
+                            SizedBox(width: 12),
+                            Text('Add Old Customers'),
+                          ],
+                        ),
+                      ),
+                    const PopupMenuItem(
+                      value: 'export_all',
+                      child: Row(
+                        children: [
+                          Icon(Icons.download_outlined, size: 20, color: Color(0xFF10B981)),
+                          SizedBox(width: 12),
+                          Text('Export All Customers (Excel)'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'export_old',
+                      child: Row(
+                        children: [
+                          Icon(Icons.file_download_outlined, size: 20, color: Color(0xFF3B82F6)),
+                          SizedBox(width: 12),
+                          Text('Export Old Customers Only'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'toggle_archive',
+                      child: Row(
+                        children: [
+                          Icon(
+                            isArchived ? Icons.people_outline : Icons.archive_outlined,
+                            size: 20,
+                            color: isArchived ? Colors.blue : Colors.amber.shade800,
+                          ),
+                          SizedBox(width: 12),
+                          Text(isArchived ? 'View Active Customers' : 'View Archived Customers'),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       body: Column(
         children: [
           // Search bar (seamless extension of AppBar)

@@ -100,11 +100,14 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen>
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF6D28D9),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Book Complaint', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        onPressed: () => context.push('/complaints/book'),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 76),
+        child: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFF6D28D9),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('Book Complaint', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          onPressed: () => context.push('/complaints/book'),
+        ),
       ),
       body: Column(
         children: [
@@ -244,7 +247,7 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen>
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       itemCount: list.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {

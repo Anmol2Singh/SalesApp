@@ -38,7 +38,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
   // 0: Needs Action, 1: Active, 2: Completed
   int _selectedTabIndex = 1;
-  String _quickFilter = 'all'; // 'all', 'needs_approval', 'quotation', 'boq', 'factory_order'
+  String _quickFilter =
+      'all'; // 'all', 'needs_approval', 'quotation', 'boq', 'factory_order'
 
   @override
   void initState() {
@@ -47,7 +48,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
     _selectedStatus = widget.initialStatus;
     if (_selectedStatus == 'completed') {
       _selectedTabIndex = 2;
-    } else if (_selectedStatus == 'needs_approval' || widget.initialStep == 'quotation_approval') {
+    } else if (_selectedStatus == 'needs_approval' ||
+        widget.initialStep == 'quotation_approval') {
       _selectedTabIndex = 0;
       _quickFilter = 'needs_approval';
     }
@@ -101,21 +103,28 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         roles.contains(UserRole.salesHead) ||
         roles.contains(UserRole.sales);
 
-    final hasBoqRole = profile?.primaryRole == UserRole.boq || roles.contains(UserRole.boq);
-    final hasFactoryRole = profile?.primaryRole == UserRole.factory || roles.contains(UserRole.factory);
-    final hasMaterialRole = profile?.primaryRole == UserRole.purchase || roles.contains(UserRole.purchase);
+    final hasBoqRole =
+        profile?.primaryRole == UserRole.boq || roles.contains(UserRole.boq);
+    final hasFactoryRole = profile?.primaryRole == UserRole.factory ||
+        roles.contains(UserRole.factory);
+    final hasMaterialRole = profile?.primaryRole == UserRole.purchase ||
+        roles.contains(UserRole.purchase);
 
-    final isRoleRestricted = !isSalesOrAdmin && (hasBoqRole || hasFactoryRole || hasMaterialRole);
+    final isRoleRestricted =
+        !isSalesOrAdmin && (hasBoqRole || hasFactoryRole || hasMaterialRole);
 
     bool isDealVisibleForUser(SalesPipeline p) {
       if (!isRoleRestricted) return true;
-      final isCompleted = p.status == PipelineStatus.completed || p.currentStep == PipelineStep.completed;
+      final isCompleted = p.status == PipelineStatus.completed ||
+          p.currentStep == PipelineStep.completed;
       if (isCompleted) return true;
 
       final stepIndex = p.currentStep.stepIndex;
       if (hasBoqRole && stepIndex >= PipelineStep.boq.stepIndex) return true;
-      if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex) return true;
-      if (hasMaterialRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex) return true;
+      if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex)
+        return true;
+      if (hasMaterialRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex)
+        return true;
 
       return false;
     }
@@ -138,7 +147,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           const SyncStatusIndicator(),
           Consumer(
             builder: (context, ref, _) {
-              final hasActive = _selectedStep.isNotEmpty || _selectedStatus.isNotEmpty;
+              final hasActive =
+                  _selectedStep.isNotEmpty || _selectedStatus.isNotEmpty;
               return Stack(
                 alignment: Alignment.center,
                 children: [
@@ -166,15 +176,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           ),
           if (canViewAll)
             IconButton(
-              icon: const Icon(Icons.download_outlined),
-              tooltip: 'Export to Excel',
-              onPressed: () => _exportExcel(context, ref),
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+              onPressed: () =>
+                  ref.read(pipelinesNotifierProvider.notifier).refresh(),
             ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-            onPressed: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
-          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             tooltip: 'More options',
@@ -217,7 +223,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                   value: 'export',
                   child: Row(
                     children: [
-                      Icon(Icons.download_outlined, color: AppColors.primary, size: 18),
+                      Icon(Icons.download_outlined,
+                          color: AppColors.primary, size: 18),
                       SizedBox(width: 10),
                       Text('Export to Excel'),
                     ],
@@ -247,7 +254,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
             // Segmented Control Tabs & Quick Filter Chips
             pipelinesAsync.maybeWhen(
               data: (rawPipelines) {
-                final allPipelines = rawPipelines.where(isDealVisibleForUser).toList();
+                final allPipelines =
+                    rawPipelines.where(isDealVisibleForUser).toList();
                 final needsActionCount = allPipelines
                     .where((p) =>
                         p.quotation?.status == QuotationStatus.pendingApproval)
@@ -288,7 +296,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                               });
                             },
                             decoration: InputDecoration(
-                              hintText: 'Search by customer, product, quote #...',
+                              hintText:
+                                  'Search by customer, product, quote #...',
                               hintStyle: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 13,
@@ -391,7 +400,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                   ),
                 );
               },
-              orElse: () => const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              orElse: () =>
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ),
 
             if (_selectedStep.isNotEmpty || _selectedStatus.isNotEmpty)
@@ -416,11 +426,13 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
             pipelinesAsync.when(
               data: (rawPipelines) {
-                final allPipelines = rawPipelines.where(isDealVisibleForUser).toList();
+                final allPipelines =
+                    rawPipelines.where(isDealVisibleForUser).toList();
                 final pipelines = allPipelines.where((p) {
                   // Tab selection
                   if (_selectedTabIndex == 0) {
-                    if (p.quotation?.status != QuotationStatus.pendingApproval) {
+                    if (p.quotation?.status !=
+                        QuotationStatus.pendingApproval) {
                       return false;
                     }
                   } else if (_selectedTabIndex == 1) {
@@ -431,7 +443,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
                   // Quick filter chips
                   if (_quickFilter == 'needs_approval') {
-                    if (p.quotation?.status != QuotationStatus.pendingApproval) {
+                    if (p.quotation?.status !=
+                        QuotationStatus.pendingApproval) {
                       return false;
                     }
                   } else if (_quickFilter == 'quotation') {
@@ -439,18 +452,25 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                   } else if (_quickFilter == 'boq') {
                     if (p.currentStep != PipelineStep.boq) return false;
                   } else if (_quickFilter == 'factory_order') {
-                    if (p.currentStep != PipelineStep.factoryOrder) return false;
+                    if (p.currentStep != PipelineStep.factoryOrder)
+                      return false;
                   }
 
                   // Search query filter
                   if (_searchQuery.isNotEmpty) {
                     final q = _searchQuery;
-                    final custName = (p.customer?.customerName ?? '').toLowerCase();
-                    final compName = (p.customer?.companyName ?? '').toLowerCase();
+                    final custName =
+                        (p.customer?.customerName ?? '').toLowerCase();
+                    final compName =
+                        (p.customer?.companyName ?? '').toLowerCase();
                     final phone = (p.customer?.phone ?? '').toLowerCase();
                     final prod = (p.product?.name ?? '').toLowerCase();
-                    final salesman = (p.createdByProfile?.fullName ?? p.quotation?.salesman ?? '').toLowerCase();
-                    final quoteNo = (p.quotation?.quotationNumber ?? '').toLowerCase();
+                    final salesman = (p.createdByProfile?.fullName ??
+                            p.quotation?.salesman ??
+                            '')
+                        .toLowerCase();
+                    final quoteNo =
+                        (p.quotation?.quotationNumber ?? '').toLowerCase();
 
                     final matches = custName.contains(q) ||
                         compName.contains(q) ||
@@ -578,8 +598,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                 icon: const Icon(Icons.add),
                 label: const Text(
                   'New Deal',
-                  style:
-                      TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      fontFamily: 'Inter', fontWeight: FontWeight.w600),
                 ),
               ),
             )
@@ -657,9 +677,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? (isAlert ? const Color(0xFFFEF3C7) : AppColors.primary)
-              : (isAlert
-                  ? const Color(0xFFFFFBEB)
-                  : Colors.white),
+              : (isAlert ? const Color(0xFFFFFBEB) : Colors.white),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
@@ -833,120 +851,127 @@ class _FilterSheetState extends State<_FilterSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          const Text(
-            'Filter Deals',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Step',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              '',
-              'quotation',
-              'boq',
-              'factory_order',
-              'purchase_order',
-              'completed',
-            ].map((step) {
-              final label = step.isEmpty
-                  ? 'All'
-                  : PipelineStep.fromString(step).displayName;
-              return ChoiceChip(
-                label: Text(label,
-                    style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        color: _step == step
-                            ? AppColors.primary
-                            : AppColors.textPrimary)),
-                selected: _step == step,
-                onSelected: (_) => setState(() => _step = step),
-                selectedColor: AppColors.primarySurface,
-                side: BorderSide(
-                  color: _step == step ? AppColors.primary : AppColors.border,
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Status',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: ['', 'in_progress', 'completed', 'on_hold', 'cancelled']
-                .map((status) {
-              final label = status.isEmpty
-                  ? 'All'
-                  : PipelineStatus.fromString(status).displayName;
-              return ChoiceChip(
-                label: Text(label,
-                    style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        color: _status == status
-                            ? AppColors.primary
-                            : AppColors.textPrimary)),
-                selected: _status == status,
-                onSelected: (_) => setState(() => _status = status),
-                selectedColor: AppColors.primarySurface,
-                side: BorderSide(
-                  color:
-                      _status == status ? AppColors.primary : AppColors.border,
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _step = '';
-                      _status = '';
-                    });
-                    widget.onApply('', '');
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Clear'),
+              const Text(
+                'Filter Deals',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    widget.onApply(_step, _status);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Apply'),
+              const SizedBox(height: 16),
+              const Text(
+                'Step',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
                 ),
               ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  '',
+                  'quotation',
+                  'boq',
+                  'factory_order',
+                  'purchase_order',
+                  'completed',
+                ].map((step) {
+                  final label = step.isEmpty
+                      ? 'All'
+                      : PipelineStep.fromString(step).displayName;
+                  return ChoiceChip(
+                    label: Text(label,
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: _step == step
+                                ? AppColors.primary
+                                : AppColors.textPrimary)),
+                    selected: _step == step,
+                    onSelected: (_) => setState(() => _step = step),
+                    selectedColor: AppColors.primarySurface,
+                    side: BorderSide(
+                      color:
+                          _step == step ? AppColors.primary : AppColors.border,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Status',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  '',
+                  'in_progress',
+                  'completed',
+                  'on_hold',
+                  'cancelled'
+                ].map((status) {
+                  final label = status.isEmpty
+                      ? 'All'
+                      : PipelineStatus.fromString(status).displayName;
+                  return ChoiceChip(
+                    label: Text(label,
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: _status == status
+                                ? AppColors.primary
+                                : AppColors.textPrimary)),
+                    selected: _status == status,
+                    onSelected: (_) => setState(() => _status = status),
+                    selectedColor: AppColors.primarySurface,
+                    side: BorderSide(
+                      color: _status == status
+                          ? AppColors.primary
+                          : AppColors.border,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        setState(() {
+                          _step = '';
+                          _status = '';
+                        });
+                        widget.onApply('', '');
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Clear'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        widget.onApply(_step, _status);
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Apply'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
             ],
           ),
-          const SizedBox(height: 8),
-        ],
-      ),
         ),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/models/prospect_model.dart';
 import '../data/models/lead_model.dart';
 import '../data/models/communication_model.dart';
+import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/notification_backend_helper.dart';
@@ -20,16 +21,17 @@ final prospectsProvider = StateNotifierProvider<ProspectsNotifier, AsyncValue<Li
       profile?.primaryRole == UserRole.salesHead ||
       (profile?.roles.contains(UserRole.admin) ?? false) ||
       (profile?.roles.contains(UserRole.salesHead) ?? false);
-  return ProspectsNotifier(supabase, profile?.id, isAdminOrSalesHead);
+  return ProspectsNotifier(supabase, profile?.id, isAdminOrSalesHead, profile);
 });
 
 class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   final SupabaseClient _supabase;
   final String? _userId;
   final bool _isAdmin;
+  final Profile? _profile;
   RealtimeChannel? _realtimeChannel;
 
-  ProspectsNotifier(this._supabase, this._userId, this._isAdmin) : super(const AsyncValue.loading()) {
+  ProspectsNotifier(this._supabase, this._userId, this._isAdmin, [this._profile]) : super(const AsyncValue.loading()) {
     load();
     _initRealtime();
   }
@@ -157,7 +159,7 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     try {
       String assignerName = 'Admin/Sales Head';
       if (_userId != null) {
-        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId!).maybeSingle();
+        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId).maybeSingle();
         if (p != null && p['full_name'] != null) assignerName = p['full_name'] as String;
       }
 
@@ -282,6 +284,26 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   }) async {
     if (_userId == null) return null;
     try {
+      bool isSalesOrSalesHead = _profile?.primaryRole == UserRole.sales ||
+          _profile?.primaryRole == UserRole.salesHead ||
+          (_profile?.roles.contains(UserRole.sales) ?? false) ||
+          (_profile?.roles.contains(UserRole.salesHead) ?? false);
+
+      if (!isSalesOrSalesHead) {
+        try {
+          final myProf = await _supabase.from('profiles').select('role, roles').eq('id', _userId).maybeSingle();
+          if (myProf != null) {
+            final r = (myProf['role'] as String? ?? '').toLowerCase();
+            final roles = (myProf['roles'] is List)
+                ? (myProf['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
+                : [];
+            if (r == 'sales' || r == 'sales_head' || roles.contains('sales') || roles.contains('sales_head')) {
+              isSalesOrSalesHead = true;
+            }
+          }
+        } catch (_) {}
+      }
+
       final data = {
         'name': name.trim(),
         'phone': phone.trim(),
@@ -291,6 +313,7 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
         if (company != null && company.trim().isNotEmpty) 'company': company.trim(),
         'source': source,
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        if (isSalesOrSalesHead) 'assigned_to': _userId,
         'created_by': _userId,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
@@ -658,7 +681,7 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
     try {
       String assignerName = 'Admin/Sales Head';
       if (_userId != null) {
-        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId!).maybeSingle();
+        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId).maybeSingle();
         if (p != null && p['full_name'] != null) assignerName = p['full_name'] as String;
       }
       

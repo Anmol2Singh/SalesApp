@@ -1,5 +1,6 @@
-﻿// lib/core/services/excel_service.dart
+// lib/core/services/excel_service.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -845,7 +846,7 @@ class ExcelService {
     if (context.mounted) {
       ExportPreviewDialog.show(
         context,
-        title: 'Export Preview â€” Products (${products.length})',
+        title: 'Export Preview — Products (${products.length})',
         fileName: fileName,
         headers: headers,
         rows: previewRows,
@@ -853,4 +854,276 @@ class ExcelService {
       );
     }
   }
+
+  static Future<void> exportOldCustomers(BuildContext context, List<Customer> oldCustomers) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Old Customers'];
+
+    final headers = [
+      'Customer / Company Name',
+      'Contact Person',
+      'Phone',
+      'Email',
+      'Installation Address',
+      'GSTIN',
+      'Product Name',
+      'Component Items',
+      'Notes',
+      'Created Date',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#6D28D9'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final List<List<String>> previewRows = [];
+
+    int currentRow = 1;
+    for (final c in oldCustomers) {
+      final notes = c.notes ?? '';
+      List<Map<String, dynamic>> products = [];
+      String cleanNotes = notes;
+
+      if (notes.contains('[OLD_CUSTOMER_DATA:')) {
+        final sIdx = notes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+        final eIdx = notes.indexOf(']', sIdx);
+        if (eIdx > sIdx) {
+          final jsonStr = notes.substring(sIdx, eIdx).trim();
+          try {
+            final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+            products = List<Map<String, dynamic>>.from(decoded['products'] as List? ?? []);
+          } catch (_) {}
+        }
+        cleanNotes = notes.replaceAll(RegExp(r'\[OLD_CUSTOMER_DATA:[^\]]*\]'), '').trim();
+      }
+
+      if (products.isEmpty) {
+        final rowData = [
+          c.companyName,
+          c.contactPerson ?? '',
+          c.phone ?? '',
+          c.email ?? '',
+          c.address ?? '',
+          c.gstNumber ?? '',
+          '',
+          '',
+          cleanNotes,
+          _dateFormat.format(c.createdAt),
+        ];
+        previewRows.add(rowData);
+        for (int col = 0; col < rowData.length; col++) {
+          final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow));
+          cell.value = TextCellValue(rowData[col]);
+        }
+        currentRow++;
+      } else {
+        for (final p in products) {
+          final pName = p['name']?.toString() ?? '';
+          final pItems = (p['items'] as List? ?? []).join(', ');
+          final rowData = [
+            c.companyName,
+            c.contactPerson ?? '',
+            c.phone ?? '',
+            c.email ?? '',
+            c.address ?? '',
+            c.gstNumber ?? '',
+            pName,
+            pItems,
+            cleanNotes,
+            _dateFormat.format(c.createdAt),
+          ];
+          previewRows.add(rowData);
+          for (int col = 0; col < rowData.length; col++) {
+            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow));
+            cell.value = TextCellValue(rowData[col]);
+          }
+          currentRow++;
+        }
+      }
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate Excel file');
+
+    final fileName = 'Old_Customers_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.xlsx';
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Export Preview — Old Customers (${oldCustomers.length})',
+        fileName: fileName,
+        headers: headers,
+        rows: previewRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
+  static Future<void> downloadOldCustomerTemplate(BuildContext context) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Old Customers Template'];
+
+    final headers = [
+      'Customer Name',
+      'Contact Person',
+      'Phone',
+      'Email',
+      'Address',
+      'GSTIN',
+      'Product Name',
+      'Component Items',
+      'Notes',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#6D28D9'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final sampleRows = [
+      [
+        'Sharma Residency',
+        'Rohit Sharma',
+        '9876543210',
+        'rohit@example.com',
+        'Flat 402, Green Avenue, Pune',
+        '27AAPCS1234F1Z5',
+        'Heat Pump 300L',
+        'Compressor, Fan Motor, Tank, Thermostat, Sensor',
+        'Installed in 2023',
+      ],
+      [
+        'Hotel Sunshine',
+        'Amit Patel',
+        '9822334455',
+        'amit@sunshine.com',
+        'MG Road, Mumbai',
+        '27AABCT9876C1Z3',
+        'Commercial Solar Water Heater 500LPD',
+        'Solar Collector Tubes, Tank, Stand, Backup Heater',
+        'Installed in 2022',
+      ],
+    ];
+
+    for (int r = 0; r < sampleRows.length; r++) {
+      for (int c = 0; c < sampleRows[r].length; c++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1));
+        cell.value = TextCellValue(sampleRows[r][c]);
+      }
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate template');
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Sample Excel Template — Old Customers',
+        fileName: 'Old_Customers_Template.xlsx',
+        headers: headers,
+        rows: sampleRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
+  static List<Map<String, dynamic>> parseOldCustomersExcel(List<int> bytes) {
+    final excel = Excel.decodeBytes(bytes);
+    final results = <Map<String, dynamic>>[];
+
+    for (var tableName in excel.tables.keys) {
+      final sheet = excel.tables[tableName];
+      if (sheet == null || sheet.rows.isEmpty) continue;
+
+      int nameCol = 0;
+      int contactCol = 1;
+      int phoneCol = 2;
+      int emailCol = 3;
+      int addressCol = 4;
+      int gstCol = 5;
+      int productCol = 6;
+      int itemsCol = 7;
+      int notesCol = 8;
+
+      bool isHeader = true;
+      for (final row in sheet.rows) {
+        if (isHeader) {
+          isHeader = false;
+          for (int i = 0; i < row.length; i++) {
+            final val = row[i]?.value?.toString().toLowerCase().trim() ?? '';
+            if (val.contains('customer') || val.contains('company')) {
+              nameCol = i;
+            } else if (val.contains('contact') || val.contains('person')) {
+              contactCol = i;
+            } else if (val.contains('phone') || val.contains('mobile') || val.contains('contact no')) {
+              phoneCol = i;
+            } else if (val.contains('email') || val.contains('mail')) {
+              emailCol = i;
+            } else if (val.contains('address') || val.contains('location')) {
+              addressCol = i;
+            } else if (val.contains('gst') || val.contains('tax')) {
+              gstCol = i;
+            } else if (val.contains('product')) {
+              productCol = i;
+            } else if (val.contains('component') || val.contains('item')) {
+              itemsCol = i;
+            } else if (val.contains('note') || val.contains('remark')) {
+              notesCol = i;
+            }
+          }
+          continue;
+        }
+
+        String getCellVal(int idx) {
+          if (idx < 0 || idx >= row.length) return '';
+          final cell = row[idx];
+          if (cell == null) return '';
+          return cell.value?.toString().trim() ?? '';
+        }
+
+        final custName = getCellVal(nameCol);
+        final phone = getCellVal(phoneCol);
+        final contact = getCellVal(contactCol);
+        final email = getCellVal(emailCol);
+        final address = getCellVal(addressCol);
+        final gstin = getCellVal(gstCol);
+        final productName = getCellVal(productCol);
+        final itemsStr = getCellVal(itemsCol);
+        final notes = getCellVal(notesCol);
+
+        if (custName.isEmpty && phone.isEmpty && productName.isEmpty) continue;
+
+        final itemsList = itemsStr
+            .split(RegExp(r'[,;\n]'))
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+
+        results.add({
+          'customer_name': custName.isNotEmpty ? custName : (contact.isNotEmpty ? contact : 'Customer $phone'),
+          'contact_person': contact,
+          'phone': phone,
+          'email': email,
+          'address': address,
+          'gst_number': gstin.toUpperCase(),
+          'product_name': productName,
+          'items': itemsList,
+          'notes': notes,
+        });
+      }
+    }
+    return results;
+  }
 }
+

@@ -170,7 +170,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
           _lineItems.add({
             'description': TextEditingController(text: item.description),
             'hsn_sac': TextEditingController(text: item.hsnSac ?? ''),
-            'qty': TextEditingController(text: item.qty.toString()),
+            'qty': TextEditingController(text: item.qty.toInt().toString()),
             'gst_percent': TextEditingController(text: item.gstPercent.toString()),
             'free_qty': TextEditingController(text: '0'),
             'uom': TextEditingController(text: item.uom),
@@ -207,7 +207,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
               'description': TextEditingController(text: item.description),
               'hsn_sac':
                   TextEditingController(text: item.hsnSac ?? '85308000'), // Default HSN code
-              'qty': TextEditingController(text: item.qty.toString()),
+              'qty': TextEditingController(text: item.qty.toInt().toString()),
               'gst_percent': TextEditingController(text: item.gstPercent.toString()),
               'free_qty': TextEditingController(text: '0'),
               'uom': TextEditingController(text: item.uom),
@@ -1483,13 +1483,13 @@ class _SalesOrderLineItemRow extends StatelessWidget {
                 child: TextFormField(
                   controller: item['qty'] as TextEditingController,
                   enabled: enabled,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onChanged: (_) => onChanged(),
                   decoration: const InputDecoration(labelText: 'Qty *'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    final val = num.tryParse(v);
+                    final val = int.tryParse(v);
                     if (val == null || val <= 0) return '> 0';
                     return null;
                   },

@@ -982,7 +982,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       _supplementaryItems.clear();
       _supplementaryItems.addAll(q.supplementaryTerms!.map((t) => {
             'name': TextEditingController(text: t.name),
-            'qty': TextEditingController(text: t.qty.toString()),
+            'qty': TextEditingController(text: t.qty.toInt().toString()),
             'rate': TextEditingController(text: t.rate.toString()),
             'gst_percent': TextEditingController(text: t.gstPercent.toString()),
             'type': TextEditingController(text: t.type),
@@ -2482,6 +2482,40 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                     enabled: enabled,
                   ),
                 ),
+            if (_supplementaryItems.isNotEmpty) ...[
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Supplementary Total',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      '₹${currencyFormat.format(_calcSupplementarySubtotal())}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (enabled)
               TextButton.icon(
                 onPressed: () => _addSupplementaryItem(),
@@ -4365,55 +4399,94 @@ class _SupplementaryItemRow extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                flex: 1,
-                child: TextFormField(
-                  controller: qtyCtrl,
-                  enabled: isEnabled,
-                  decoration:
-                      const InputDecoration(labelText: 'Qty', isDense: true),
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => onChanged(),
-                ),
+          if (isIncluded) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
-                child: TextFormField(
-                  controller: rateCtrl,
-                  enabled: isEnabled,
-                  decoration:
-                      const InputDecoration(labelText: 'Rate', isDense: true),
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => onChanged(),
-                ),
+              child: Row(
+                children: const [
+                  Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF047857)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Included in base package (No extra charge)',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF047857),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Included',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF047857),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 1,
-                child: TextFormField(
-                  controller: gstCtrl,
-                  enabled: isEnabled,
-                  decoration:
-                      const InputDecoration(labelText: 'GST %', isDense: true),
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => onChanged(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'Total: ₹${NumberFormat('#,##,##0.00', 'en_IN').format(total)}',
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: AppColors.primary),
             ),
-          ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: qtyCtrl,
+                    enabled: isEnabled,
+                    decoration:
+                        const InputDecoration(labelText: 'Qty', isDense: true),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: rateCtrl,
+                    enabled: isEnabled,
+                    decoration:
+                        const InputDecoration(labelText: 'Rate', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: gstCtrl,
+                    enabled: isEnabled,
+                    decoration:
+                        const InputDecoration(labelText: 'GST %', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Total: ₹${NumberFormat('#,##,##0.00', 'en_IN').format(total)}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: AppColors.primary),
+              ),
+            ),
+          ],
         ],
       ),
     );

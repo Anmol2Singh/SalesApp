@@ -33,6 +33,8 @@ import '../../features/admin/screens/admin_panel_screen.dart';
 import '../../features/admin/screens/product_catalog_screen.dart';
 import '../../features/admin/screens/inventory_screen.dart';
 import '../../features/admin/screens/pdf_template_screen.dart';
+import '../../features/admin/screens/add_old_customer_screen.dart';
+import '../../features/admin/screens/pdf_list_hub_screen.dart';
 import '../../features/amc/screens/amc_list_screen.dart';
 import '../../features/amc/screens/amc_detail_screen.dart';
 import '../../features/amc/screens/amc_setup_form_screen.dart';
@@ -108,6 +110,7 @@ class AppRoutes {
   static const String userManagement = '/admin/users';
   static const String productCatalog = '/admin/products';
   static const String pdfTemplates = '/admin/pdf-templates';
+  static const String addOldCustomer = '/admin/add-old-customer';
   static const String amcList = '/amc';
   static const String amcDetail = '/amc/details/:id';
   static const String amcSetup = '/amc/setup';
@@ -124,6 +127,7 @@ class AppRoutes {
   static const String assignInstallation = '/installations/assign';
   static const String installationHistory = '/installations/history';
   static const String searchPdf = '/search-pdf';
+  static const String pdfList = '/admin/pdf-list';
   static const String boqDashboard = '/boq/dashboard';
   static const String manageBoqItems = '/boq/manage-items';
   static const String dailyTasks = '/daily-tasks';
@@ -346,12 +350,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const AdminPanelScreen(),
           ),
           GoRoute(
+            path: AppRoutes.addOldCustomer,
+            builder: (context, state) => const AddOldCustomerScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.inventory,
             builder: (context, state) => const InventoryScreen(),
           ),
           GoRoute(
             path: AppRoutes.searchPdf,
             builder: (context, state) => const SearchPdfScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.pdfList,
+            builder: (context, state) => const PdfListHubScreen(),
           ),
           GoRoute(
             path: AppRoutes.amcList,

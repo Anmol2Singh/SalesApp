@@ -139,8 +139,11 @@ class _AppShellState extends ConsumerState<AppShell> {
               final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
               return MediaQuery(
                 data: mq.copyWith(
+                  padding: mq.padding.copyWith(
+                    bottom: topOfNavBar + 8,
+                  ),
                   viewPadding: mq.viewPadding.copyWith(
-                    bottom: topOfNavBar + 4,
+                    bottom: topOfNavBar + 8,
                   ),
                 ),
                 child: widget.child,

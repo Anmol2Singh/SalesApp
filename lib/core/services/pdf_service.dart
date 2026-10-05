@@ -528,26 +528,54 @@ class PdfService {
                                   pw.SizedBox(height: 3),
                                   pw.Table(
                                     border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+                                    columnWidths: {
+                                      0: const pw.FlexColumnWidth(3),   // Item / Term
+                                      1: const pw.FixedColumnWidth(48), // Type
+                                      2: const pw.FixedColumnWidth(28), // Qty
+                                      3: const pw.FixedColumnWidth(45), // Rate
+                                      4: const pw.FixedColumnWidth(32), // GST %
+                                      5: const pw.FixedColumnWidth(55), // Total
+                                    },
                                     children: [
                                       pw.TableRow(
                                         decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                                         children: [
                                           pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Item / Term', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold))),
+                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Type', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
                                           pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Qty', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
                                           pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Rate (Rs.)', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('GST %', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
                                           pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Total (Rs.)', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
                                         ],
                                       ),
                                       ...quotation.supplementaryTerms!.map((item) {
+                                        final isIncluded = item.type.toLowerCase() == 'included';
                                         return pw.TableRow(
                                           children: [
                                             pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(item.name, style: const pw.TextStyle(fontSize: 6.5))),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('${item.qty}', style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.center)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(item.rate), style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.right)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(item.amount), style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.right)),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(item.type, style: pw.TextStyle(fontSize: 6.5, fontWeight: isIncluded ? pw.FontWeight.bold : pw.FontWeight.normal, color: isIncluded ? const PdfColor.fromInt(0xFF047857) : PdfColors.black), textAlign: pw.TextAlign.center)),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? '-' : '${item.qty.toInt()}', style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.center)),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? '-' : _currencyFormat.format(item.rate), style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.right)),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? '-' : '${item.gstPercent.toStringAsFixed(0)}%', style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.center)),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? 'Included' : _currencyFormat.format(item.amount), style: pw.TextStyle(fontSize: 6.5, fontWeight: isIncluded ? pw.FontWeight.bold : pw.FontWeight.normal, color: isIncluded ? const PdfColor.fromInt(0xFF047857) : PdfColors.black), textAlign: pw.TextAlign.right)),
                                           ],
                                         );
                                       }),
+                                      // Total Row for Supplementary Table
+                                      () {
+                                        final totalSupplementaryAmount = quotation.supplementaryTerms!.fold<double>(0, (sum, it) => sum + (it.type.toLowerCase() == 'included' ? 0.0 : it.amount));
+                                        return pw.TableRow(
+                                          decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                                          children: [
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Total Supplementary', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold))),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
+                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(totalSupplementaryAmount), style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                                          ],
+                                        );
+                                      }(),
                                     ],
                                   ),
                                 ],
@@ -1186,7 +1214,7 @@ class PdfService {
               ),
               pw.Padding(
                 padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(item.qty.toString(),
+                child: pw.Text(item.qty.toInt().toString(),
                     style: const pw.TextStyle(fontSize: 9)),
               ),
               pw.Padding(
@@ -2081,7 +2109,7 @@ class PdfService {
                   (idx + 1).toString(),
                   item.description,
                   item.hsnSac ?? '',
-                  item.qty.toStringAsFixed(2),
+                  item.qty.toInt().toString(),
                   '${item.gstPercent.toStringAsFixed(0)}%',
                   item.uom,
                   _currencyFormat.format(item.rate),
@@ -2093,13 +2121,13 @@ class PdfService {
                       (idx + 1).toString(),
                       item.description,
                       item.hsnSac ?? '',
-                      item.qty.toStringAsFixed(2),
+                      item.qty.toInt().toString(),
                       item.uom,
                     ]
                   : [
                       (idx + 1).toString(),
                       item.description,
-                      item.qty.toStringAsFixed(2),
+                      item.qty.toInt().toString(),
                       item.uom,
                     ];
 
@@ -2619,7 +2647,7 @@ class PdfService {
                   ...visit.items.map((item) => pw.TableRow(
                     children: [
                       pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.partName, style: const pw.TextStyle(fontSize: 8))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.qty.toStringAsFixed(1), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
+                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.qty.toInt().toString(), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
                       pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.unitPrice), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
                       pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.total), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
                     ],

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -361,6 +362,29 @@ final customerPurchasedProductsProvider = FutureProvider.family<List<String>, St
       if (prod != null && prod['name'] != null) {
         final name = (prod['name'] as String).trim();
         if (name.isNotEmpty) purchased.add(name);
+      }
+    }
+  } catch (_) {}
+
+  // 4. From old customer records (stored in customers.notes)
+  try {
+    final custRes = await supabase
+        .from('customers')
+        .select('notes')
+        .eq('id', customerId)
+        .maybeSingle();
+    final notes = custRes?['notes'] as String? ?? '';
+    if (notes.contains('[OLD_CUSTOMER_DATA:')) {
+      final sIdx = notes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+      final eIdx = notes.indexOf(']', sIdx);
+      if (eIdx > sIdx) {
+        final jsonStr = notes.substring(sIdx, eIdx).trim();
+        final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final prods = decoded['products'] as List? ?? [];
+        for (final p in prods) {
+          final pName = (p['name'] as String? ?? '').trim();
+          if (pName.isNotEmpty) purchased.add(pName);
+        }
       }
     }
   } catch (_) {}

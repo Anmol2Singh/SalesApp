@@ -246,7 +246,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
           if (_isRefreshing) const LinearProgressIndicator(minHeight: 2.5),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 100.0),
               child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

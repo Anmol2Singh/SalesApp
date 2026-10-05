@@ -312,7 +312,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
         return {
           'component': (item['component'] as TextEditingController).text.trim(),
           'spec': (item['spec'] as TextEditingController).text.trim(),
-          'qty': double.tryParse((item['qty'] as TextEditingController).text) ?? 1,
+          'qty': int.tryParse((item['qty'] as TextEditingController).text) ?? 1,
           'unit': (item['unit'] as TextEditingController).text.trim(),
           'scope': item['scope'] ?? 'company',
         };

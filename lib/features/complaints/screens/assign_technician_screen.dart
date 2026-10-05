@@ -74,7 +74,7 @@ class AssignTechnicianScreen extends ConsumerWidget {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   itemCount: pendingComplaints.length,
                   itemBuilder: (context, index) {
                     final complaint = pendingComplaints[index];

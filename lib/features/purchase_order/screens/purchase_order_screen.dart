@@ -81,7 +81,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         for (final item in _existingPO!.items) {
           _poItems.add({
             'description': TextEditingController(text: item.description),
-            'qty': TextEditingController(text: item.qty.toString()),
+            'qty': TextEditingController(text: item.qty.toInt().toString()),
             'unit': TextEditingController(text: item.unit),
           });
         }
@@ -106,7 +106,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
             _poItems.add({
               'description':
                   TextEditingController(text: i['component'] as String? ?? ''),
-              'qty': TextEditingController(text: (i['qty'] ?? 1).toString()),
+              'qty': TextEditingController(text: (num.tryParse(i['qty']?.toString() ?? '1')?.toInt() ?? 1).toString()),
               'unit':
                   TextEditingController(text: i['unit'] as String? ?? 'nos'),
             });
@@ -207,7 +207,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
 
       final items = _poItems.map((item) {
         final qty =
-            double.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+            int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
         return {
           'description':
               (item['description'] as TextEditingController).text.trim(),

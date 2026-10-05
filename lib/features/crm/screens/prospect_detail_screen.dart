@@ -159,15 +159,24 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
     final isConverted = prospect.convertedToLeadId != null || matchingLead != null;
     final leadIdToView = prospect.convertedToLeadId ?? matchingLead?.id;
 
-    final isSalesOrAdmin = profile?.primaryRole.isSalesOrAdmin ?? false;
-    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || profile?.roles.contains(UserRole.admin) == true || profile?.roles.contains(UserRole.salesHead) == true || profile?.roles.contains(UserRole.manager) == true;
-    final isOnlyAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
-    final isSalesRole = profile?.primaryRole == UserRole.sales || (profile?.roles.contains(UserRole.sales) ?? false);
+    final isSalesOrAdmin = (profile?.primaryRole.isSalesOrAdmin ?? false) ||
+        (profile?.roles.any((r) => r.isSalesOrAdmin) ?? false);
+    final isAdmin = profile?.primaryRole == UserRole.admin ||
+        profile?.primaryRole == UserRole.manager ||
+        profile?.primaryRole == UserRole.salesHead ||
+        profile?.roles.contains(UserRole.admin) == true ||
+        profile?.roles.contains(UserRole.salesHead) == true ||
+        profile?.roles.contains(UserRole.manager) == true;
+    final isOnlyAdmin = profile?.primaryRole == UserRole.admin ||
+        profile?.roles.contains(UserRole.admin) == true;
+    final isSalesRole = profile?.primaryRole == UserRole.sales ||
+        (profile?.roles.contains(UserRole.sales) ?? false);
     final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
     final isCreatedByMe = prospect.createdBy == profile?.id;
     final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
 
-    final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
+    final isCrmStaff = profile?.primaryRole == UserRole.crmStaff ||
+        (profile?.roles.contains(UserRole.crmStaff) ?? false);
 
     final canEdit = isCrmStaff || RecordEditPermissions.canEditRecord(
       userRole: profile?.primaryRole,
@@ -177,8 +186,16 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
       assigneeId: prospect.assignedTo,
     );
 
-    // Can convert if: CRM Staff OR (isSalesOrAdmin AND (Admin OR Assigned Salesperson OR Creator Salesperson without assignment))
-    final canConvert = !isConverted && (isCrmStaff || (isSalesOrAdmin && (isAdmin || isAssignedToMe || (isSalesRole && prospect.assignedTo == null))));
+    // Can convert if: CRM Staff OR Admin OR (has sales capability AND (assigned to me OR (created by me and not transferred away) OR unassigned))
+    final canConvert = !isConverted && (
+      isCrmStaff ||
+      isAdmin ||
+      (isSalesOrAdmin && (
+        isAssignedToMe ||
+        (isCreatedByMe && !isTransferredAway) ||
+        (isSalesRole && (prospect.assignedTo == null || isAssignedToMe || isCreatedByMe))
+      ))
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -231,7 +248,7 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
           if (_isRefreshing) const LinearProgressIndicator(minHeight: 2.5),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 100.0),
               child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

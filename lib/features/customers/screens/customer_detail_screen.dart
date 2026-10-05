@@ -379,7 +379,7 @@ class CustomerDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           _AmcSection(customerId: customer.id),
-          const SizedBox(height: 80), // FAB space
+          const SizedBox(height: 100), // FAB space
         ],
       ),
     );

@@ -46,6 +46,10 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
   final List<String> _issuePhotosBase64 = [];
   final ImagePicker _picker = ImagePicker();
 
+  List<String> _quotationItems = [];
+  bool _isLoadingQuotationItems = false;
+  final Set<String> _selectedDefectedItems = {};
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -61,8 +65,164 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       _selectedCustomer = customer;
       _addressController.text = customer.address ?? '';
       _selectedProducts.clear();
+      _selectedDefectedItems.clear();
+      _quotationItems.clear();
       _showAllProductsFallback = false;
     });
+  }
+
+  void _onProductSelected(String productName, bool isSelected) {
+    setState(() {
+      if (isSelected) {
+        _selectedProducts.clear();
+        _selectedProducts.add(productName);
+        _selectedDefectedItems.clear();
+        _loadQuotationItems(productName);
+      } else {
+        _selectedProducts.remove(productName);
+        _selectedDefectedItems.clear();
+        _quotationItems.clear();
+      }
+    });
+  }
+
+  Future<void> _loadQuotationItems(String productName) async {
+    setState(() {
+      _isLoadingQuotationItems = true;
+      _quotationItems.clear();
+    });
+
+    try {
+      final customerId = _selectedCustomer?.id ?? '';
+      final supabase = ref.read(supabaseClientProvider);
+      final Set<String> items = {};
+
+      final customerNotes = _selectedCustomer?.notes ?? '';
+      if (customerNotes.contains('[OLD_CUSTOMER_DATA:')) {
+        try {
+          final sIdx = customerNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+          final eIdx = customerNotes.indexOf(']', sIdx);
+          if (eIdx > sIdx) {
+            final jsonStr = customerNotes.substring(sIdx, eIdx).trim();
+            final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+            final prods = decoded['products'] as List? ?? [];
+            for (final p in prods) {
+              final pName = (p['name'] as String? ?? '').trim();
+              if (productName.isEmpty || pName.toLowerCase() == productName.trim().toLowerCase()) {
+                final pItems = p['items'] as List? ?? [];
+                for (final it in pItems) {
+                  final str = it.toString().trim();
+                  if (str.isNotEmpty) items.add(str);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (customerId.isNotEmpty) {
+        try {
+          final pipelinesRes = await supabase
+              .from('sales_pipelines')
+              .select('id, product_name, products(name)')
+              .eq('customer_id', customerId)
+              .or('status.eq.completed,current_step.eq.completed');
+
+          final List<String> matchingPipelineIds = [];
+          for (final row in pipelinesRes as List) {
+            final pid = row['id'] as String?;
+            final prodMap = row['products'] as Map<String, dynamic>?;
+            final pName = (prodMap?['name'] as String?)?.trim() ??
+                          (row['product_name'] as String?)?.trim() ?? '';
+
+            if (pid != null && pid.isNotEmpty) {
+              if (productName.isEmpty ||
+                  pName.toLowerCase() == productName.trim().toLowerCase() ||
+                  pName.toLowerCase().contains(productName.trim().toLowerCase()) ||
+                  productName.trim().toLowerCase().contains(pName.toLowerCase())) {
+                matchingPipelineIds.add(pid);
+              }
+            }
+          }
+
+          if (matchingPipelineIds.isNotEmpty) {
+            final quotesRes = await supabase
+                .from('quotations')
+                .select('line_items')
+                .inFilter('pipeline_id', matchingPipelineIds)
+                .order('created_at', ascending: false);
+
+            for (final q in quotesRes as List) {
+              final lineItems = q['line_items'];
+              if (lineItems is List) {
+                for (final it in lineItems) {
+                  if (it is Map && it['description'] != null) {
+                    final desc = it['description'].toString().trim();
+                    if (desc.isNotEmpty) items.add(desc);
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Error fetching quotation line items: $e');
+        }
+      }
+
+      if (items.isEmpty) {
+        final lower = productName.toLowerCase();
+        if (lower.contains('water heater') || lower.contains('swh') || lower.contains('solar water')) {
+          items.addAll([
+            'Solar Collector / Evacuated Tubes (ETC/FPC)',
+            'Hot Water Storage Tank (Inner/Outer Tank)',
+            'Electrical Backup Heating Element & Thermostat',
+            'Mounting Stand & MS/GI Structure',
+            'Air Vent & Safety Valves',
+            'Connecting GI/CPVC Pipes & Fittings',
+            'Sacrificial Magnesium Anode',
+          ]);
+        } else if (lower.contains('heat pump')) {
+          items.addAll([
+            'Heat Pump Compressor Unit',
+            'Condenser Coil / Heat Exchanger',
+            'Circulation Pump',
+            'Digital Temperature Controller / Sensor',
+            'Refrigerant Piping & Expansion Valve',
+            'Insulated Storage Tank',
+          ]);
+        } else if (lower.contains('boom barrier') || lower.contains('barrier')) {
+          items.addAll([
+            'Boom Barrier Drive Mechanism & Motor',
+            'Barrier Arm / Boom Pole',
+            'Access Controller / RFID Reader',
+            'Loop Detector / Safety Sensor',
+            'Remote Control & Receiver',
+            'Power Supply & Control Board',
+          ]);
+        } else {
+          items.addAll([
+            'Solar PV Modules / Panels',
+            'Solar Inverter / PCU',
+            'Solar Battery Bank',
+            'Module Mounting Structure (MMS)',
+            'ACDB / DCDB Protection Box',
+            'DC Cabling & MC4 Connectors',
+            'Earthing & Lightning Arrester',
+          ]);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _quotationItems = items.toList();
+          _isLoadingQuotationItems = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingQuotationItems = false);
+      }
+    }
   }
 
   void _showImagePreviewDialog(String imageStr) {
@@ -221,9 +381,13 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
         : _titleController.text.trim();
 
     final baseDesc = _descController.text.trim();
-    final fullDescription = _selectedReplacementReason != null
-        ? 'Reason for part replacement: $_selectedReplacementReason\n\n$baseDesc'
-        : baseDesc;
+    String fullDescription = baseDesc;
+    if (_selectedDefectedItems.isNotEmpty) {
+      fullDescription = 'Defected Product(s) / Component(s):\n• ${_selectedDefectedItems.join("\n• ")}\n\n$fullDescription';
+    }
+    if (_selectedReplacementReason != null) {
+      fullDescription = 'Reason for part replacement: $_selectedReplacementReason\n\n$fullDescription';
+    }
 
     final updatedAddress = _addressController.text.trim().isEmpty
         ? (_selectedCustomer!.address ?? '')
@@ -322,19 +486,21 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Row(
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Row(
           children: [
             if (_currentStep > 0)
               OutlinedButton(
@@ -379,8 +545,9 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildStepCircle(int step, String label) {
     final isDone = _currentStep > step;
@@ -528,6 +695,73 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Customer Banner (Item 3)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF6D28D9).withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6D28D9).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.person_outline, color: Color(0xFF6D28D9), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedCustomer?.companyName ?? _selectedCustomer?.customerName ?? 'Customer',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      if (_selectedCustomer?.phone != null && _selectedCustomer!.phone!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Phone: ${_selectedCustomer!.phone!}',
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                      if (_selectedCustomer?.address != null && _selectedCustomer!.address!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _selectedCustomer!.address!,
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.grey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _currentStep = 0),
+                  child: const Text('Change', style: TextStyle(fontSize: 12, color: Color(0xFF6D28D9), fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+
           const Text('Issue Details', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
 
@@ -616,16 +850,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
                         color: isSelected ? Colors.white : Colors.black87,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       ),
-                      onSelected: (val) {
-                        setState(() {
-                          if (val) {
-                            _selectedProducts.clear();
-                            _selectedProducts.add(p);
-                          } else {
-                            _selectedProducts.remove(p);
-                          }
-                        });
-                      },
+                      onSelected: (val) => _onProductSelected(p, val),
                     );
                   }).toList(),
                 );
@@ -652,16 +877,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
                         color: isSelected ? Colors.white : Colors.black,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       ),
-                      onSelected: (val) {
-                        setState(() {
-                          if (val) {
-                            _selectedProducts.clear();
-                            _selectedProducts.add(p);
-                          } else {
-                            _selectedProducts.remove(p);
-                          }
-                        });
-                      },
+                      onSelected: (val) => _onProductSelected(p, val),
                     );
                   }).toList(),
                 );
@@ -669,6 +885,110 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
               loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
               error: (e, _) => Text('Error loading products: $e'),
             ),
+
+          // Quotation Items / Defected Product Selection (Item 4)
+          if (_selectedProducts.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF6D28D9).withOpacity(0.25)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.checklist_rtl_rounded, color: Color(0xFF6D28D9), size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Quotation Items / Defected Component(s)',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                      if (_selectedDefectedItems.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEDE9FE),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_selectedDefectedItems.length} selected',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF6D28D9),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Select which component(s) from the quotation have defects (multi-select allowed):',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_isLoadingQuotationItems)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(color: Color(0xFF6D28D9), strokeWidth: 2),
+                      ),
+                    )
+                  else if (_quotationItems.isEmpty)
+                    const Text('No quotation items found for this product.', style: TextStyle(color: Colors.grey, fontSize: 12))
+                  else ...[
+                    ..._quotationItems.map((item) {
+                      final isChecked = _selectedDefectedItems.contains(item);
+                      return CheckboxListTile(
+                        value: isChecked,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        activeColor: const Color(0xFF6D28D9),
+                        title: Text(
+                          item,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: isChecked ? FontWeight.bold : FontWeight.normal,
+                            color: isChecked ? const Color(0xFF6D28D9) : const Color(0xFF1E293B),
+                          ),
+                        ),
+                        onChanged: (bool? val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedDefectedItems.add(item);
+                            } else {
+                              _selectedDefectedItems.remove(item);
+                            }
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           TextField(
@@ -995,6 +1315,8 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
                 Text('Address: ${_addressController.text}'),
                 Text('Assigned Tech: ${_selectedTechnician?.name ?? "Not Selected"}'),
                 Text('Selected Products: ${_selectedProducts.isEmpty ? "All Products" : _selectedProducts.join(", ")}'),
+                if (_selectedDefectedItems.isNotEmpty)
+                  Text('Defected Product(s) / Items: ${_selectedDefectedItems.join(", ")}'),
                 Text('Priority: $_selectedPriority'),
                 Text('Issue: ${_titleController.text.isEmpty ? "General Service Request" : _titleController.text}'),
               ],

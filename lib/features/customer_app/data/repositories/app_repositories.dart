@@ -1361,6 +1361,87 @@ class SupabaseCustomerRepository implements CustomerRepository {
         debugPrint('Error linking locally availed AMCs: $e');
       }
 
+      // Append products for Old Customers (stored in customers.notes)
+      try {
+        final Set<String> targetCustomerIds = Set<String>.from(allCustomerIds);
+        if (cleanDigits.isNotEmpty) {
+          try {
+            final custsByPhone = await _supabase
+                .from('customers')
+                .select('id')
+                .or('phone.eq.$cleanDigits,phone.ilike.%$last10');
+            for (final r in (custsByPhone as List? ?? [])) {
+              if (r['id'] != null) targetCustomerIds.add(r['id'] as String);
+            }
+          } catch (_) {}
+        }
+
+        if (targetCustomerIds.isNotEmpty) {
+          final oldCusts = await _supabase
+              .from('customers')
+              .select('id, customer_name, company_name, phone, address, created_at, notes')
+              .inFilter('id', targetCustomerIds.toList());
+
+          for (final oc in (oldCusts as List? ?? [])) {
+            final oNotes = oc['notes'] as String? ?? '';
+            if (oNotes.contains('[OLD_CUSTOMER_DATA:')) {
+              final sIdx = oNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+              final eIdx = oNotes.indexOf(']', sIdx);
+              if (eIdx > sIdx) {
+                final jsonStr = oNotes.substring(sIdx, eIdx).trim();
+                final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+                final prods = decoded['products'] as List? ?? [];
+                final custId = oc['id'] as String;
+                final custAddr = oc['address'] as String?;
+                final createdAtStr = oc['created_at'] as String?;
+                final regDate = createdAtStr != null ? (DateTime.tryParse(createdAtStr) ?? DateTime.now()) : DateTime.now();
+
+                int pIdx = 0;
+                for (final p in prods) {
+                  final pName = (p['name'] as String? ?? '').trim();
+                  if (pName.isNotEmpty) {
+                    final alreadyInList = list.any((existing) => 
+                      existing.productName.toLowerCase() == pName.toLowerCase() ||
+                      existing.productId == 'old_cust_${custId}_$pIdx'
+                    );
+                    if (!alreadyInList) {
+                      final matchedCat = findCatalogProduct(pName);
+                      var imgList = List<String>.from(matchedCat?['image_urls'] ?? []);
+                      final firstImg = imgList.isNotEmpty ? imgList.first : '';
+                      final cat = (matchedCat?['category'] as String?) ?? 'COMMERCIAL';
+
+                      list.add(
+                        Product(
+                          productId: 'old_cust_${custId}_$pIdx',
+                          productName: pName,
+                          modelNumber: pName.toUpperCase(),
+                          imageUrl: firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(cat),
+                          imageUrls: imgList.isNotEmpty ? imgList : [firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(cat)],
+                          purchasedDate: regDate,
+                          sellerName: 'IZYHEAT Industry',
+                          amountPaid: 0.0,
+                          currencyCode: 'INR',
+                          warrantyStartDate: regDate,
+                          warrantyExpiryDate: regDate.add(const Duration(days: 365)),
+                          amcStatus: 'none',
+                          serialNumber: 'OLD-CUST-${custId.length >= 6 ? custId.substring(0, 6).toUpperCase() : custId}',
+                          category: cat,
+                          installationAddress: custAddr,
+                          requestedServicesCount: requestedCount,
+                        ),
+                      );
+                    }
+                    pIdx++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading old customer products in getProducts: $e');
+      }
+
       _cachedProducts = list;
       try {
         final prefs = await SharedPreferences.getInstance();
