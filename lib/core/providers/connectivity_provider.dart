@@ -1,8 +1,7 @@
-// lib/core/providers/connectivity_provider.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) {
@@ -43,8 +42,16 @@ class NetworkStatusNotifier extends StateNotifier<bool> {
   }
 
   Future<void> _evaluateInternet(List<ConnectivityResult> results) async {
-    if (results.isEmpty || results.every((r) => r == ConnectivityResult.none)) {
+    final hasConnection = results.isNotEmpty && results.any((r) => r != ConnectivityResult.none);
+    if (!hasConnection) {
       if (mounted && state != false) state = false;
+      return;
+    }
+
+    if (kIsWeb) {
+      // In web browsers, window.navigator.onLine determines network status.
+      // InternetAddress.lookup is from dart:io and throws UnsupportedOperation on Web.
+      if (mounted && state != true) state = true;
       return;
     }
 
