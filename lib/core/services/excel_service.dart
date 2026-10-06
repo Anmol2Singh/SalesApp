@@ -925,7 +925,14 @@ class ExcelService {
       } else {
         for (final p in products) {
           final pName = p['name']?.toString() ?? '';
-          final pItems = (p['items'] as List? ?? []).join(', ');
+          final pItems = (p['items'] as List? ?? []).map((it) {
+            if (it is Map) {
+              final n = it['name'] ?? '';
+              final q = it['qty'] ?? 1;
+              return '$n (Qty: $q)';
+            }
+            return it.toString();
+          }).join(', ');
           final rowData = [
             c.companyName,
             c.contactPerson ?? '',

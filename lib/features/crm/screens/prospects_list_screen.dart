@@ -90,67 +90,47 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(prospectsProvider.notifier).load(refresh: true),
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              floating: true,
-              snap: true,
-              pinned: false,
-              primary: false,
-              automaticallyImplyLeading: false,
-              backgroundColor: AppColors.surface,
-              surfaceTintColor: Colors.transparent,
-              elevation: 2,
-              shadowColor: Colors.black.withOpacity(0.08),
-              toolbarHeight: 0,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(170),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+      body: Column(
+        children: [
+          _buildFilters(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: AppColors.surface,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
-                    _buildFilters(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      color: AppColors.surface,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'Active Pipeline',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+                    const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const Divider(height: 1, color: AppColors.border),
                   ],
                 ),
-              ),
+                Text(
+                  'Active Pipeline',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
-            prospectsAsync.when(
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(prospectsProvider.notifier).load(refresh: true),
+              child: prospectsAsync.when(
               data: (prospects) {
                 // Apply filters
                 var filtered = prospects.where((p) {
@@ -179,24 +159,24 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                 });
 
                 if (filtered.isEmpty) {
-                  return const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Text('No prospects found.', style: TextStyle(color: AppColors.textSecondary)),
-                    ),
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 100),
+                      Center(
+                        child: Text('No prospects found.', style: TextStyle(color: AppColors.textSecondary)),
+                      ),
+                    ],
                   );
                 }
 
-                return SliverPadding(
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final itemIndex = index ~/ 2;
-                        if (index.isOdd) {
-                          return const SizedBox(height: 12);
-                        }
-                        final prospect = filtered[itemIndex];
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, itemIndex) {
+                    final prospect = filtered[itemIndex];
                       final isConverted = checkConverted(prospect);
                       final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
                       final isCreatedByMe = prospect.createdBy == profile?.id;
@@ -419,24 +399,18 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                     ),
                                   ),
                                 ),
-                        ),
-                      );
-                    },
-                    childCount: filtered.length * 2 - 1,
-                  ),
-                ),
-              );
-            },
-            loading: () => const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, st) => SliverFillRemaining(
-              child: Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
-            ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
           ),
-        ],
+        ),
       ),
-    ),
+    ],
+  ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
         child: FloatingActionButton.extended(

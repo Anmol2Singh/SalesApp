@@ -865,7 +865,7 @@ class _CustomerTile extends ConsumerWidget {
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -934,7 +934,7 @@ class _CustomerTile extends ConsumerWidget {
                         fontSize: 13,
                         color: AppColors.textSecondary,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -1084,110 +1084,6 @@ class _CustomerTile extends ConsumerWidget {
                 },
               ),
               const SizedBox(width: 8),
-            ],
-            if (ref.watch(currentProfileProvider)?.roles.contains(UserRole.admin) == true ||
-                ref.watch(currentProfileProvider)?.roles.contains(UserRole.salesHead) == true ||
-                (ref.watch(currentProfileProvider)?.primaryRole.canDeleteCustomer ?? false)) ...[
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'Customer Actions',
-                onSelected: (val) async {
-                  if (val == 'archive') {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Archive Customer'),
-                        content: Text('Archive "${customer.companyName}"? This hides the customer from active lists.'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700),
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Archive', style: TextStyle(color: Colors.white)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      await ref.read(customersNotifierProvider.notifier).deactivateCustomer(customer.id);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('✓ "${customer.companyName}" archived.'),
-                            backgroundColor: Colors.amber.shade800,
-                          ),
-                        );
-                      }
-                    }
-                  } else if (val == 'permanent_delete') {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Row(
-                          children: [
-                            Icon(Icons.delete_forever, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete All Records'),
-                          ],
-                        ),
-                        content: Text(
-                          'Permanently delete "${customer.companyName}" and all associated records?\n\n'
-                          'This will erase:\n'
-                          '• All sales pipelines, deals, and BOQs\n'
-                          '• All quotations, orders, and invoices\n'
-                          '• All warranty cards and AMC contracts\n'
-                          '• All service complaints and visit logs\n\n'
-                          'Warning: This action cannot be undone.',
-                        ),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Delete All Records', style: TextStyle(color: Colors.white)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      await ref.read(customersNotifierProvider.notifier).permanentlyDeleteCustomer(customer.id);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('✓ "${customer.companyName}" and all associated records deleted.'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  const PopupMenuItem(
-                    value: 'archive',
-                    child: Row(
-                      children: [
-                        Icon(Icons.archive_outlined, size: 18, color: Colors.amber),
-                        SizedBox(width: 8),
-                        Text('Archive Customer'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'permanent_delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_forever, size: 18, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete All Records', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 4),
             ],
             const Icon(Icons.chevron_right, color: AppColors.textDisabled),
           ],

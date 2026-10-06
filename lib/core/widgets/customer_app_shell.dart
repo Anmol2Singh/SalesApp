@@ -226,10 +226,10 @@ class _CustomerAppShellState extends ConsumerState<CustomerAppShell> {
                   return MediaQuery(
                     data: mq.copyWith(
                       padding: mq.padding.copyWith(
-                        bottom: topOfNavBar + 20,
+                        bottom: topOfNavBar + 8,
                       ),
                       viewPadding: mq.viewPadding.copyWith(
-                        bottom: topOfNavBar + 4,
+                        bottom: topOfNavBar + 8,
                       ),
                     ),
                     child: widget.child,

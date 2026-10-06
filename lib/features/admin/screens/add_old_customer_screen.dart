@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/user_role.dart';
@@ -14,19 +15,36 @@ import '../../../core/services/excel_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customers/providers/customers_provider.dart';
 
-class _ProductItemEntry {
+class _ComponentItemEntry {
   final TextEditingController nameController;
-  final List<TextEditingController> itemControllers;
+  final TextEditingController qtyController;
 
-  _ProductItemEntry({
+  _ComponentItemEntry({
     required this.nameController,
-    required this.itemControllers,
+    required this.qtyController,
   });
 
   void dispose() {
     nameController.dispose();
-    for (final c in itemControllers) {
-      c.dispose();
+    qtyController.dispose();
+  }
+}
+
+class _ProductItemEntry {
+  final TextEditingController nameController;
+  DateTime? purchaseDate;
+  final List<_ComponentItemEntry> items;
+
+  _ProductItemEntry({
+    required this.nameController,
+    this.purchaseDate,
+    required this.items,
+  });
+
+  void dispose() {
+    nameController.dispose();
+    for (final it in items) {
+      it.dispose();
     }
   }
 }
@@ -50,6 +68,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
   final _notesController = TextEditingController();
 
   final List<_ProductItemEntry> _products = [];
+  DateTime _customerSinceDate = DateTime.now();
   List<Map<String, dynamic>> _catalogProducts = [];
   List<String> _catalogProductNames = [];
   List<Map<String, dynamic>> _inventoryItems = [];
@@ -215,6 +234,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
         }
         return;
       }
+
+      if (!mounted) return;
 
       // Show confirmation dialog before inserting
       final confirmed = await showDialog<bool>(
@@ -400,8 +421,12 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
       _products.add(
         _ProductItemEntry(
           nameController: TextEditingController(),
-          itemControllers: [
-            TextEditingController(),
+          purchaseDate: DateTime.now(),
+          items: [
+            _ComponentItemEntry(
+              nameController: TextEditingController(),
+              qtyController: TextEditingController(text: '1'),
+            ),
           ],
         ),
       );
@@ -418,13 +443,18 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
 
   void _addItemToProduct(int productIndex) {
     setState(() {
-      _products[productIndex].itemControllers.add(TextEditingController());
+      _products[productIndex].items.add(
+        _ComponentItemEntry(
+          nameController: TextEditingController(),
+          qtyController: TextEditingController(text: '1'),
+        ),
+      );
     });
   }
 
   void _removeItemFromProduct(int productIndex, int itemIndex) {
     setState(() {
-      final removed = _products[productIndex].itemControllers.removeAt(itemIndex);
+      final removed = _products[productIndex].items.removeAt(itemIndex);
       removed.dispose();
     });
   }
@@ -495,6 +525,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
     final productEntry = _products[productIndex];
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -680,10 +711,11 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
     }
 
     final productEntry = _products[productIndex];
-    final itemCtrl = productEntry.itemControllers[itemIndex];
+    final itemEntry = productEntry.items[itemIndex];
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -806,7 +838,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
                             itemBuilder: (context, idx) {
                               final item = filtered[idx];
-                              final isSelected = itemCtrl.text.trim().toLowerCase() ==
+                              final isSelected = itemEntry.nameController.text.trim().toLowerCase() ==
                                   (item['name'] as String).trim().toLowerCase();
 
                               return ListTile(
@@ -843,7 +875,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                     : const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
                                 onTap: () {
                                   setState(() {
-                                    itemCtrl.text = item['name'] as String;
+                                    itemEntry.nameController.text = item['name'] as String;
                                   });
                                   Navigator.pop(ctx);
                                 },
@@ -894,14 +926,24 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           return;
         }
 
-        for (final it in p.itemControllers) {
-          final itName = it.text.trim();
+        for (final it in p.items) {
+          final itName = it.nameController.text.trim();
           if (itName.isNotEmpty &&
               _inventoryItemNames.isNotEmpty &&
               !_inventoryItemNames.any((n) => n.trim().toLowerCase() == itName.toLowerCase())) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('"$itName" is not in the Inventory. Please select from the inventory list.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
+          final qVal = int.tryParse(it.qtyController.text.trim());
+          if (itName.isNotEmpty && (qVal == null || qVal <= 0)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Please enter a valid integer quantity for "$itName".'),
                 backgroundColor: AppColors.error,
               ),
             );
@@ -932,18 +974,28 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
       for (final p in _products) {
         final pName = p.nameController.text.trim();
         if (pName.isNotEmpty) {
-          final itemsList = p.itemControllers
-              .map((c) => c.text.trim())
-              .where((txt) => txt.isNotEmpty)
-              .toList();
+          final itemsList = <Map<String, dynamic>>[];
+          for (final it in p.items) {
+            final itName = it.nameController.text.trim();
+            if (itName.isNotEmpty) {
+              final qty = int.tryParse(it.qtyController.text.trim()) ?? 1;
+              itemsList.add({
+                'name': itName,
+                'qty': qty,
+              });
+            }
+          }
           productsPayload.add({
             'name': pName,
+            if (p.purchaseDate != null)
+              'purchase_date': p.purchaseDate!.toIso8601String(),
             'items': itemsList,
           });
         }
       }
 
       final oldCustomerData = {
+        'customer_since': _customerSinceDate.toIso8601String(),
         'products': productsPayload,
       };
 
@@ -1254,6 +1306,34 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       textCapitalization: TextCapitalization.characters,
                       decoration: _inputDecoration('GSTIN (Optional)', Icons.receipt_long_outlined),
                     ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _customerSinceDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setState(() => _customerSinceDate = picked);
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: InputDecorator(
+                        decoration: _inputDecoration('Customer Since Date *', Icons.calendar_month_outlined),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              DateFormat('dd MMM yyyy').format(_customerSinceDate),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                            ),
+                            const Icon(Icons.arrow_drop_down, color: Color(0xFF6D28D9)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1439,6 +1519,42 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
               return null;
             },
           ),
+          const SizedBox(height: 12),
+
+          // Product Purchase Date
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: productEntry.purchaseDate ?? DateTime.now(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null) {
+                setState(() => productEntry.purchaseDate = picked);
+              }
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: InputDecorator(
+              decoration: _inputDecoration('Product Purchase Date', Icons.event_available_outlined),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    productEntry.purchaseDate != null
+                        ? DateFormat('dd MMM yyyy').format(productEntry.purchaseDate!)
+                        : 'Select purchase date...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: productEntry.purchaseDate != null ? const Color(0xFF1E293B) : Colors.grey.shade500,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down, color: Color(0xFF6D28D9)),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
 
           // Items / Components under this product (Strictly from Inventory)
@@ -1460,7 +1576,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
               TextButton.icon(
                 onPressed: () {
                   _addItemToProduct(productIndex);
-                  final newIndex = productEntry.itemControllers.length - 1;
+                  final newIndex = productEntry.items.length - 1;
                   _openInventoryItemPicker(productIndex, newIndex);
                 },
                 icon: const Icon(Icons.add, size: 14),
@@ -1475,14 +1591,16 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           ),
           const SizedBox(height: 6),
 
-          ...List.generate(productEntry.itemControllers.length, (itemIndex) {
-            final itemCtrl = productEntry.itemControllers[itemIndex];
+          ...List.generate(productEntry.items.length, (itemIndex) {
+            final itemEntry = productEntry.items[itemIndex];
             return Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     width: 22,
+                    height: 44,
                     alignment: Alignment.center,
                     child: Text(
                       '${itemIndex + 1}.',
@@ -1492,7 +1610,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: TextFormField(
-                      controller: itemCtrl,
+                      controller: itemEntry.nameController,
                       readOnly: true,
                       onTap: () => _openInventoryItemPicker(productIndex, itemIndex),
                       decoration: InputDecoration(
@@ -1506,14 +1624,14 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                         suffixIcon: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (itemCtrl.text.isNotEmpty)
+                            if (itemEntry.nameController.text.isNotEmpty)
                               IconButton(
                                 icon: const Icon(Icons.clear, size: 16, color: Colors.grey),
                                 tooltip: 'Clear',
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () {
                                   setState(() {
-                                    itemCtrl.clear();
+                                    itemEntry.nameController.clear();
                                   });
                                 },
                               ),
@@ -1550,7 +1668,43 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       },
                     ),
                   ),
-                  if (productEntry.itemControllers.length > 1) ...[
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 72,
+                    child: TextFormField(
+                      controller: itemEntry.qtyController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        labelText: 'Qty',
+                        labelStyle: const TextStyle(fontSize: 12),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF059669)),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Qty';
+                        final n = int.tryParse(v.trim());
+                        if (n == null || n <= 0) return '>0';
+                        return null;
+                      },
+                    ),
+                  ),
+                  if (productEntry.items.length > 1) ...[
                     const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18, color: Colors.grey),

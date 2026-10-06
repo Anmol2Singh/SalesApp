@@ -634,7 +634,7 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
         case PdfCategoryType.complaints:
           final res = await supabase
               .from('complaints')
-              .select('*, customers(*), profiles!technician_id(*)')
+              .select('*')
               .order('created_at', ascending: false)
               .limit(100);
 
@@ -662,7 +662,7 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
         case PdfCategoryType.installation:
           final res = await supabase
               .from('installations')
-              .select('*, customers(*), profiles!technician_id(*)')
+              .select('*')
               .order('created_at', ascending: false)
               .limit(100);
 

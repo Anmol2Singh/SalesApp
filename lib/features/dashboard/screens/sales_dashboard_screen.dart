@@ -13,6 +13,7 @@ import '../../../core/models/customer.dart';
 import '../../crm/providers/crm_providers.dart';
 import '../../../core/widgets/dashboard_switcher_button.dart';
 import '../../../core/widgets/network_status_chip.dart';
+import '../../../core/widgets/dashboard_skeleton.dart';
 
 class SalesDashboardScreen extends ConsumerWidget {
   const SalesDashboardScreen({super.key});
@@ -303,12 +304,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                       },
                     );
                   },
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  ),
+                  loading: () => const DashboardSkeleton(),
                   error: (_, __) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 10),

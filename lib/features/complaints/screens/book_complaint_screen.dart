@@ -38,7 +38,6 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
     'Other person serviced the system',
   ];
   bool _isSubmitting = false;
-  bool _showAllProductsFallback = false;
 
   Customer? _selectedCustomer;
   TechnicianInfo? _selectedTechnician;
@@ -67,7 +66,6 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       _selectedProducts.clear();
       _selectedDefectedItems.clear();
       _quotationItems.clear();
-      _showAllProductsFallback = false;
     });
   }
 
@@ -101,7 +99,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
       if (customerNotes.contains('[OLD_CUSTOMER_DATA:')) {
         try {
           final sIdx = customerNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
-          final eIdx = customerNotes.indexOf(']', sIdx);
+          final eIdx = customerNotes.lastIndexOf(']');
           if (eIdx > sIdx) {
             final jsonStr = customerNotes.substring(sIdx, eIdx).trim();
             final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -111,7 +109,14 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
               if (productName.isEmpty || pName.toLowerCase() == productName.trim().toLowerCase()) {
                 final pItems = p['items'] as List? ?? [];
                 for (final it in pItems) {
-                  final str = it.toString().trim();
+                  String str = '';
+                  if (it is Map) {
+                    final n = (it['name'] ?? it['item_name'] ?? '').toString().trim();
+                    final q = it['qty'] ?? it['quantity'];
+                    str = (q != null && q.toString().isNotEmpty) ? '$n (Qty: $q)' : n;
+                  } else {
+                    str = it.toString().trim();
+                  }
                   if (str.isNotEmpty) items.add(str);
                 }
               }
@@ -125,8 +130,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           final pipelinesRes = await supabase
               .from('sales_pipelines')
               .select('id, product_name, products(name)')
-              .eq('customer_id', customerId)
-              .or('status.eq.completed,current_step.eq.completed');
+              .eq('customer_id', customerId);
 
           final List<String> matchingPipelineIds = [];
           for (final row in pipelinesRes as List) {
@@ -166,49 +170,6 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           }
         } catch (e) {
           debugPrint('Error fetching quotation line items: $e');
-        }
-      }
-
-      if (items.isEmpty) {
-        final lower = productName.toLowerCase();
-        if (lower.contains('water heater') || lower.contains('swh') || lower.contains('solar water')) {
-          items.addAll([
-            'Solar Collector / Evacuated Tubes (ETC/FPC)',
-            'Hot Water Storage Tank (Inner/Outer Tank)',
-            'Electrical Backup Heating Element & Thermostat',
-            'Mounting Stand & MS/GI Structure',
-            'Air Vent & Safety Valves',
-            'Connecting GI/CPVC Pipes & Fittings',
-            'Sacrificial Magnesium Anode',
-          ]);
-        } else if (lower.contains('heat pump')) {
-          items.addAll([
-            'Heat Pump Compressor Unit',
-            'Condenser Coil / Heat Exchanger',
-            'Circulation Pump',
-            'Digital Temperature Controller / Sensor',
-            'Refrigerant Piping & Expansion Valve',
-            'Insulated Storage Tank',
-          ]);
-        } else if (lower.contains('boom barrier') || lower.contains('barrier')) {
-          items.addAll([
-            'Boom Barrier Drive Mechanism & Motor',
-            'Barrier Arm / Boom Pole',
-            'Access Controller / RFID Reader',
-            'Loop Detector / Safety Sensor',
-            'Remote Control & Receiver',
-            'Power Supply & Control Board',
-          ]);
-        } else {
-          items.addAll([
-            'Solar PV Modules / Panels',
-            'Solar Inverter / PCU',
-            'Solar Battery Bank',
-            'Module Mounting Structure (MMS)',
-            'ACDB / DCDB Protection Box',
-            'DC Cabling & MC4 Connectors',
-            'Earthing & Lightning Arrester',
-          ]);
         }
       }
 
@@ -766,125 +727,61 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           const SizedBox(height: 12),
 
           // Purchased Products List
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Select Purchased Product with Issue:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              if (!_showAllProductsFallback)
-                TextButton.icon(
-                  onPressed: () => setState(() => _showAllProductsFallback = true),
-                  icon: const Icon(Icons.list_alt, size: 14),
-                  label: const Text('Show All Products', style: TextStyle(fontSize: 11)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6D28D9),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 0),
+          const Text('Select Purchased Product with Issue:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 8),
+          purchasedAsync.when(
+            data: (purchasedList) {
+              if (purchasedList.isEmpty) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
                   ),
-                )
-              else
-                TextButton.icon(
-                  onPressed: () => setState(() => _showAllProductsFallback = false),
-                  icon: const Icon(Icons.verified, size: 14),
-                  label: const Text('Only Purchased', style: TextStyle(fontSize: 11)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF10B981),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 0),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if (!_showAllProductsFallback)
-            purchasedAsync.when(
-              data: (purchasedList) {
-                if (purchasedList.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFCD34D)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'No past deals/purchases recorded for ${_selectedCustomer?.customerName ?? 'this customer'}.',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No purchased products found for ${_selectedCustomer?.companyName ?? _selectedCustomer?.customerName ?? 'this customer'}.',
                           style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
                         ),
-                        const SizedBox(height: 6),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6D28D9),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            minimumSize: const Size(0, 32),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          icon: const Icon(Icons.search, size: 14),
-                          label: const Text('Select from All Products Catalog', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          onPressed: () => setState(() => _showAllProductsFallback = true),
-                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: purchasedList.map((p) {
+                  final isSelected = _selectedProducts.contains(p);
+                  return FilterChip(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.verified, size: 14, color: Color(0xFF10B981)),
+                        const SizedBox(width: 4),
+                        Text(p),
                       ],
                     ),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFF6D28D9),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    onSelected: (val) => _onProductSelected(p, val),
                   );
-                }
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: purchasedList.map((p) {
-                    final isSelected = _selectedProducts.contains(p);
-                    return FilterChip(
-                      label: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.verified, size: 14, color: Color(0xFF10B981)),
-                          const SizedBox(width: 4),
-                          Text(p),
-                        ],
-                      ),
-                      selected: isSelected,
-                      selectedColor: const Color(0xFF6D28D9),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      onSelected: (val) => _onProductSelected(p, val),
-                    );
-                  }).toList(),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
-              error: (e, _) => Text('Error loading purchased products: $e'),
-            )
-          else
-            allProductsAsync.when(
-              data: (productsList) {
-                if (productsList.isEmpty) {
-                  return const Text('No products available in database.', style: TextStyle(color: Colors.grey, fontSize: 12));
-                }
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: productsList.map((p) {
-                    final isSelected = _selectedProducts.contains(p);
-                    return FilterChip(
-                      label: Text(p),
-                      selected: isSelected,
-                      selectedColor: const Color(0xFF6D28D9),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      onSelected: (val) => _onProductSelected(p, val),
-                    );
-                  }).toList(),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
-              error: (e, _) => Text('Error loading products: $e'),
-            ),
+                }).toList(),
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
+            error: (e, _) => Text('Error loading purchased products: $e'),
+          ),
 
           // Quotation Items / Defected Product Selection (Item 4)
           if (_selectedProducts.isNotEmpty) ...[

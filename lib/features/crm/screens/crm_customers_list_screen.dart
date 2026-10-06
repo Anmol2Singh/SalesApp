@@ -79,160 +79,140 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.read(leadsProvider.notifier).load(refresh: true);
-          ref.read(prospectsProvider.notifier).load(refresh: true);
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              floating: true,
-              snap: true,
-              pinned: false,
-              primary: false,
-              automaticallyImplyLeading: false,
-              backgroundColor: AppColors.surface,
-              surfaceTintColor: Colors.transparent,
-              elevation: 2,
-              shadowColor: Colors.black.withOpacity(0.08),
-              toolbarHeight: 0,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(115),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+      body: Column(
+        children: [
+          _buildFilters(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: AppColors.surface,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
-                    _buildFilters(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      color: AppColors.surface,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
+                    const Icon(Icons.verified_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Converted Customers: $wonLeadsCount',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Won Leads',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.read(leadsProvider.notifier).load(refresh: true);
+                ref.read(prospectsProvider.notifier).load(refresh: true);
+              },
+              child: leadsAsync.when(
+                data: (leads) {
+                  final prospects = prospectsAsync.value ?? [];
+                  var filtered = leads.where((l) {
+                    if (l.convertedToCustomerId == null && l.status != 'Won') return false;
+                    final prospect = prospects.where((p) => p.id == l.prospectId).firstOrNull;
+                    final name = (l.prospectName != null && l.prospectName!.isNotEmpty)
+                        ? l.prospectName!
+                        : (prospect?.name ?? '');
+                    final phone = (l.contactPhone != null && l.contactPhone!.isNotEmpty)
+                        ? l.contactPhone!
+                        : (prospect?.phone ?? '');
+
+                    return name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+                           phone.contains(_searchQuery) ||
+                           l.productName.toLowerCase().contains(_searchQuery.toLowerCase());
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 100),
+                        Center(
+                          child: Text('No converted customers found.', style: TextStyle(color: AppColors.textSecondary)),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, itemIndex) {
+                      final lead = filtered[itemIndex];
+                      final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
+                      final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
+                          ? lead.prospectName!
+                          : (prospect?.name ?? 'Customer');
+                      final displayPhone = (lead.contactPhone != null && lead.contactPhone!.isNotEmpty)
+                          ? lead.contactPhone!
+                          : (prospect?.phone ?? '');
+
+                      return Card(
+                        elevation: 0,
+                        color: AppColors.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: AppColors.border.withOpacity(0.5)),
+                        ),
+                        child: ListTile(
+                          onTap: () {
+                            context.push('/crm/customers/${lead.id}');
+                          },
+                          leading: CircleAvatar(
+                            backgroundColor: AppColors.success.withOpacity(0.1),
+                            child: const Icon(Icons.star, color: AppColors.success),
+                          ),
+                          title: Text(
+                            displayName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.verified_outlined, size: 18, color: AppColors.primary),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Total Converted Customers: $wonLeadsCount',
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
+                              Text(lead.productName, style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w500)),
+                              Row(
+                                children: [
+                                  Text('₹${lead.estimatedValue.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 12)),
+                                  if (displayPhone.isNotEmpty) ...[
+                                    const Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
+                                    Text(displayPhone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
-                          const Text(
-                            'Won Leads',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1, color: AppColors.border),
-                  ],
-                ),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
+                        ),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
               ),
             ),
-            leadsAsync.when(
-              data: (leads) {
-                final prospects = prospectsAsync.value ?? [];
-                var filtered = leads.where((l) {
-                  if (l.convertedToCustomerId == null && l.status != 'Won') return false;
-                  final prospect = prospects.where((p) => p.id == l.prospectId).firstOrNull;
-                  final name = (l.prospectName != null && l.prospectName!.isNotEmpty)
-                      ? l.prospectName!
-                      : (prospect?.name ?? '');
-                  final phone = (l.contactPhone != null && l.contactPhone!.isNotEmpty)
-                      ? l.contactPhone!
-                      : (prospect?.phone ?? '');
-
-                  return name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-                         phone.contains(_searchQuery) ||
-                         l.productName.toLowerCase().contains(_searchQuery.toLowerCase());
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Text('No converted customers found.', style: TextStyle(color: AppColors.textSecondary)),
-                    ),
-                  );
-                }
-
-                return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final itemIndex = index ~/ 2;
-                        if (index.isOdd) return const SizedBox(height: 12);
-                        final lead = filtered[itemIndex];
-                        final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
-                        final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
-                            ? lead.prospectName!
-                            : (prospect?.name ?? 'Customer');
-                        final displayPhone = (lead.contactPhone != null && lead.contactPhone!.isNotEmpty)
-                            ? lead.contactPhone!
-                            : (prospect?.phone ?? '');
-
-                        return Card(
-                          elevation: 0,
-                          color: AppColors.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: AppColors.border.withOpacity(0.5)),
-                          ),
-                          child: ListTile(
-                            onTap: () {
-                              context.push('/crm/customers/${lead.id}');
-                            },
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.success.withOpacity(0.1),
-                              child: const Icon(Icons.star, color: AppColors.success),
-                            ),
-                            title: Text(
-                              displayName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(lead.productName, style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w500)),
-                                Row(
-                                  children: [
-                                    Text('₹${lead.estimatedValue.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 12)),
-                                    if (displayPhone.isNotEmpty) ...[
-                                      const Text(' • ', style: TextStyle(color: AppColors.textSecondary)),
-                                      Text(displayPhone, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
-                          ),
-                        );
-                      },
-                      childCount: filtered.length * 2 - 1,
-                    ),
-                  ),
-                );
-              },
-              loading: () => const SliverFillRemaining(child: Center(child: CircularProgressIndicator())),
-              error: (e, st) => SliverFillRemaining(child: Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error)))),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

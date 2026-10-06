@@ -18,6 +18,7 @@ import '../../complaints/providers/complaints_provider.dart';
 import 'product_interests_screen.dart';
 import '../providers/product_inquiries_provider.dart';
 import '../../../core/widgets/network_status_chip.dart';
+import '../../../core/widgets/dashboard_skeleton.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
@@ -410,13 +411,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       ],
                     );
                   },
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  ),
+                  loading: () => const DashboardSkeleton(),
                   error: (e, _) => Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),

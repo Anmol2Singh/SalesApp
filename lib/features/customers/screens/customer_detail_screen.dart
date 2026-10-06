@@ -1,5 +1,6 @@
 // lib/features/customers/screens/customer_detail_screen.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -202,16 +203,56 @@ class CustomerDetailScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              customer.companyName,
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    customer.companyName,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (customer.notes?.contains('[OLD_CUSTOMER_DATA:') == true) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF59E0B),
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.15),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.history_toggle_off, size: 12, color: Colors.white),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Old Customer',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             if (customer.contactPerson != null)
                               Text(
@@ -319,6 +360,8 @@ class CustomerDetailScreen extends ConsumerWidget {
           ],
           // Contact info card
           _InfoCard(customer: customer),
+          if (customer.notes?.contains('[OLD_CUSTOMER_DATA:') == true)
+            _OldCustomerProductsCard(customer: customer),
           const SizedBox(height: 20),
           Builder(
             builder: (context) {
@@ -576,6 +619,25 @@ class _InfoCard extends ConsumerWidget {
         (profile?.roles.contains(UserRole.salesHead) ?? false) ||
         (profile?.roles.contains(UserRole.manager) ?? false);
 
+    String cleanNotes = customer.notes ?? '';
+    DateTime customerSince = customer.createdAt;
+    if (cleanNotes.contains('[OLD_CUSTOMER_DATA:')) {
+      try {
+        final sIdx = cleanNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+        final eIdx = cleanNotes.lastIndexOf(']');
+        if (eIdx > sIdx) {
+          final jsonStr = cleanNotes.substring(sIdx, eIdx).trim();
+          final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final cSinceStr = decoded['customer_since'] as String?;
+          if (cSinceStr != null) {
+            final parsed = DateTime.tryParse(cSinceStr);
+            if (parsed != null) customerSince = parsed;
+          }
+        }
+      } catch (_) {}
+      cleanNotes = cleanNotes.replaceAll(RegExp(r'\[OLD_CUSTOMER_DATA:[^\]]*\]'), '').trim();
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -805,12 +867,230 @@ class _InfoCard extends ConsumerWidget {
             _InfoRow(Icons.location_on_outlined, 'Address', customer.address!),
           if (customer.gstNumber != null && customer.gstNumber!.isNotEmpty)
             _InfoRow(Icons.receipt_long_outlined, 'GSTIN', customer.gstNumber!),
-          if (customer.notes != null && customer.notes!.isNotEmpty)
-            _InfoRow(Icons.note_alt_outlined, 'Notes', customer.notes!),
+          if (cleanNotes.isNotEmpty)
+            _InfoRow(Icons.note_alt_outlined, 'Notes', cleanNotes),
           _InfoRow(
             Icons.calendar_today_outlined,
             'Customer Since',
-            DateFormat('dd MMM yyyy').format(customer.createdAt),
+            DateFormat('dd MMM yyyy').format(customerSince),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OldCustomerProductsCard extends StatelessWidget {
+  final Customer customer;
+
+  const _OldCustomerProductsCard({required this.customer});
+
+  @override
+  Widget build(BuildContext context) {
+    List<Map<String, dynamic>> products = [];
+    final rawNotes = customer.notes ?? '';
+    if (rawNotes.contains('[OLD_CUSTOMER_DATA:')) {
+      try {
+        final sIdx = rawNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+        final eIdx = rawNotes.lastIndexOf(']');
+        if (eIdx > sIdx) {
+          final jsonStr = rawNotes.substring(sIdx, eIdx).trim();
+          final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+          products = List<Map<String, dynamic>>.from(decoded['products'] as List? ?? []);
+        }
+      } catch (_) {}
+    }
+
+    if (products.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6D28D9).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF6D28D9), size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Purchased Products (Old Customer Record)',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6D28D9).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${products.length} Product${products.length > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6D28D9),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: products.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final prod = products[index];
+              final prodName = (prod['name'] as String? ?? 'Product').trim();
+              final purchaseDateStr = prod['purchase_date'] as String?;
+              DateTime? pDate = purchaseDateStr != null ? DateTime.tryParse(purchaseDateStr) : null;
+              final itemsRaw = prod['items'] as List? ?? [];
+
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            prodName,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                        if (pDate != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.event_available, size: 12, color: Color(0xFF64748B)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  DateFormat('dd MMM yyyy').format(pDate),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (itemsRaw.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Components / Items Included:',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: itemsRaw.map((it) {
+                          String itemName = '';
+                          int? qty;
+                          if (it is Map) {
+                            itemName = (it['name'] ?? it['item_name'] ?? '').toString();
+                            qty = int.tryParse((it['qty'] ?? it['quantity'] ?? '1').toString());
+                          } else {
+                            itemName = it.toString();
+                          }
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.precision_manufacturing_outlined, size: 12, color: Color(0xFF059669)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  itemName,
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF334155),
+                                  ),
+                                ),
+                                if (qty != null && qty > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE0E7FF),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Qty: $qty',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF4338CA),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),

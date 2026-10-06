@@ -376,7 +376,7 @@ final customerPurchasedProductsProvider = FutureProvider.family<List<String>, St
     final notes = custRes?['notes'] as String? ?? '';
     if (notes.contains('[OLD_CUSTOMER_DATA:')) {
       final sIdx = notes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
-      final eIdx = notes.indexOf(']', sIdx);
+      final eIdx = notes.lastIndexOf(']');
       if (eIdx > sIdx) {
         final jsonStr = notes.substring(sIdx, eIdx).trim();
         final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
