@@ -180,6 +180,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
 
         final pName = (r['product_name'] as String? ?? '').trim();
         final pItems = (r['items'] as List<String>? ?? []);
+        final pPurchaseDate = (r['purchase_date'] as String? ?? '').trim();
+        final cSinceDate = (r['customer_since'] as String? ?? '').trim();
 
         if (!consolidated.containsKey(key)) {
           consolidated[key] = {
@@ -189,9 +191,12 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
             'email': r['email'],
             'address': r['address'],
             'gst_number': r['gst_number'],
+            'customer_since': cSinceDate,
             'notes': r['notes'],
             'products': <Map<String, dynamic>>[],
           };
+        } else if (cSinceDate.isNotEmpty && (consolidated[key]!['customer_since'] as String? ?? '').isEmpty) {
+          consolidated[key]!['customer_since'] = cSinceDate;
         }
 
         if (pName.isNotEmpty) {
@@ -212,15 +217,22 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           final List<Map<String, dynamic>> prods = consolidated[key]!['products'];
           final existingProdIdx = prods.indexWhere((p) => (p['name'] as String? ?? '').toLowerCase() == matchedProd.toLowerCase());
           if (existingProdIdx >= 0) {
-            final existingItems = List<String>.from(prods[existingProdIdx]['items'] as List? ?? []);
+            final existingItems = List<Map<String, dynamic>>.from(prods[existingProdIdx]['items'] as List? ?? []);
+            final existingNames = existingItems.map((it) => it['name']?.toString() ?? '').toList();
             for (final it in normalizedItems) {
-              if (!existingItems.contains(it)) existingItems.add(it);
+              if (!existingNames.contains(it)) {
+                existingItems.add({'name': it, 'qty': 1});
+              }
             }
             prods[existingProdIdx]['items'] = existingItems;
+            if (pPurchaseDate.isNotEmpty && prods[existingProdIdx]['purchase_date'] == null) {
+              prods[existingProdIdx]['purchase_date'] = pPurchaseDate;
+            }
           } else {
             prods.add({
               'name': matchedProd,
-              'items': normalizedItems,
+              if (pPurchaseDate.isNotEmpty) 'purchase_date': pPurchaseDate,
+              'items': normalizedItems.map((it) => {'name': it, 'qty': 1}).toList(),
             });
           }
         }
@@ -327,6 +339,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
 
         final oldCustMeta = {
           'products': prods,
+          if (entry['customer_since'] != null && (entry['customer_since'] as String).isNotEmpty)
+            'customer_since': entry['customer_since'],
         };
         final metaJson = '[OLD_CUSTOMER_DATA:${jsonEncode(oldCustMeta)}]';
         final fullNotes = cNotes.isNotEmpty ? '$cNotes\n$metaJson' : metaJson;
@@ -345,23 +359,31 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
             if (existingNotes.contains('[OLD_CUSTOMER_DATA:')) {
               try {
                 final sIdx = existingNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
-                final eIdx = existingNotes.indexOf(']', sIdx);
+                final eIdx = existingNotes.lastIndexOf(']');
                 if (eIdx > sIdx) {
                   final prevDecoded = jsonDecode(existingNotes.substring(sIdx, eIdx)) as Map<String, dynamic>;
                   final prevProds = List<Map<String, dynamic>>.from(prevDecoded['products'] as List? ?? []);
+                  if (prevDecoded['customer_since'] == null && entry['customer_since'] != null && (entry['customer_since'] as String).isNotEmpty) {
+                    prevDecoded['customer_since'] = entry['customer_since'];
+                  }
                   for (final newP in prods) {
                     final idx = prevProds.indexWhere((p) => (p['name'] as String? ?? '').toLowerCase() == (newP['name'] as String? ?? '').toLowerCase());
                     if (idx >= 0) {
-                      final prevItems = List<String>.from(prevProds[idx]['items'] as List? ?? []);
+                      final prevItems = (prevProds[idx]['items'] as List? ?? []).map((it) => it is Map ? it['name']?.toString() ?? '' : it.toString()).toList();
                       for (final it in (newP['items'] as List? ?? [])) {
-                        if (!prevItems.contains(it.toString())) prevItems.add(it.toString());
+                        final itName = it is Map ? it['name']?.toString() ?? '' : it.toString();
+                        if (!prevItems.contains(itName)) {
+                          (prevProds[idx]['items'] as List).add(it);
+                        }
                       }
-                      prevProds[idx]['items'] = prevItems;
+                      if (newP['purchase_date'] != null && prevProds[idx]['purchase_date'] == null) {
+                        prevProds[idx]['purchase_date'] = newP['purchase_date'];
+                      }
                     } else {
                       prevProds.add(Map<String, dynamic>.from(newP as Map));
                     }
                   }
-                  final mergedMeta = '[OLD_CUSTOMER_DATA:${jsonEncode({'products': prevProds})}]';
+                  final mergedMeta = '[OLD_CUSTOMER_DATA:${jsonEncode(prevDecoded)}]';
                   final prefixNotes = existingNotes.substring(0, existingNotes.indexOf('[OLD_CUSTOMER_DATA:')).trim();
                   updatedNotes = prefixNotes.isNotEmpty ? '$prefixNotes\n$mergedMeta' : mergedMeta;
                 }

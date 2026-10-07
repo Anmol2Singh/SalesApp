@@ -1246,6 +1246,36 @@ class SupabaseCustomerRepository implements CustomerRepository {
           }
         } catch (_) {}
 
+        // Extract line items / components purchased with this product
+        final List<String> extractedItems = [];
+        void extractFromRawItems(dynamic rawItems) {
+          if (rawItems == null) return;
+          List itemsList = [];
+          if (rawItems is List) {
+            itemsList = rawItems;
+          } else if (rawItems is String) {
+            try {
+              itemsList = jsonDecode(rawItems);
+            } catch (_) {}
+          }
+          for (final it in itemsList) {
+            if (it is Map) {
+              final n = (it['name'] ?? it['item_name'] ?? it['description'] ?? '').toString().trim();
+              final q = it['qty'] ?? it['quantity'];
+              if (n.isNotEmpty) {
+                final str = (q != null && q.toString().isNotEmpty) ? '$n (Qty: $q)' : n;
+                if (!extractedItems.contains(str)) extractedItems.add(str);
+              }
+            } else if (it is String && it.trim().isNotEmpty) {
+              final str = it.trim();
+              if (!extractedItems.contains(str)) extractedItems.add(str);
+            }
+          }
+        }
+
+        extractFromRawItems(quoteData?['line_items']);
+        extractFromRawItems(soData?['line_items']);
+
         // Strict verification: only genuinely purchased/completed systems are displayed
         final pStatus = (item['status'] as String? ?? '').toLowerCase();
         final pStep = (item['current_step'] as String? ?? '').toLowerCase();
@@ -1280,6 +1310,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           installationAddress: installationAddress,
           amcVisits: amcVisits,
           requestedServicesCount: requestedCount,
+          includedItems: extractedItems,
         ));
       }
 
@@ -1386,7 +1417,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
             final oNotes = oc['notes'] as String? ?? '';
             if (oNotes.contains('[OLD_CUSTOMER_DATA:')) {
               final sIdx = oNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
-              final eIdx = oNotes.indexOf(']', sIdx);
+              final eIdx = oNotes.lastIndexOf(']');
               if (eIdx > sIdx) {
                 final jsonStr = oNotes.substring(sIdx, eIdx).trim();
                 final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -1410,6 +1441,33 @@ class SupabaseCustomerRepository implements CustomerRepository {
                       final firstImg = imgList.isNotEmpty ? imgList.first : '';
                       final cat = (matchedCat?['category'] as String?) ?? 'COMMERCIAL';
 
+                      // Extract actual purchase date entered for this product / old customer
+                      DateTime productPurchaseDate = regDate;
+                      if (p['purchase_date'] != null) {
+                        final parsed = DateTime.tryParse(p['purchase_date'].toString());
+                        if (parsed != null) productPurchaseDate = parsed;
+                      } else if (decoded['customer_since'] != null) {
+                        final parsed = DateTime.tryParse(decoded['customer_since'].toString());
+                        if (parsed != null) productPurchaseDate = parsed;
+                      }
+
+                      // Extract purchased items / components for this old customer product
+                      final List<String> oldCustItems = [];
+                      final rawItems = p['items'] as List? ?? [];
+                      for (final it in rawItems) {
+                        if (it is Map) {
+                          final n = (it['name'] ?? it['item_name'] ?? it['description'] ?? '').toString().trim();
+                          final q = it['qty'] ?? it['quantity'];
+                          if (n.isNotEmpty) {
+                            final str = (q != null && q.toString().isNotEmpty) ? '$n (Qty: $q)' : n;
+                            if (!oldCustItems.contains(str)) oldCustItems.add(str);
+                          }
+                        } else if (it is String && it.trim().isNotEmpty) {
+                          final str = it.trim();
+                          if (!oldCustItems.contains(str)) oldCustItems.add(str);
+                        }
+                      }
+
                       list.add(
                         Product(
                           productId: 'old_cust_${custId}_$pIdx',
@@ -1417,17 +1475,18 @@ class SupabaseCustomerRepository implements CustomerRepository {
                           modelNumber: pName.toUpperCase(),
                           imageUrl: firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(cat),
                           imageUrls: imgList.isNotEmpty ? imgList : [firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(cat)],
-                          purchasedDate: regDate,
+                          purchasedDate: productPurchaseDate,
                           sellerName: 'IZYHEAT Industry',
                           amountPaid: 0.0,
                           currencyCode: 'INR',
-                          warrantyStartDate: regDate,
-                          warrantyExpiryDate: regDate.add(const Duration(days: 365)),
+                          warrantyStartDate: productPurchaseDate,
+                          warrantyExpiryDate: productPurchaseDate.add(const Duration(days: 365)),
                           amcStatus: 'none',
                           serialNumber: 'OLD-CUST-${custId.length >= 6 ? custId.substring(0, 6).toUpperCase() : custId}',
                           category: cat,
                           installationAddress: custAddr,
                           requestedServicesCount: requestedCount,
+                          includedItems: oldCustItems,
                         ),
                       );
                     }

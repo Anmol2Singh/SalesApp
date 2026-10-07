@@ -251,24 +251,16 @@ class SalesDashboardScreen extends ConsumerWidget {
 
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        final crossAxisCount = constraints.maxWidth >= 900
-                            ? 4
-                            : constraints.maxWidth >= 550
-                                ? 4
-                                : 2;
-                        final childAspectRatio = constraints.maxWidth >= 900
-                            ? 2.3
-                            : constraints.maxWidth >= 550
-                                ? 2.0
-                                : 1.85;
+                        final crossAxisCount = constraints.maxWidth >= 800 ? 4 : 2;
+                        final childAspectRatio = constraints.maxWidth >= 800 ? 1.6 : 1.34;
 
                         return GridView.count(
                           crossAxisCount: crossAxisCount,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           padding: EdgeInsets.zero,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
                           childAspectRatio: childAspectRatio,
                           children: [
                             _SalesStatCard(
@@ -307,7 +299,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                   loading: () => const DashboardSkeleton(),
                   error: (_, __) => const SizedBox.shrink(),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
 
                 // Quick actions
                 const Text(
@@ -321,6 +313,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Builder(
                   builder: (context) {
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
                     final roles = profile?.roles ?? [];
                     final isHeadOrAdmin = profile?.primaryRole == UserRole.admin ||
                         profile?.primaryRole == UserRole.manager ||
@@ -328,17 +321,16 @@ class SalesDashboardScreen extends ConsumerWidget {
                         roles.contains(UserRole.admin) ||
                         roles.contains(UserRole.salesHead);
 
-                    final actionCards = <_ActionCard>[];
+                    final actions = <_QuickActionBtn>[];
 
-                    // Requirement 4: Exclude "New Customer" & "View Deals" for sales person & sales head as already in nav bar
                     final isSalesRole = profile?.primaryRole == UserRole.sales ||
                         profile?.primaryRole == UserRole.salesHead ||
                         roles.contains(UserRole.sales) ||
                         roles.contains(UserRole.salesHead);
 
                     if (!isSalesRole && (profile?.primaryRole.canCreateCustomers ?? false)) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.business_outlined,
                           label: 'New Customer',
                           color: AppColors.primary,
@@ -348,8 +340,8 @@ class SalesDashboardScreen extends ConsumerWidget {
                     }
 
                     if (!isSalesRole) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.alt_route_outlined,
                           label: 'View Deals',
                           color: const Color(0xFF6366F1),
@@ -358,19 +350,18 @@ class SalesDashboardScreen extends ConsumerWidget {
                       );
                     }
 
-                    actionCards.add(
-                      _ActionCard(
-                        icon: Icons.inventory_2_outlined,
+                    actions.add(
+                      _QuickActionBtn(
+                        icon: Icons.grid_view_outlined,
                         label: 'View Products',
-                        color: Colors.teal,
+                        color: const Color(0xFF0D9488),
                         onTap: () => context.push('/products'),
                       ),
                     );
 
-                    // Multi-role direct Quick Action: Complaints (serviceHead / admin)
                     if (roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.support_agent_outlined,
                           label: 'Complaints',
                           color: const Color(0xFF8B5CF6),
@@ -379,10 +370,9 @@ class SalesDashboardScreen extends ConsumerWidget {
                       );
                     }
 
-                    // Multi-role direct Quick Action: Installations (installation / serviceHead / admin)
                     if (roles.contains(UserRole.installation) || roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.build_circle_outlined,
                           label: 'Installations',
                           color: const Color(0xFF0284C7),
@@ -391,10 +381,9 @@ class SalesDashboardScreen extends ConsumerWidget {
                       );
                     }
 
-                    // Multi-role direct Quick Action: Manage BOQ Items (boq / admin)
                     if (roles.contains(UserRole.boq) || isHeadOrAdmin) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.format_list_bulleted_outlined,
                           label: 'BOQ Items',
                           color: const Color(0xFFEC4899),
@@ -403,10 +392,9 @@ class SalesDashboardScreen extends ConsumerWidget {
                       );
                     }
 
-                    // Multi-role direct Quick Action: Factory Queue (factory)
                     if (roles.contains(UserRole.factory)) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.precision_manufacturing_outlined,
                           label: 'Factory Queue',
                           color: const Color(0xFFEA580C),
@@ -415,10 +403,9 @@ class SalesDashboardScreen extends ConsumerWidget {
                       );
                     }
 
-                    // Multi-role direct Quick Action: Material Queue (purchase)
                     if (roles.contains(UserRole.purchase)) {
-                      actionCards.add(
-                        _ActionCard(
+                      actions.add(
+                        _QuickActionBtn(
                           icon: Icons.shopping_cart_outlined,
                           label: 'Material Queue',
                           color: const Color(0xFF10B981),
@@ -427,17 +414,17 @@ class SalesDashboardScreen extends ConsumerWidget {
                       );
                     }
 
-                    actionCards.add(
-                      _ActionCard(
-                        icon: Icons.download_outlined,
+                    actions.add(
+                      _QuickActionBtn(
+                        icon: Icons.bar_chart_outlined,
                         label: "Today's Report",
-                        color: AppColors.success,
+                        color: const Color(0xFF10B981),
                         onTap: () => context.push('/reports/activity'),
                       ),
                     );
 
-                    actionCards.add(
-                      _ActionCard(
+                    actions.add(
+                      _QuickActionBtn(
                         icon: Icons.contact_page_outlined,
                         label: 'Customer 360',
                         color: const Color(0xFFF59E0B),
@@ -445,17 +432,17 @@ class SalesDashboardScreen extends ConsumerWidget {
                       ),
                     );
 
-                    actionCards.add(
-                      _ActionCard(
+                    actions.add(
+                      _QuickActionBtn(
                         icon: Icons.people_alt_outlined,
                         label: 'CRM',
-                        color: Colors.blueAccent,
+                        color: const Color(0xFF3B82F6),
                         onTap: () => context.push('/crm/dashboard'),
                       ),
                     );
 
-                    actionCards.add(
-                      _ActionCard(
+                    actions.add(
+                      _QuickActionBtn(
                         icon: Icons.fact_check_outlined,
                         label: 'Daily Tasks',
                         color: const Color(0xFF8B5CF6),
@@ -465,19 +452,93 @@ class SalesDashboardScreen extends ConsumerWidget {
 
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        final crossAxisCount = constraints.maxWidth > 550 ? 4 : 3;
-                        return GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: actionCards.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 1.15,
-                          ),
-                          itemBuilder: (context, idx) => actionCards[idx],
-                        );
+                        final crossAxisCount = constraints.maxWidth >= 700 ? 4 : 2;
+                        final rows = <Widget>[];
+
+                        for (int i = 0; i < actions.length; i += crossAxisCount) {
+                          final rowChildren = <Widget>[];
+                          for (int j = 0; j < crossAxisCount; j++) {
+                            if (i + j < actions.length) {
+                              final a = actions[i + j];
+                              rowChildren.add(
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: a.onTap,
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: isDark
+                                                ? const Color(0xFF334155)
+                                                : Colors.grey.shade200,
+                                            width: 1.2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withValues(alpha: isDark ? 0.2 : 0.02),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: a.color.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Icon(a.icon, color: a.color, size: 20),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                a.label,
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: 13.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : const Color(0xFF0F172A),
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                              if (j < crossAxisCount - 1) {
+                                rowChildren.add(const SizedBox(width: 10));
+                              }
+                            } else {
+                              rowChildren.add(const Expanded(child: SizedBox.shrink()));
+                              if (j < crossAxisCount - 1) {
+                                rowChildren.add(const SizedBox(width: 10));
+                              }
+                            }
+                          }
+                          rows.add(Row(children: rowChildren));
+                          if (i + crossAxisCount < actions.length) {
+                            rows.add(const SizedBox(height: 10));
+                          }
+                        }
+
+                        return Column(children: rows);
                       },
                     );
                   },
@@ -645,69 +706,18 @@ Color _getDealBadgeColor(PipelineStep step, PipelineStatus status) {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
+class _QuickActionBtn {
   final String label;
-  final VoidCallback onTap;
+  final IconData icon;
   final Color color;
+  final VoidCallback onTap;
 
-  const _ActionCard({
-    required this.icon,
+  const _QuickActionBtn({
     required this.label,
-    this.color = AppColors.primary,
+    required this.icon,
+    required this.color,
     required this.onTap,
   });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 84,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _SalesStatCard extends StatelessWidget {
@@ -733,12 +743,12 @@ class _SalesStatCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
               width: 1.2,
@@ -746,46 +756,46 @@ class _SalesStatCard extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
                       color: color,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, color: Colors.white, size: 18),
+                    child: Icon(icon, color: Colors.white, size: 22),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       title,
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isDark
                             ? Colors.grey.shade300
                             : const Color(0xFF1E293B),
-                        height: 1.15,
+                        height: 1.2,
                       ),
                       maxLines: 2,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
@@ -793,7 +803,7 @@ class _SalesStatCard extends StatelessWidget {
                   value,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: isDark ? Colors.white : const Color(0xFF0F172A),
                     letterSpacing: -0.5,

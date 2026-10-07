@@ -868,6 +868,8 @@ class ExcelService {
       'GSTIN',
       'Product Name',
       'Component Items',
+      'Product Purchase Date',
+      'Customer Since Date',
       'Notes',
       'Created Date',
     ];
@@ -889,18 +891,24 @@ class ExcelService {
       final notes = c.notes ?? '';
       List<Map<String, dynamic>> products = [];
       String cleanNotes = notes;
+      String customerSinceStr = '';
 
       if (notes.contains('[OLD_CUSTOMER_DATA:')) {
         final sIdx = notes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
-        final eIdx = notes.indexOf(']', sIdx);
+        final eIdx = notes.lastIndexOf(']');
         if (eIdx > sIdx) {
           final jsonStr = notes.substring(sIdx, eIdx).trim();
           try {
             final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
             products = List<Map<String, dynamic>>.from(decoded['products'] as List? ?? []);
+            if (decoded['customer_since'] != null) {
+              final rawSince = decoded['customer_since'].toString();
+              final dt = DateTime.tryParse(rawSince);
+              customerSinceStr = dt != null ? DateFormat('dd MMM yyyy').format(dt) : rawSince;
+            }
           } catch (_) {}
         }
-        cleanNotes = notes.replaceAll(RegExp(r'\[OLD_CUSTOMER_DATA:[^\]]*\]'), '').trim();
+        cleanNotes = notes.substring(0, notes.indexOf('[OLD_CUSTOMER_DATA:')).trim();
       }
 
       if (products.isEmpty) {
@@ -913,6 +921,8 @@ class ExcelService {
           c.gstNumber ?? '',
           '',
           '',
+          '',
+          customerSinceStr,
           cleanNotes,
           _dateFormat.format(c.createdAt),
         ];
@@ -933,6 +943,14 @@ class ExcelService {
             }
             return it.toString();
           }).join(', ');
+
+          final rawPDate = p['purchase_date']?.toString() ?? '';
+          String pPurchaseDate = '';
+          if (rawPDate.isNotEmpty) {
+            final dt = DateTime.tryParse(rawPDate);
+            pPurchaseDate = dt != null ? DateFormat('dd MMM yyyy').format(dt) : rawPDate;
+          }
+
           final rowData = [
             c.companyName,
             c.contactPerson ?? '',
@@ -942,6 +960,8 @@ class ExcelService {
             c.gstNumber ?? '',
             pName,
             pItems,
+            pPurchaseDate,
+            customerSinceStr,
             cleanNotes,
             _dateFormat.format(c.createdAt),
           ];
@@ -985,6 +1005,8 @@ class ExcelService {
       'GSTIN',
       'Product Name',
       'Component Items',
+      'Product Purchase Date',
+      'Customer Since Date',
       'Notes',
     ];
 
@@ -1008,6 +1030,8 @@ class ExcelService {
         '27AAPCS1234F1Z5',
         'Heat Pump 300L',
         'Compressor, Fan Motor, Tank, Thermostat, Sensor',
+        '2023-04-15',
+        '2023-01-10',
         'Installed in 2023',
       ],
       [
@@ -1019,6 +1043,8 @@ class ExcelService {
         '27AABCT9876C1Z3',
         'Commercial Solar Water Heater 500LPD',
         'Solar Collector Tubes, Tank, Stand, Backup Heater',
+        '2022-11-20',
+        '2022-09-01',
         'Installed in 2022',
       ],
     ];
@@ -1061,6 +1087,8 @@ class ExcelService {
       int gstCol = 5;
       int productCol = 6;
       int itemsCol = 7;
+      int purchaseDateCol = -1;
+      int sinceDateCol = -1;
       int notesCol = 8;
 
       bool isHeader = true;
@@ -1069,7 +1097,11 @@ class ExcelService {
           isHeader = false;
           for (int i = 0; i < row.length; i++) {
             final val = row[i]?.value?.toString().toLowerCase().trim() ?? '';
-            if (val.contains('customer') || val.contains('company')) {
+            if (val.contains('purchase') && (val.contains('date') || val.contains('dt'))) {
+              purchaseDateCol = i;
+            } else if (val.contains('since') || (val.contains('customer') && val.contains('date'))) {
+              sinceDateCol = i;
+            } else if (val.contains('customer') || val.contains('company')) {
               nameCol = i;
             } else if (val.contains('contact') || val.contains('person')) {
               contactCol = i;
@@ -1099,6 +1131,34 @@ class ExcelService {
           return cell.value?.toString().trim() ?? '';
         }
 
+        String parseDateVal(int idx) {
+          if (idx < 0 || idx >= row.length) return '';
+          final cell = row[idx];
+          if (cell == null || cell.value == null) return '';
+          final raw = cell.value.toString().trim();
+          if (raw.isEmpty) return '';
+
+          DateTime? dt = DateTime.tryParse(raw);
+          if (dt != null) return dt.toIso8601String();
+
+          final formats = [
+            DateFormat('yyyy-MM-dd'),
+            DateFormat('dd/MM/yyyy'),
+            DateFormat('dd-MM-yyyy'),
+            DateFormat('yyyy/MM/dd'),
+            DateFormat('d MMM yyyy'),
+            DateFormat('dd MMM yyyy'),
+            DateFormat('MM/dd/yyyy'),
+          ];
+          for (final fmt in formats) {
+            try {
+              final parsed = fmt.parseLoose(raw);
+              return parsed.toIso8601String();
+            } catch (_) {}
+          }
+          return raw;
+        }
+
         final custName = getCellVal(nameCol);
         final phone = getCellVal(phoneCol);
         final contact = getCellVal(contactCol);
@@ -1107,6 +1167,8 @@ class ExcelService {
         final gstin = getCellVal(gstCol);
         final productName = getCellVal(productCol);
         final itemsStr = getCellVal(itemsCol);
+        final purchaseDate = parseDateVal(purchaseDateCol);
+        final customerSince = parseDateVal(sinceDateCol);
         final notes = getCellVal(notesCol);
 
         if (custName.isEmpty && phone.isEmpty && productName.isEmpty) continue;
@@ -1126,6 +1188,8 @@ class ExcelService {
           'gst_number': gstin.toUpperCase(),
           'product_name': productName,
           'items': itemsList,
+          'purchase_date': purchaseDate,
+          'customer_since': customerSince,
           'notes': notes,
         });
       }

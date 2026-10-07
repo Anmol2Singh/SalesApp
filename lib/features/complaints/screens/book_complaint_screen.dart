@@ -44,13 +44,29 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
   final List<String> _selectedProducts = [];
   final List<String> _issuePhotosBase64 = [];
   final ImagePicker _picker = ImagePicker();
+  final ScrollController _customerScrollController = ScrollController();
 
   List<String> _quotationItems = [];
   bool _isLoadingQuotationItems = false;
   final Set<String> _selectedDefectedItems = {};
 
   @override
+  void initState() {
+    super.initState();
+    _customerScrollController.addListener(_onCustomerScroll);
+  }
+
+  void _onCustomerScroll() {
+    if (_customerScrollController.hasClients &&
+        _customerScrollController.position.pixels >=
+            _customerScrollController.position.maxScrollExtent - 200) {
+      ref.read(customersNotifierProvider.notifier).load();
+    }
+  }
+
+  @override
   void dispose() {
+    _customerScrollController.dispose();
     _searchController.dispose();
     _titleController.dispose();
     _descController.dispose();
@@ -92,9 +108,31 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
 
     try {
       final customerId = _selectedCustomer?.id ?? '';
+      final customerName = _selectedCustomer?.companyName ?? _selectedCustomer?.customerName ?? '';
+      final customerPhone = _selectedCustomer?.phone ?? '';
       final supabase = ref.read(supabaseClientProvider);
       final Set<String> items = {};
 
+      void extractFromLineItems(dynamic lineItems) {
+        if (lineItems is List) {
+          for (final it in lineItems) {
+            if (it is Map) {
+              final desc = (it['description'] ?? it['item_name'] ?? it['name'] ?? '').toString().trim();
+              if (desc.isNotEmpty) {
+                final qty = it['qty'] ?? it['quantity'];
+                final label = (qty != null && qty.toString().isNotEmpty && qty.toString() != '1' && qty.toString() != '0')
+                    ? '$desc (Qty: $qty)'
+                    : desc;
+                items.add(label);
+              }
+            } else if (it != null && it.toString().trim().isNotEmpty) {
+              items.add(it.toString().trim());
+            }
+          }
+        }
+      }
+
+      // 1. From Old Customer Data in Notes
       final customerNotes = _selectedCustomer?.notes ?? '';
       if (customerNotes.contains('[OLD_CUSTOMER_DATA:')) {
         try {
@@ -125,51 +163,66 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
         } catch (_) {}
       }
 
+      // 2. Fetch directly from quotations table matching customer_name
+      if (customerName.isNotEmpty) {
+        try {
+          final quotesByName = await supabase
+              .from('quotations')
+              .select('line_items')
+              .ilike('customer_name', customerName)
+              .order('created_at', ascending: false);
+
+          for (final q in (quotesByName as List? ?? [])) {
+            extractFromLineItems(q['line_items']);
+          }
+        } catch (e) {
+          debugPrint('Error fetching quotations by name: $e');
+        }
+      }
+
+      // 3. Fetch quotations by phone if available
+      if (customerPhone.isNotEmpty) {
+        try {
+          final cleanPhone = customerPhone.replaceAll(RegExp(r'\D'), '');
+          final quotesByPhone = await supabase
+              .from('quotations')
+              .select('line_items')
+              .or('customer_phone.eq.$customerPhone,customer_phone.ilike.%$cleanPhone%')
+              .order('created_at', ascending: false);
+
+          for (final q in (quotesByPhone as List? ?? [])) {
+            extractFromLineItems(q['line_items']);
+          }
+        } catch (_) {}
+      }
+
+      // 4. Fetch via sales_pipelines linked to this customer
       if (customerId.isNotEmpty) {
         try {
           final pipelinesRes = await supabase
               .from('sales_pipelines')
-              .select('id, product_name, products(name)')
+              .select('id')
               .eq('customer_id', customerId);
 
-          final List<String> matchingPipelineIds = [];
-          for (final row in pipelinesRes as List) {
-            final pid = row['id'] as String?;
-            final prodMap = row['products'] as Map<String, dynamic>?;
-            final pName = (prodMap?['name'] as String?)?.trim() ??
-                          (row['product_name'] as String?)?.trim() ?? '';
-
-            if (pid != null && pid.isNotEmpty) {
-              if (productName.isEmpty ||
-                  pName.toLowerCase() == productName.trim().toLowerCase() ||
-                  pName.toLowerCase().contains(productName.trim().toLowerCase()) ||
-                  productName.trim().toLowerCase().contains(pName.toLowerCase())) {
-                matchingPipelineIds.add(pid);
-              }
-            }
+          final List<String> pids = [];
+          for (final row in (pipelinesRes as List? ?? [])) {
+            final id = row['id'] as String?;
+            if (id != null && id.isNotEmpty) pids.add(id);
           }
 
-          if (matchingPipelineIds.isNotEmpty) {
+          if (pids.isNotEmpty) {
             final quotesRes = await supabase
                 .from('quotations')
                 .select('line_items')
-                .inFilter('pipeline_id', matchingPipelineIds)
+                .inFilter('pipeline_id', pids)
                 .order('created_at', ascending: false);
 
-            for (final q in quotesRes as List) {
-              final lineItems = q['line_items'];
-              if (lineItems is List) {
-                for (final it in lineItems) {
-                  if (it is Map && it['description'] != null) {
-                    final desc = it['description'].toString().trim();
-                    if (desc.isNotEmpty) items.add(desc);
-                  }
-                }
-              }
+            for (final q in (quotesRes as List? ?? [])) {
+              extractFromLineItems(q['line_items']);
             }
           }
         } catch (e) {
-          debugPrint('Error fetching quotation line items: $e');
+          debugPrint('Error fetching quotation line items via pipeline: $e');
         }
       }
 
@@ -421,31 +474,33 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
         backgroundColor: const Color(0xFF6D28D9),
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Stepper Header
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-              color: const Color(0xFF6D28D9),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildStepCircle(0, 'Customer'),
-                  _buildStepLine(0),
-                  _buildStepCircle(1, 'Issue Details'),
-                  _buildStepLine(1),
-                  _buildStepCircle(2, 'Submit'),
-                ],
-              ),
+      body: Column(
+        children: [
+          // Stepper Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+            color: const Color(0xFF6D28D9),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildStepCircle(0, 'Customer'),
+                _buildStepLine(0),
+                _buildStepCircle(1, 'Issue Details'),
+                _buildStepLine(1),
+                _buildStepCircle(2, 'Submit'),
+              ],
             ),
+          ),
 
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _buildCurrentStepContent(customersAsync),
-            ),
-          ],
-        ),
+          Expanded(
+            child: _currentStep == 0
+                ? _buildCustomerSelectionStep(customersAsync)
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: _buildCurrentStepContent(customersAsync),
+                  ),
+          ),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -554,104 +609,211 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
     );
   }
 
-  Widget _buildCurrentStepContent(AsyncValue<List<Customer>> customersAsync) {
-    if (_currentStep == 0) {
-      return Column(
+  Widget _buildCustomerSelectionStep(AsyncValue<List<Customer>> customersAsync) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Select Customer from Customers List',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _searchController,
-            onChanged: (v) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Search customer companyName or phone...',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          customersAsync.when(
-            data: (customers) {
-              final query = _searchController.text.toLowerCase();
-              final filtered = customers.where((c) {
-                return c.companyName.toLowerCase().contains(query) || (c.phone?.contains(query) ?? false);
-              }).toList();
-
-              if (filtered.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Center(
-                    child: Text('No matching customers found in Customers section.'),
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final customer = filtered[index];
-                  final isSelected = _selectedCustomer?.id == customer.id;
-
-                  return GestureDetector(
-                    onTap: () => _onCustomerSelected(customer),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected ? const Color(0xFF6D28D9) : Colors.grey.shade200,
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: isSelected ? const Color(0xFF6D28D9) : Colors.grey.shade200,
-                            child: Text(
-                              customer.companyName.substring(0, 1).toUpperCase(),
-                              style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(customer.companyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                if (customer.phone != null) Text(customer.phone!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                if (customer.address != null) Text(customer.address!, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                          if (isSelected)
-                            const Icon(Icons.check_circle_rounded, color: Color(0xFF6D28D9)),
-                        ],
-                      ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Select Customer',
+                style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+              Consumer(
+                builder: (context, ref, _) {
+                  final totalCount = ref.watch(customersNotifierProvider.notifier).totalCount;
+                  final displayCount = totalCount > 0 ? totalCount : (customersAsync.valueOrNull?.length ?? 0);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6D28D9).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$displayCount Customers',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
                     ),
                   );
                 },
-              );
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _searchController,
+            onChanged: (v) {
+              setState(() {});
+              ref.read(customersNotifierProvider.notifier).search(v);
             },
-            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
-            error: (e, _) => Text('Failed to load customers: $e'),
+            decoration: InputDecoration(
+              hintText: 'Search by company name, person or phone...',
+              hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+              prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF6D28D9)),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                        ref.read(customersNotifierProvider.notifier).search('');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: Colors.white,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF6D28D9), width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: customersAsync.when(
+              data: (customers) {
+                final query = _searchController.text.toLowerCase().trim();
+                final filtered = customers.where((c) {
+                  final name = c.companyName.toLowerCase();
+                  final contact = (c.contactPerson ?? '').toLowerCase();
+                  final phone = (c.phone ?? '').toLowerCase();
+                  return name.contains(query) || contact.contains(query) || phone.contains(query);
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off, size: 40, color: Colors.grey.shade400),
+                        const SizedBox(height: 8),
+                        Text(
+                          query.isEmpty ? 'No customers found.' : 'No customer matches "$query"',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  controller: _customerScrollController,
+                  padding: const EdgeInsets.only(bottom: 12),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final customer = filtered[index];
+                    final isSelected = _selectedCustomer?.id == customer.id;
+
+                    return GestureDetector(
+                      onTap: () => _onCustomerSelected(customer),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFFFAF5FF) : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFF6D28D9) : Colors.grey.shade200,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: isSelected ? const Color(0xFF6D28D9) : const Color(0xFFF1F5F9),
+                              child: Text(
+                                customer.companyName.isNotEmpty ? customer.companyName.substring(0, 1).toUpperCase() : 'C',
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : const Color(0xFF475569),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    customer.companyName,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                      fontSize: 13,
+                                      color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF1E293B),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      if (customer.phone != null && customer.phone!.isNotEmpty) ...[
+                                        Icon(Icons.phone_outlined, size: 11, color: Colors.grey.shade600),
+                                        const SizedBox(width: 3),
+                                        Text(customer.phone!, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      if (customer.address != null && customer.address!.isNotEmpty)
+                                        Expanded(
+                                          child: Text(
+                                            customer.address!,
+                                            style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF6D28D9), size: 20),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
+              error: (e, _) => Center(child: Text('Failed to load customers: $e', style: const TextStyle(fontSize: 12))),
+            ),
           ),
         ],
-      );
+      ),
+    );
+  }
+
+  Widget _buildCurrentStepContent(AsyncValue<List<Customer>> customersAsync) {
+    if (_currentStep == 0) {
+      return _buildCustomerSelectionStep(customersAsync);
     } else if (_currentStep == 1) {
       final customerId = _selectedCustomer?.id ?? '';
       final purchasedAsync = ref.watch(customerPurchasedProductsProvider(customerId));
-      final allProductsAsync = ref.watch(productsListProvider);
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

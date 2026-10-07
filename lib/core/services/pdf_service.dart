@@ -1617,6 +1617,32 @@ class PdfService {
 
   // ─── SALES ORDER PDF ─────────────────────────────────────────────────────────
 
+  static String formatSalesOrderNumber(String raw, [DateTime? date]) {
+    final clean = raw.trim();
+    final year = (date ?? DateTime.now()).year.toString();
+    if (clean.isEmpty) return 'IZY/SO/$year/00001';
+    if (clean.startsWith('IZY/SO/')) return clean;
+
+    // Pattern: "00051/26-27" or "00051/2026" or "51/2026"
+    if (clean.contains('/')) {
+      final parts = clean.split('/');
+      if (RegExp(r'^\d+$').hasMatch(parts[0])) {
+        final seq = parts[0].padLeft(5, '0');
+        return 'IZY/SO/$year/$seq';
+      } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
+        final seq = parts[1].padLeft(5, '0');
+        return 'IZY/SO/$year/$seq';
+      }
+    }
+
+    final digits = RegExp(r'\d+').firstMatch(clean)?.group(0);
+    if (digits != null) {
+      return 'IZY/SO/$year/${digits.padLeft(5, '0')}';
+    }
+
+    return 'IZY/SO/$year/$clean';
+  }
+
   static Future<Uint8List> generateSalesOrderPdf({
     required SalesOrder salesOrder,
     required Customer customer,
@@ -1643,6 +1669,7 @@ class PdfService {
         resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
 
     final cleanCompanyName = _cleanText(companyName);
+    final formattedSoNum = formatSalesOrderNumber(salesOrder.salesOrderNumber, salesOrder.orderDate);
 
     pdf.addPage(
       pw.MultiPage(
@@ -1655,7 +1682,7 @@ class PdfService {
           companyEmail: companyEmail,
           companyGst: variant == 'production' ? '' : 'GSTIN : $companyGst',
           docTitle: 'SALES ORDER',
-          docNumber: salesOrder.salesOrderNumber,
+          docNumber: formattedSoNum,
           docDate: salesOrder.orderDate,
           status: salesOrder.status.displayName,
           logoImage: logoImage,
@@ -1681,7 +1708,7 @@ class PdfService {
                 pw.TableRow(
                   children: [
                     _metaCellRow(
-                        'Sales Order No.', salesOrder.salesOrderNumber),
+                        'Sales Order No.', formattedSoNum),
                     _metaCellRow('Order Date',
                         DateFormat('dd/MM/yyyy').format(salesOrder.orderDate)),
                   ],

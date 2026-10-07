@@ -18,6 +18,7 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
   final _formKey = GlobalKey<FormState>();
   final _companyNameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final _servicePhoneCtrl = TextEditingController();
   final _whatsappCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _hoursCtrl = TextEditingController();
@@ -37,6 +38,7 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
   void dispose() {
     _companyNameCtrl.dispose();
     _phoneCtrl.dispose();
+    _servicePhoneCtrl.dispose();
     _whatsappCtrl.dispose();
     _emailCtrl.dispose();
     _hoursCtrl.dispose();
@@ -59,6 +61,9 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
           }
           if (map['phone'] != null && map['phone'].toString().isNotEmpty) {
             _phoneCtrl.text = map['phone'].toString();
+          }
+          if (map['service_phone'] != null && map['service_phone'].toString().isNotEmpty) {
+            _servicePhoneCtrl.text = map['service_phone'].toString();
           }
           if (map['whatsapp'] != null && map['whatsapp'].toString().isNotEmpty) {
             _whatsappCtrl.text = map['whatsapp'].toString();
@@ -136,6 +141,7 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
       final fullSettings = {
         'company_name': _companyNameCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
+        'service_phone': _servicePhoneCtrl.text.trim(),
         'whatsapp': _whatsappCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
         'working_hours': _hoursCtrl.text.trim(),
@@ -159,6 +165,12 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
         await supabase.from('company_settings').upsert({
           'id': 'default',
           'company_name': _companyNameCtrl.text.trim(),
+          'helpline_phone': _phoneCtrl.text.trim(),
+          'service_phone': _servicePhoneCtrl.text.trim(),
+          'whatsapp_number': _whatsappCtrl.text.trim(),
+          'support_email': _emailCtrl.text.trim(),
+          'working_hours': _hoursCtrl.text.trim(),
+          'support_address': _addressCtrl.text.trim(),
           'updated_at': DateTime.now().toIso8601String(),
         });
       } catch (e) {
@@ -272,6 +284,19 @@ class _CompanyHelplineScreenState extends ConsumerState<CompanyHelplineScreen> {
               border: OutlineInputBorder(),
             ),
             validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+
+          // Service Phone Number
+          TextFormField(
+            controller: _servicePhoneCtrl,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Service Phone Number',
+              hintText: '+91 99999 99999',
+              prefixIcon: Icon(Icons.home_repair_service_outlined, color: Color(0xFF6D28D9)),
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 16),
 

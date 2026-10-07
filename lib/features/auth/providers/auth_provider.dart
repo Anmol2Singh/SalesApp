@@ -41,12 +41,27 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
     final prefs = await SharedPreferences.getInstance();
     final staffId = prefs.getString('staff_session_id') ??
         prefs.getString('technician_session_id');
-    final staffRoleStr = prefs.getString('staff_session_role') ?? 'technician';
-    final staffRolesList = prefs.getStringList('staff_session_roles');
-    final staffEmail = prefs.getString('staff_session_email') ?? '';
-    final staffName = prefs.getString('staff_session_name') ?? 'Staff';
+    final customerUid = prefs.getString('customer_session_uid');
 
-    if (staffId != null && staffId.isNotEmpty) {
+    if (customerUid != null && customerUid.isNotEmpty) {
+      final customerPhone = prefs.getString('customer_session_phone') ?? '';
+      final customerName = prefs.getString('customer_session_name') ?? 'Customer';
+      yield Profile(
+        id: customerUid,
+        fullName: customerName,
+        email: '',
+        phone: customerPhone,
+        roles: [UserRole.customer],
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    } else if (staffId != null && staffId.isNotEmpty) {
+      final staffRoleStr = prefs.getString('staff_session_role') ?? 'technician';
+      final staffRolesList = prefs.getStringList('staff_session_roles');
+      final staffEmail = prefs.getString('staff_session_email') ?? '';
+      final staffName = prefs.getString('staff_session_name') ?? 'Staff';
+
       final roles = (staffRolesList != null && staffRolesList.isNotEmpty)
           ? staffRolesList.map((r) => UserRole.fromString(r)).toList()
           : [UserRole.fromString(staffRoleStr)];
@@ -72,9 +87,22 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
     if (user == null) {
       final prefs = await SharedPreferences.getInstance();
       final staffId = prefs.getString('staff_session_id');
+      final customerUid = prefs.getString('customer_session_uid');
 
-      // If no auth user and no offline staff session, user is logged out
-      if (staffId == null || staffId.isEmpty) {
+      if (customerUid != null && customerUid.isNotEmpty) {
+        final customerPhone = prefs.getString('customer_session_phone') ?? '';
+        final customerName = prefs.getString('customer_session_name') ?? 'Customer';
+        yield Profile(
+          id: customerUid,
+          fullName: customerName,
+          email: '',
+          phone: customerPhone,
+          roles: [UserRole.customer],
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+      } else if (staffId == null || staffId.isEmpty) {
         yield null;
       }
       continue;
@@ -82,7 +110,7 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
 
     // Handle Mock User
     if (user.id.startsWith('mock-user-')) {
-      yield Profile(
+      final mockProfile = Profile(
         id: user.id,
         fullName: 'Customer (Mock)',
         email: user.email ?? '',
@@ -92,6 +120,8 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
+      await _saveProfileSession(mockProfile);
+      yield mockProfile;
       continue;
     }
 
@@ -154,6 +184,7 @@ final authStateProvider = StreamProvider<Profile?>((ref) async* {
               DateTime.tryParse(custResponse['updated_at']?.toString() ?? '') ??
                   DateTime.now(),
         );
+        await _saveProfileSession(custProfile);
         yield custProfile;
         continue;
       }
@@ -257,12 +288,18 @@ Future<void> _clearLocalSessions() async {
 Future<void> _saveProfileSession(Profile profile) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('staff_session_id', profile.id);
-    await prefs.setString('staff_session_email', profile.email);
-    await prefs.setString('staff_session_name', profile.fullName);
-    await prefs.setString('staff_session_role', profile.primaryRole.value);
-    await prefs.setStringList(
-        'staff_session_roles', profile.roles.map((r) => r.value).toList());
+    if (profile.primaryRole == UserRole.customer || profile.roles.contains(UserRole.customer)) {
+      await prefs.setString('customer_session_uid', profile.id);
+      await prefs.setString('customer_session_phone', profile.phone ?? '');
+      await prefs.setString('customer_session_name', profile.fullName);
+    } else {
+      await prefs.setString('staff_session_id', profile.id);
+      await prefs.setString('staff_session_email', profile.email);
+      await prefs.setString('staff_session_name', profile.fullName);
+      await prefs.setString('staff_session_role', profile.primaryRole.value);
+      await prefs.setStringList(
+          'staff_session_roles', profile.roles.map((r) => r.value).toList());
+    }
     await prefs.setString('cached_profile_id_${profile.id}', profile.id);
     await prefs.setString(
         'cached_profile_name_${profile.id}', profile.fullName);
@@ -320,6 +357,51 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
 
       state = const AsyncValue.data(null);
     } catch (e) {
+      // Technician auto-sync fallback: if user exists in technicians table with matching password,
+      // create/sync their Auth account on the fly and retry sign in.
+      try {
+        final techList = await _supabase
+            .from('technicians')
+            .select()
+            .ilike('email', cleanEmail)
+            .limit(1);
+
+        if (techList.isNotEmpty) {
+          final tech = techList.first;
+          final techPass = tech['password']?.toString() ?? '';
+          if (techPass.isNotEmpty && techPass == password.trim()) {
+            await _supabase.rpc('create_new_user', params: {
+              'email': cleanEmail,
+              'password': password.trim(),
+              'full_name': tech['name'] ?? 'Technician',
+              'new_role': 'technician',
+            });
+
+            final retryResponse = await _supabase.auth.signInWithPassword(
+              email: cleanEmail,
+              password: password.trim(),
+            );
+
+            if (retryResponse.user != null) {
+              final authUser = retryResponse.user!;
+              final techProfile = Profile(
+                id: authUser.id,
+                fullName: tech['name'] ?? 'Technician',
+                email: cleanEmail,
+                phone: tech['phone']?.toString(),
+                roles: [UserRole.technician],
+                isActive: true,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              );
+              await _saveProfileSession(techProfile);
+              state = const AsyncValue.data(null);
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+
       state = AsyncValue.error(e, StackTrace.current);
       rethrow;
     }

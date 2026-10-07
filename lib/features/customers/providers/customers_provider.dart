@@ -1,5 +1,4 @@
-// lib/features/customers/providers/customers_provider.dart
-
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/app_config.dart';
@@ -16,11 +15,16 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
   final bool _isAdmin;
 
   int _page = 0;
-  static const int _pageSize = 20;
+  static const int _pageSize = 50;
+  int _totalCount = 0;
   bool _hasMore = true;
   String _sortBy = 'recent'; // 'recent', 'alphabetical'
   String _filterBy = ''; // '', 'active_deal', 'active_amc'
   String _searchQuery = '';
+  Timer? _debounceTimer;
+  List<Customer> _allCustomersCache = [];
+
+  int get totalCount => _totalCount;
 
   bool _isLoading = false;
 
@@ -29,12 +33,14 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     load();
   }
 
-  Future<void> load({bool refresh = false}) async {
+  Future<void> load({bool refresh = false, bool isSearch = false}) async {
     if (_isLoading) return;
     if (refresh) {
       _page = 0;
       _hasMore = true;
-      state = const AsyncValue.loading();
+      if (!isSearch && (state.valueOrNull == null || state.valueOrNull!.isEmpty)) {
+        state = const AsyncValue.loading();
+      }
     }
 
     if (!_hasMore && !refresh) return;
@@ -42,6 +48,7 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     const supabaseUrl = AppConfig.supabaseUrl;
     if (supabaseUrl.contains('your-project-ref')) {
       final mock = _getMockCustomers();
+      _totalCount = mock.length;
       state = AsyncValue.data(mock);
       _hasMore = false;
       return;
@@ -49,6 +56,21 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
 
     _isLoading = true;
     try {
+      if (_page == 0 || refresh) {
+        try {
+          var countQuery = _supabase.from('customers').select('id');
+          if (_filterBy == 'archived') {
+            countQuery = countQuery.not('deleted_at', 'is', null);
+          } else {
+            countQuery = countQuery.isFilter('deleted_at', null);
+          }
+          if (!_isAdmin && _userId != null) {
+            countQuery = countQuery.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
+          }
+          _totalCount = (await countQuery.count(CountOption.exact)).count;
+        } catch (_) {}
+      }
+
       final from = _page * _pageSize;
       final to = from + _pageSize - 1;
 
@@ -134,6 +156,10 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
         if (customers.length < _pageSize) _hasMore = false;
       }
 
+      if (_totalCount == 0 && customers.isNotEmpty && _searchQuery.isEmpty) {
+        _totalCount = customers.length;
+      }
+
       // Sort
       if (_sortBy == 'alphabetical') {
         customers.sort((a, b) => a.companyName.toLowerCase().compareTo(b.companyName.toLowerCase()));
@@ -149,6 +175,9 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
       } else {
         state = AsyncValue.data([...state.value ?? [], ...customers]);
       }
+      if (_searchQuery.isEmpty) {
+        _allCustomersCache = state.value ?? [];
+      }
     } catch (e, st) {
       if (mounted) state = AsyncValue.error(e, st);
     } finally {
@@ -156,9 +185,55 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     }
   }
 
-  Future<void> search(String query) async {
-    _searchQuery = query;
-    await load(refresh: true);
+  void search(String query) {
+    _debounceTimer?.cancel();
+    final cleanQuery = query.trim();
+
+    if (cleanQuery.isEmpty) {
+      _searchQuery = '';
+      if (_allCustomersCache.isNotEmpty) {
+        state = AsyncValue.data(_allCustomersCache);
+      } else {
+        load(refresh: true, isSearch: true);
+      }
+      return;
+    }
+
+    _searchQuery = cleanQuery;
+    final q = cleanQuery.toLowerCase();
+
+    // 1. Instant 0ms local in-memory filter (NO SPINNERS!)
+    final source = _allCustomersCache.isNotEmpty
+        ? _allCustomersCache
+        : (state.valueOrNull ?? []);
+
+    if (source.isNotEmpty) {
+      final localMatches = source.where((c) {
+        final name = c.companyName.toLowerCase();
+        final contact = (c.contactPerson ?? '').toLowerCase();
+        final phone = (c.phone ?? '').toLowerCase();
+        final email = (c.email ?? '').toLowerCase();
+        final addr = (c.address ?? '').toLowerCase();
+        return name.contains(q) ||
+            contact.contains(q) ||
+            phone.contains(q) ||
+            email.contains(q) ||
+            addr.contains(q);
+      }).toList();
+
+      state = AsyncValue.data(localMatches);
+    }
+
+    // 2. Debounce background server query by 300ms
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      load(refresh: true, isSearch: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> setFilterAndSort({required String filter, required String sort}) async {
@@ -223,7 +298,7 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     try {
       String assignerName = 'Admin/Sales Head';
       if (_userId != null) {
-        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId!).maybeSingle();
+        final p = await _supabase.from('profiles').select('full_name').eq('id', _userId).maybeSingle();
         if (p != null && p['full_name'] != null) assignerName = p['full_name'] as String;
       }
 

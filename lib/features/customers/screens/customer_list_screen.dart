@@ -71,6 +71,10 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
   @override
   Widget build(BuildContext context) {
     final customersAsync = ref.watch(customersNotifierProvider);
+    final notifier = ref.watch(customersNotifierProvider.notifier);
+    final totalCount = notifier.totalCount > 0
+        ? notifier.totalCount
+        : (customersAsync.valueOrNull?.length ?? 0);
     final profile = ref.watch(currentProfileProvider);
     final canCreate = profile?.primaryRole.canCreateCustomers ?? false;
 
@@ -96,7 +100,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '${customersAsync.valueOrNull?.length ?? 0}',
+                  '$totalCount',
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 12,
@@ -383,7 +387,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
                     const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
                     const SizedBox(width: 8),
                     Text(
-                      'Total Customers: ${customersAsync.valueOrNull?.length ?? 0}',
+                      'Total Customers: $totalCount',
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 13,

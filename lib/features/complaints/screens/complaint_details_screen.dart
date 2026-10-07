@@ -450,6 +450,71 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
   }
   Future<DateTime> _getCustomerPurchaseDate(String customerId, [String? productName]) async {
     final supabase = ref.read(supabaseClientProvider);
+
+    // 1. Check customer notes for [OLD_CUSTOMER_DATA:...]
+    try {
+      if (customerId.isNotEmpty) {
+        final cust = await supabase
+            .from('customers')
+            .select('notes, created_at')
+            .eq('id', customerId)
+            .maybeSingle();
+
+        if (cust != null) {
+          final notes = cust['notes']?.toString() ?? '';
+          if (notes.contains('[OLD_CUSTOMER_DATA:')) {
+            final sIdx = notes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+            final eIdx = notes.lastIndexOf(']');
+            if (eIdx > sIdx) {
+              final jsonStr = notes.substring(sIdx, eIdx).trim();
+              final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+              final prods = decoded['products'] as List? ?? [];
+              final target = (productName ?? '').trim().toLowerCase();
+
+              // First priority: matching product purchase_date
+              for (final p in prods) {
+                final pName = (p['name'] as String? ?? '').trim().toLowerCase();
+                if (target.isEmpty || pName == target || pName.contains(target) || target.contains(pName)) {
+                  final pDateStr = p['purchase_date'] as String?;
+                  if (pDateStr != null && pDateStr.isNotEmpty) {
+                    final parsed = DateTime.tryParse(pDateStr);
+                    if (parsed != null) return parsed;
+                  }
+                }
+              }
+
+              // Second priority: any product's purchase_date in this record
+              for (final p in prods) {
+                final pDateStr = p['purchase_date'] as String?;
+                if (pDateStr != null && pDateStr.isNotEmpty) {
+                  final parsed = DateTime.tryParse(pDateStr);
+                  if (parsed != null) return parsed;
+                }
+              }
+
+              // Third priority: customer_since date
+              final sinceStr = decoded['customer_since'] as String?;
+              if (sinceStr != null && sinceStr.isNotEmpty) {
+                final parsed = DateTime.tryParse(sinceStr);
+                if (parsed != null) return parsed;
+              }
+            }
+          }
+
+          // Fourth priority: customer createdAt if it looks older than now
+          if (cust['created_at'] != null) {
+            final parsed = DateTime.tryParse(cust['created_at'].toString());
+            if (parsed != null && parsed.isBefore(DateTime.now().subtract(const Duration(days: 1)))) {
+              return parsed;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error reading customer purchase date from notes: $e');
+    }
+
+    // 2. Check warranty cards
     try {
       var query = supabase
           .from('warranty_cards')
@@ -485,6 +550,7 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
       }
     } catch (_) {}
 
+    // 3. Check sales pipelines
     try {
       final pipe = await supabase
           .from('sales_pipelines')

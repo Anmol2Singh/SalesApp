@@ -527,7 +527,10 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               _PdfDocItem(
                 id: row['id']?.toString() ?? '',
                 docType: 'sales_order',
-                docNumber: row['so_number']?.toString() ?? 'Sales Order',
+                docNumber: PdfService.formatSalesOrderNumber(
+                  row['sales_order_number']?.toString() ?? row['so_number']?.toString() ?? 'Sales Order',
+                  DateTime.tryParse(row['created_at']?.toString() ?? ''),
+                ),
                 customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
@@ -815,9 +818,15 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
         final pipe = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
         final customer = Customer.fromJson(pipe['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
         final product = Product.fromJson(pipe['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
-        final quotData = pipe['quotations'] != null && (pipe['quotations'] as List).isNotEmpty
-            ? (pipe['quotations'] as List).first as Map<String, dynamic>
-            : <String, dynamic>{'id': '', 'pipeline_id': boq.pipelineId, 'quotation_number': 'REF', 'product_id': boq.id, 'status': 'draft'};
+        Map<String, dynamic> quotData;
+        final rawQuot = pipe['quotations'];
+        if (rawQuot is Map<String, dynamic>) {
+          quotData = rawQuot;
+        } else if (rawQuot is List && rawQuot.isNotEmpty) {
+          quotData = rawQuot.first as Map<String, dynamic>;
+        } else {
+          quotData = <String, dynamic>{'id': '', 'pipeline_id': boq.pipelineId, 'quotation_number': 'REF', 'product_id': boq.id, 'status': 'draft'};
+        }
         final quotation = Quotation.fromJson(quotData);
         return PdfService.generateBoqPdf(
           boq: boq,

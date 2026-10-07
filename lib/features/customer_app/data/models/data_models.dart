@@ -25,6 +25,8 @@ class Product {
   final List<Map<String, dynamic>> amcVisits;
   final int requestedServicesCount;
 
+  final List<String> includedItems;
+
   Product({
     required this.productId,
     required this.productName,
@@ -49,6 +51,7 @@ class Product {
     this.installationAddress,
     this.amcVisits = const [],
     this.requestedServicesCount = 0,
+    this.includedItems = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -83,6 +86,9 @@ class Product {
       installationAddress: json['installationAddress'] as String?,
       amcVisits: List<Map<String, dynamic>>.from(json['amcVisits'] ?? []),
       requestedServicesCount: json['requestedServicesCount'] ?? 0,
+      includedItems: (json['includedItems'] as List?)?.map((e) => e.toString()).toList() ??
+          (json['items'] as List?)?.map((e) => e.toString()).toList() ??
+          [],
     );
   }
 
@@ -108,6 +114,7 @@ class Product {
       'numberOfVisitsIncluded': numberOfVisitsIncluded,
       'numberOfVisitsCompleted': numberOfVisitsCompleted,
       'brochureUrls': brochureUrls,
+      'includedItems': includedItems,
     };
   }
 
@@ -135,6 +142,7 @@ class Product {
     String? installationAddress,
     List<Map<String, dynamic>>? amcVisits,
     int? requestedServicesCount,
+    List<String>? includedItems,
   }) {
     return Product(
       productId: productId ?? this.productId,
@@ -160,6 +168,7 @@ class Product {
       installationAddress: installationAddress ?? this.installationAddress,
       amcVisits: amcVisits ?? this.amcVisits,
       requestedServicesCount: requestedServicesCount ?? this.requestedServicesCount,
+      includedItems: includedItems ?? this.includedItems,
     );
   }
 }

@@ -224,6 +224,8 @@ class _AmcManagementScreenState extends ConsumerState<AmcManagementScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
@@ -236,7 +238,7 @@ class _AmcManagementScreenState extends ConsumerState<AmcManagementScreen> {
               left: 20,
               right: 20,
               top: 20,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 36,
             ),
             decoration: BoxDecoration(
               color: cardBg,
@@ -732,27 +734,30 @@ class _AmcManagementScreenState extends ConsumerState<AmcManagementScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          plan.title,
-                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                        ),
-                                        if (plan.badge != null && plan.badge!.isNotEmpty) ...[
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF06B6D4),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              plan.badge!,
-                                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                                            ),
+                                    Expanded(
+                                      child: Wrap(
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: [
+                                          Text(
+                                            plan.title,
+                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                           ),
+                                          if (plan.badge != null && plan.badge!.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF06B6D4),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                plan.badge!,
+                                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                                              ),
+                                            ),
                                         ],
-                                      ],
+                                      ),
                                     ),
                                     Row(
                                       children: [

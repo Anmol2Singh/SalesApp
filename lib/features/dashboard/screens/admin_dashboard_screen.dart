@@ -1909,6 +1909,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
       data: (interests) {
         if (interests.isEmpty) return const SizedBox.shrink();
 
+        final item = interests.first;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1946,258 +1948,272 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.refresh,
-                      size: 20, color: AppColors.textSecondary),
-                  tooltip: 'Refresh inquiries',
-                  onPressed: () => ref.invalidate(productInquiriesProvider),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ProductInterestsScreen()),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View All',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                          SizedBox(width: 2),
+                          Icon(Icons.chevron_right, size: 16, color: Color(0xFF2563EB)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.refresh,
+                          size: 18, color: AppColors.textSecondary),
+                      tooltip: 'Refresh inquiries',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: () => ref.invalidate(productInquiriesProvider),
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            // Show ONLY the single latest request on admin dashboard (count stays full)
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: interests.isEmpty ? 0 : 1,
-              separatorBuilder: (ctx, i) => const SizedBox(height: 10),
-              itemBuilder: (ctx, index) {
-                final item = interests[index];
 
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _showInterestMenu(context, ref, item),
+            // Latest interest card
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _showInterestMenu(context, ref, item),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                            color:
-                                const Color(0xFF2563EB).withValues(alpha: 0.2)),
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                const Color(0xFF2563EB).withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
+                    border: Border.all(
+                        color:
+                            const Color(0xFF2563EB).withValues(alpha: 0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color:
+                            const Color(0xFF2563EB).withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
                       ),
-                      child: Column(
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2563EB)
-                                      .withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.shopping_cart_outlined,
-                                  color: Color(0xFF2563EB),
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    RichText(
-                                      text: TextSpan(
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB)
+                                  .withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.shopping_cart_outlined,
+                              color: Color(0xFF2563EB),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                RichText(
+                                  text: TextSpan(
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      color: Color(0xFF1E293B),
+                                      height: 1.35,
+                                    ),
+                                    children: [
+                                      const TextSpan(
+                                          text: 'Respected customer '),
+                                      TextSpan(
+                                        text: item.customerName,
                                         style: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 14,
-                                          color: Color(0xFF1E293B),
-                                          height: 1.35,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                      if (item.customerPhone.isNotEmpty)
+                                        TextSpan(
+                                          text: ' (${item.customerPhone})',
+                                          style: const TextStyle(
+                                              color: Color(0xFF64748B)),
                                         ),
-                                        children: [
-                                          const TextSpan(
-                                              text: 'Respected customer '),
-                                          TextSpan(
-                                            text: item.customerName,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                          ),
-                                          if (item.customerPhone.isNotEmpty)
-                                            TextSpan(
-                                              text: ' (${item.customerPhone})',
-                                              style: const TextStyle(
-                                                  color: Color(0xFF64748B)),
-                                            ),
-                                          const TextSpan(
-                                              text:
-                                                  ' has shown interest in following product: '),
-                                          TextSpan(
-                                            text: item.productName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Color(0xFF2563EB),
-                                            ),
-                                          ),
-                                          if (item.modelNumber.isNotEmpty)
-                                            TextSpan(
-                                              text: ' (${item.modelNumber})',
-                                              style: const TextStyle(
-                                                  color: Color(0xFF64748B)),
-                                            ),
-                                        ],
+                                      const TextSpan(
+                                          text:
+                                              ' has shown interest in following product: '),
+                                      TextSpan(
+                                        text: item.productName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF2563EB),
+                                        ),
+                                      ),
+                                      if (item.modelNumber.isNotEmpty)
+                                        TextSpan(
+                                          text: ' (${item.modelNumber})',
+                                          style: const TextStyle(
+                                              color: Color(0xFF64748B)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.schedule,
+                                        size: 13,
+                                        color: Colors.grey.shade500),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      DateFormat('dd MMM yyyy, hh:mm a')
+                                          .format(item.createdAt),
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600,
                                       ),
                                     ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.schedule,
-                                            size: 13,
-                                            color: Colors.grey.shade500),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          DateFormat('dd MMM yyyy, hh:mm a')
-                                              .format(item.createdAt),
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 11,
-                                            color: Colors.grey.shade600,
-                                          ),
+                                    const SizedBox(width: 10),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: item.status == 'accepted'
+                                            ? Colors.green.shade50
+                                            : Colors.amber.shade50,
+                                        borderRadius:
+                                            BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: item.status == 'accepted'
+                                              ? Colors.green.shade300
+                                              : Colors.amber.shade200,
                                         ),
-                                        const SizedBox(width: 10),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: item.status == 'accepted'
-                                                ? Colors.green.shade50
-                                                : Colors.amber.shade50,
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                            border: Border.all(
-                                              color: item.status == 'accepted'
-                                                  ? Colors.green.shade300
-                                                  : Colors.amber.shade200,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            item.status.toUpperCase(),
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              color: item.status == 'accepted'
-                                                  ? Colors.green.shade800
-                                                  : Colors.amber.shade800,
-                                            ),
-                                          ),
+                                      ),
+                                      child: Text(
+                                        item.status.toUpperCase(),
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: item.status == 'accepted'
+                                              ? Colors.green.shade800
+                                              : Colors.amber.shade800,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ],
                                 ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                      const SizedBox(height: 10),
+
+                      // Action bar: quick WhatsApp / Call and Tap for options
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.touch_app_outlined,
+                                  size: 15, color: Colors.blue.shade600),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Tap for actions',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.shade700,
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          const Divider(height: 1),
-                          const SizedBox(height: 10),
-
-                          // Action bar: quick WhatsApp / Call and Tap for options
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.touch_app_outlined,
-                                      size: 15, color: Colors.blue.shade600),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Tap for actions',
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF16A34A),
+                                  side: const BorderSide(
+                                      color: Color(0xFF16A34A), width: 1.2),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                icon: const Icon(Icons.chat_outlined,
+                                    size: 14),
+                                label: const Text('WhatsApp',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue.shade700,
-                                    ),
-                                  ),
-                                ],
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                                onPressed: () =>
+                                    _launchWhatsApp(item.customerPhone),
                               ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF16A34A),
-                                      side: const BorderSide(
-                                          color: Color(0xFF16A34A), width: 1.2),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    icon: const Icon(Icons.chat_outlined,
-                                        size: 14),
-                                    label: const Text('WhatsApp',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold)),
-                                    onPressed: () =>
-                                        _launchWhatsApp(item.customerPhone),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF2563EB),
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      visualDensity: VisualDensity.compact,
-                                      elevation: 0,
-                                    ),
-                                    icon: const Icon(Icons.phone, size: 14),
-                                    label: const Text('Call',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold)),
-                                    onPressed: () =>
-                                        _launchCall(item.customerPhone),
-                                  ),
-                                ],
+                              const SizedBox(width: 6),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  visualDensity: VisualDensity.compact,
+                                  elevation: 0,
+                                ),
+                                icon: const Icon(Icons.phone, size: 14),
+                                label: const Text('Call',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                                onPressed: () =>
+                                    _launchCall(item.customerPhone),
                               ),
                             ],
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const ProductInterestsScreen()),
-                  );
-                },
-                child: const Text('View all Requests'),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
           ],
         );
       },

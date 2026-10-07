@@ -562,24 +562,38 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: _searchController,
-                onChanged: (v) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'Search technician name, phone, email...',
-                  prefixIcon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => setState(() => _searchController.clear()),
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              // Search Bar matching Staff Users
+              SizedBox(
+                height: 42,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search technician name, phone, email...',
+                    hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () => setState(() => _searchController.clear()),
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    fillColor: AppColors.background,
+                    filled: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               techniciansAsync.when(
                 data: (technicians) {
                   final query = _searchController.text.trim().toLowerCase();
@@ -595,93 +609,248 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Center(
-                        child: Text(technicians.isEmpty
-                            ? 'No technician accounts created yet. Click below to add your first technician.'
-                            : 'No technicians found matching "$query"'),
+                        child: Text(
+                          technicians.isEmpty
+                              ? 'No technician accounts created yet. Click below to add your first technician.'
+                              : 'No technicians found matching "$query"',
+                          style: const TextStyle(color: AppColors.textSecondary, fontFamily: 'Inter'),
+                        ),
                       ),
                     );
                   }
 
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final tech = filtered[index];
-                      return Container(
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Section Header matching Staff Users
+                      Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200),
+                          color: const Color(0xFF6D28D9).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFF6D28D9).withOpacity(0.25),
+                            width: 1,
+                          ),
                         ),
                         child: Row(
                           children: [
-                            CircleAvatar(
-                              backgroundColor: const Color(0xFF6D28D9).withOpacity(0.1),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6D28D9).withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.engineering_outlined,
+                                size: 16,
+                                color: Color(0xFF6D28D9),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
                               child: Text(
-                                tech.name.isNotEmpty ? tech.name.substring(0, 1).toUpperCase() : 'T',
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
+                                'TECHNICIANS',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.6,
+                                  color: Color(0xFF6D28D9),
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(tech.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${tech.phone ?? "No Phone"} • ${tech.email ?? "No Email"}',
-                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    'Status: ${tech.status} • Rating: ${tech.rating}' +
-                                    (tech.plainPassword != null && tech.plainPassword!.isNotEmpty ? ' • Password: ${tech.plainPassword}' : ''),
-                                    style: const TextStyle(color: Colors.grey, fontSize: 11),
-                                  ),
-                                ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6D28D9),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            ),
-                            PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                              onSelected: (val) {
-                                if (val == 'edit') {
-                                  _showEditTechnicianDialog(tech);
-                                } else if (val == 'delete') {
-                                  _deleteTechnician(tech);
-                                }
-                              },
-                              itemBuilder: (ctx) => [
-                                const PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit_outlined, size: 16),
-                                      SizedBox(width: 8),
-                                      Text('Edit Technician'),
-                                    ],
-                                  ),
+                              child: Text(
+                                '${filtered.length} Technicians',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                                      SizedBox(width: 8),
-                                      Text('Delete', style: TextStyle(color: Colors.red)),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    },
+                      ),
+
+                      // Technician Cards matching Staff Users
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final tech = filtered[index];
+                          final initial = tech.name.isNotEmpty ? tech.name.substring(0, 1).toUpperCase() : 'T';
+                          final isAvailable = tech.status.toLowerCase().contains('available');
+                          final statusColor = isAvailable ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF6D28D9).withOpacity(0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          initial,
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF6D28D9),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            tech.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${tech.phone != null && tech.phone!.isNotEmpty ? "${tech.phone} • " : ""}${tech.email ?? "No Email"}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          _TechnicianPasswordWidget(password: tech.plainPassword),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                                      onSelected: (val) {
+                                        if (val == 'edit') {
+                                          _showEditTechnicianDialog(tech);
+                                        } else if (val == 'delete') {
+                                          _deleteTechnician(tech);
+                                        }
+                                      },
+                                      itemBuilder: (ctx) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit_outlined, size: 16),
+                                              SizedBox(width: 8),
+                                              Text('Edit Technician'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                              SizedBox(width: 8),
+                                              Text('Delete', style: TextStyle(color: Colors.red)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // Status pill with colored indicator dot
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 6,
+                                            height: 6,
+                                            decoration: BoxDecoration(
+                                              color: statusColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            tech.status,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: statusColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Rating
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${tech.rating.toStringAsFixed(1)} Rating',
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6D28D9))),
@@ -690,6 +859,91 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TechnicianPasswordWidget extends StatefulWidget {
+  final String? password;
+  const _TechnicianPasswordWidget({required this.password});
+
+  @override
+  State<_TechnicianPasswordWidget> createState() => _TechnicianPasswordWidgetState();
+}
+
+class _TechnicianPasswordWidgetState extends State<_TechnicianPasswordWidget> {
+  bool _revealed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.password == null || widget.password!.isEmpty) {
+      return Row(
+        children: [
+          Icon(Icons.key_off_outlined, size: 12, color: Colors.grey.shade400),
+          const SizedBox(width: 4),
+          Text(
+            'Password: not set',
+            style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.key, size: 12, color: Color(0xFF4F46E5)),
+          const SizedBox(width: 4),
+          Text(
+            'Pass: ',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 11,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            _revealed ? widget.password! : '••••••••',
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => setState(() => _revealed = !_revealed),
+            child: Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: Icon(_revealed ? Icons.visibility_off : Icons.visibility,
+                  size: 14, color: const Color(0xFF64748B)),
+            ),
+          ),
+          const SizedBox(width: 3),
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: widget.password!));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Password copied to clipboard'), duration: Duration(seconds: 2)),
+              );
+            },
+            child: const Padding(
+              padding: EdgeInsets.all(2.0),
+              child: Icon(Icons.copy, size: 13, color: Color(0xFF64748B)),
+            ),
+          ),
+        ],
       ),
     );
   }

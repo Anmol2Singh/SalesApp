@@ -15,6 +15,7 @@ final companyContactProvider = FutureProvider<Map<String, dynamic>>((ref) async 
   String name = 'Insiya Solar Industry';
   String address = 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
   String phone = '+91 9292922992';
+  String servicePhone = '+91 9292922992';
   String whatsapp = '+91 9292922992';
   String email = 'insiyasolarindustry@gmail.com';
   String hours = 'Mon - Sat: 10:00 AM - 6:00 PM';
@@ -29,6 +30,7 @@ final companyContactProvider = FutureProvider<Map<String, dynamic>>((ref) async 
       if (map['company_name'] != null && map['company_name'].toString().isNotEmpty) name = map['company_name'].toString();
       if (map['address'] != null && map['address'].toString().isNotEmpty) address = map['address'].toString();
       if (map['phone'] != null && map['phone'].toString().isNotEmpty) phone = map['phone'].toString();
+      if (map['service_phone'] != null && map['service_phone'].toString().isNotEmpty) servicePhone = map['service_phone'].toString();
       if (map['whatsapp'] != null && map['whatsapp'].toString().isNotEmpty) whatsapp = map['whatsapp'].toString();
       if (map['email'] != null && map['email'].toString().isNotEmpty) email = map['email'].toString();
       if (map['working_hours'] != null && map['working_hours'].toString().isNotEmpty) hours = map['working_hours'].toString();
@@ -51,6 +53,9 @@ final companyContactProvider = FutureProvider<Map<String, dynamic>>((ref) async 
       if (companyRes['helpline_phone'] != null && companyRes['helpline_phone'].toString().isNotEmpty) {
         phone = companyRes['helpline_phone'].toString();
       }
+      if (companyRes['service_phone'] != null && companyRes['service_phone'].toString().isNotEmpty) {
+        servicePhone = companyRes['service_phone'].toString();
+      }
       if (companyRes['whatsapp_number'] != null && companyRes['whatsapp_number'].toString().isNotEmpty) {
         whatsapp = companyRes['whatsapp_number'].toString();
       }
@@ -70,6 +75,7 @@ final companyContactProvider = FutureProvider<Map<String, dynamic>>((ref) async 
     'name': name,
     'address': address,
     'phone': phone,
+    'service_phone': servicePhone,
     'whatsapp': whatsapp,
     'email': email,
     'working_hours': hours,
@@ -183,6 +189,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
               final companyName = company['name'] as String? ?? 'Insiya Solar Industry';
               final address = company['address'] as String? ?? '';
               final phone = company['phone'] as String? ?? '+91 99999 99999';
+              final servicePhone = company['service_phone'] as String? ?? phone;
               final whatsapp = company['whatsapp'] as String? ?? phone;
               final email = company['email'] as String? ?? 'info@insiyasolar.com';
               final workingHours = company['working_hours'] as String? ?? 'Mon - Sat: 9:00 AM - 7:00 PM';
@@ -368,6 +375,16 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                           title: 'Customer Helpline',
                           value: phone,
                           onAction: () => _launchCall(phone),
+                          actionIcon: Icons.call,
+                          textColor: textColor,
+                          subtitleColor: subtitleColor,
+                        ),
+                        const Divider(height: 20),
+                        _buildContactRow(
+                          icon: Icons.home_repair_service_outlined,
+                          title: 'Service Phone Number',
+                          value: servicePhone,
+                          onAction: () => _launchCall(servicePhone),
                           actionIcon: Icons.call,
                           textColor: textColor,
                           subtitleColor: subtitleColor,

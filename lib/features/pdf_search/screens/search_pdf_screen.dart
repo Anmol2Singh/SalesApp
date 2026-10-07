@@ -286,8 +286,11 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
         final product = pipeline['products'] as Map<String, dynamic>? ?? {};
         return DocSearchResult(
           docType: 'sales_order',
-          docNumber: row['sales_order_number']?.toString() ?? 'Sales Order',
-          title: 'Sales Order • ${row['sales_order_number']}',
+          docNumber: PdfService.formatSalesOrderNumber(
+            row['sales_order_number']?.toString() ?? 'Sales Order',
+            DateTime.tryParse(row['created_at']?.toString() ?? ''),
+          ),
+          title: 'Sales Order • ${PdfService.formatSalesOrderNumber(row['sales_order_number']?.toString() ?? '', DateTime.tryParse(row['created_at']?.toString() ?? ''))}',
           customerName: customer['customer_name']?.toString() ?? customer['company_name']?.toString() ?? 'Customer',
           productName: product['name']?.toString(),
           date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -512,9 +515,15 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
         final pipelineData = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
         final customer = Customer.fromJson(pipelineData['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
         final product = Product.fromJson(pipelineData['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
-        final quotData = pipelineData['quotations'] != null && (pipelineData['quotations'] as List).isNotEmpty
-            ? (pipelineData['quotations'] as List).first as Map<String, dynamic>
-            : <String, dynamic>{'id': '', 'pipeline_id': boq.pipelineId, 'quotation_number': 'REF', 'product_id': boq.id, 'status': 'draft'};
+        Map<String, dynamic> quotData;
+        final rawQuot = pipelineData['quotations'];
+        if (rawQuot is Map<String, dynamic>) {
+          quotData = rawQuot;
+        } else if (rawQuot is List && rawQuot.isNotEmpty) {
+          quotData = rawQuot.first as Map<String, dynamic>;
+        } else {
+          quotData = <String, dynamic>{'id': '', 'pipeline_id': boq.pipelineId, 'quotation_number': 'REF', 'product_id': boq.id, 'status': 'draft'};
+        }
         final quotation = Quotation.fromJson(quotData);
         pdfBytes = await PdfService.generateBoqPdf(
           boq: boq,

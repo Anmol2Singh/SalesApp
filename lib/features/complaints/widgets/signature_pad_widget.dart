@@ -22,29 +22,71 @@ class _SignaturePadDialogState extends State<SignaturePadDialog> {
   }
 
   Future<String?> _captureSignature() async {
-    if (_points.isEmpty) return null;
+    final validPoints = _points.whereType<Offset>().toList();
+    if (validPoints.isEmpty) return null;
+
+    double minX = validPoints.first.dx;
+    double maxX = validPoints.first.dx;
+    double minY = validPoints.first.dy;
+    double maxY = validPoints.first.dy;
+
+    for (final p in validPoints) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+
+    // Add breathing margin around drawn signature
+    const margin = 16.0;
+    minX = (minX - margin);
+    minY = (minY - margin);
+    maxX = (maxX + margin);
+    maxY = (maxY + margin);
+
+    final drawnWidth = (maxX - minX).clamp(40.0, 5000.0);
+    final drawnHeight = (maxY - minY).clamp(30.0, 3000.0);
+
+    // Target crisp canvas dimensions for high quality PDF & screen export
+    const double targetWidth = 500.0;
+    final double targetHeight = (targetWidth * (drawnHeight / drawnWidth)).clamp(150.0, 300.0);
+
+    final scaleX = targetWidth / drawnWidth;
+    final scaleY = targetHeight / drawnHeight;
+    final scale = scaleX < scaleY ? scaleX : scaleY;
+
+    final renderedW = drawnWidth * scale;
+    final renderedH = drawnHeight * scale;
+    final offsetX = (targetWidth - renderedW) / 2.0 - (minX * scale);
+    final offsetY = (targetHeight - renderedH) / 2.0 - (minY * scale);
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // Draw white background
+    // Draw solid white background
     final bgPaint = Paint()..color = Colors.white;
-    canvas.drawRect(const Rect.fromLTWH(0, 0, 400, 200), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(0, 0, targetWidth, targetHeight), bgPaint);
 
-    // Draw signature lines
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale, scale);
+
+    // Draw signature lines with crisp adaptive stroke width
     final paint = Paint()
-      ..color = Colors.black
+      ..color = const Color(0xFF0F172A)
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 3.0;
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 3.5 / scale;
 
     for (int i = 0; i < _points.length - 1; i++) {
       if (_points[i] != null && _points[i + 1] != null) {
         canvas.drawLine(_points[i]!, _points[i + 1]!, paint);
       }
     }
+    canvas.restore();
 
     final picture = recorder.endRecording();
-    final img = await picture.toImage(400, 200);
+    final img = await picture.toImage(targetWidth.toInt(), targetHeight.toInt());
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) return null;
 

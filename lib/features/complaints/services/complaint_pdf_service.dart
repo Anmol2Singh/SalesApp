@@ -485,22 +485,22 @@ class ComplaintPdfService {
                     pw.SizedBox(height: 4),
                     if (techSignatureImage != null)
                       pw.Container(
-                        width: 130,
-                        height: 50,
+                        width: 150,
+                        height: 55,
                         child: pw.Image(techSignatureImage,
                             fit: pw.BoxFit.contain),
                       )
                     else
                       pw.Container(
-                        width: 130,
-                        height: 50,
+                        width: 150,
+                        height: 55,
                         alignment: pw.Alignment.center,
                         child: pw.Text('Signed Digitally',
                             style: pw.TextStyle(
                                 fontSize: 9, color: PdfColors.grey700)),
                       ),
                     pw.Container(
-                      width: 130,
+                      width: 150,
                       height: 1,
                       color: PdfColors.grey600,
                     ),
@@ -519,22 +519,22 @@ class ComplaintPdfService {
                     pw.SizedBox(height: 4),
                     if (customerSignatureImage != null)
                       pw.Container(
-                        width: 130,
-                        height: 50,
+                        width: 150,
+                        height: 55,
                         child: pw.Image(customerSignatureImage,
                             fit: pw.BoxFit.contain),
                       )
                     else
                       pw.Container(
-                        width: 130,
-                        height: 50,
+                        width: 150,
+                        height: 55,
                         alignment: pw.Alignment.center,
                         child: pw.Text('Signed Digitally',
                             style: pw.TextStyle(
                                 fontSize: 9, color: PdfColors.grey700)),
                       ),
                     pw.Container(
-                      width: 130,
+                      width: 150,
                       height: 1,
                       color: PdfColors.grey600,
                     ),

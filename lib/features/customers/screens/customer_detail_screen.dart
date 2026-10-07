@@ -635,7 +635,11 @@ class _InfoCard extends ConsumerWidget {
           }
         }
       } catch (_) {}
-      cleanNotes = cleanNotes.replaceAll(RegExp(r'\[OLD_CUSTOMER_DATA:[^\]]*\]'), '').trim();
+      final sIdx = cleanNotes.indexOf('[OLD_CUSTOMER_DATA:');
+      final eIdx = cleanNotes.lastIndexOf(']');
+      if (sIdx != -1 && eIdx > sIdx) {
+        cleanNotes = (cleanNotes.substring(0, sIdx) + cleanNotes.substring(eIdx + 1)).trim();
+      }
     }
 
     return Container(
@@ -880,13 +884,13 @@ class _InfoCard extends ConsumerWidget {
   }
 }
 
-class _OldCustomerProductsCard extends StatelessWidget {
+class _OldCustomerProductsCard extends ConsumerWidget {
   final Customer customer;
 
   const _OldCustomerProductsCard({required this.customer});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     List<Map<String, dynamic>> products = [];
     final rawNotes = customer.notes ?? '';
     if (rawNotes.contains('[OLD_CUSTOMER_DATA:')) {
@@ -948,6 +952,34 @@ class _OldCustomerProductsCard extends StatelessWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF6D28D9),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () => _showEditCustomerModal(context, ref, customer),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6D28D9).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.edit_outlined, size: 14, color: Color(0xFF6D28D9)),
+                      SizedBox(width: 4),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF6D28D9),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1721,6 +1753,33 @@ void _showEditCustomerModal(BuildContext context, WidgetRef ref, Customer custom
   );
 }
 
+class _EditOldItemEntry {
+  final TextEditingController nameCtrl;
+  final TextEditingController qtyCtrl;
+  _EditOldItemEntry({required String name, required int qty})
+      : nameCtrl = TextEditingController(text: name),
+        qtyCtrl = TextEditingController(text: qty.toString());
+  void dispose() {
+    nameCtrl.dispose();
+    qtyCtrl.dispose();
+  }
+}
+
+class _EditOldProductEntry {
+  final TextEditingController nameCtrl;
+  DateTime? purchaseDate;
+  final List<_EditOldItemEntry> items;
+  _EditOldProductEntry({required String name, this.purchaseDate, required List<_EditOldItemEntry> items})
+      : nameCtrl = TextEditingController(text: name),
+        items = items;
+  void dispose() {
+    nameCtrl.dispose();
+    for (final it in items) {
+      it.dispose();
+    }
+  }
+}
+
 class _EditCustomerSheet extends ConsumerStatefulWidget {
   final Customer customer;
   const _EditCustomerSheet({required this.customer});
@@ -1740,6 +1799,10 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
   late final TextEditingController _notesCtrl;
   bool _isSaving = false;
 
+  bool _isOldCustomer = false;
+  DateTime _customerSinceDate = DateTime.now();
+  final List<_EditOldProductEntry> _oldProducts = [];
+
   @override
   void initState() {
     super.initState();
@@ -1749,7 +1812,51 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
     _emailCtrl = TextEditingController(text: widget.customer.email ?? '');
     _addressCtrl = TextEditingController(text: widget.customer.address ?? '');
     _gstCtrl = TextEditingController(text: widget.customer.gstNumber ?? '');
-    _notesCtrl = TextEditingController(text: widget.customer.notes ?? '');
+
+    final rawNotes = widget.customer.notes ?? '';
+    String cleanNotes = rawNotes;
+    if (rawNotes.contains('[OLD_CUSTOMER_DATA:')) {
+      _isOldCustomer = true;
+      try {
+        final sIdx = rawNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+        final eIdx = rawNotes.lastIndexOf(']');
+        if (eIdx > sIdx) {
+          final jsonStr = rawNotes.substring(sIdx, eIdx).trim();
+          final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final cSinceStr = decoded['customer_since'] as String?;
+          if (cSinceStr != null) {
+            final parsed = DateTime.tryParse(cSinceStr);
+            if (parsed != null) _customerSinceDate = parsed;
+          }
+          final prods = decoded['products'] as List? ?? [];
+          for (final p in prods) {
+            final pName = (p['name'] as String? ?? '').trim();
+            final pDateStr = p['purchase_date'] as String?;
+            final pDate = pDateStr != null ? DateTime.tryParse(pDateStr) : null;
+            final pItems = p['items'] as List? ?? [];
+            final itemsList = <_EditOldItemEntry>[];
+            for (final it in pItems) {
+              if (it is Map) {
+                final n = (it['name'] ?? it['item_name'] ?? '').toString().trim();
+                final q = int.tryParse((it['qty'] ?? it['quantity'] ?? '1').toString()) ?? 1;
+                itemsList.add(_EditOldItemEntry(name: n, qty: q));
+              } else {
+                itemsList.add(_EditOldItemEntry(name: it.toString().trim(), qty: 1));
+              }
+            }
+            _oldProducts.add(_EditOldProductEntry(name: pName, purchaseDate: pDate, items: itemsList));
+          }
+        }
+      } catch (_) {}
+
+      final sIdx = rawNotes.indexOf('[OLD_CUSTOMER_DATA:');
+      final eIdx = rawNotes.lastIndexOf(']');
+      if (sIdx != -1 && eIdx > sIdx) {
+        cleanNotes = (rawNotes.substring(0, sIdx) + rawNotes.substring(eIdx + 1)).trim();
+      }
+    }
+
+    _notesCtrl = TextEditingController(text: cleanNotes);
   }
 
   @override
@@ -1761,6 +1868,9 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
     _addressCtrl.dispose();
     _gstCtrl.dispose();
     _notesCtrl.dispose();
+    for (final p in _oldProducts) {
+      p.dispose();
+    }
     super.dispose();
   }
 
@@ -1770,6 +1880,37 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
 
     try {
       final supabase = ref.read(supabaseClientProvider);
+
+      String? finalNotes = _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
+      if (_isOldCustomer) {
+        final productsPayload = <Map<String, dynamic>>[];
+        for (final p in _oldProducts) {
+          final pName = p.nameCtrl.text.trim();
+          if (pName.isNotEmpty) {
+            final itemsList = <Map<String, dynamic>>[];
+            for (final it in p.items) {
+              final itName = it.nameCtrl.text.trim();
+              if (itName.isNotEmpty) {
+                final qty = int.tryParse(it.qtyCtrl.text.trim()) ?? 1;
+                itemsList.add({'name': itName, 'qty': qty});
+              }
+            }
+            productsPayload.add({
+              'name': pName,
+              if (p.purchaseDate != null) 'purchase_date': p.purchaseDate!.toIso8601String(),
+              'items': itemsList,
+            });
+          }
+        }
+
+        final oldCustomerData = {
+          'customer_since': _customerSinceDate.toIso8601String(),
+          'products': productsPayload,
+        };
+        final metaJson = '[OLD_CUSTOMER_DATA:${jsonEncode(oldCustomerData)}]';
+        finalNotes = finalNotes != null && finalNotes.isNotEmpty ? '$finalNotes\n$metaJson' : metaJson;
+      }
+
       await supabase.from('customers').update({
         'customer_name': _companyNameCtrl.text.trim(),
         'company_name': _companyNameCtrl.text.trim(),
@@ -1778,7 +1919,7 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
         'email': _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         'address': _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
         'gst_number': _gstCtrl.text.trim().isEmpty ? null : _gstCtrl.text.trim().toUpperCase(),
-        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        'notes': finalNotes,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', widget.customer.id);
 
@@ -1930,6 +2071,239 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                 ),
                 textCapitalization: TextCapitalization.characters,
               ),
+              if (_isOldCustomer) ...[
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6D28D9).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.history_rounded, color: Color(0xFF6D28D9), size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Customer Since Date',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          side: const BorderSide(color: Color(0xFF6D28D9)),
+                        ),
+                        icon: const Icon(Icons.calendar_month, size: 14, color: Color(0xFF6D28D9)),
+                        label: Text(
+                          DateFormat('dd MMM yyyy').format(_customerSinceDate),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
+                        ),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _customerSinceDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setState(() => _customerSinceDate = picked);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Purchased Products & Items',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.add, size: 16, color: Color(0xFF6D28D9)),
+                      label: const Text('Add Product', style: TextStyle(color: Color(0xFF6D28D9), fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: () {
+                        setState(() {
+                          _oldProducts.add(_EditOldProductEntry(
+                            name: '',
+                            purchaseDate: DateTime.now(),
+                            items: [_EditOldItemEntry(name: '', qty: 1)],
+                          ));
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...List.generate(_oldProducts.length, (pIdx) {
+                  final prod = _oldProducts[pIdx];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF6D28D9).withOpacity(0.3)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Product #${pIdx + 1}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF6D28D9)),
+                            ),
+                            if (_oldProducts.length > 1)
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Remove Product',
+                                onPressed: () {
+                                  setState(() {
+                                    final removed = _oldProducts.removeAt(pIdx);
+                                    removed.dispose();
+                                  });
+                                },
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: prod.nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Product Name *',
+                            hintText: 'e.g. Heat Pump, Solar Water Heater',
+                            prefixIcon: Icon(Icons.inventory_2_outlined, size: 18),
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.event_available, size: 16, color: Color(0xFF6D28D9)),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Purchase Date:',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                            ),
+                            const Spacer(),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              icon: const Icon(Icons.edit_calendar, size: 14),
+                              label: Text(
+                                prod.purchaseDate != null
+                                    ? DateFormat('dd MMM yyyy').format(prod.purchaseDate!)
+                                    : 'Set Date',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: prod.purchaseDate ?? DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                );
+                                if (picked != null) {
+                                  setState(() => prod.purchaseDate = picked);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Components / Items Included:',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                            ),
+                            TextButton.icon(
+                              icon: const Icon(Icons.add, size: 14),
+                              label: const Text('Add Item', style: TextStyle(fontSize: 11)),
+                              onPressed: () {
+                                setState(() {
+                                  prod.items.add(_EditOldItemEntry(name: '', qty: 1));
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        ...List.generate(prod.items.length, (itIdx) {
+                          final it = prod.items[itIdx];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: it.nameCtrl,
+                                    decoration: InputDecoration(
+                                      labelText: 'Component #${itIdx + 1}',
+                                      hintText: 'e.g. Compressor, Sensor',
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 70,
+                                  child: TextFormField(
+                                    controller: it.qtyCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Qty',
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                if (prod.items.length > 1)
+                                  IconButton(
+                                    icon: const Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                                    onPressed: () {
+                                      setState(() {
+                                        final rem = prod.items.removeAt(itIdx);
+                                        rem.dispose();
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  );
+                }),
+              ],
               const SizedBox(height: 14),
               TextFormField(
                 controller: _notesCtrl,

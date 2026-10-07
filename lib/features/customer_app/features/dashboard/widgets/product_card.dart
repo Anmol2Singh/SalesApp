@@ -302,6 +302,92 @@ class HeroProductCard extends StatelessWidget {
             ),
           ),
 
+          // 2a. Purchased Components / Quotation Items Strip
+          if (product.includedItems.isNotEmpty) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF5F3FF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFF6D28D9).withOpacity(0.2),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6D28D9).withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.checklist_rtl_rounded, size: 14, color: Color(0xFF6D28D9)),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Purchased Items / Components (${product.includedItems.length})',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : const Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: product.includedItems.map((item) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF6D28D9).withOpacity(0.18) : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF8B5CF6).withOpacity(0.3) : const Color(0xFFDDD6FE),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF6D28D9)),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                item,
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? const Color(0xFFDDD6FE) : const Color(0xFF4C1D95),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // 2b. Active AMC Banner with "Extend Year" and "Upgrade Plan" options
           if (isAmcActive) ...[
             Container(
@@ -619,6 +705,19 @@ class ProductCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (product.includedItems.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            'Includes: ${product.includedItems.first}${product.includedItems.length > 1 ? ' +${product.includedItems.length - 1} more' : ''}',
+                            style: const TextStyle(
+                              color: Color(0xFFDDD6FE),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -954,6 +954,102 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                 ),
                               ),
 
+                              // Included Equipment & Quotation Items Purchased
+                              if (product.includedItems.isNotEmpty) ...[
+                                const SizedBox(height: 24),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.checklist_rtl_rounded, color: Color(0xFF6D28D9), size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Quotation Items / Components Purchased',
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                                          ),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEDE9FE),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${product.includedItems.length} items',
+                                        style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF6D28D9),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                GlassCard(
+                                  padding: const EdgeInsets.all(16),
+                                  borderRadius: 16,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Equipment and accessories supplied with this installation (as listed in quotation & sales records):',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ...product.includedItems.map((item) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(bottom: 8.0),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.all(4),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF6D28D9).withOpacity(0.12),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.check_circle_rounded,
+                                                    size: 16,
+                                                    color: Color(0xFF6D28D9),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    item,
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 13,
+                                                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              ],
+
                               if (isPurchased && (product.amcVisits.isNotEmpty || product.amcStatus == 'active')) ...[
                                 const SizedBox(height: 24),
                                 Text(
