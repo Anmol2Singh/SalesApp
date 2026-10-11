@@ -641,7 +641,19 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                   ),
 
-                // 8. Search PDF
+                // 8. Quotations Hub
+                if (hasAdminOrManager || hasSales)
+                  _buildNavItemTile(
+                    route: AppRoutes.heatPumpQuotationHub,
+                    label: 'Quotations',
+                    icon: const Icon(Icons.request_quote_outlined),
+                    selectedIcon: const Icon(Icons.request_quote),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 9. Search PDF
                 if (hasAdminOrManager || hasSales)
                   _buildNavItemTile(
                     route: AppRoutes.searchPdf,

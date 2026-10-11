@@ -20,5 +20,9 @@ void main() {
     expect(find.text('IZYHEAT'), findsOneWidget);
     expect(find.text('SALES MANAGEMENT'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    // Unmount before delayed timer executes
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 4));
   });
 }

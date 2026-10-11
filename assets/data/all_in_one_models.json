@@ -1,0 +1,42 @@
+[
+  {
+    "id": "IZ-200A",
+    "modelName": "IZ-200A",
+    "mountType": "floor",
+    "tankVolumeLitres": 200,
+    "description": "ALL IN ONE HEAT PUMP (TOP Blow) Make: IZYHEAT Heat Pump Model: IZ-200A",
+    "specs": {
+      "Product Dimension": "570x1810mm",
+      "Tank Volume": "200 Ltr",
+      "Power Supply": "220V-240V/50Hz",
+      "Heating Rate": "42 L/h",
+      "COP": "4.76",
+      "Compressor": "PANASONIC",
+      "Refrigerant": "R134a",
+      "Max Outlet Water Temp": "65°C",
+      "Ambient Temperature": "-7~45°C",
+      "Water Tank": "Tank with enamel coating",
+      "Net Weight": "93 KG"
+    }
+  },
+  {
+    "id": "IZ-100V",
+    "modelName": "IZ-100V",
+    "mountType": "wall",
+    "tankVolumeLitres": 100,
+    "description": "ALL IN ONE WALL MOUNTED HEAT PUMP (TOP Blow) Make: IZYHEAT Heat Pump Model: IZ-100V",
+    "specs": {
+      "Product Dimension": "470x1282mm",
+      "Tank Volume": "100 Ltr",
+      "Power Supply": "220V-240V/50Hz",
+      "Heating Rate": "12 L/h",
+      "COP": "3.5",
+      "Compressor": "GMCC/PANASONIC",
+      "Refrigerant": "R134a",
+      "Max Outlet Water Temp": "75°C",
+      "Ambient Temperature": "-7~45°C",
+      "Water Tank": "Tank with enamel coating",
+      "Net Weight": "45 kg"
+    }
+  }
+]

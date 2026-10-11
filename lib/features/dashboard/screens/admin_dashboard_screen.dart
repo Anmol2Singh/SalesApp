@@ -856,6 +856,12 @@ class _QuickActionsGrid extends StatelessWidget {
         color: const Color(0xFFF97316),
         onTap: () => context.push(AppRoutes.searchPdf),
       ),
+      _QuickActionBtn(
+        label: 'Quotation Generator',
+        icon: Icons.request_quote_outlined,
+        color: const Color(0xFF0284C7),
+        onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
+      ),
     ];
 
     return LayoutBuilder(

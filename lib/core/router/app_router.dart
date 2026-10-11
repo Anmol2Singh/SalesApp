@@ -15,6 +15,8 @@ import '../../features/customers/screens/create_customer_screen.dart';
 import '../../features/pipelines/screens/pipeline_list_screen.dart';
 import '../../features/pipelines/screens/pipeline_detail_screen.dart';
 import '../../features/quotation/screens/quotation_form_screen.dart';
+import '../../features/quotation_generator/ui/screens/quotation_history_screen.dart';
+import '../../features/quotation_generator/ui/screens/quotation_form_screen.dart' show QuotationGeneratorFormScreen;
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
 import '../../features/boq/screens/boq_form_screen.dart';
 import '../../features/boq/screens/boq_dashboard_screen.dart';
@@ -131,6 +133,8 @@ class AppRoutes {
   static const String boqDashboard = '/boq/dashboard';
   static const String manageBoqItems = '/boq/manage-items';
   static const String dailyTasks = '/daily-tasks';
+  static const String heatPumpQuotationHub = '/heat-pump-quotations';
+  static const String heatPumpQuotationCreate = '/heat-pump-quotations/new';
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -536,6 +540,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           return QuotationFormScreen(pipelineId: id);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.heatPumpQuotationHub,
+        builder: (context, state) => const QuotationHistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.heatPumpQuotationCreate,
+        builder: (context, state) => const QuotationGeneratorFormScreen(),
       ),
       GoRoute(
         path: AppRoutes.salesOrderForm,

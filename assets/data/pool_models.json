@@ -1,0 +1,22 @@
+[
+  {
+    "id": "IZ-35SP",
+    "modelName": "IZ-35SP",
+    "capacityKw": 35.0,
+    "description": "Air Source Heat Pump 35KW for Swimming Pool. Make: IZYHEAT Heat Pump Model: IZ-35SP",
+    "specs": {
+      "Capacity in kW": "35KW",
+      "Product Dimensions": "1084x399x737mm",
+      "Power Supply": "415V - 3Phase",
+      "Max. Power Input": "4.76kw",
+      "Max. Current": "30A",
+      "Water Flow Volume": "12000 L/h",
+      "Noise Level (10m)": "<=59 dB(A)",
+      "Heating Capacity": "25.5~6.4 kW (TODO_CONFIRM)",
+      "Power Input": "5.2~0.84 kW (TODO_CONFIRM)",
+      "Refrigerant": "R32",
+      "Heat Exchanger": "Titanium",
+      "Working Temp Range": "-15~43°C"
+    }
+  }
+]

@@ -1,0 +1,35 @@
+{
+  "materials": [
+    {
+      "code": "GI",
+      "name": "Galvanized Iron (GI)",
+      "defaultShellThicknessMm": 3,
+      "defaultDishThicknessMm": 3,
+      "defaultIsPressurized": true
+    },
+    {
+      "code": "MS",
+      "name": "Mild Steel (MS)",
+      "defaultShellThicknessMm": 5,
+      "defaultDishThicknessMm": 6,
+      "defaultIsPressurized": true
+    },
+    {
+      "code": "Enamel",
+      "name": "Glass-Lined Enamel",
+      "defaultShellThicknessMm": 2,
+      "defaultDishThicknessMm": 2,
+      "defaultIsPressurized": false
+    }
+  ],
+  "insulationPresets": [
+    "50 mm with Puff Insulation",
+    "19mm IC CLAD insulation",
+    "19mm IC CLAD insulation with 450mm Manhole",
+    "100 mm Rockwool Insulation 24 Gauge Aluminium Cladding & other Provisions for stand",
+    "100 mm Rockwool Insulation 24 Gauge Aluminium Cladding With 450 mm Manhole & other Provisions for stand"
+  ],
+  "standardCapacities": [
+    100, 200, 300, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000
+  ]
+}

@@ -437,6 +437,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         isDark ? cust_colors.AppColors.bgPrimary : Colors.grey.shade50;
 
     return Column(
+      key: const ValueKey('customer_login_form_column'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -592,6 +593,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         isDark ? cust_colors.AppColors.bgPrimary : Colors.grey.shade50;
 
     return Column(
+      key: const ValueKey('office_login_form_column'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
