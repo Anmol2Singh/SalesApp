@@ -1,6 +1,5 @@
 // test/quotation_generator_test.dart
 
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salesapp/features/quotation_generator/models/generator_company_settings.dart';
@@ -221,7 +220,6 @@ void main() {
 
       expect(pdfBytes, isNotNull);
       expect(pdfBytes.length, greaterThan(10000)); // Non-empty valid PDF bytes
-      File('test_output.pdf').writeAsBytesSync(pdfBytes);
     });
   });
 

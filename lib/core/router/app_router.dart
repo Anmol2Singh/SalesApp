@@ -15,6 +15,7 @@ import '../../features/customers/screens/create_customer_screen.dart';
 import '../../features/pipelines/screens/pipeline_list_screen.dart';
 import '../../features/pipelines/screens/pipeline_detail_screen.dart';
 import '../../features/quotation/screens/quotation_form_screen.dart';
+import '../../features/quotation_generator/config/quotation_generator_flags.dart';
 import '../../features/quotation_generator/ui/screens/quotation_history_screen.dart';
 import '../../features/quotation_generator/ui/screens/quotation_form_screen.dart' show QuotationGeneratorFormScreen;
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
@@ -547,7 +548,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.heatPumpQuotationCreate,
-        builder: (context, state) => const QuotationGeneratorFormScreen(),
+        builder: (context, state) => kQgStandaloneCreateEnabled
+            ? const QuotationGeneratorFormScreen()
+            : const QuotationHistoryScreen(),
       ),
       GoRoute(
         path: AppRoutes.salesOrderForm,

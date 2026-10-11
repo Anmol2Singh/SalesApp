@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../config/quotation_generator_flags.dart';
 import '../config/quote_type.dart';
 import '../models/generator_company_settings.dart';
 import '../models/generator_quotation.dart';
@@ -95,6 +96,10 @@ class QuotationSupabaseRepository {
 
   Future<void> saveSettings(GeneratorCompanySettings settings) async {
     _cachedSettings = settings;
+    if (kDisableUnsafeExistingWrites) {
+      debugPrint('[CONTAINMENT GUARD] saveSettings: Writes to legacy "pdf_templates" table are disabled.');
+      return;
+    }
     try {
       final existing = await _supabase
           .from('pdf_templates')
@@ -163,9 +168,11 @@ class QuotationSupabaseRepository {
           : settings.nextRunningNumber;
 
       // Update settings with the next running number in Supabase
-      try {
-        await saveSettings(settings.copyWith(nextRunningNumber: nextNumber + 1));
-      } catch (_) {}
+      if (!kDisableUnsafeExistingWrites) {
+        try {
+          await saveSettings(settings.copyWith(nextRunningNumber: nextNumber + 1));
+        } catch (_) {}
+      }
     } catch (e) {
       debugPrint('QuotationSupabaseRepository.getAndIncrementNextRunningNumber error: $e');
       final settings = await getSettings();
@@ -234,6 +241,10 @@ class QuotationSupabaseRepository {
   }
 
   Future<void> saveQuotation(GeneratorQuotation quotation, {Uint8List? pdfBytes}) async {
+    if (kDisableUnsafeExistingWrites) {
+      debugPrint('[CONTAINMENT GUARD] saveQuotation: Unsafe writes to legacy "quotations" table are disabled.');
+      return;
+    }
     String? publicPdfUrl = quotation.pdfUrl;
 
     // Upload generated PDF to Supabase Storage if bytes provided
@@ -369,6 +380,10 @@ class QuotationSupabaseRepository {
   }
 
   Future<void> deleteQuotation(String id) async {
+    if (kDisableUnsafeExistingWrites) {
+      debugPrint('[CONTAINMENT GUARD] deleteQuotation: Writes to legacy "quotations" table are disabled.');
+      return;
+    }
     try {
       await _supabase.from('quotations').update({
         'deleted_at': DateTime.now().toIso8601String(),

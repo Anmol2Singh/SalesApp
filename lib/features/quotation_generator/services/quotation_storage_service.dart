@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../config/quotation_generator_flags.dart';
+
 class QuotationStorageService {
   /// Uploads a local file or image bytes to Supabase Storage and returns the public URL.
   static Future<String?> uploadImageFile({
@@ -14,6 +16,11 @@ class QuotationStorageService {
     String bucket = 'company-assets',
     String folder = 'quotations',
   }) async {
+    if (kDisableUnsafeExistingWrites &&
+        (bucket == 'company-assets' || bucket == 'product-images' || bucket == 'pdfs')) {
+      debugPrint('[CONTAINMENT GUARD] uploadImageFile: Uploads to legacy bucket "$bucket" are disabled.');
+      return null;
+    }
     try {
       final ext = file.path.contains('.') ? file.path.split('.').last.toLowerCase() : 'jpg';
       final fileName = '$folder/${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4().substring(0, 8)}.$ext';
@@ -46,6 +53,10 @@ class QuotationStorageService {
     required Uint8List pdfBytes,
     required String quotationNumber,
   }) async {
+    if (kDisableUnsafeExistingWrites) {
+      debugPrint('[CONTAINMENT GUARD] uploadQuotationPdf: Uploads to legacy bucket "pdfs" are disabled.');
+      return null;
+    }
     try {
       final cleanRef = quotationNumber.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final fileName = 'quotation_${cleanRef}_${DateTime.now().millisecondsSinceEpoch}.pdf';

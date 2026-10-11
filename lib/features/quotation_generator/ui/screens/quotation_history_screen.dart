@@ -12,6 +12,7 @@ import '../../models/generator_quotation.dart';
 import '../../models/generator_company_settings.dart';
 import '../../providers/quotation_generator_providers.dart';
 import '../../services/price_calculator.dart';
+import '../../config/quotation_generator_flags.dart';
 import 'quotation_form_screen.dart';
 import 'quotation_preview_screen.dart';
 import 'quotation_settings_screen.dart';
@@ -101,7 +102,7 @@ _buildQuotationsTab(),
 const QuotationSettingsScreen(),
 ],
 ),
-floatingActionButton: _tabController.index == 0
+floatingActionButton: _tabController.index == 0 && kQgStandaloneCreateEnabled
 ? FloatingActionButton.extended(
 onPressed: () {
 Navigator.push(
