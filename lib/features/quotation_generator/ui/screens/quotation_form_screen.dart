@@ -57,7 +57,6 @@ class _QuotationGeneratorFormScreenState
   final _customerNameCtrl = TextEditingController();
   final _customerAddressCtrl = TextEditingController();
   final _customerMobileCtrl = TextEditingController();
-  Customer? _selectedCustomer;
   List<DealQuotationOption> _availableDeals = [];
   DealQuotationOption? _linkedDeal;
   bool _isFetchingDeals = false;
@@ -156,7 +155,6 @@ class _QuotationGeneratorFormScreenState
     );
 
     if (selected != null) {
-      _selectedCustomer = selected;
       setState(() {
         final name = selected.companyName.trim().isNotEmpty
             ? selected.companyName.trim()

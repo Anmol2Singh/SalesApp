@@ -7,10 +7,13 @@
 
 -- 1. Drop RPCs and helper functions
 DROP FUNCTION IF EXISTS qg_finalize_proposal(UUID, JSONB, TEXT, TEXT);
+DROP FUNCTION IF EXISTS qg_is_admin();
 DROP FUNCTION IF EXISTS qg_is_staff_user();
 DROP FUNCTION IF EXISTS qg_is_admin_or_manager();
 
 -- 2. Drop Storage Policies & Bucket
+DROP POLICY IF EXISTS "Admin can read quotation-generator bucket" ON storage.objects;
+DROP POLICY IF EXISTS "Admin can upload to proposals folder" ON storage.objects;
 DROP POLICY IF EXISTS "Staff can read quotation-generator bucket" ON storage.objects;
 DROP POLICY IF EXISTS "Staff can upload to proposals folder" ON storage.objects;
 DELETE FROM storage.buckets WHERE id = 'quotation-generator';

@@ -56,16 +56,13 @@ class TankSpec {
     final kwStr = effectiveKw.truncateToDouble() == effectiveKw
         ? effectiveKw.toInt().toString()
         : effectiveKw.toString();
-    final typeStr = isPressurized ? 'Pressurized' : 'Non-Pressurized';
-    final qtySuffix = hpQty > 1 ? 'x$hpQty' : '';
-    final tankQtySuffix = tankQty > 1 ? 'x$tankQty' : '';
-    return 'Proposal For air Source Heat Pump Water Heating System $kwStr KW$qtySuffix, $effectiveLitres LTR$tankQtySuffix for your Project ($typeStr).';
+    return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$hpQty, ${effectiveLitres}LTRx$tankQty for your Project.';
   }
 
-  static String generateMultiTankSubjectLine(double hpKw, List<TankSpec> tanks) {
+  static String generateMultiTankSubjectLine(double hpKw, List<TankSpec> tanks, {int hpQty = 1}) {
     final kwStr = hpKw.truncateToDouble() == hpKw ? hpKw.toInt().toString() : hpKw.toString();
-    final tankDescs = tanks.map((t) => '${t.capacityLitres} LTR (${t.isPressurized ? "Pressurized" : "Non-Pressurized"})').join(' + ');
-    return 'Proposal For air Source Heat Pump Water Heating System $kwStr KW, $tankDescs for your Project.';
+    final tankDescs = tanks.map((t) => '${t.capacityLitres}LTRx1').join(', ');
+    return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$hpQty, $tankDescs for your Project.';
   }
 
   factory TankSpec.defaultFor({

@@ -206,6 +206,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       logoIcon = Colors.white;
     }
 
+    final hasAdmin = roles.any((r) => r == UserRole.admin);
     final hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
     final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.sales || r == UserRole.salesHead);
@@ -641,8 +642,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                   ),
 
-                // 8. Quotations Hub
-                if (hasAdminOrManager || hasSales)
+                // 8. Quotations Hub (Strictly Admin only)
+                if (hasAdmin)
                   _buildNavItemTile(
                     route: AppRoutes.heatPumpQuotationHub,
                     label: 'Quotations',

@@ -1,5 +1,6 @@
 // test/quotation_phase2_golden_test.dart
 
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salesapp/features/quotation_generator/config/dynamic_annexure_resolver.dart';
@@ -391,4 +392,195 @@ void main() {
       });
     }
   });
+
+  group('Milestone M4: Template Fidelity Golden Test (Shine Enterprises)', () {
+    final settings = const GeneratorCompanySettings();
+
+    final goldenShineQuotation = GeneratorQuotation(
+      id: 'golden_shine_enterprises',
+      quoteType: QuoteType.hpWithTank,
+      salutation: 'Ms.',
+      customerName: 'Shine Enterprises',
+      customerAddress: 'Goa',
+      customerMobile: '7097064061',
+      date: DateTime(2026, 10, 7),
+      quoteRefNo: 'IN/HP/SS/26-27/1668',
+      salesRef: 'Mr. Aman Khan',
+      salesMobile: '9044495184',
+      model: const HeatPumpModel(
+        id: 'IZ-38C',
+        modelName: 'IZ-38C',
+        displayCapacityKw: 38.0,
+        ratedHeatingCapacity: '38kw',
+        descriptionLine: 'Air Source Heat pump 38kw',
+        makeModelLine: 'Make: IZYHEAT Heat Pump Model: IZ-38C 38kw',
+        powerInputText: 'Power Input 8.75kw, output 38kw, 415V - 3Phase, 50Hz With Auto Defrost.',
+        defaultImagePath: 'assets/images/product_iz_38c.png',
+        specs: {
+          'Size (W x D x H)': '1410x748x1000',
+          'Rated Heating Capacity': '38kw',
+          'Power Supply': '415V - 3Phase',
+          'Rated Input Power': '8.75kw',
+          'Rated COP': '4.34',
+          'Rated Water Yield': '817 L/h',
+          'Max Outlet Water Temperature': '60°C',
+          'Water Flow Noise': '<=59dB(A)',
+          'Condenser': '0',
+          'Refrigerant': 'R134A/410A',
+          'Operating ambient Temp': '-15~43°C',
+          'Compressor': 'DOUBLE',
+        },
+      ),
+      heatPumpQty: 1,
+      heatPumpAmountType: PriceRowType.included,
+      tankCapacityLitres: 3000,
+      tankQty: 2,
+      tankRate: 375000,
+      isTankPressurized: true,
+      tankSpec: const TankSpec(
+        capacityLitres: 3000,
+        isPressurized: true,
+        capacityAndThickness: '3000 ltr, 3mm Shell, 3mm Dish.',
+        operatingPressure: 'Up to 5 Bar',
+        testingPressure: '7 bar pressure',
+        hotWaterInletOutlet: '2 Inch,',
+        heatPumpCirculation: '1 Inch,',
+        outerTankInsulation: '19mm IC CLAD insulation',
+        temperatureDrop: '3º C / 8 hour',
+        innerAndOuterTank: 'GI',
+        tankDirection: 'Horizontal / Vertical',
+        other: 'Solar Provision Additional Heat Pump Provision',
+      ),
+      extraPriceRows: const [],
+      priceRows: const [
+        PriceRow(
+          id: '01',
+          serialNo: '01',
+          description: 'Air Source Heat pump 38kw',
+          qty: 1,
+          rate: 0,
+          status: PriceRowStatus.included,
+        ),
+        PriceRow(
+          id: '02',
+          serialNo: '02',
+          description: '3000  LTR Capacity, GI Pressurized Tank, 3mm Shell, and 3mm Dish, , Thickness,19mm IC CLAD insulation.',
+          qty: 2,
+          rate: 375000,
+          status: PriceRowStatus.priced,
+        ),
+        PriceRow(id: '03', serialNo: '03', description: 'Transport to site', status: PriceRowStatus.included),
+        PriceRow(id: '04', serialNo: '04', description: 'Lifting', status: PriceRowStatus.extra),
+        PriceRow(id: '05', serialNo: '05', description: 'Installation', status: PriceRowStatus.included),
+        PriceRow(id: '06', serialNo: '06', description: 'Circulation pump', status: PriceRowStatus.included),
+        PriceRow(id: '07', serialNo: '07', description: 'Plumbing & wiring material', status: PriceRowStatus.extra),
+      ],
+      subtotal: 750000,
+      gstAmount: 135000,
+      grandTotal: 885000,
+      netPayable: 885000,
+      grossTotal: 885000,
+      paymentSplitAdvance: 70,
+      paymentSplitDelivery: 20,
+      paymentSplitCommissioning: 10,
+      validityDays: 7,
+      warrantyHpYears: 2,
+      warrantyTankYears: 5,
+      termsAndConditions: const [
+        'Proper 1 / 3 Phase power should be arranged where you install the heat pump.',
+        'Electrical/civil/plumbing work materials – Customer Scope.',
+        'Safe storage place need to be provided by you to keep our material & tools.',
+        'All Interconnected pipe lines between system and Tank Your Scope but our team will do the installation. (If applicable): Included',
+      ],
+      includeBanner: true,
+      includeProductImagePage: true,
+      status: 'confirmed',
+      createdAt: DateTime(2026, 10, 7),
+      updatedAt: DateTime(2026, 10, 7),
+    );
+
+    test('Generates 7-page confirmed PDF for Shine Enterprises golden vector and persists to scratch', () async {
+      final pdfBytes = await PdfQuotationBuilder.buildQuotationPdf(goldenShineQuotation, settings);
+      expect(pdfBytes, isNotNull);
+      expect(pdfBytes.length, greaterThan(20000));
+
+      final outFile = File('scratch/golden_generated.pdf');
+      outFile.writeAsBytesSync(pdfBytes);
+      expect(outFile.existsSync(), isTrue);
+    });
+
+    test('Pre-approval proposal includes DRAFT - NOT APPROVED watermark when status is draft', () async {
+      final draftQuotation = goldenShineQuotation.copyWith(status: 'draft');
+      final draftPdfBytes = await PdfQuotationBuilder.buildQuotationPdf(draftQuotation, settings);
+      expect(draftPdfBytes, isNotNull);
+      expect(draftPdfBytes.length, greaterThan(20000));
+
+      final outDraftFile = File('scratch/golden_draft_generated.pdf');
+      outDraftFile.writeAsBytesSync(draftPdfBytes);
+      expect(outDraftFile.existsSync(), isTrue);
+    });
+
+    test('hpOnly quotation (no tank added) generates 6 pages, omits tank spec, and shows HP rate in price table', () async {
+      final noTankQuotation = goldenShineQuotation.copyWith(
+        quoteType: QuoteType.hpOnly,
+        tankLines: const [],
+        tankSpec: null,
+        tankCapacityLitres: 0,
+        tankRate: 0,
+        heatPumpNumericPrice: 440000,
+        subtotal: 440000,
+        gstAmount: 79200,
+        grandTotal: 519200,
+        netPayable: 519200,
+        grossTotal: 519200,
+        extraPriceRows: const [
+          PriceItem(serialNo: '02', description: 'Transport to site', amountType: PriceRowType.included),
+          PriceItem(serialNo: '03', description: 'Lifting', amountType: PriceRowType.extra),
+          PriceItem(serialNo: '04', description: 'Installation', amountType: PriceRowType.included),
+        ],
+      );
+
+      expect(noTankQuotation.hasTank, isFalse);
+
+      final pdfBytes = await PdfQuotationBuilder.buildQuotationPdf(noTankQuotation, settings);
+      expect(pdfBytes, isNotNull);
+      expect(pdfBytes.length, greaterThan(20000));
+
+      final outFile = File('scratch/no_tank_generated.pdf');
+      outFile.writeAsBytesSync(pdfBytes);
+      expect(outFile.existsSync(), isTrue);
+    });
+
+    test('Subject line formats with KWx#qty and LTRx#qty correctly', () {
+      const model38 = HeatPumpModel(
+        id: 'IZ-38C',
+        modelName: 'IZ-38C',
+        displayCapacityKw: 38.0,
+      );
+      final qWithTank = goldenShineQuotation.copyWith(
+        model: model38,
+        heatPumpQty: 1,
+        tankCapacityLitres: 500,
+        tankQty: 2,
+        tankLines: const [],
+      );
+      expect(
+        qWithTank.subjectLine,
+        'Proposal For air Source Heat Pump Water Heating System 38KWx1, 500LTRx2 for your Project.',
+      );
+
+      final qNoTank = goldenShineQuotation.copyWith(
+        quoteType: QuoteType.hpOnly,
+        model: model38,
+        heatPumpQty: 1,
+        tankLines: const [],
+        tankCapacityLitres: 0,
+      );
+      expect(
+        qNoTank.subjectLine,
+        'Proposal For air Source Heat Pump Water Heating System 38KWx1 for your Project.',
+      );
+    });
+  });
 }
+

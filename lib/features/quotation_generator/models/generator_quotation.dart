@@ -183,6 +183,26 @@ class GeneratorQuotation {
 
   bool get isFinalized => status.toLowerCase() == 'finalized';
 
+  bool get hasTank {
+    if (quoteType == QuoteType.hpOnly || quoteType == QuoteType.partsOnly || quoteType == QuoteType.swimmingPool) {
+      return false;
+    }
+    if (quoteType == QuoteType.tankOnly) return true;
+    if (tankLines.isNotEmpty) {
+      return tankLines.any((t) => t.qty > 0 && (t.rate > 0 || t.capacityLitres > 0));
+    }
+    if (tankRate > 0 && tankQty > 0) return true;
+    for (final r in priceRows) {
+      final lower = r.description.toLowerCase();
+      if ((lower.contains('tank') || lower.contains('storage')) &&
+          !lower.contains('all in one') &&
+          !lower.contains('heat pump')) {
+        if (r.rate > 0 || r.amount > 0) return true;
+      }
+    }
+    return false;
+  }
+
   String get displayProductName {
     if (proposalTitle != null && proposalTitle!.trim().isNotEmpty) {
       final clean = proposalTitle!
@@ -208,19 +228,22 @@ class GeneratorQuotation {
 
     switch (quoteType) {
       case QuoteType.hpWithTank:
-        if (tankLines.isNotEmpty) {
-          final effectiveTanks = tankLines.map((t) => t.toTankSpec()).toList();
-          return TankSpec.generateMultiTankSubjectLine(model.displayCapacityKw, effectiveTanks);
+        final kwVal = model.displayCapacityKw;
+        final kwStr = (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
+        if (!hasTank) {
+          return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty for your Project.';
         }
-        return TankSpec.generateSubjectLine(
-          kw: model.displayCapacityKw,
-          litres: tankCapacityLitres,
-          innerMaterial: tankSpec.innerTankMaterial,
-          isPressurized: isTankPressurized,
-        );
+        if (tankLines.isNotEmpty) {
+          final tankDescs = tankLines.map((t) => '${t.capacityLitres}LTRx${t.qty}').join(', ');
+          return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty, $tankDescs for your Project.';
+        }
+        final cap = tankCapacityLitres > 0 ? tankCapacityLitres : 500;
+        return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty, ${cap}LTRx$tankQty for your Project.';
 
       case QuoteType.hpOnly:
-        return 'Proposal for air Source Heat pump Model: ${model.modelName} for your Project.';
+        final kwVal = model.displayCapacityKw;
+        final kwStr = (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
+        return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty for your Project.';
 
       case QuoteType.tankOnly:
         final cap = tankLines.isNotEmpty ? tankLines.first.capacityLitres : tankCapacityLitres;
@@ -248,23 +271,7 @@ class GeneratorQuotation {
   }
 
   String get acceptanceSubjectLine {
-    switch (quoteType) {
-      case QuoteType.hpWithTank:
-        final cap = tankLines.isNotEmpty ? tankLines.first.capacityLitres : tankCapacityLitres;
-        return 'Proposal For air Source Heat pump with $cap Ltr Hot Water Storage Tank for your Project.';
-      case QuoteType.allInOneFloor:
-      case QuoteType.allInOneWall:
-        final cap = allInOneModel?.tankVolumeLtr ?? (quoteType == QuoteType.allInOneFloor ? 200 : 100);
-        return 'Proposal For air Source Heat Pump Water Heating System $cap LTR for your Project.';
-      case QuoteType.swimmingPool:
-        final poolName = poolModel?.modelName ?? 'IZ-35SP';
-        return 'Proposal For SWIMMING POOL Heat Pump Model: $poolName for your Project.';
-      case QuoteType.hpOnly:
-        return 'Proposal for air Source Heat pump Model: ${model.modelName} for your Project.';
-      case QuoteType.tankOnly:
-      case QuoteType.partsOnly:
-        return subjectLine;
-    }
+    return subjectLine;
   }
 
   GeneratorQuotation copyWith({

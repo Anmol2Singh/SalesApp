@@ -110,154 +110,107 @@ ALTER TABLE qg_text_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE qg_item_aliases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE qg_settings ENABLE ROW LEVEL SECURITY;
 
--- Helper check function for staff roles
-CREATE OR REPLACE FUNCTION qg_is_staff_user()
+-- Helper check function for admin role (strictly admin per requirement)
+CREATE OR REPLACE FUNCTION qg_is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM profiles
+    SELECT 1 FROM public.profiles
     WHERE id = auth.uid()
+      AND deleted_at IS NULL
       AND (
-        primary_role IN ('admin', 'manager', 'sales', 'sales_head')
-        OR 'admin' = ANY(roles)
-        OR 'manager' = ANY(roles)
-        OR 'sales' = ANY(roles)
-        OR 'sales_head' = ANY(roles)
-      )
-  );
-$$;
-
--- Helper check function for admin/manager roles
-CREATE OR REPLACE FUNCTION qg_is_admin_or_manager()
-RETURNS BOOLEAN
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM profiles
-    WHERE id = auth.uid()
-      AND (
-        primary_role IN ('admin', 'manager')
-        OR 'admin' = ANY(roles)
-        OR 'manager' = ANY(roles)
+        role::text = 'admin'
+        OR (roles IS NOT NULL AND 'admin' = ANY(roles::text[]))
       )
   );
 $$;
 
 -- RLS: qg_proposals
--- Staff can read proposals
+-- Admin can read proposals
 DROP POLICY IF EXISTS "Staff can read qg_proposals" ON qg_proposals;
-CREATE POLICY "Staff can read qg_proposals"
+DROP POLICY IF EXISTS "Admin can read qg_proposals" ON qg_proposals;
+CREATE POLICY "Admin can read qg_proposals"
 ON qg_proposals FOR SELECT
 TO authenticated
-USING (qg_is_staff_user());
+USING (qg_is_admin());
 
 -- Direct INSERT/UPDATE/DELETE denied for clients (mutations happen strictly via SECURITY DEFINER RPC)
 -- (By omitting INSERT/UPDATE/DELETE policies, direct client writes are forbidden)
 
 -- RLS: qg_catalog
 DROP POLICY IF EXISTS "Staff can read qg_catalog" ON qg_catalog;
-CREATE POLICY "Staff can read qg_catalog"
-ON qg_catalog FOR SELECT
-TO authenticated
-USING (qg_is_staff_user());
-
 DROP POLICY IF EXISTS "Admin can manage qg_catalog" ON qg_catalog;
 CREATE POLICY "Admin can manage qg_catalog"
 ON qg_catalog FOR ALL
 TO authenticated
-USING (qg_is_admin_or_manager())
-WITH CHECK (qg_is_admin_or_manager());
+USING (qg_is_admin())
+WITH CHECK (qg_is_admin());
 
 -- RLS: qg_categories
 DROP POLICY IF EXISTS "Staff can read qg_categories" ON qg_categories;
-CREATE POLICY "Staff can read qg_categories"
-ON qg_categories FOR SELECT
-TO authenticated
-USING (qg_is_staff_user());
-
 DROP POLICY IF EXISTS "Admin can manage qg_categories" ON qg_categories;
 CREATE POLICY "Admin can manage qg_categories"
 ON qg_categories FOR ALL
 TO authenticated
-USING (qg_is_admin_or_manager())
-WITH CHECK (qg_is_admin_or_manager());
+USING (qg_is_admin())
+WITH CHECK (qg_is_admin());
 
 -- RLS: qg_spec_templates
 DROP POLICY IF EXISTS "Staff can read qg_spec_templates" ON qg_spec_templates;
-CREATE POLICY "Staff can read qg_spec_templates"
-ON qg_spec_templates FOR SELECT
-TO authenticated
-USING (qg_is_staff_user());
-
 DROP POLICY IF EXISTS "Admin can manage qg_spec_templates" ON qg_spec_templates;
 CREATE POLICY "Admin can manage qg_spec_templates"
 ON qg_spec_templates FOR ALL
 TO authenticated
-USING (qg_is_admin_or_manager())
-WITH CHECK (qg_is_admin_or_manager());
+USING (qg_is_admin())
+WITH CHECK (qg_is_admin());
 
 -- RLS: qg_text_blocks
 DROP POLICY IF EXISTS "Staff can read qg_text_blocks" ON qg_text_blocks;
-CREATE POLICY "Staff can read qg_text_blocks"
-ON qg_text_blocks FOR SELECT
-TO authenticated
-USING (qg_is_staff_user());
-
 DROP POLICY IF EXISTS "Admin can manage qg_text_blocks" ON qg_text_blocks;
 CREATE POLICY "Admin can manage qg_text_blocks"
 ON qg_text_blocks FOR ALL
 TO authenticated
-USING (qg_is_admin_or_manager())
-WITH CHECK (qg_is_admin_or_manager());
+USING (qg_is_admin())
+WITH CHECK (qg_is_admin());
 
 -- RLS: qg_item_aliases
 DROP POLICY IF EXISTS "Staff can read qg_item_aliases" ON qg_item_aliases;
-CREATE POLICY "Staff can read qg_item_aliases"
-ON qg_item_aliases FOR SELECT
-TO authenticated
-USING (qg_is_staff_user());
-
 DROP POLICY IF EXISTS "Admin can manage qg_item_aliases" ON qg_item_aliases;
 CREATE POLICY "Admin can manage qg_item_aliases"
 ON qg_item_aliases FOR ALL
 TO authenticated
-USING (qg_is_admin_or_manager())
-WITH CHECK (qg_is_admin_or_manager());
+USING (qg_is_admin())
+WITH CHECK (qg_is_admin());
 
 -- RLS: qg_settings
 DROP POLICY IF EXISTS "Staff can read qg_settings" ON qg_settings;
-CREATE POLICY "Staff can read qg_settings"
-ON qg_settings FOR SELECT
-TO authenticated
-USING (qg_is_staff_user());
-
 DROP POLICY IF EXISTS "Admin can manage qg_settings" ON qg_settings;
 CREATE POLICY "Admin can manage qg_settings"
 ON qg_settings FOR ALL
 TO authenticated
-USING (qg_is_admin_or_manager())
-WITH CHECK (qg_is_admin_or_manager());
+USING (qg_is_admin())
+WITH CHECK (qg_is_admin());
 
 -- Storage policies for quotation-generator bucket
 DROP POLICY IF EXISTS "Staff can read quotation-generator bucket" ON storage.objects;
-CREATE POLICY "Staff can read quotation-generator bucket"
+DROP POLICY IF EXISTS "Admin can read quotation-generator bucket" ON storage.objects;
+CREATE POLICY "Admin can read quotation-generator bucket"
 ON storage.objects FOR SELECT
 TO authenticated
-USING (bucket_id = 'quotation-generator' AND qg_is_staff_user());
+USING (bucket_id = 'quotation-generator' AND qg_is_admin());
 
 DROP POLICY IF EXISTS "Staff can upload to proposals folder" ON storage.objects;
-CREATE POLICY "Staff can upload to proposals folder"
+DROP POLICY IF EXISTS "Admin can upload to proposals folder" ON storage.objects;
+CREATE POLICY "Admin can upload to proposals folder"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
     bucket_id = 'quotation-generator' 
     AND (storage.foldername(name))[1] = 'proposals'
-    AND qg_is_staff_user()
+    AND qg_is_admin()
 );
 
 -- ----------------------------------------------------------------------------
@@ -277,7 +230,7 @@ SET search_path = public
 AS $$
 DECLARE
     v_user_id UUID;
-    v_is_staff BOOLEAN;
+    v_is_admin BOOLEAN;
     v_quote_status TEXT;
     v_quote_record RECORD;
     v_next_version INT;
@@ -289,14 +242,14 @@ BEGIN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
-    -- Verify user is authorized staff
-    SELECT qg_is_staff_user() INTO v_is_staff;
-    IF NOT v_is_staff THEN
-        RAISE EXCEPTION 'User % is not authorized to finalize quotations', v_user_id;
+    -- Verify user has admin role
+    SELECT qg_is_admin() INTO v_is_admin;
+    IF NOT v_is_admin THEN
+        RAISE EXCEPTION 'Access denied: Quotation Generator is restricted to admin role.';
     END IF;
 
     -- Fetch source quotation (read-only verification)
-    SELECT id, status, updated_at, revision, grand_total, subtotal, quotation_number
+    SELECT id, status, updated_at, grand_total, subtotal, quotation_number
     INTO v_quote_record
     FROM quotations
     WHERE id = p_quotation_id AND deleted_at IS NULL;
@@ -317,7 +270,6 @@ BEGIN
         'quotation_number', v_quote_record.quotation_number,
         'status', v_quote_record.status,
         'updated_at', v_quote_record.updated_at,
-        'revision', v_quote_record.revision,
         'subtotal', v_quote_record.subtotal,
         'grand_total', v_quote_record.grand_total,
         'snapshot_at', NOW()

@@ -200,6 +200,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               return '/crm/dashboard';
             }
           }
+
+          // Guard Quotation Generator (strictly admin only per requirement)
+          if (location == AppRoutes.heatPumpQuotationHub ||
+              location == AppRoutes.heatPumpQuotationCreate ||
+              location.startsWith('/quotation-generator')) {
+            if (!profile.roles.contains(UserRole.admin)) {
+              return _getRoleHome(profile.primaryRole);
+            }
+          }
         }
       }
 

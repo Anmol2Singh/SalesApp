@@ -10,7 +10,6 @@ import 'package:printing/printing.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../models/generator_quotation.dart';
 import '../../models/generator_company_settings.dart';
-import '../../providers/quotation_generator_providers.dart';
 import '../../services/pdf_quotation_builder.dart';
 
 class QuotationPreviewScreen extends ConsumerStatefulWidget {
@@ -30,7 +29,6 @@ class QuotationPreviewScreen extends ConsumerStatefulWidget {
 class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen> {
   Uint8List? _cachedPdfBytes;
   bool _isSaving = false;
-  bool _isSyncedToSupabase = false;
 
   Future<Uint8List> _generatePdf() async {
     if (_cachedPdfBytes != null) return _cachedPdfBytes!;
@@ -39,26 +37,7 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
       widget.settings,
     );
     _cachedPdfBytes = bytes;
-
-    // Automatically sync and upload PDF to Supabase in the background
-    _syncToSupabase(bytes);
-
     return bytes;
-  }
-
-  Future<void> _syncToSupabase(Uint8List bytes) async {
-    if (_isSyncedToSupabase) return;
-    try {
-      await ref.read(quotationsHistoryProvider.notifier).saveQuotation(
-        widget.quotation,
-        pdfBytes: bytes,
-      );
-      if (mounted) {
-        setState(() => _isSyncedToSupabase = true);
-      }
-    } catch (e) {
-      debugPrint('Background Supabase sync error: $e');
-    }
   }
 
   Future<void> _saveToDevice() async {
@@ -161,19 +140,9 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
               widget.quotation.customerName.isNotEmpty ? widget.quotation.customerName : 'Quotation Preview',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            Row(
-              children: [
-                Icon(
-                  _isSyncedToSupabase ? Icons.cloud_done : Icons.cloud_upload_outlined,
-                  size: 12,
-                  color: _isSyncedToSupabase ? Colors.greenAccent : Colors.white70,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _isSyncedToSupabase ? 'Synced to Supabase Cloud' : 'Syncing with Supabase...',
-                  style: const TextStyle(fontSize: 11, color: Colors.white70),
-                ),
-              ],
+            Text(
+              widget.quotation.quoteRefNo.isNotEmpty ? 'Ref: ${widget.quotation.quoteRefNo}' : 'Quotation Proposal Preview',
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
             ),
           ],
         ),
