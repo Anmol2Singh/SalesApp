@@ -359,6 +359,17 @@ class SalesDashboardScreen extends ConsumerWidget {
                       ),
                     );
 
+                    if (roles.contains(UserRole.admin)) {
+                      actions.add(
+                        _QuickActionBtn(
+                          icon: Icons.request_quote_outlined,
+                          label: 'Quotation Generator',
+                          color: const Color(0xFF0284C7),
+                          onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
+                        ),
+                      );
+                    }
+
                     if (roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
                       actions.add(
                         _QuickActionBtn(

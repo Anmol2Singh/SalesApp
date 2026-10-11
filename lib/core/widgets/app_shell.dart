@@ -206,6 +206,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       logoIcon = Colors.white;
     }
 
+    final hasAdmin = roles.any((r) => r == UserRole.admin);
     final hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
     final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.sales || r == UserRole.salesHead);
@@ -641,7 +642,19 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                   ),
 
-                // 8. Search PDF
+                // 8. Quotations Hub (Strictly Admin only)
+                if (hasAdmin)
+                  _buildNavItemTile(
+                    route: AppRoutes.heatPumpQuotationHub,
+                    label: 'Quotations',
+                    icon: const Icon(Icons.request_quote_outlined),
+                    selectedIcon: const Icon(Icons.request_quote),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 9. Search PDF
                 if (hasAdminOrManager || hasSales)
                   _buildNavItemTile(
                     route: AppRoutes.searchPdf,
