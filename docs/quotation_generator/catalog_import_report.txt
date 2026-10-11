@@ -1,0 +1,61 @@
+================================================================================
+CATALOG IMPORT & RECONCILIATION REPORT
+================================================================================
+
+--- [DOMESTIC HEAT PUMP CATALOG] ---
+Loaded 32 valid Domestic rows from CSV.
+Row  1: IZ-4C    | 3.6kw    (parsed kw: 3.6) [FLAGS: non_integer_kw, junk_capacity_in_litre, duplicate_model_no]
+Row  2: IZ-4C    | 4kw      (parsed kw: 4) [FLAGS: junk_capacity_in_litre, duplicate_model_no]
+Row  3: IZ-6C    | 5.4kw    (parsed kw: 5.4) [FLAGS: non_integer_kw]
+Row  4: IZ-8C    | 8kw      (parsed kw: 8)
+Row  5: IZ-10C   | 10kw     (parsed kw: 10) [FLAGS: duplicate_model_no]
+Row  6: IZ-10C   | 9.580kW  (parsed kw: 9.58) [FLAGS: non_integer_kw, duplicate_model_no]
+Row  7: IZ-10C   | 9.58kW   (parsed kw: 9.58) [FLAGS: non_integer_kw, duplicate_model_no]
+Row  8: IZ-10C   | 10.8kw   (parsed kw: 10.8) [FLAGS: non_integer_kw, duplicate_model_no]
+Row  9: IZ-12C   | 12kw     (parsed kw: 12)
+Row 10: IZ-15C   | 15kw     (parsed kw: 15)
+Row 11: IZ-18C   | 17.5kW   (parsed kw: 17.5) [FLAGS: non_integer_kw, duplicate_model_no]
+Row 12: IZ-18C   | 18kw     (parsed kw: 18) [FLAGS: duplicate_model_no]
+Row 13: IZ-19C   | 19kw     (parsed kw: 19)
+Row 14: IZ-20C   | 20kw     (parsed kw: 20)
+Row 15: IZ-22C   | 22kw     (parsed kw: 22)
+Row 16: IZ-24C   | 24kw     (parsed kw: 24)
+Row 17: IZ-25C   | 25KW     (parsed kw: 25)
+Row 18: IZ-36C   | 35.2kW   (parsed kw: 35.2) [FLAGS: non_integer_kw, duplicate_model_no]
+Row 19: IZ-36C   | 36kw     (parsed kw: 36) [FLAGS: duplicate_model_no]
+Row 20: IZ-38C   | 38kw     (parsed kw: 38) [FLAGS: blank_condenser]
+Row 21: IZ-42C   | 42kw     (parsed kw: 42) [FLAGS: blank_condenser]
+Row 22: IZ-47C   | 47kw     (parsed kw: 47) [FLAGS: blank_condenser]
+Row 23: IZ-50C   | 50kw     (parsed kw: 50) [FLAGS: junk_capacity_in_litre]
+Row 24: IZ-75C   | 75kW     (parsed kw: 75)
+Row 25: IZ-76C   | 75.5kW   (parsed kw: 75.5) [FLAGS: non_integer_kw, duplicate_model_no]
+Row 26: IZ-76C   | 76kw     (parsed kw: 76) [FLAGS: duplicate_model_no]
+Row 27: IZ-90C   | 88kw     (parsed kw: 88) [FLAGS: differs_from_catalog, blank_condenser]
+Row 28: IZ-100C  | 100kw    (parsed kw: 100)
+Row 29: IZ-120C  | 120kw    (parsed kw: 120)
+Row 30: IZ-150C  | 150KW    (parsed kw: 150) [FLAGS: blank_condenser, junk_capacity_in_litre]
+Row 31: IZ-102C  | 102kw    (parsed kw: 102)
+Row 32: IZ-84C   | 84kw     (parsed kw: 84) [FLAGS: missing_sr_no]
+
+--- [ALL-IN-ONE / WALL-MOUNTED CATALOG] ---
+AIO 1: IZ-60A   | Tank: 60L
+AIO 2: IZ-80V   | Tank: 80L
+AIO 3: IZ-100V  | Tank: 100L
+AIO 4: IZ-200A  | Tank: 200L
+AIO 5: IZ-300A  | Tank: 300L
+AIO 6: IZ-500A  | Tank: 500L
+
+--- [SWIMMING POOL CATALOG] ---
+POOL 1: IZ-30SP  | Cap: 30 kW (parsed kw: 30)
+POOL 2: IZ-120SP | Cap: 120kw (parsed kw: 120)
+POOL 3: IZ-136SP | Cap: 136kw (parsed kw: 136)
+POOL 4: IZ-50SP  | Cap: 50kw (parsed kw: 50)
+POOL 5: IZ-35SP  | Cap: 35KW (parsed kw: 35)
+POOL 6: IZ-17SP  | Cap: 17kw (parsed kw: 17)
+
+================================================================================
+TOTAL CATALOG ITEMS IMPORTED: 44
+ - Domestic: 32
+ - All-In-One: 6
+ - Swimming Pool: 6
+================================================================================

@@ -6,6 +6,10 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../core/providers/supabase_provider.dart';
 import '../data/quotation_supabase_repository.dart';
+import '../data/deal_quotations_repository.dart';
+import '../data/qg_proposals_repository.dart';
+import '../data/qg_settings_repository.dart';
+import '../models/deal_quotation_item.dart';
 import '../models/generator_company_settings.dart';
 import '../models/generator_quotation.dart';
 import '../models/heat_pump_model.dart';
@@ -14,6 +18,26 @@ import '../services/quote_number_service.dart';
 final quotationRepositoryProvider = Provider<QuotationSupabaseRepository>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
   return QuotationSupabaseRepository(supabase);
+});
+
+final dealQuotationsRepositoryProvider = Provider<DealQuotationsRepository>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return DealQuotationsRepository(supabase);
+});
+
+final qgProposalsRepositoryProvider = Provider<QgProposalsRepository>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return QgProposalsRepository(supabase);
+});
+
+final qgSettingsRepositoryProvider = Provider<QgSettingsRepository>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return QgSettingsRepository(supabase);
+});
+
+final dealQuotationsProvider = FutureProvider.autoDispose<List<DealQuotationItem>>((ref) async {
+  final repo = ref.watch(dealQuotationsRepositoryProvider);
+  return repo.getDealQuotations();
 });
 
 // Backward compatibility alias
