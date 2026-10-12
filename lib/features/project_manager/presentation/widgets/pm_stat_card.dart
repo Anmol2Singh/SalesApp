@@ -8,6 +8,7 @@ class PmStatCard extends StatelessWidget {
   final Widget icon;
   final Color? iconBgColor;
   final Color? iconColor;
+  final Color? accentColor;
 
   const PmStatCard({
     super.key,
@@ -17,13 +18,14 @@ class PmStatCard extends StatelessWidget {
     required this.icon,
     this.iconBgColor,
     this.iconColor,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final pm = context.pm;
-    final bgBubble = iconBgColor ?? const Color(0xFFE0F2FE);
-    final fgBubble = iconColor ?? const Color(0xFF0284C7);
+    final fgBubble = iconColor ?? accentColor ?? const Color(0xFF0284C7);
+    final bgBubble = iconBgColor ?? (accentColor != null ? accentColor!.withOpacity(0.12) : const Color(0xFFE0F2FE));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
