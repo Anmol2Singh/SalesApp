@@ -14,6 +14,10 @@ import '../widgets/pm_header_bar.dart';
 import '../widgets/pm_stat_card.dart';
 import '../widgets/pm_directory_table.dart';
 import '../widgets/pm_button.dart';
+import '../widgets/pm_pdf_preview_modal.dart';
+import '../widgets/pm_excel_preview_modal.dart';
+import '../widgets/pm_excel_import_modal.dart';
+import '../widgets/pm_excel_bulk_update_modal.dart';
 
 class PmDashboardScreen extends ConsumerStatefulWidget {
   const PmDashboardScreen({super.key});
@@ -261,15 +265,14 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                   ),
                                   // Generate PDF pill
                                   InkWell(
-                                    onTap: () async {
-                                      final pdfBytes = await PmPdfService.generateDirectoryPdf(
-                                        records: filtered,
-                                        companyName: activeCompany.name,
-                                        isPurchase: isPurchase,
-                                      );
-                                      await Printing.layoutPdf(
-                                        onLayout: (_) => pdfBytes,
-                                        name: '${activeCompany.name}_Directory.pdf',
+                                    onTap: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) => PmPdfPreviewModal(
+                                          records: filtered,
+                                          companyName: activeCompany.name,
+                                          isPurchase: isPurchase,
+                                        ),
                                       );
                                     },
                                     borderRadius: BorderRadius.circular(9999),
@@ -293,16 +296,14 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                   // Export to Excel pill
                                   InkWell(
                                     onTap: () {
-                                      final excelBytes = PmExcelService.exportDirectoryToExcel(
-                                        records: filtered,
-                                        isPurchase: isPurchase,
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) => PmExcelPreviewModal(
+                                          records: filtered,
+                                          companyName: activeCompany.name,
+                                          isPurchase: isPurchase,
+                                        ),
                                       );
-                                      if (excelBytes != null) {
-                                        Printing.sharePdf(
-                                          bytes: excelBytes,
-                                          filename: '${activeCompany.name}_Directory.xlsx',
-                                        );
-                                      }
                                     },
                                     borderRadius: BorderRadius.circular(9999),
                                     child: Container(
@@ -325,8 +326,11 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                   // Update via Excel pill
                                   InkWell(
                                     onTap: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Update via Excel: Ready for sync')),
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) => PmExcelBulkUpdateModal(
+                                          isPurchase: isPurchase,
+                                        ),
                                       );
                                     },
                                     borderRadius: BorderRadius.circular(9999),
@@ -350,8 +354,11 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                   // Import Excel pill
                                   InkWell(
                                     onTap: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Import Excel template ready')),
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) => PmExcelImportModal(
+                                          isPurchase: isPurchase,
+                                        ),
                                       );
                                     },
                                     borderRadius: BorderRadius.circular(9999),

@@ -14,7 +14,8 @@ enum UserRole {
   installation,
   technician,
   customer,
-  crmStaff;
+  crmStaff,
+  accounts;
 
   static UserRole fromString(String value) {
     switch (value) {
@@ -30,6 +31,7 @@ enum UserRole {
       case 'technician': return UserRole.technician;
       case 'customer': return UserRole.customer;
       case 'crm_staff': return UserRole.crmStaff;
+      case 'accounts': return UserRole.accounts;
       default: return UserRole.customer;
     }
   }
@@ -48,6 +50,7 @@ enum UserRole {
       case UserRole.technician: return 'technician';
       case UserRole.customer: return 'customer';
       case UserRole.crmStaff: return 'crm_staff';
+      case UserRole.accounts: return 'accounts';
     }
   }
 
@@ -77,6 +80,8 @@ enum UserRole {
         return 'Customer';
       case UserRole.crmStaff:
         return 'CRM Staff';
+      case UserRole.accounts:
+        return 'Accounts';
     }
   }
 
@@ -165,8 +170,15 @@ enum UserRole {
         return const Color(0xFF8B5CF6); // Violet
       case UserRole.customer:
         return const Color(0xFF64748B); // Slate
+      case UserRole.accounts:
+        return const Color(0xFF005CE6); // Primary Blue
     }
   }
+
+  bool get canAccessProjectManager =>
+      this == UserRole.admin ||
+      this == UserRole.manager ||
+      this == UserRole.accounts;
 
   List<Color> get gradientColors {
     switch (this) {
@@ -194,6 +206,8 @@ enum UserRole {
         return const [Color(0xFF6D28D9), Color(0xFF8B5CF6)];
       case UserRole.customer:
         return const [Color(0xFF475569), Color(0xFF64748B)];
+      case UserRole.accounts:
+        return const [Color(0xFF005CE6), Color(0xFF0284C7)];
     }
   }
 }

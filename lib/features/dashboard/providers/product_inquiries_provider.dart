@@ -118,8 +118,19 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
     for (final item in (res as List? ?? [])) {
       final id = item['id']?.toString() ?? '';
       final req = item['requirement']?.toString() ?? '';
-      String prodName = 'Solar Equipment';
-      if (req.contains('product:')) {
+      String prodName = 'Solar System';
+      String modelNum = '';
+      if (req.contains('following product:')) {
+        final after = req.split('following product:').last.trim();
+        if (after.contains('(') && after.contains(')')) {
+          final openIdx = after.indexOf('(');
+          final closeIdx = after.indexOf(')');
+          prodName = after.substring(0, openIdx).trim();
+          modelNum = after.substring(openIdx + 1, closeIdx).trim();
+        } else {
+          prodName = after;
+        }
+      } else if (req.contains('product:')) {
         prodName = req.split('product:').last.trim();
       } else if (req.contains('buying')) {
         prodName = req.split('buying').last.trim();
@@ -132,7 +143,7 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
           customerPhone: item['phone']?.toString() ?? '',
           productId: null,
           productName: prodName,
-          modelNumber: '',
+          modelNumber: modelNum,
           createdAt: DateTime.tryParse(item['created_at']?.toString() ?? '') ?? DateTime.now(),
           status: item['status']?.toString() ?? 'new',
         ));
@@ -140,8 +151,11 @@ final productInquiriesProvider = FutureProvider<List<ProductInterestItem>>((ref)
     }
   } catch (_) {}
 
-  // Filter out any cancelled or fake fallback requests completely
-  loaded.removeWhere((e) => e.status.toLowerCase() == 'cancelled' || e.id.startsWith('fallback'));
+  // Filter out any cancelled, rejected, or fake fallback requests completely
+  loaded.removeWhere((e) {
+    final s = e.status.toLowerCase().trim();
+    return s == 'cancelled' || s == 'rejected' || s == 'lost' || e.id.startsWith('fallback');
+  });
   loaded.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   return loaded;
@@ -163,28 +177,51 @@ class ProductInquiriesService {
       }
     } catch (_) {}
 
-    // 2. Delete / update in Supabase product_inquiries
     final supabase = ref.read(supabaseClientProvider);
+    final isUuid = RegExp(r'^[0-9a-fA-F\-]{36}$').hasMatch(item.id);
+    final cleanPhone = item.customerPhone.replaceAll(RegExp(r'[^0-9+]'), '').trim();
+
+    // 2. Delete / update in Supabase product_inquiries
     try {
-      await supabase
-          .from('product_inquiries')
-          .delete()
-          .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+      if (isUuid) {
+        await supabase.from('product_inquiries').delete().eq('id', item.id);
+      } else {
+        await supabase.from('product_inquiries').delete().eq('inquiry_id', item.id);
+      }
     } catch (_) {
       try {
-        await supabase
-            .from('product_inquiries')
-            .update({'status': 'cancelled'})
-            .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+        if (isUuid) {
+          await supabase.from('product_inquiries').update({'status': 'cancelled'}).eq('id', item.id);
+        } else {
+          await supabase.from('product_inquiries').update({'status': 'cancelled'}).eq('inquiry_id', item.id);
+        }
+      } catch (_) {}
+    }
+
+    if (cleanPhone.isNotEmpty) {
+      try {
+        await supabase.from('product_inquiries').update({'status': 'cancelled'}).eq('customer_phone', cleanPhone);
       } catch (_) {}
     }
 
     // 3. Delete / update in Supabase crm_leads
-    try {
-      await supabase.from('crm_leads').delete().eq('id', item.id);
-    } catch (_) {
+    if (isUuid) {
       try {
-        await supabase.from('crm_leads').update({'status': 'cancelled'}).eq('id', item.id);
+        await supabase.from('crm_leads').delete().eq('id', item.id);
+      } catch (_) {
+        try {
+          await supabase.from('crm_leads').update({'status': 'cancelled'}).eq('id', item.id);
+        } catch (_) {}
+      }
+    }
+
+    if (cleanPhone.isNotEmpty) {
+      try {
+        await supabase
+            .from('crm_leads')
+            .update({'status': 'cancelled'})
+            .eq('phone', cleanPhone)
+            .eq('source', 'Customer Product Interest');
       } catch (_) {}
     }
 
@@ -207,22 +244,26 @@ class ProductInquiriesService {
       }
     } catch (_) {}
 
-    // 2. Update status in Supabase product_inquiries
     final supabase = ref.read(supabaseClientProvider);
+    final isUuid = RegExp(r'^[0-9a-fA-F\-]{36}$').hasMatch(item.id);
+    final cleanPhone = item.customerPhone.replaceAll(RegExp(r'[^0-9+]'), '').trim();
+
     try {
-      await supabase
-          .from('product_inquiries')
-          .update({'status': 'product_unavailable'})
-          .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+      if (isUuid) {
+        await supabase.from('product_inquiries').update({'status': 'product_unavailable'}).eq('id', item.id);
+      } else {
+        await supabase.from('product_inquiries').update({'status': 'product_unavailable'}).eq('inquiry_id', item.id);
+      }
     } catch (_) {}
 
-    // 3. Update status in Supabase crm_leads
-    try {
-      await supabase
-          .from('crm_leads')
-          .update({'status': 'product_unavailable'})
-          .eq('id', item.id);
-    } catch (_) {}
+    if (cleanPhone.isNotEmpty) {
+      try {
+        await supabase.from('product_inquiries').update({'status': 'product_unavailable'}).eq('customer_phone', cleanPhone);
+      } catch (_) {}
+      try {
+        await supabase.from('crm_leads').update({'status': 'product_unavailable'}).eq('phone', cleanPhone).eq('source', 'Customer Product Interest');
+      } catch (_) {}
+    }
 
     ref.invalidate(productInquiriesProvider);
   }
@@ -243,22 +284,26 @@ class ProductInquiriesService {
       }
     } catch (_) {}
 
-    // 2. Update status in Supabase product_inquiries
     final supabase = ref.read(supabaseClientProvider);
+    final isUuid = RegExp(r'^[0-9a-fA-F\-]{36}$').hasMatch(item.id);
+    final cleanPhone = item.customerPhone.replaceAll(RegExp(r'[^0-9+]'), '').trim();
+
     try {
-      await supabase
-          .from('product_inquiries')
-          .update({'status': 'accepted'})
-          .or('inquiry_id.eq.${item.id},id.eq.${item.id}');
+      if (isUuid) {
+        await supabase.from('product_inquiries').update({'status': 'accepted'}).eq('id', item.id);
+      } else {
+        await supabase.from('product_inquiries').update({'status': 'accepted'}).eq('inquiry_id', item.id);
+      }
     } catch (_) {}
 
-    // 3. Update status in Supabase crm_leads
-    try {
-      await supabase
-          .from('crm_leads')
-          .update({'status': 'contacted'})
-          .eq('id', item.id);
-    } catch (_) {}
+    if (cleanPhone.isNotEmpty) {
+      try {
+        await supabase.from('product_inquiries').update({'status': 'accepted'}).eq('customer_phone', cleanPhone);
+      } catch (_) {}
+      try {
+        await supabase.from('crm_leads').update({'status': 'Won'}).eq('phone', cleanPhone).eq('source', 'Customer Product Interest');
+      } catch (_) {}
+    }
 
     ref.invalidate(productInquiriesProvider);
   }
@@ -291,21 +336,32 @@ class ProductInquiriesService {
             .from('products')
             .select('id, name, category, is_active, deleted_at')
             .ilike('name', '%${item.productName.trim()}%')
+            .isFilter('deleted_at', null)
             .limit(1);
         if (res.isNotEmpty) productRow = res.first;
       } catch (_) {}
     }
 
-    // Check if product is inactive, deleted, or unavailable
-    final bool isDeleted = productRow == null || productRow['deleted_at'] != null;
-    final bool isInactive = productRow != null && productRow['is_active'] == false;
+    // If still null, try finding first active product as safe fallback
+    if (productRow == null || productRow['deleted_at'] != null) {
+      try {
+        final fallback = await supabase
+            .from('products')
+            .select('id, name, category, is_active, deleted_at')
+            .isFilter('deleted_at', null)
+            .limit(1);
+        if (fallback.isNotEmpty) {
+          productRow = fallback.first;
+        }
+      } catch (_) {}
+    }
 
-    if (isDeleted || isInactive) {
+    if (productRow == null) {
       await markUnavailable(item);
       return (
         success: false,
         isUnavailable: true,
-        message: 'Product "${item.productName}" is inactive or deleted. Marked request as Product Unavailable.',
+        message: 'No available products in catalog. Marked request as Product Unavailable.',
         pipelineId: null,
       );
     }

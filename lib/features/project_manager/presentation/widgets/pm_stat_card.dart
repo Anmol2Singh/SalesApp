@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/pm_tokens.dart';
 
 class PmStatCard extends StatelessWidget {
   final String title;
@@ -23,12 +22,11 @@ class PmStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pm = context.pm;
     final fgBubble = iconColor ?? accentColor ?? const Color(0xFF0284C7);
     final bgBubble = iconBgColor ?? (accentColor != null ? accentColor!.withOpacity(0.12) : const Color(0xFFE0F2FE));
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -43,6 +41,7 @@ class PmStatCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -62,40 +61,42 @@ class PmStatCard extends StatelessWidget {
                 ),
               ),
               Container(
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: bgBubble,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
                   child: IconTheme(
-                    data: IconThemeData(color: fgBubble, size: 18),
+                    data: IconThemeData(color: fgBubble, size: 17),
                     child: icon,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 26,
+              fontSize: 24,
               fontWeight: FontWeight.w900,
               color: Color(0xFF0F172A),
               letterSpacing: -0.6,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              description,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

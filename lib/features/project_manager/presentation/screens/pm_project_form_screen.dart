@@ -200,6 +200,17 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
         backgroundColor: pm.card,
         foregroundColor: pm.foreground,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft, size: 20, color: Color(0xFF0F172A)),
+          tooltip: 'Back to Directory',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/pm');
+            }
+          },
+        ),
         title: Text(
           isEdit
               ? (widget.isPurchase ? 'Edit Vendor #$_idNo' : 'Edit Project #$_idNo')

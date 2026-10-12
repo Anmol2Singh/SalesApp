@@ -184,40 +184,52 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                         // KPI Stat Cards Row
                         LayoutBuilder(
                           builder: (context, constraints) {
-                            final isMobile = constraints.maxWidth < 700;
-                            return GridView.count(
-                              crossAxisCount: isMobile ? 2 : 4,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: isMobile ? 1.6 : 2.2,
-                              children: [
-                                PmStatCard(
-                                  title: 'Total Inflow (Credits)',
-                                  value: _currencyFmt.format(totalCredit),
-                                  icon: Icon(LucideIcons.arrowDownLeft, color: pm.success, size: 20),
-                                  accentColor: pm.success,
-                                ),
-                                PmStatCard(
-                                  title: 'Total Outflow (Debits)',
-                                  value: _currencyFmt.format(totalDebit),
-                                  icon: Icon(LucideIcons.arrowUpRight, color: pm.destructive, size: 20),
-                                  accentColor: pm.destructive,
-                                ),
-                                PmStatCard(
-                                  title: 'Net Cash Balance',
-                                  value: _currencyFmt.format(netBalance),
-                                  icon: Icon(LucideIcons.wallet, color: netBalance >= 0 ? pm.success : pm.destructive, size: 20),
-                                  accentColor: netBalance >= 0 ? pm.success : pm.destructive,
-                                ),
-                                PmStatCard(
-                                  title: 'Entries Count',
-                                  value: transactions.length.toString(),
-                                  icon: Icon(LucideIcons.receipt, color: pm.primary, size: 20),
-                                  accentColor: pm.primary,
-                                ),
-                              ],
+                            final isMobile = constraints.maxWidth < 750;
+                            final cards = [
+                              PmStatCard(
+                                title: 'Total Inflow (Credits)',
+                                value: _currencyFmt.format(totalCredit),
+                                icon: Icon(LucideIcons.arrowDownLeft, color: pm.success, size: 20),
+                                accentColor: pm.success,
+                              ),
+                              PmStatCard(
+                                title: 'Total Outflow (Debits)',
+                                value: _currencyFmt.format(totalDebit),
+                                icon: Icon(LucideIcons.arrowUpRight, color: pm.destructive, size: 20),
+                                accentColor: pm.destructive,
+                              ),
+                              PmStatCard(
+                                title: 'Net Cash Balance',
+                                value: _currencyFmt.format(netBalance),
+                                icon: Icon(LucideIcons.wallet, color: netBalance >= 0 ? pm.success : pm.destructive, size: 20),
+                                accentColor: netBalance >= 0 ? pm.success : pm.destructive,
+                              ),
+                              PmStatCard(
+                                title: 'Entries Count',
+                                value: transactions.length.toString(),
+                                icon: Icon(LucideIcons.receipt, color: pm.primary, size: 20),
+                                accentColor: pm.primary,
+                              ),
+                            ];
+
+                            if (!isMobile) {
+                              return Row(
+                                children: cards.map((c) => Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                                    child: c,
+                                  ),
+                                )).toList(),
+                              );
+                            }
+
+                            return Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: cards.map((c) => SizedBox(
+                                width: (constraints.maxWidth - 12) / 2,
+                                child: c,
+                              )).toList(),
                             );
                           },
                         ),

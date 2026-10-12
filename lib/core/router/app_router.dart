@@ -78,6 +78,7 @@ import '../../features/project_manager/presentation/screens/pm_dashboard_screen.
 import '../../features/project_manager/presentation/screens/pm_project_detail_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_project_form_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_filter_screen.dart';
+import '../../features/dashboard/screens/product_interests_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_quick_call_remark_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
 
@@ -153,6 +154,10 @@ class AppRoutes {
   static const String pmCallRemark = '/pm/projects/:id/call-remark';
   static const String pmFilter = '/pm/filter';
   static const String pmDailyTransactions = '/pm/daily-transactions';
+  static const String productInterests = '/product-interests';
+  static const String userActivityReport = '/reports/activity';
+  static const String customerReport = '/reports/customer';
+  static const String products = '/products';
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -223,6 +228,23 @@ final routerProvider = Provider<GoRouter>((ref) {
               location == AppRoutes.heatPumpQuotationCreate ||
               location.startsWith('/quotation-generator')) {
             if (!profile.roles.contains(UserRole.admin)) {
+              return _getRoleHome(profile.primaryRole);
+            }
+          }
+
+          // Guard Accounts role: access to Project Manager module only
+          if (profile.roles.contains(UserRole.accounts) &&
+              !profile.roles.contains(UserRole.admin) &&
+              !profile.roles.contains(UserRole.manager)) {
+            if (!location.startsWith('/pm')) {
+              return AppRoutes.projectManager;
+            }
+          }
+
+          // Guard Project Manager module: strictly admin, manager, or accounts
+          if (location.startsWith('/pm')) {
+            final canAccess = profile.roles.any((r) => r.canAccessProjectManager);
+            if (!canAccess) {
               return _getRoleHome(profile.primaryRole);
             }
           }
@@ -516,6 +538,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.installationHistory,
             builder: (context, state) => const InstallationHistoryScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.productInterests,
+            builder: (context, state) => const ProductInterestsScreen(),
+          ),
+          GoRoute(
+            path: '/reports/activity',
+            builder: (context, state) => const UserActivityReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/customer',
+            builder: (context, state) => const CustomerReportScreen(),
+          ),
+          GoRoute(
+            path: '/products',
+            builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
+          ),
         ],
       ),
       // Detail/Form views (Full screen)
@@ -709,18 +747,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/reports/activity',
-        builder: (context, state) => const UserActivityReportScreen(),
-      ),
-      GoRoute(
-        path: '/reports/customer',
-        builder: (context, state) => const CustomerReportScreen(),
-      ),
-      GoRoute(
-        path: '/products',
-        builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
-      ),
-      GoRoute(
         path: '/customer/dashboard',
         builder: (context, state) => const CustomerDashboardScreen(),
       ),
@@ -767,6 +793,8 @@ String getRoleHome(UserRole role) {
       return '/customer/dashboard';
     case UserRole.crmStaff:
       return '/crm/dashboard';
+    case UserRole.accounts:
+      return AppRoutes.projectManager;
   }
 }
 

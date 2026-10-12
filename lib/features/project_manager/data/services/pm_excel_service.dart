@@ -14,8 +14,12 @@ class PmExcelService {
     required bool isPurchase,
   }) {
     final excel = Excel.createExcel();
+    final defaultSheet = excel.getDefaultSheet();
     final sheetName = isPurchase ? 'Vendors' : 'Customers';
     final sheet = excel[sheetName];
+    if (defaultSheet != null && defaultSheet != sheetName) {
+      excel.delete(defaultSheet);
+    }
 
     final headers = isPurchase
         ? ['ID', 'Order Type', 'Vendor Name', 'Party Print Name', 'Mobile Number', 'Address', 'Quotation Value', 'Payment Paid', 'Balance']
@@ -78,7 +82,11 @@ class PmExcelService {
     required bool isPurchase,
   }) {
     final excel = Excel.createExcel();
+    final defaultSheet = excel.getDefaultSheet();
     final sheet = excel['Ledger'];
+    if (defaultSheet != null && defaultSheet != 'Ledger') {
+      excel.delete(defaultSheet);
+    }
 
     final headers = isPurchase
         ? ['Sr No', 'Date', 'Type', 'Reference', 'Invoice', 'Particulars', 'Bill Received', 'Payment Bill', 'Quotation Value', 'Payment Paid']

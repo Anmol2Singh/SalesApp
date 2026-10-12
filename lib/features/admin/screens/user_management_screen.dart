@@ -236,6 +236,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         return Colors.blueGrey;
       case UserRole.installation:
         return const Color(0xFF0284C7);
+      case UserRole.accounts:
+        return const Color(0xFF005CE6);
     }
   }
 
@@ -265,6 +267,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         return Icons.person_outline;
       case UserRole.installation:
         return Icons.build_circle_outlined;
+      case UserRole.accounts:
+        return Icons.account_balance_wallet_outlined;
     }
   }
 
@@ -1313,6 +1317,8 @@ class _UserTile extends StatelessWidget {
         return Colors.blueGrey;
       case UserRole.installation:
         return const Color(0xFF0284C7);
+      case UserRole.accounts:
+        return const Color(0xFF005CE6);
     }
   }
 }

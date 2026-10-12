@@ -19,6 +19,13 @@ class PmPurchase {
   double get orderValue => quotationValue;
   double get paymentReceived => paymentPaid;
   double get extraWorkValue => 0.0;
+  String? get salesMan => null;
+  String? get salesmanName => null;
+  String? get gstNo => null;
+  String? get itemPurchased => null;
+  int? get itemQuantity => null;
+  String? get tankType => null;
+  int? get tankCapacity => null;
 
   // Derived follow-up fields
   final DateTime? reminderDate;

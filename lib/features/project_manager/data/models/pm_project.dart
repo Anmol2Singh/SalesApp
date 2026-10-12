@@ -70,6 +70,11 @@ class PmProject {
   String? get partyPrintName => customer?.companyName;
   String? get mobileNumber => customer?.phone;
   String? get firmName => customer?.companyName;
+  String? get salesMan => salesmanName;
+  String? get gstNo => customer?.gstNumber;
+  String? get itemPurchased => hpType ?? tankType;
+  int get itemQuantity => hpQty > 0 ? hpQty : tankQty;
+  int get tankCapacity => gl > 0 ? gl : tankQty;
 
   factory PmProject.fromJson(Map<String, dynamic> json) {
     Customer? linkedCustomer;

@@ -6,6 +6,8 @@ import '../theme/pm_tokens.dart';
 import '../../providers/pm_mode_provider.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../data/models/pm_company.dart';
+import '../../../../core/providers/sidebar_provider.dart';
+import 'pm_app_settings_dialog.dart';
 
 class PmHeaderBar extends ConsumerWidget {
   final String searchQuery;
@@ -348,23 +350,57 @@ class PmHeaderBar extends ConsumerWidget {
             ),
           );
 
-          // 6. Settings gear button
-          final settingsButton = InkWell(
-            onTap: () => context.push('/pm/filter'),
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              height: 38,
-              width: 38,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+          // 0. Collapse/Expand Left Navigation Bar Button (Requirement 4)
+          final isSidebarCollapsed = ref.watch(sidebarCollapsedProvider);
+          final collapseButton = Tooltip(
+            message: isSidebarCollapsed ? 'Expand Navigation' : 'Collapse Navigation (Icons Only)',
+            child: InkWell(
+              onTap: () => ref.read(sidebarCollapsedProvider.notifier).state = !isSidebarCollapsed,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  color: isSidebarCollapsed ? const Color(0xFFEFF6FF) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSidebarCollapsed ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    isSidebarCollapsed ? LucideIcons.panelLeftOpen : LucideIcons.panelLeftClose,
+                    size: 17,
+                    color: isSidebarCollapsed ? const Color(0xFF005CE6) : const Color(0xFF64748B),
+                  ),
+                ),
               ),
-              child: const Center(
-                child: Icon(
-                  LucideIcons.settings,
-                  size: 16,
-                  color: Color(0xFF64748B),
+            ),
+          );
+
+          // 6. Settings gear button (Requirement 1: App Settings & Company Management)
+          final settingsButton = Tooltip(
+            message: 'App Settings & Company Management',
+            child: InkWell(
+              onTap: () => showDialog(
+                context: context,
+                builder: (ctx) => const PmAppSettingsDialog(),
+              ),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Center(
+                  child: Icon(
+                    LucideIcons.settings,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
               ),
             ),
@@ -373,6 +409,8 @@ class PmHeaderBar extends ConsumerWidget {
           if (isWide) {
             return Row(
               children: [
+                collapseButton,
+                const SizedBox(width: 12),
                 companyBlock,
                 const SizedBox(width: 16),
                 modeSwitcher,
@@ -395,7 +433,14 @@ class PmHeaderBar extends ConsumerWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             alignment: WrapAlignment.spaceBetween,
             children: [
-              companyBlock,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  collapseButton,
+                  const SizedBox(width: 10),
+                  companyBlock,
+                ],
+              ),
               modeSwitcher,
               SizedBox(
                 width: constraints.maxWidth > 550 ? 300 : constraints.maxWidth,

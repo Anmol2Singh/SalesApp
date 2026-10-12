@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme/pm_tokens.dart';
 import '../../providers/pm_providers.dart';
-import '../widgets/pm_badge.dart';
 import '../widgets/pm_button.dart';
 import '../tabs/pm_ledger_tab.dart';
 import '../tabs/pm_payment_terms_tab.dart';
@@ -105,7 +104,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
             final customerSince = record.createdAt != null
                 ? DateFormat('dd/MM/yyyy').format(record.createdAt!)
                 : (record.reminderDate != null ? DateFormat('dd/MM/yyyy').format(record.reminderDate!) : '10/10/2026');
-            final salesMan = record.salesMan ?? 'Sagar Farate';
+            final salesMan = record.salesMan ?? record.salesmanName ?? 'Sagar Farate';
             final firmName = record.firmName ?? 'Insiya Trading Corporation';
 
             return Column(
@@ -530,26 +529,6 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
           },
         ),
       ),
-    );
-  }
-}
-
-class _QuickStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
-
-  const _QuickStat({required this.label, required this.value, this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color)),
-      ],
     );
   }
 }
