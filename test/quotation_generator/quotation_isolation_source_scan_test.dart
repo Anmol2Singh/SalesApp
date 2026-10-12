@@ -26,6 +26,8 @@ void main() {
         'products',
         'inventory_items',
         'supplementary_items',
+        'installations',
+        'sales_orders',
       ];
 
       final legacyBuckets = [
@@ -76,7 +78,7 @@ void main() {
           }
 
           // 3. Check for RPC calls: all RPCs in module must be prefixed with qg_
-          final rpcRegex = RegExp(r"\.rpc\(['" + r'"]([a-zA-Z0-9_]+)' + r"['" + r'"]');
+          final rpcRegex = RegExp(r"""\.rpc\(['"]([a-zA-Z0-9_]+)['"]""");
           final rpcMatch = rpcRegex.firstMatch(line);
           if (rpcMatch != null) {
             final rpcName = rpcMatch.group(1)!;

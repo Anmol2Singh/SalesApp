@@ -6,6 +6,7 @@ import 'tank_spec.dart';
 import 'price_item.dart';
 import 'price_row.dart';
 import 'tank_line_item.dart';
+import 'heat_pump_line_item.dart';
 import 'all_in_one_model.dart';
 import 'pool_heat_pump_model.dart';
 
@@ -43,6 +44,9 @@ class GeneratorQuotation {
 
   // Multi tank lines (Phase 2)
   final List<TankLineItem> tankLines;
+
+  // Multi heat pump lines
+  final List<HeatPumpLineItem> heatPumpLines;
 
   // Specialized Models
   final AllInOneModel? allInOneModel;
@@ -120,6 +124,7 @@ class GeneratorQuotation {
     required this.tankRate,
     required this.tankSpec,
     this.tankLines = const [],
+    this.heatPumpLines = const [],
     this.allInOneModel,
     this.poolModel,
     this.priceRows = const [],
@@ -221,6 +226,42 @@ class GeneratorQuotation {
     return 'Quotation_${cleanName}_$cleanRef.pdf';
   }
 
+  List<HeatPumpLineItem> get effectiveHeatPumps {
+    if (heatPumpLines.isNotEmpty) return heatPumpLines;
+    return [
+      HeatPumpLineItem(
+        id: 'hp_default',
+        modelName: model.modelName,
+        kw: model.displayCapacityKw,
+        qty: heatPumpQty > 0 ? heatPumpQty : 1,
+        rate: heatPumpNumericPrice,
+        amount: heatPumpNumericPrice * (heatPumpQty > 0 ? heatPumpQty : 1),
+        model: model,
+        specs: model.specs,
+      ),
+    ];
+  }
+
+  List<TankLineItem> get effectiveTanks {
+    if (tankLines.isNotEmpty) return tankLines;
+    if (hasTank) {
+      return [
+        TankLineItem(
+          id: 'tank_default',
+          capacityLitres: tankCapacityLitres > 0 ? tankCapacityLitres : 500,
+          qty: tankQty > 0 ? tankQty : 1,
+          isPressurized: isTankPressurized,
+          rate: tankRate,
+          innerTankMaterial: tankSpec.innerTankMaterial.isNotEmpty ? tankSpec.innerTankMaterial : 'GI',
+          innerTankThickness: tankSpec.innerTankThickness.isNotEmpty ? tankSpec.innerTankThickness : '3mm',
+          outerCladdingMaterial: 'Galvanized Painted',
+          insulationMaterial: 'PUF',
+        ),
+      ];
+    }
+    return const [];
+  }
+
   String get subjectLine {
     if (subjectOverride != null && subjectOverride!.trim().isNotEmpty) {
       return subjectOverride!.trim();
@@ -228,29 +269,40 @@ class GeneratorQuotation {
 
     switch (quoteType) {
       case QuoteType.hpWithTank:
-        final kwVal = model.displayCapacityKw;
-        final kwStr = (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
+        final hpList = effectiveHeatPumps;
+        final hpDescs = hpList.map((hp) => '${hp.kwDisplay}KWx${hp.qty > 0 ? hp.qty : 1}').join(', ');
+
         if (!hasTank) {
-          return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty for your Project.';
+          return 'Proposal For air Source Heat Pump Water Heating System $hpDescs for your Project.';
         }
-        if (tankLines.isNotEmpty) {
-          final tankDescs = tankLines.map((t) => '${t.capacityLitres}LTRx${t.qty}').join(', ');
-          return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty, $tankDescs for your Project.';
+
+        final tanksList = effectiveTanks;
+        if (tanksList.isNotEmpty) {
+          final tankDescs = tanksList.map((t) => '${t.capacityLitres}LTRx${t.qty > 0 ? t.qty : 1}').join(', ');
+          return 'Proposal For air Source Heat Pump Water Heating System $hpDescs, $tankDescs for your Project.';
         }
         final cap = tankCapacityLitres > 0 ? tankCapacityLitres : 500;
-        return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty, ${cap}LTRx$tankQty for your Project.';
+        return 'Proposal For air Source Heat Pump Water Heating System $hpDescs, ${cap}LTRx$tankQty for your Project.';
 
       case QuoteType.hpOnly:
-        final kwVal = model.displayCapacityKw;
-        final kwStr = (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
-        return 'Proposal For air Source Heat Pump Water Heating System ${kwStr}KWx$heatPumpQty for your Project.';
+        final hpList = effectiveHeatPumps;
+        final hpDescs = hpList.map((hp) => '${hp.kwDisplay}KWx${hp.qty > 0 ? hp.qty : 1}').join(', ');
+        return 'Proposal For air Source Heat Pump Water Heating System $hpDescs for your Project.';
 
       case QuoteType.tankOnly:
-        final cap = tankLines.isNotEmpty ? tankLines.first.capacityLitres : tankCapacityLitres;
-        final moc = tankLines.isNotEmpty ? tankLines.first.innerTankMaterial : tankSpec.innerTankMaterial;
-        final press = tankLines.isNotEmpty ? (tankLines.first.isPressurized ? 'PRESSURIZED' : 'NON-PRESSURIZED') : (isTankPressurized ? 'PRESSURIZED' : 'NON-PRESSURIZED');
+        final tanksList = effectiveTanks;
+        if (tanksList.isNotEmpty) {
+          final tankDescs = tanksList.map((t) => '${t.capacityLitres}LTRx${t.qty > 0 ? t.qty : 1}').join(', ');
+          final moc = tanksList.first.innerTankMaterial;
+          final press = tanksList.first.isPressurized ? 'PRESSURIZED' : 'NON-PRESSURIZED';
+          final purp = purpose?.trim().isNotEmpty == true ? purpose!.trim().toUpperCase() : 'HOT WATER STORAGE';
+          return 'Proposal for $tankDescs / $purp / $moc / $press TANK for your Project.';
+        }
+        final cap = tankCapacityLitres > 0 ? tankCapacityLitres : 500;
+        final moc = tankSpec.innerTankMaterial;
+        final press = isTankPressurized ? 'PRESSURIZED' : 'NON-PRESSURIZED';
         final purp = purpose?.trim().isNotEmpty == true ? purpose!.trim().toUpperCase() : 'HOT WATER STORAGE';
-        return 'Proposal for $cap Ltr / $purp / $moc / $press TANK for your Project.';
+        return 'Proposal for ${cap}LTRx$tankQty / $purp / $moc / $press TANK for your Project.';
 
       case QuoteType.partsOnly:
         final title = proposalTitle?.trim().isNotEmpty == true ? proposalTitle!.trim() : 'Heat Pump Spare Parts & Accessories';
@@ -299,6 +351,7 @@ class GeneratorQuotation {
     int? tankRate,
     TankSpec? tankSpec,
     List<TankLineItem>? tankLines,
+    List<HeatPumpLineItem>? heatPumpLines,
     AllInOneModel? allInOneModel,
     PoolHeatPumpModel? poolModel,
     List<PriceRow>? priceRows,
@@ -360,6 +413,7 @@ class GeneratorQuotation {
       tankRate: tankRate ?? this.tankRate,
       tankSpec: tankSpec ?? this.tankSpec,
       tankLines: tankLines ?? this.tankLines,
+      heatPumpLines: heatPumpLines ?? this.heatPumpLines,
       allInOneModel: allInOneModel ?? this.allInOneModel,
       poolModel: poolModel ?? this.poolModel,
       priceRows: priceRows ?? this.priceRows,
@@ -441,6 +495,8 @@ class GeneratorQuotation {
       'tankSpec': tankSpec.toJson(),
       'tank_lines': tankLines.map((e) => e.toJson()).toList(),
       'tankLines': tankLines.map((e) => e.toJson()).toList(),
+      'heat_pump_lines': heatPumpLines.map((e) => e.toJson()).toList(),
+      'heatPumpLines': heatPumpLines.map((e) => e.toJson()).toList(),
       'all_in_one_model': allInOneModel?.toJson(),
       'pool_model': poolModel?.toJson(),
       'price_rows': priceRows.map((e) => e.toJson()).toList(),
@@ -551,6 +607,33 @@ class GeneratorQuotation {
       ];
     }
 
+    // Parse Heat Pump Lines
+    List<HeatPumpLineItem> hpLinesList = [];
+    if (json['heat_pump_lines'] is List) {
+      hpLinesList = (json['heat_pump_lines'] as List)
+          .map((e) => HeatPumpLineItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } else if (json['heatPumpLines'] is List) {
+      hpLinesList = (json['heatPumpLines'] as List)
+          .map((e) => HeatPumpLineItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    if (hpLinesList.isEmpty && (qType == QuoteType.hpWithTank || qType == QuoteType.hpOnly)) {
+      hpLinesList = [
+        HeatPumpLineItem(
+          id: 'hp_1',
+          modelName: hpModel.modelName,
+          kw: hpModel.displayCapacityKw,
+          qty: (json['heat_pump_qty'] as num?)?.toInt() ?? (json['heatPumpQty'] as num?)?.toInt() ?? 1,
+          rate: (json['heat_pump_numeric_price'] as num?)?.toInt() ?? (json['heatPumpNumericPrice'] as num?)?.toInt() ?? 0,
+          amount: ((json['heat_pump_numeric_price'] as num?)?.toInt() ?? (json['heatPumpNumericPrice'] as num?)?.toInt() ?? 0) *
+              ((json['heat_pump_qty'] as num?)?.toInt() ?? (json['heatPumpQty'] as num?)?.toInt() ?? 1),
+          model: hpModel,
+          specs: hpModel.specs,
+        ),
+      ];
+    }
+
     // Parse Price Rows (Phase 2)
     List<PriceRow> pRows = [];
     if (json['price_rows'] is List) {
@@ -631,6 +714,7 @@ class GeneratorQuotation {
       tankRate: legacyTankRate,
       tankSpec: legacyTankSpec,
       tankLines: tankLinesList,
+      heatPumpLines: hpLinesList,
       allInOneModel: aioModel,
       poolModel: pModel,
       priceRows: pRows,

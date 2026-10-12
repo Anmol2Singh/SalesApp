@@ -1769,9 +1769,8 @@ class _EditOldProductEntry {
   final TextEditingController nameCtrl;
   DateTime? purchaseDate;
   final List<_EditOldItemEntry> items;
-  _EditOldProductEntry({required String name, this.purchaseDate, required List<_EditOldItemEntry> items})
-      : nameCtrl = TextEditingController(text: name),
-        items = items;
+  _EditOldProductEntry({required String name, this.purchaseDate, required this.items})
+      : nameCtrl = TextEditingController(text: name);
   void dispose() {
     nameCtrl.dispose();
     for (final it in items) {
@@ -1802,6 +1801,12 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
   bool _isOldCustomer = false;
   DateTime _customerSinceDate = DateTime.now();
   final List<_EditOldProductEntry> _oldProducts = [];
+
+  List<Map<String, dynamic>> _catalogProducts = [];
+  List<String> _catalogProductNames = [];
+  List<Map<String, dynamic>> _inventoryItems = [];
+  List<String> _inventoryItemNames = [];
+  bool _isLoadingCatalog = false;
 
   @override
   void initState() {
@@ -1857,6 +1862,448 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
     }
 
     _notesCtrl = TextEditingController(text: cleanNotes);
+
+    if (_isOldCustomer) {
+      _loadCatalogAndInventory();
+    }
+  }
+
+  Future<void> _loadCatalogAndInventory() async {
+    setState(() => _isLoadingCatalog = true);
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+
+      // 1. Load active sell products
+      final prodResponse = await supabase
+          .from('products')
+          .select('id, name, category')
+          .eq('is_active', true)
+          .isFilter('deleted_at', null)
+          .order('name');
+      final names = <String>[];
+      final prods = <Map<String, dynamic>>[];
+      for (final r in (prodResponse as List? ?? [])) {
+        final n = (r['name'] as String?)?.trim();
+        if (n != null && n.isNotEmpty && !names.contains(n)) {
+          names.add(n);
+          prods.add({
+            'id': r['id']?.toString() ?? '',
+            'name': n,
+            'category': (r['category'] as String?) ?? 'Sell Product',
+          });
+        }
+      }
+
+      // 2. Load inventory items
+      final invResponse = await supabase
+          .from('inventory_items')
+          .select('id, item_name, hsn_sac, uom')
+          .order('item_name');
+      final invNames = <String>[];
+      final invs = <Map<String, dynamic>>[];
+      for (final r in (invResponse as List? ?? [])) {
+        final n = (r['item_name'] as String?)?.trim();
+        if (n != null && n.isNotEmpty && !invNames.contains(n)) {
+          invNames.add(n);
+          invs.add({
+            'id': r['id']?.toString() ?? '',
+            'name': n,
+            'hsn_sac': r['hsn_sac'] as String?,
+            'uom': r['uom'] as String?,
+          });
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _catalogProducts = prods;
+          _catalogProductNames = names;
+          _inventoryItems = invs;
+          _inventoryItemNames = invNames;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingCatalog = false);
+    }
+  }
+
+  void _openProductPicker(int productIndex) {
+    if (_catalogProducts.isEmpty && _isLoadingCatalog) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading sell products list, please wait...')),
+      );
+      return;
+    }
+
+    final productEntry = _oldProducts[productIndex];
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = _catalogProducts.where((p) {
+              final q = searchQuery.toLowerCase();
+              final name = (p['name'] as String).toLowerCase();
+              final cat = (p['category'] as String).toLowerCase();
+              return name.contains(q) || cat.contains(q);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6D28D9).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF6D28D9), size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select Sell Product',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                Text(
+                                  '${filtered.length} products available',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Search sell products by name or category...',
+                        hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
+                        suffixIcon: searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  setModalState(() => searchQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF6D28D9), width: 1.5),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setModalState(() => searchQuery = val);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.search_off, size: 48, color: Colors.grey),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No sell products match "$searchQuery"',
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+                            itemBuilder: (context, idx) {
+                              final p = filtered[idx];
+                              final isSelected = productEntry.nameCtrl.text.trim().toLowerCase() ==
+                                  (p['name'] as String).trim().toLowerCase();
+
+                              return ListTile(
+                                leading: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(0xFF6D28D9).withOpacity(0.15)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.inventory_2_outlined,
+                                    size: 20,
+                                    color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                                title: Text(
+                                  p['name'] as String,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 14,
+                                    color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF1E293B),
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  p['category'] as String,
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                                trailing: isSelected
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF6D28D9), size: 20)
+                                    : const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                                onTap: () {
+                                  setState(() {
+                                    productEntry.nameCtrl.text = p['name'] as String;
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openInventoryItemPicker(int productIndex, int itemIndex) {
+    if (_inventoryItems.isEmpty && _isLoadingCatalog) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading inventory items, please wait...')),
+      );
+      return;
+    }
+
+    final productEntry = _oldProducts[productIndex];
+    final itemEntry = productEntry.items[itemIndex];
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = _inventoryItems.where((inv) {
+              final q = searchQuery.toLowerCase();
+              final name = (inv['name'] as String).toLowerCase();
+              final hsn = (inv['hsn_sac'] as String? ?? '').toLowerCase();
+              return name.contains(q) || hsn.contains(q);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF059669).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.precision_manufacturing_outlined, color: Color(0xFF059669), size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select Item from Inventory',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                Text(
+                                  '${filtered.length} inventory items available',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Search inventory items by name or HSN...',
+                        hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF059669)),
+                        suffixIcon: searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  setModalState(() => searchQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF059669), width: 1.5),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setModalState(() => searchQuery = val);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.search_off, size: 48, color: Colors.grey),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No inventory items match "$searchQuery"',
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+                            itemBuilder: (context, idx) {
+                              final item = filtered[idx];
+                              final isSelected = itemEntry.nameCtrl.text.trim().toLowerCase() ==
+                                  (item['name'] as String).trim().toLowerCase();
+
+                              return ListTile(
+                                leading: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(0xFF059669).withOpacity(0.15)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.build_outlined,
+                                    size: 20,
+                                    color: isSelected ? const Color(0xFF059669) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                                title: Text(
+                                  item['name'] as String,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 14,
+                                    color: isSelected ? const Color(0xFF059669) : const Color(0xFF1E293B),
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'HSN: ${item['hsn_sac'] ?? "—"} • UOM: ${item['uom'] ?? "NOS"}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                                trailing: isSelected
+                                    ? const Icon(Icons.check_circle, color: Color(0xFF059669), size: 20)
+                                    : const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                                onTap: () {
+                                  setState(() {
+                                    itemEntry.nameCtrl.text = item['name'] as String;
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -2141,6 +2588,8 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                             items: [_EditOldItemEntry(name: '', qty: 1)],
                           ));
                         });
+                        final newIdx = _oldProducts.length - 1;
+                        _openProductPicker(newIdx);
                       },
                     ),
                   ],
@@ -2191,13 +2640,46 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: prod.nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Product Name *',
-                            hintText: 'e.g. Heat Pump, Solar Water Heater',
-                            prefixIcon: Icon(Icons.inventory_2_outlined, size: 18),
+                          readOnly: true,
+                          onTap: () => _openProductPicker(pIdx),
+                          decoration: InputDecoration(
+                            labelText: 'Product Name (Strictly from Sell Products) *',
+                            hintText: 'Tap to select Sell Product...',
+                            prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF6D28D9)),
                             isDense: true,
-                            border: OutlineInputBorder(),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (prod.nameCtrl.text.isNotEmpty)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                                    tooltip: 'Clear',
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () {
+                                      setState(() {
+                                        prod.nameCtrl.clear();
+                                      });
+                                    },
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
+                                  tooltip: 'Search Sell Products',
+                                  onPressed: () => _openProductPicker(pIdx),
+                                ),
+                              ],
+                            ),
+                            border: const OutlineInputBorder(),
                           ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Please select a Product from Sell Products list';
+                            }
+                            final match = _catalogProductNames.any((n) => n.trim().toLowerCase() == v.trim().toLowerCase());
+                            if (!match && _catalogProductNames.isNotEmpty) {
+                              return 'Product must be chosen strictly from Sell Products list';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -2239,7 +2721,7 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'Components / Items Included:',
+                              'Components / Items Included (From Inventory):',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
                             ),
                             TextButton.icon(
@@ -2249,6 +2731,8 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                                 setState(() {
                                   prod.items.add(_EditOldItemEntry(name: '', qty: 1));
                                 });
+                                final newItIdx = prod.items.length - 1;
+                                _openInventoryItemPicker(pIdx, newItIdx);
                               },
                             ),
                           ],
@@ -2262,13 +2746,48 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: it.nameCtrl,
+                                    readOnly: true,
+                                    onTap: () => _openInventoryItemPicker(pIdx, itIdx),
                                     decoration: InputDecoration(
-                                      labelText: 'Component #${itIdx + 1}',
-                                      hintText: 'e.g. Compressor, Sensor',
+                                      labelText: 'Component #${itIdx + 1} *',
+                                      hintText: 'Tap to select from Inventory...',
                                       isDense: true,
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                      prefixIcon: const Icon(Icons.precision_manufacturing_outlined, size: 18, color: Color(0xFF059669)),
+                                      suffixIcon: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (it.nameCtrl.text.isNotEmpty)
+                                            IconButton(
+                                              icon: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                                              tooltip: 'Clear',
+                                              visualDensity: VisualDensity.compact,
+                                              onPressed: () {
+                                                setState(() {
+                                                  it.nameCtrl.clear();
+                                                });
+                                              },
+                                            ),
+                                          IconButton(
+                                            icon: const Icon(Icons.search, size: 18, color: Color(0xFF059669)),
+                                            tooltip: 'Search Inventory',
+                                            visualDensity: VisualDensity.compact,
+                                            onPressed: () => _openInventoryItemPicker(pIdx, itIdx),
+                                          ),
+                                        ],
+                                      ),
                                       border: const OutlineInputBorder(),
                                     ),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) {
+                                        return 'Please select an item from Inventory';
+                                      }
+                                      final match = _inventoryItemNames.any((n) => n.trim().toLowerCase() == v.trim().toLowerCase());
+                                      if (!match && _inventoryItemNames.isNotEmpty) {
+                                        return 'Item must come strictly from Inventory';
+                                      }
+                                      return null;
+                                    },
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -2280,7 +2799,7 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
                                     decoration: const InputDecoration(
                                       labelText: 'Qty',
                                       isDense: true,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       border: OutlineInputBorder(),
                                     ),
                                   ),

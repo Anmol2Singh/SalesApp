@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/supabase_provider.dart';
@@ -627,12 +626,20 @@ class _ProposalBuilderScreenState extends ConsumerState<ProposalBuilderScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Text('Qty: ${item.qty}  •  Rate: ₹${item.rate.toStringAsFixed(2)}  •  Amount: ₹${item.amount.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const Spacer(),
               TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 icon: const Icon(Icons.tune, size: 14),
                 label: const Text('Resolve / Edit', style: TextStyle(fontSize: 12)),
                 onPressed: () async {

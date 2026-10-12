@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/warranty_card.dart';
-import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/pdf_service.dart';
@@ -67,8 +66,7 @@ class _WarrantyCardScreenState extends ConsumerState<WarrantyCardScreen> {
     final canActivate = profile?.primaryRole.canActivateWarrantyCard ?? false;
 
     final pData = pipelineAsync.value;
-    final isAdmin = profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false);
-    final isCompleted = pData?['status'] == 'completed' || pData?['current_step'] == 'completed' || isAdmin;
+    final isCompleted = pData?['status'] == 'completed' || pData?['current_step'] == 'completed';
 
     return Scaffold(
       backgroundColor: AppColors.background,

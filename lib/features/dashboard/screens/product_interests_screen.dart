@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../crm/providers/crm_providers.dart';
 import '../providers/product_inquiries_provider.dart';
 
 export '../providers/product_inquiries_provider.dart' show ProductInterestItem;
@@ -81,51 +80,37 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
   }
 
   Future<void> _acceptRequest(ProductInterestItem item) async {
+    setState(() => _isCreatingDeal = true);
     try {
-      await ref.read(productInquiriesServiceProvider).acceptInquiry(item);
+      final res = await ref.read(productInquiriesServiceProvider).acceptAndCreateDeal(item);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Product request accepted successfully!'),
-            backgroundColor: Color(0xFF16A34A),
-          ),
-        );
+        if (res.isUnavailable) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ ${res.message}'),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        } else if (res.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res.message),
+              backgroundColor: const Color(0xFF16A34A),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${res.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error accepting request: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _createDeal(ProductInterestItem item) async {
-    setState(() => _isCreatingDeal = true);
-    try {
-      await ref.read(leadsProvider.notifier).addDirectLead(
-        prospectName: item.customerName,
-        contactPhone: item.customerPhone,
-        productName: item.productName,
-        estimatedValue: 0.0,
-        notes: 'Deal created from Product Interest request. Product: ${item.productName} ${item.modelNumber}',
-      );
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Deal created successfully!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error creating deal: $e'),
-            backgroundColor: Colors.red,
-          ),
         );
       }
     } finally {
@@ -246,7 +231,47 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                     ],
                   ),
                   const SizedBox(height: 16),
-                  if (item.status != 'accepted') ...[
+                  if (item.status == 'accepted') ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Request Accepted & Deal Created',
+                              style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ] else if (item.status == 'product_unavailable') ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Product Unavailable (Inactive / Deleted)',
+                              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ] else ...[
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -255,32 +280,24 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                           backgroundColor: const Color(0xFF16A34A),
                           foregroundColor: Colors.white,
                         ),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _acceptRequest(item);
-                        },
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Accept Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        onPressed: _isCreatingDeal
+                            ? null
+                            : () {
+                                Navigator.pop(ctx);
+                                _acceptRequest(item);
+                              },
+                        icon: _isCreatingDeal
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.check_circle_outline),
+                        label: Text(_isCreatingDeal ? 'Creating Deal...' : 'Accept & Create Deal',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
                     const SizedBox(height: 10),
                   ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: _isCreatingDeal ? null : () => _createDeal(item),
-                      icon: _isCreatingDeal
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.handshake_outlined),
-                      label: Text(_isCreatingDeal ? 'Creating Deal...' : 'Create Deal', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     child: TextButton.icon(
@@ -391,19 +408,33 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: item.status == 'accepted' ? Colors.green.shade50 : Colors.amber.shade50,
+                                    color: item.status == 'accepted'
+                                        ? Colors.green.shade50
+                                        : item.status == 'product_unavailable'
+                                            ? Colors.red.shade50
+                                            : Colors.amber.shade50,
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
-                                      color: item.status == 'accepted' ? Colors.green.shade300 : Colors.amber.shade200,
+                                      color: item.status == 'accepted'
+                                          ? Colors.green.shade300
+                                          : item.status == 'product_unavailable'
+                                              ? Colors.red.shade300
+                                              : Colors.amber.shade200,
                                     ),
                                   ),
                                   child: Text(
-                                    item.status.toUpperCase(),
+                                    item.status == 'product_unavailable'
+                                        ? 'PRODUCT UNAVAILABLE'
+                                        : item.status.toUpperCase(),
                                     style: TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 9,
                                       fontWeight: FontWeight.bold,
-                                      color: item.status == 'accepted' ? Colors.green.shade800 : Colors.amber.shade800,
+                                      color: item.status == 'accepted'
+                                          ? Colors.green.shade800
+                                          : item.status == 'product_unavailable'
+                                              ? Colors.red.shade800
+                                              : Colors.amber.shade800,
                                     ),
                                   ),
                                 ),

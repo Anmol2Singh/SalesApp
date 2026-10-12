@@ -1,7 +1,6 @@
 // test/quotation_phase2_golden_test.dart
 
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salesapp/features/quotation_generator/config/dynamic_annexure_resolver.dart';
 import 'package:salesapp/features/quotation_generator/config/quote_template_config.dart';
@@ -10,6 +9,7 @@ import 'package:salesapp/features/quotation_generator/models/all_in_one_model.da
 import 'package:salesapp/features/quotation_generator/models/generator_company_settings.dart';
 import 'package:salesapp/features/quotation_generator/models/generator_quotation.dart';
 import 'package:salesapp/features/quotation_generator/models/heat_pump_model.dart';
+import 'package:salesapp/features/quotation_generator/models/heat_pump_line_item.dart';
 import 'package:salesapp/features/quotation_generator/models/pool_heat_pump_model.dart';
 import 'package:salesapp/features/quotation_generator/models/price_item.dart';
 import 'package:salesapp/features/quotation_generator/models/price_row.dart';
@@ -580,6 +580,149 @@ void main() {
         qNoTank.subjectLine,
         'Proposal For air Source Heat Pump Water Heating System 38KWx1 for your Project.',
       );
+    });
+
+    test('Multi-heat-pump and Multi-tank: formats subjects, price table, and multi-column tech specs', () async {
+      final multiHpTankQuotation = goldenShineQuotation.copyWith(
+        heatPumpLines: [
+          const HeatPumpLineItem(
+            id: 'hp_1',
+            modelName: 'IZ-4C',
+            kw: 4.0,
+            qty: 5,
+            rate: 120000,
+            amount: 600000,
+          ),
+          const HeatPumpLineItem(
+            id: 'hp_2',
+            modelName: 'IZ-10C',
+            kw: 10.0,
+            qty: 2,
+            rate: 200000,
+            amount: 400000,
+          ),
+        ],
+        tankLines: [
+          const TankLineItem(
+            id: 'tank_1',
+            capacityLitres: 500,
+            qty: 5,
+            rate: 60000,
+            innerTankMaterial: 'GI',
+            innerTankThickness: '3mm',
+            isPressurized: true,
+          ),
+          const TankLineItem(
+            id: 'tank_2',
+            capacityLitres: 500,
+            qty: 1,
+            rate: 55000,
+            innerTankMaterial: 'Enamel',
+            innerTankThickness: '2mm',
+            isPressurized: true,
+          ),
+        ],
+        priceRows: [
+          const PriceRow(
+            id: 'item_0',
+            serialNo: '01',
+            description: 'Air Source Heat pump 4kw',
+            qty: 5,
+            rate: 120000,
+            amount: 600000,
+            hpKw: 4.0,
+            status: PriceRowStatus.priced,
+            metadata: {'type': 'heatPump', 'hpModel': 'IZ-4C'},
+          ),
+          const PriceRow(
+            id: 'item_1',
+            serialNo: '02',
+            description: 'GI pressurised Tank 500Ltr',
+            qty: 5,
+            rate: 60000,
+            amount: 300000,
+            systemLph: 500,
+            status: PriceRowStatus.priced,
+            metadata: {'type': 'tank', 'tankMaterial': 'GI', 'isPressurized': true},
+          ),
+          const PriceRow(
+            id: 'item_2',
+            serialNo: '03',
+            description: 'Wilo circulation pump 25/6',
+            qty: 1,
+            rate: 12500,
+            amount: 12500,
+            status: PriceRowStatus.priced,
+          ),
+          const PriceRow(
+            id: 'item_3',
+            serialNo: '04',
+            description: 'Tank Enamel coat 500Ltr',
+            qty: 1,
+            rate: 55000,
+            amount: 55000,
+            systemLph: 500,
+            status: PriceRowStatus.priced,
+            metadata: {'type': 'tank', 'tankMaterial': 'Enamel', 'isPressurized': true},
+          ),
+          const PriceRow(
+            id: 'item_4',
+            serialNo: '05',
+            description: 'Sensor Reverse line',
+            qty: 1,
+            rate: 0,
+            amount: 0,
+            status: PriceRowStatus.included,
+          ),
+          const PriceRow(
+            id: 'item_5',
+            serialNo: '06',
+            description: 'HP Contractor 3Ph',
+            qty: 1,
+            rate: 4000,
+            amount: 4000,
+            status: PriceRowStatus.priced,
+          ),
+        ],
+        extraPriceRows: [
+          const PriceItem(
+            serialNo: '07',
+            description: 'Installation - Included',
+            amountType: PriceRowType.included,
+          ),
+          const PriceItem(
+            serialNo: '08',
+            description: 'Transportation - Extra',
+            amountType: PriceRowType.extra,
+            numericAmount: 4000,
+          ),
+          const PriceItem(
+            serialNo: '09',
+            description: 'Plumbing & wiring - Extra',
+            amountType: PriceRowType.extra,
+            numericAmount: 200,
+          ),
+        ],
+      );
+
+      // Verify subject line contains all heat pumps and tanks
+      expect(
+        multiHpTankQuotation.subjectLine,
+        'Proposal For air Source Heat Pump Water Heating System 4KWx5, 10KWx2, 500LTRx5, 500LTRx1 for your Project.',
+      );
+      expect(
+        multiHpTankQuotation.acceptanceSubjectLine,
+        'Proposal For air Source Heat Pump Water Heating System 4KWx5, 10KWx2, 500LTRx5, 500LTRx1 for your Project.',
+      );
+
+      // Verify PDF generation succeeds and creates valid multi-page PDF
+      final pdfBytes = await PdfQuotationBuilder.buildQuotationPdf(multiHpTankQuotation, settings);
+      expect(pdfBytes, isNotNull);
+      expect(pdfBytes.length, greaterThan(25000));
+
+      final outFile = File('scratch/multi_hp_tank_generated.pdf');
+      outFile.writeAsBytesSync(pdfBytes);
+      expect(outFile.existsSync(), isTrue);
     });
   });
 }

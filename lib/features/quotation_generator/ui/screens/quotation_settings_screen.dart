@@ -5,10 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../../../core/providers/supabase_provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../config/qg_noc_flags.dart';
+import '../../data/qg_noc_repository.dart';
 import '../../models/generator_company_settings.dart';
 import '../../models/heat_pump_model.dart';
+import '../../models/qg_noc_profile.dart';
 import '../../providers/quotation_generator_providers.dart';
 import '../../services/quotation_storage_service.dart';
 
@@ -57,7 +62,7 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: kQgNocEnabled ? 4 : 3, vsync: this);
   }
 
   @override
@@ -467,22 +472,28 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
                   unselectedLabelColor: isDark ? Colors.white70 : AppColors.textSecondary,
                   labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                  tabs: const [
-                    Tab(
+                  tabs: [
+                    const Tab(
                       icon: Icon(Icons.heat_pump_outlined, size: 18),
                       text: 'Product Models',
                       iconMargin: EdgeInsets.only(bottom: 2),
                     ),
-                    Tab(
+                    const Tab(
                       icon: Icon(Icons.account_balance_outlined, size: 18),
                       text: 'Company & Bank',
                       iconMargin: EdgeInsets.only(bottom: 2),
                     ),
-                    Tab(
+                    const Tab(
                       icon: Icon(Icons.image_outlined, size: 18),
                       text: 'Cover, Banner & Stamp',
                       iconMargin: EdgeInsets.only(bottom: 2),
                     ),
+                    if (kQgNocEnabled)
+                      const Tab(
+                        icon: Icon(Icons.verified_outlined, size: 18),
+                        text: 'NOC Certificates',
+                        iconMargin: EdgeInsets.only(bottom: 2),
+                      ),
                   ],
                 ),
               ),
@@ -494,6 +505,7 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
                   _buildProductModelsTab(settings),
                   _buildCompanyAndBankTab(settings),
                   _buildCoverAndStampTab(settings),
+                  if (kQgNocEnabled) _buildNocSettingsTab(),
                 ],
               ),
             ),
@@ -1010,6 +1022,124 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         border: const OutlineInputBorder(),
       ),
+    );
+  }
+
+  // ─── TAB 4: NOC SETTINGS & PROFILES ──────────────────────────────────────
+
+  Widget _buildNocSettingsTab() {
+    return FutureBuilder<List<QgNocProfile>>(
+      future: QgNocRepository.fetchProfiles(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final profiles = snapshot.data ?? [];
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Quick action card to open NOC Hub
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF174895).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF174895).withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_outlined, size: 28, color: Color(0xFF174895)),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Installation & Commissioning NOC Hub',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Manage, issue, and print satisfactory installation certificates.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => context.push('/qg/noc'),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open Hub'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF174895),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            const Text(
+              'Preset NOC Profiles',
+              style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'These profiles define default equipment labels, subjects, checklists, and scope phrasing when generating NOCs.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 14),
+
+            ...profiles.map((p) {
+              return Card(
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              p.profileName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF286B37).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              p.productName,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF286B37)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Subject: ${p.defaultSubject}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Text('Work Type: ${p.workType}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Text('Confirmations: ${p.defaultConfirmations.length} points', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }

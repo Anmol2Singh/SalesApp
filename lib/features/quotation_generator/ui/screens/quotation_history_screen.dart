@@ -99,11 +99,13 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            tooltip: 'Back',
-            onPressed: _navigateBack,
-          ),
+          leading: MediaQuery.of(context).size.width >= 800
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: _navigateBack,
+                ),
           title: const Text(
             'Proposal PDF Generator (Heat Pump Hub)',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
@@ -488,29 +490,31 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined, size: 12, color: AppColors.textSecondary),
-                          const SizedBox(width: 4),
-                          Text(q.formattedDate, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                          const SizedBox(width: 12),
-                          const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
-                          const SizedBox(width: 4),
-                          Text(
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today_outlined, size: 12, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(q.formattedDate, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
                             q.salesmanName,
                             style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     q.formattedGrandTotal,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.primary,
                     ),

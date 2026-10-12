@@ -6,6 +6,7 @@ import 'heat_pump_model.dart';
 import 'price_row.dart';
 import 'price_item.dart';
 import 'tank_line_item.dart';
+import 'heat_pump_line_item.dart';
 import 'tank_spec.dart';
 import 'generator_company_settings.dart';
 import '../config/quote_type.dart';
@@ -360,14 +361,16 @@ class QgProposalDraft {
     }
 
     return {
-      'Capacity and Thickness': '$litres Litre & $shellThick Inner & 0.5mm Outer',
-      'Operating pressure': isPressurized ? '6 bar' : 'Atmospheric',
-      'Testing Pressure': isPressurized ? '9 bar' : 'Atmospheric',
-      'Outer Tank Insulation': '50 mm with Puff Insulation',
-      'Temperature drop': 'Within 3°C to 4°C in 24 Hours',
-      'Inner and outer Tank': 'Inner $material and outer Galvanized Painted',
-      'Tank direction': 'Vertical',
-      'Other': 'Drain, Air Vent, Temp Sensor Pocket, Electric Heater Flange',
+      'Capacity and Thickness': '$litres ltr, $shellThick Shell, $dishThick Dish.',
+      'Operating pressure': isPressurized ? 'Up to 5 Bar' : 'Atmospheric',
+      'Testing Pressure': isPressurized ? '7 bar pressure' : 'Atmospheric',
+      'Hot Water Inlet/ outlet': '2 Inch,',
+      'Heat Pump Circulation': '1 Inch,',
+      'Outer Tank Insulation': 'PUF',
+      'Temperature drop': '3° C / 8 hour',
+      'Inner and outer Tank': material,
+      'Tank direction': 'Horizontal / Vertical',
+      'Other': 'Solar Provision Additional Heat Pump Provision',
     };
   }
 
@@ -506,8 +509,51 @@ class QgProposalDraft {
       specs: Map<String, String>.from(hpSpecs),
     );
 
+    // Multi Heat Pump Lines
+    final hpLineItems = <HeatPumpLineItem>[];
+    int hpItemIdx = 1;
+    for (int i = 0; i < items.length; i++) {
+      final it = items[i];
+      if (it.type == ParsedItemType.heatPump || it.type == ParsedItemType.allInOne || it.type == ParsedItemType.pool) {
+        final kwVal = it.hpKw?.toDouble() ?? hpKw.toDouble();
+        final model = it.hpModel ?? hpModel;
+        final specs = (model == hpModel) ? hpSpecs : _buildDefaultHpSpecs(kwVal.toInt(), model);
+        hpLineItems.add(HeatPumpLineItem(
+          id: 'hp_${hpItemIdx++}',
+          modelName: model,
+          kw: kwVal,
+          qty: it.qty,
+          rate: it.rate.round(),
+          amount: it.amount.round(),
+          description: it.rawDescription,
+          specs: specs,
+        ));
+      }
+    }
+
+    // Multi Tank Lines
     final tankLinesList = <TankLineItem>[];
-    if (hasTank) {
+    int tankIdx = 1;
+    for (final it in items) {
+      if (it.type == ParsedItemType.tank) {
+        final cap = it.tankCapacityLitres ?? tankCapacityLitres;
+        final mat = it.tankMaterial ?? tankMaterial;
+        final isPress = it.isPressurized;
+        final thick = (mat == 'Enamel') ? '2mm' : (mat == 'MS' ? '5mm' : '3mm');
+        tankLinesList.add(TankLineItem(
+          id: 'tank_${tankIdx++}',
+          capacityLitres: cap,
+          qty: it.qty,
+          isPressurized: isPress,
+          rate: it.rate.round(),
+          innerTankMaterial: mat,
+          innerTankThickness: thick,
+          outerCladdingMaterial: 'Galvanized Painted',
+          insulationMaterial: it.insulationType ?? tankInsulation,
+        ));
+      }
+    }
+    if (tankLinesList.isEmpty && hasTank) {
       tankLinesList.add(TankLineItem(
         id: 'tank_1',
         capacityLitres: tankCapacityLitres,
@@ -515,9 +561,9 @@ class QgProposalDraft {
         isPressurized: isTankPressurized,
         rate: tankRate.round(),
         innerTankMaterial: tankMaterial,
-        innerTankThickness: tankSpecs['Capacity and Thickness'] ?? '3mm',
+        innerTankThickness: '3mm',
         outerCladdingMaterial: 'Galvanized Painted',
-        insulationMaterial: tankInsulation,
+        insulationMaterial: (tankInsulation.toLowerCase().contains('puff') || tankInsulation.toLowerCase().contains('puf')) ? 'PUF' : tankInsulation,
       ));
     }
 
@@ -529,9 +575,18 @@ class QgProposalDraft {
         serialNo: (i + 1).toString().padLeft(2, '0'),
         description: it.rawDescription,
         qty: it.qty,
-        status: PriceRowStatus.included,
+        status: it.rate > 0 ? PriceRowStatus.priced : PriceRowStatus.included,
         rate: it.rate.round(),
         amount: it.amount.round(),
+        hpKw: it.hpKw?.toDouble(),
+        systemLph: it.tankCapacityLitres,
+        metadata: {
+          'type': it.type.name,
+          'hpModel': it.hpModel,
+          'tankMaterial': it.tankMaterial,
+          'isPressurized': it.isPressurized,
+          'insulationType': it.insulationType,
+        },
       ));
     }
 
@@ -594,9 +649,21 @@ class QgProposalDraft {
       parsedDate = quotationUpdatedAt;
     }
 
+    if (hpLineItems.isEmpty) {
+      hpLineItems.add(HeatPumpLineItem(
+        id: 'hp_1',
+        modelName: hpModel,
+        kw: hpKw.toDouble(),
+        qty: hpQtyVal,
+        rate: hpRateVal,
+        amount: hpRateVal * hpQtyVal,
+        specs: hpSpecs,
+      ));
+    }
+
     return GeneratorQuotation(
       id: quotationId,
-      quoteType: hasTank ? QuoteType.hpWithTank : QuoteType.hpOnly,
+      quoteType: (hasTank || tankLinesList.isNotEmpty) ? QuoteType.hpWithTank : QuoteType.hpOnly,
       status: isConfirmed ? 'confirmed' : 'draft',
       salutation: customerSalutation,
       customerName: customerName,
@@ -610,6 +677,7 @@ class QgProposalDraft {
       heatPumpQty: hpQtyVal,
       heatPumpNumericPrice: hpRateVal,
       heatPumpAmountType: PriceRowType.amount,
+      heatPumpLines: hpLineItems,
       tankLines: tankLinesList,
       tankSpec: TankSpec(
         capacityLitres: hasTank ? tankCapacityLitres : 0,

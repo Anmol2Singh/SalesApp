@@ -18,6 +18,8 @@ import '../../features/quotation/screens/quotation_form_screen.dart';
 import '../../features/quotation_generator/config/quotation_generator_flags.dart';
 import '../../features/quotation_generator/ui/screens/quotation_history_screen.dart';
 import '../../features/quotation_generator/ui/screens/quotation_form_screen.dart' show QuotationGeneratorFormScreen;
+import '../../features/quotation_generator/ui/screens/noc_hub_screen.dart';
+import '../../features/quotation_generator/ui/screens/noc_builder_screen.dart';
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
 import '../../features/boq/screens/boq_form_screen.dart';
 import '../../features/boq/screens/boq_dashboard_screen.dart';
@@ -136,6 +138,8 @@ class AppRoutes {
   static const String dailyTasks = '/daily-tasks';
   static const String heatPumpQuotationHub = '/heat-pump-quotations';
   static const String heatPumpQuotationCreate = '/heat-pump-quotations/new';
+  static const String nocHub = '/qg/noc';
+  static const String nocBuilder = '/qg/noc/builder';
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -387,6 +391,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.dailyTasks,
             builder: (context, state) => const DailyTasksScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.heatPumpQuotationHub,
+            builder: (context, state) => const QuotationHistoryScreen(),
+          ),
           ShellRoute(
             builder: (context, state, child) {
               return CrmShell(
@@ -552,14 +560,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutes.heatPumpQuotationHub,
-        builder: (context, state) => const QuotationHistoryScreen(),
-      ),
-      GoRoute(
         path: AppRoutes.heatPumpQuotationCreate,
         builder: (context, state) => kQgStandaloneCreateEnabled
             ? const QuotationGeneratorFormScreen()
             : const QuotationHistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.nocHub,
+        builder: (context, state) => const NocHubScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.nocBuilder,
+        builder: (context, state) {
+          final dealId = state.uri.queryParameters['dealId'];
+          final quotationId = state.uri.queryParameters['quotationId'];
+          final documentId = state.uri.queryParameters['documentId'];
+          final newVersion = state.uri.queryParameters['newVersion'] == 'true';
+          return NocBuilderScreen(
+            dealId: dealId,
+            quotationId: quotationId,
+            documentId: documentId,
+            newVersion: newVersion,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.salesOrderForm,

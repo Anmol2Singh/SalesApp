@@ -1300,7 +1300,7 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
                 controller: _nameCtrl,
                 enabled: canEditName,
                 decoration: InputDecoration(
-                  labelText: 'Full Name *',
+                  labelText: 'Customer/Business name *',
                   prefixIcon: const Icon(Icons.person_outline),
                   border: const OutlineInputBorder(),
                   helperText: canEditName ? null : 'Only creator or admin can edit name',
@@ -1352,7 +1352,7 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
                     child: TextFormField(
                       controller: _companyCtrl,
                       decoration: const InputDecoration(
-                        labelText: 'Company (Optional)',
+                        labelText: 'Contact Person Name (Optional)',
                         prefixIcon: Icon(Icons.business_outlined),
                         border: OutlineInputBorder(),
                       ),
