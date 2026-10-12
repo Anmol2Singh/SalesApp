@@ -84,6 +84,7 @@ dependencies:
   crypto: ^3.0.7
   razorpay_flutter: ^1.4.7
   flutter_local_notifications: ^22.3.1
+  lucide_icons_flutter: ^3.1.25
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -191,7 +191,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         widget.currentRoute.startsWith('/amc') ||
         widget.currentRoute.startsWith('/complaints') ||
         widget.currentRoute == AppRoutes.dailyTasks ||
-        widget.currentRoute.startsWith('/heat-pump-quotations')) {
+        widget.currentRoute.startsWith('/heat-pump-quotations') ||
+        widget.currentRoute.startsWith('/pm')) {
       navBgColor = const Color(0xFF1E1B4B);
       selectedTextColor = Colors.white;
       unselectedTextColor = Colors.white70;
@@ -406,6 +407,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label: 'Deals',
                     icon: const Icon(Icons.handshake_outlined),
                     selectedIcon: const Icon(Icons.handshake),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+
+                // 3.5 Project Manager
+                if (hasAdminOrManager || hasSales || isPurchase || isFactory || isBoq)
+                  _buildNavItemTile(
+                    route: AppRoutes.projectManager,
+                    label: 'Projects',
+                    icon: const Icon(Icons.solar_power_outlined),
+                    selectedIcon: const Icon(Icons.solar_power),
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
@@ -1014,6 +1027,22 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool isFactory = roles.any((r) => r == UserRole.factory);
     final bool isPurchase = roles.any((r) => r == UserRole.purchase);
     final bool isTechnician = roles.any((r) => r == UserRole.technician);
+
+    final bool isPmRoute = widget.currentRoute.startsWith('/pm');
+
+    // 0.5 Project Manager contextual route
+    if (!isWide && (hasAdminOrManager || hasSales || isPurchase || isFactory || isBoq) && isPmRoute) {
+      addItem(const _NavItem(route: AppRoutes.projectManager, label: 'Projects', icon: Icon(Icons.solar_power_outlined), selectedIcon: Icon(Icons.solar_power)));
+      addItem(const _NavItem(route: AppRoutes.pmDailyTransactions, label: 'Day-Book', icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long)));
+      addItem(const _NavItem(route: AppRoutes.pmFilter, label: 'Reports', icon: Icon(Icons.filter_list_outlined), selectedIcon: Icon(Icons.filter_list)));
+      addItem(_NavItem(
+        route: hasAdminOrManager ? AppRoutes.adminDashboard : (hasSales ? AppRoutes.salesDashboard : AppRoutes.pipelines),
+        label: 'Home',
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
+      ));
+      return uniqueItems.values.toList();
+    }
 
     // 1. Complaints routes
     if (!isWide && (hasAdminOrManager || hasComplaints) && isComplaintsRoute) {

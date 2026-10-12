@@ -74,6 +74,12 @@ import '../../features/crm/screens/crm_customer_detail_screen.dart';
 import '../../features/crm/screens/prospect_detail_screen.dart';
 import '../models/user_role.dart';
 import '../widgets/app_shell.dart';
+import '../../features/project_manager/presentation/screens/pm_dashboard_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_project_detail_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_project_form_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_filter_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_quick_call_remark_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
 
 // Customer app imports
 import '../../features/customer_app/features/auth/screens/otp_screen.dart';
@@ -140,6 +146,13 @@ class AppRoutes {
   static const String heatPumpQuotationCreate = '/heat-pump-quotations/new';
   static const String nocHub = '/qg/noc';
   static const String nocBuilder = '/qg/noc/builder';
+  static const String projectManager = '/pm';
+  static const String pmProjectNew = '/pm/projects/new';
+  static const String pmProjectDetail = '/pm/projects/:id';
+  static const String pmProjectEdit = '/pm/projects/:id/edit';
+  static const String pmCallRemark = '/pm/projects/:id/call-remark';
+  static const String pmFilter = '/pm/filter';
+  static const String pmDailyTransactions = '/pm/daily-transactions';
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -395,6 +408,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.heatPumpQuotationHub,
             builder: (context, state) => const QuotationHistoryScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.projectManager,
+            builder: (context, state) => const PmDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.pmDailyTransactions,
+            builder: (context, state) => const PmDailyTransactionsScreen(),
+          ),
           ShellRoute(
             builder: (context, state, child) {
               return CrmShell(
@@ -498,6 +519,41 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       // Detail/Form views (Full screen)
+      GoRoute(
+        path: AppRoutes.pmProjectNew,
+        builder: (context, state) {
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmProjectFormScreen(isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmProjectDetail,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmProjectDetailScreen(id: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmProjectEdit,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmProjectFormScreen(editId: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmCallRemark,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmQuickCallRemarkScreen(id: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmFilter,
+        builder: (context, state) => const PmFilterScreen(),
+      ),
       GoRoute(
         path: AppRoutes.bookInstallation,
         builder: (context, state) => const BookInstallationScreen(),
