@@ -18,6 +18,7 @@ import '../../amc/providers/amc_provider.dart';
 import '../../../core/widgets/breadcrumbs.dart';
 import '../../../core/services/record_edit_permissions.dart';
 import '../../daily_tasks/widgets/customer_tasks_sheet.dart';
+import '../../project_manager/providers/pm_providers.dart';
 
 class CustomerDetailScreen extends ConsumerWidget {
   final String customerId;
@@ -420,6 +421,8 @@ class CustomerDetailScreen extends ConsumerWidget {
               );
             },
           ),
+          const SizedBox(height: 24),
+          _CustomerProjectsSection(customerId: customer.id),
           const SizedBox(height: 24),
           _AmcSection(customerId: customer.id),
           const SizedBox(height: 100), // FAB space
@@ -3309,3 +3312,237 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
     );
   }
 }
+
+class _CustomerProjectsSection extends ConsumerWidget {
+  final String customerId;
+
+  const _CustomerProjectsSection({required this.customerId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsAsync = ref.watch(customerLinkedProjectsProvider(customerId));
+    final currencyFmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Projects & Sites',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            projectsAsync.maybeWhen(
+              data: (list) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${list.length} ${list.length == 1 ? "Site" : "Sites"}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              orElse: () => const SizedBox.shrink(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        projectsAsync.when(
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+          ),
+          error: (err, _) => Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text('Error loading projects: $err', style: TextStyle(color: Colors.red.shade700, fontSize: 12)),
+          ),
+          data: (projects) {
+            if (projects.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.solar_power_outlined, size: 32, color: AppColors.textSecondary.withOpacity(0.5)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'No site installation projects linked yet.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: projects.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final project = projects[index];
+                final balance = project.balance;
+                final orderVal = project.orderValue;
+                final paid = project.paymentReceived;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '#${project.idNo}',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            project.siteName,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            project.orderType,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (project.hpType != null || project.tankType != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                [
+                                  if (project.hpType != null) 'HP: ${project.hpType} (${project.hpQty})',
+                                  if (project.tankType != null) 'Tank: ${project.tankType} (${project.tankQty})',
+                                  if (project.gl > 0) 'GL: ${project.gl}',
+                                ].join('  •  '),
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          Row(
+                            children: [
+                              Text(
+                                'Order: ${currencyFmt.format(orderVal)}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text('•', style: TextStyle(color: Colors.grey.shade400)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Paid: ${currencyFmt.format(paid)}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text('•', style: TextStyle(color: Colors.grey.shade400)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Bal: ${currencyFmt.format(balance)}',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: balance > 0 ? AppColors.error : AppColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                    onTap: () => context.push('/pm/projects/${project.id}'),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+

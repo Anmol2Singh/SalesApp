@@ -21,6 +21,7 @@ import '../../crm/providers/crm_providers.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../admin/providers/inventory_provider.dart';
+import '../../quotation_generator/providers/quotation_generator_providers.dart';
 
 class QuotationFormScreen extends ConsumerStatefulWidget {
   final String? pipelineId;
@@ -2128,6 +2129,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       } catch (_) {}
     }
 
+    ref.invalidate(dealQuotationsProvider);
     return quotationId;
   }
 

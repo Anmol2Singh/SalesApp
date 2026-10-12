@@ -7,7 +7,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../data/models/installation_model.dart';
 import '../../../core/services/pdf_service.dart';
@@ -482,9 +481,11 @@ class InstallationPdfService {
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/$filename');
       await file.writeAsBytes(pdfBytes);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Installation Report for ${installation.ticketNumber}',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Installation Report for ${installation.ticketNumber}',
+        ),
       );
     }
   }

@@ -39,8 +39,8 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Request?'),
-        content: Text('Are you sure you want to cancel the interest request for "${item.productName}" from ${item.customerName}?'),
+        title: const Text('Reject Request?'),
+        content: Text('Are you sure you want to reject and cancel the interest request for "${item.productName}" from ${item.customerName}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -52,7 +52,7 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Cancel'),
+            child: const Text('Yes, Reject'),
           ),
         ],
       ),
@@ -310,7 +310,7 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                         _cancelRequest(item);
                       },
                       icon: Icon(Icons.cancel_outlined, color: Colors.red.shade600, size: 18),
-                      label: Text('Cancel Request', style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.bold, fontSize: 14)),
+                      label: Text('Reject Request', style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.bold, fontSize: 14)),
                     ),
                   ),
                   SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
@@ -443,6 +443,18 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
                           ],
                         ),
                       ),
+                      if (item.status != 'accepted') ...[
+                        IconButton(
+                          icon: const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 22),
+                          tooltip: 'Accept & Create Deal',
+                          onPressed: () => _acceptRequest(item),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.cancel_outlined, color: Colors.red.shade600, size: 22),
+                          tooltip: 'Reject Request',
+                          onPressed: () => _cancelRequest(item),
+                        ),
+                      ],
                       const Icon(Icons.chevron_right, color: Colors.grey),
                     ],
                   ),

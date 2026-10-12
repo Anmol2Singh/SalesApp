@@ -21,6 +21,7 @@ import '../../features/amc/providers/amc_provider.dart';
 import '../../features/factory_order/screens/factory_queue_screen.dart';
 import '../../features/purchase_order/screens/purchase_queue_screen.dart';
 import '../../features/quotation/providers/quotation_provider.dart';
+import '../../features/quotation_generator/providers/quotation_generator_providers.dart';
 
 // CRM
 import '../../features/crm/providers/crm_providers.dart';
@@ -139,6 +140,7 @@ final realtimeSubscriptionProvider = Provider<void>((ref) {
         callback: (payload) {
           debugPrint('⚡ Realtime: quotations event: ${payload.eventType}');
           ref.invalidate(pendingQuotationsProvider);
+          ref.invalidate(dealQuotationsProvider);
           ref.invalidate(cust_providers.invoicesProvider);
           ref.invalidate(dashboardStatsProvider);
           final pipeId = payload.newRecord['pipeline_id'] ?? payload.oldRecord['pipeline_id'];

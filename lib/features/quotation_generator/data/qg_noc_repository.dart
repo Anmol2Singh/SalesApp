@@ -22,9 +22,7 @@ class QgNocRepository {
           .select()
           .order('product_name');
 
-      if (res is List) {
-        return res.map((e) => QgNocProfile.fromMap(Map<String, dynamic>.from(e as Map))).toList();
-      }
+      return res.map((e) => QgNocProfile.fromMap(Map<String, dynamic>.from(e as Map))).toList();
     } catch (e) {
       debugPrint('QgNocRepository.getProfiles error: $e');
     }
@@ -41,7 +39,7 @@ class QgNocRepository {
           .ilike('product_name', productName.trim())
           .maybeSingle();
 
-      if (res != null && res is Map) {
+      if (res != null) {
         return QgNocProfile.fromMap(Map<String, dynamic>.from(res));
       }
 
@@ -52,7 +50,7 @@ class QgNocRepository {
           .eq('product_name', 'Default')
           .maybeSingle();
 
-      if (def != null && def is Map) {
+      if (def != null) {
         return QgNocProfile.fromMap(Map<String, dynamic>.from(def));
       }
     } catch (e) {
@@ -73,9 +71,7 @@ class QgNocRepository {
           .eq('pipeline_id', pipelineId)
           .order('version', ascending: false);
 
-      if (res is List) {
-        return res.map((e) => QgNocDocument.fromMap(Map<String, dynamic>.from(e as Map))).toList();
-      }
+      return res.map((e) => QgNocDocument.fromMap(Map<String, dynamic>.from(e as Map))).toList();
     } catch (e) {
       debugPrint('QgNocRepository.getDocumentsForPipeline error: $e');
     }
@@ -91,7 +87,7 @@ class QgNocRepository {
           .eq('is_current', true)
           .maybeSingle();
 
-      if (res != null && res is Map) {
+      if (res != null) {
         return QgNocDocument.fromMap(Map<String, dynamic>.from(res));
       }
     } catch (e) {
@@ -178,9 +174,7 @@ class QgNocRepository {
           ''')
           .order('created_at', ascending: false);
 
-      if (res is List) {
-        return res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      }
+      return res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
       debugPrint('QgNocRepository.fetchDealsForNocHub error: $e');
     }
@@ -195,9 +189,7 @@ class QgNocRepository {
           .eq('customer_id', customerId)
           .order('created_at', ascending: false);
 
-      if (res is List) {
-        return res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      }
+      return res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
       debugPrint('QgNocRepository.fetchInstallationsForCustomer error: $e');
     }
@@ -223,21 +215,19 @@ class QgNocRepository {
         query = query.eq('pipeline_id', dealId);
       }
       final res = await query.order('created_at', ascending: false);
-      if (res is List) {
-        var list = res.map((e) => QgNocDocument.fromMap(Map<String, dynamic>.from(e as Map))).toList();
-        if (search != null && search.isNotEmpty) {
-          final s = search.toLowerCase();
-          list = list.where((d) =>
-            d.nocNumber.toLowerCase().contains(s) ||
-            d.customerName.toLowerCase().contains(s) ||
-            d.productName.toLowerCase().contains(s)
-          ).toList();
-        }
-        if (status != null) {
-          list = list.where((d) => d.status == status).toList();
-        }
-        return list;
+      var list = res.map((e) => QgNocDocument.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+      if (search != null && search.isNotEmpty) {
+        final s = search.toLowerCase();
+        list = list.where((d) =>
+          d.nocNumber.toLowerCase().contains(s) ||
+          d.customerName.toLowerCase().contains(s) ||
+          d.productName.toLowerCase().contains(s)
+        ).toList();
       }
+      if (status != null) {
+        list = list.where((d) => d.status == status).toList();
+      }
+      return list;
     } catch (e) {
       debugPrint('QgNocRepository.listNocs error: $e');
     }
@@ -251,7 +241,7 @@ class QgNocRepository {
           .select()
           .eq('id', id)
           .maybeSingle();
-      if (res != null && res is Map) {
+      if (res != null) {
         return QgNocDocument.fromMap(Map<String, dynamic>.from(res));
       }
     } catch (e) {
@@ -389,7 +379,7 @@ class QgNocRepository {
             .order('version', ascending: false)
             .limit(1);
 
-        if (existingDocs is List && existingDocs.isNotEmpty) {
+        if (existingDocs.isNotEmpty) {
           final existing = Map<String, dynamic>.from(existingDocs.first as Map);
           final updated = await client
               .from('qg_noc_documents')

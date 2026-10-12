@@ -10,11 +10,8 @@ import '../config/quote_type.dart';
 import '../models/generator_company_settings.dart';
 import '../models/generator_quotation.dart';
 import '../models/heat_pump_model.dart';
-import '../models/price_item.dart';
-import '../models/price_row.dart';
 import '../models/tank_spec.dart';
 import '../services/quote_number_service.dart';
-import '../services/quotation_storage_service.dart';
 import 'catalog_repository.dart';
 
 class QuotationSupabaseRepository {

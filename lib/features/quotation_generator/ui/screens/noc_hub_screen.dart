@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/pdf_preview_screen.dart';
-import '../../config/qg_noc_flags.dart';
 import '../../data/qg_noc_repository.dart';
 import '../../models/qg_noc_builder_state.dart';
 import '../../models/qg_noc_document.dart';
@@ -229,7 +228,7 @@ class _NocHubScreenState extends ConsumerState<NocHubScreen> {
           });
           _loadDocuments();
         },
-        selectedColor: const Color(0xFF174895).withOpacity(0.15),
+        selectedColor: const Color(0xFF174895).withValues(alpha: 0.15),
         checkmarkColor: const Color(0xFF174895),
         labelStyle: TextStyle(
           color: isSelected ? const Color(0xFF174895) : AppColors.textPrimary,
@@ -267,7 +266,7 @@ class _NocHubScreenState extends ConsumerState<NocHubScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -297,7 +296,7 @@ class _NocHubScreenState extends ConsumerState<NocHubScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.blueGrey.withOpacity(0.12),
+                          color: Colors.blueGrey.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -311,9 +310,9 @@ class _NocHubScreenState extends ConsumerState<NocHubScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
+                    color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     doc.status.name.toUpperCase(),

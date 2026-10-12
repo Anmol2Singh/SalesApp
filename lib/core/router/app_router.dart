@@ -74,6 +74,13 @@ import '../../features/crm/screens/crm_customer_detail_screen.dart';
 import '../../features/crm/screens/prospect_detail_screen.dart';
 import '../models/user_role.dart';
 import '../widgets/app_shell.dart';
+import '../../features/project_manager/presentation/screens/pm_dashboard_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_project_detail_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_project_form_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_filter_screen.dart';
+import '../../features/dashboard/screens/product_interests_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_quick_call_remark_screen.dart';
+import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
 
 // Customer app imports
 import '../../features/customer_app/features/auth/screens/otp_screen.dart';
@@ -140,6 +147,17 @@ class AppRoutes {
   static const String heatPumpQuotationCreate = '/heat-pump-quotations/new';
   static const String nocHub = '/qg/noc';
   static const String nocBuilder = '/qg/noc/builder';
+  static const String projectManager = '/pm';
+  static const String pmProjectNew = '/pm/projects/new';
+  static const String pmProjectDetail = '/pm/projects/:id';
+  static const String pmProjectEdit = '/pm/projects/:id/edit';
+  static const String pmCallRemark = '/pm/projects/:id/call-remark';
+  static const String pmFilter = '/pm/filter';
+  static const String pmDailyTransactions = '/pm/daily-transactions';
+  static const String productInterests = '/product-interests';
+  static const String userActivityReport = '/reports/activity';
+  static const String customerReport = '/reports/customer';
+  static const String products = '/products';
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -210,6 +228,23 @@ final routerProvider = Provider<GoRouter>((ref) {
               location == AppRoutes.heatPumpQuotationCreate ||
               location.startsWith('/quotation-generator')) {
             if (!profile.roles.contains(UserRole.admin)) {
+              return _getRoleHome(profile.primaryRole);
+            }
+          }
+
+          // Guard Accounts role: access to Project Manager module only
+          if (profile.roles.contains(UserRole.accounts) &&
+              !profile.roles.contains(UserRole.admin) &&
+              !profile.roles.contains(UserRole.manager)) {
+            if (!location.startsWith('/pm')) {
+              return AppRoutes.projectManager;
+            }
+          }
+
+          // Guard Project Manager module: strictly admin, manager, or accounts
+          if (location.startsWith('/pm')) {
+            final canAccess = profile.roles.any((r) => r.canAccessProjectManager);
+            if (!canAccess) {
               return _getRoleHome(profile.primaryRole);
             }
           }
@@ -395,6 +430,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.heatPumpQuotationHub,
             builder: (context, state) => const QuotationHistoryScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.projectManager,
+            builder: (context, state) => const PmDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.pmDailyTransactions,
+            builder: (context, state) => const PmDailyTransactionsScreen(),
+          ),
           ShellRoute(
             builder: (context, state, child) {
               return CrmShell(
@@ -495,9 +538,60 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.installationHistory,
             builder: (context, state) => const InstallationHistoryScreen(),
           ),
+          GoRoute(
+            path: AppRoutes.productInterests,
+            builder: (context, state) => const ProductInterestsScreen(),
+          ),
+          GoRoute(
+            path: '/reports/activity',
+            builder: (context, state) => const UserActivityReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/customer',
+            builder: (context, state) => const CustomerReportScreen(),
+          ),
+          GoRoute(
+            path: '/products',
+            builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
+          ),
         ],
       ),
       // Detail/Form views (Full screen)
+      GoRoute(
+        path: AppRoutes.pmProjectNew,
+        builder: (context, state) {
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmProjectFormScreen(isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmProjectDetail,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmProjectDetailScreen(id: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmProjectEdit,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmProjectFormScreen(editId: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmCallRemark,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmQuickCallRemarkScreen(id: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmFilter,
+        builder: (context, state) => const PmFilterScreen(),
+      ),
       GoRoute(
         path: AppRoutes.bookInstallation,
         builder: (context, state) => const BookInstallationScreen(),
@@ -653,18 +747,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/reports/activity',
-        builder: (context, state) => const UserActivityReportScreen(),
-      ),
-      GoRoute(
-        path: '/reports/customer',
-        builder: (context, state) => const CustomerReportScreen(),
-      ),
-      GoRoute(
-        path: '/products',
-        builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
-      ),
-      GoRoute(
         path: '/customer/dashboard',
         builder: (context, state) => const CustomerDashboardScreen(),
       ),
@@ -711,6 +793,8 @@ String getRoleHome(UserRole role) {
       return '/customer/dashboard';
     case UserRole.crmStaff:
       return '/crm/dashboard';
+    case UserRole.accounts:
+      return AppRoutes.projectManager;
   }
 }
 

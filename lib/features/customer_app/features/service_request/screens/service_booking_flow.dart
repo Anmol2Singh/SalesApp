@@ -43,16 +43,12 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   // Step 3 State
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
-  final bool _bookPreviousTechnician = false;
-
   // Step 4 State
   final _flatController = TextEditingController();
   final _streetController = TextEditingController();
   final _cityController = TextEditingController();
   final _pincodeController = TextEditingController();
   bool _saveAddressFuture = true;
-
-  final List<String> _timeSlots = ['08–10 AM', '10–12 PM', '12–2 PM', '2–5 PM'];
 
   @override
   void initState() {
@@ -221,8 +217,10 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
       );
 
       try {

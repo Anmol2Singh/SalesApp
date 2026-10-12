@@ -11,9 +11,9 @@ class DealQuotationsRepository {
 
   DealQuotationsRepository(this._supabase);
 
-  static const List<String> defaultProductFilter = ['Heat Pump'];
+  static const List<String> defaultProductFilter = [];
 
-  /// Fetches deal quotations for Heat Pump deals, newest first.
+  /// Fetches deal quotations for all deals, newest first.
   Future<List<DealQuotationItem>> getDealQuotations({
     List<String> productFilter = defaultProductFilter,
     String? searchQuery,
@@ -58,16 +58,29 @@ class DealQuotationsRepository {
         try {
           final rowMap = Map<String, dynamic>.from(raw as Map);
           
-          // Verify product filter (e.g. Heat Pump)
-          final pipeline = rowMap['sales_pipelines'] as Map<String, dynamic>?;
-          final product = pipeline != null ? pipeline['products'] as Map<String, dynamic>? : null;
+          // Verify product filter (if provided)
+          final rawPipeline = rowMap['sales_pipelines'];
+          Map<String, dynamic>? pipeline;
+          if (rawPipeline is Map) {
+            pipeline = Map<String, dynamic>.from(rawPipeline);
+          } else if (rawPipeline is List && rawPipeline.isNotEmpty && rawPipeline.first is Map) {
+            pipeline = Map<String, dynamic>.from(rawPipeline.first as Map);
+          }
+
+          final rawProduct = pipeline != null ? pipeline['products'] : null;
+          Map<String, dynamic>? product;
+          if (rawProduct is Map) {
+            product = Map<String, dynamic>.from(rawProduct);
+          } else if (rawProduct is List && rawProduct.isNotEmpty && rawProduct.first is Map) {
+            product = Map<String, dynamic>.from(rawProduct.first as Map);
+          }
           final pName = product != null ? (product['name'] as String? ?? '') : '';
 
           final matchesProduct = productFilter.isEmpty ||
               productFilter.any((p) => pName.toLowerCase().contains(p.toLowerCase()));
 
-          // If pipeline exists, filter by product. If pipeline is null or product name matches, include.
-          if (pipeline != null && !matchesProduct) {
+          // If product filter specified and does not match, skip
+          if (productFilter.isNotEmpty && !matchesProduct) {
             continue;
           }
 

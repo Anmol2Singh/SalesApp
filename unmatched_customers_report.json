@@ -1,0 +1,80 @@
+{
+  "timestamp": 1785209413.7090318,
+  "matched_count": 0,
+  "unmatched_count": 3,
+  "matched_projects": [],
+  "unmatched_projects": [
+    {
+      "project": {
+        "id": "25d457fe-9f61-48e2-8a31-2285ac505dab",
+        "id_no": 18032,
+        "order_type": "Boom Barrier",
+        "site_name": "Eastern Elegance Hadapsar",
+        "address": "Hadapsar",
+        "hp_type": null,
+        "hp_qty": 0,
+        "tank_type": null,
+        "tank_qty": 0,
+        "gl": 0,
+        "sales_m_value": 0,
+        "m_outward_value": 0,
+        "m_balance": 0,
+        "order_value": 44000,
+        "extra_work_value": 0,
+        "payment_received": 0,
+        "work_remark": "payment term 100% After installation",
+        "created_at": "2026-02-21T10:03:41.831968+00:00",
+        "updated_at": "2026-02-21T10:03:41.831968+00:00"
+      },
+      "reason": "No match found for phone, site name, or party name in existing customers table"
+    },
+    {
+      "project": {
+        "id": "c30af53b-a647-4b5f-a41f-f4cc84c84bbe",
+        "id_no": 2600,
+        "order_type": "Solar Water Heater",
+        "site_name": "VTP",
+        "address": "Kesnand",
+        "hp_type": "6HP",
+        "hp_qty": 3,
+        "tank_type": "GI Pressureized",
+        "tank_qty": 3,
+        "gl": 0,
+        "sales_m_value": 30000,
+        "m_outward_value": 20000,
+        "m_balance": 0,
+        "order_value": 56000,
+        "extra_work_value": 8000,
+        "payment_received": 40000,
+        "work_remark": null,
+        "created_at": "2026-02-21T10:04:00.623296+00:00",
+        "updated_at": "2026-02-21T17:56:12.383+00:00"
+      },
+      "reason": "No match found for phone, site name, or party name in existing customers table"
+    },
+    {
+      "project": {
+        "id": "256c1dd8-2a6f-457c-a700-49a3ca074404",
+        "id_no": 19091,
+        "order_type": "Heat Pump",
+        "site_name": "GRNACO Ladakh",
+        "address": "Ladakh",
+        "hp_type": "50KW",
+        "hp_qty": 9,
+        "tank_type": "GI Pressureized",
+        "tank_qty": null,
+        "gl": 0,
+        "sales_m_value": 0,
+        "m_outward_value": 0,
+        "m_balance": 0,
+        "order_value": 249570,
+        "extra_work_value": 0,
+        "payment_received": 0,
+        "work_remark": "Dispatched with Heat pump and pocket sensor by wheelseye",
+        "created_at": "2026-07-27T17:45:17.266929+00:00",
+        "updated_at": "2026-07-27T17:46:30.234+00:00"
+      },
+      "reason": "No match found for phone, site name, or party name in existing customers table"
+    }
+  ]
+}

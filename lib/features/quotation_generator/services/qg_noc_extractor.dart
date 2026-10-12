@@ -1,7 +1,6 @@
 // lib/features/quotation_generator/services/qg_noc_extractor.dart
 
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/qg_noc_builder_state.dart';
 import '../models/qg_noc_profile.dart';
@@ -13,8 +12,7 @@ class QgNocExtractor {
     final treated = <String>{};
     try {
       final res = await supabase.from('products').select('name, base_specs');
-      if (res is List) {
-        for (final p in res) {
+      for (final p in res) {
           final pName = p['name']?.toString().trim();
           if (pName != null && pName.isNotEmpty) {
             treated.add(pName.toLowerCase());
@@ -30,7 +28,6 @@ class QgNocExtractor {
             }
           }
         }
-      }
     } catch (e) {
       debugPrint('fetchItemsTreatedAsProducts error: $e');
     }

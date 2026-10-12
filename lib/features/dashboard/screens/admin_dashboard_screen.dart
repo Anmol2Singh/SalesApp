@@ -15,10 +15,10 @@ import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../crm/providers/crm_providers.dart';
 import '../../complaints/providers/complaints_provider.dart';
-import 'product_interests_screen.dart';
 import '../providers/product_inquiries_provider.dart';
 import '../../../core/widgets/network_status_chip.dart';
 import '../../../core/widgets/dashboard_skeleton.dart';
+import '../../../core/models/user_role.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
@@ -776,196 +776,310 @@ class _QuickActionBtn {
   });
 }
 
-class _QuickActionsGrid extends StatelessWidget {
+class _QuickActionCategory {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<_QuickActionBtn> actions;
+
+  const _QuickActionCategory({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.actions,
+  });
+}
+
+class _QuickActionsGrid extends ConsumerWidget {
   const _QuickActionsGrid();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final userProfile = ref.watch(currentProfileProvider);
+    final roles = userProfile?.roles ?? [];
+    final isAccountsOnly = roles.contains(UserRole.accounts) &&
+        !roles.contains(UserRole.admin);
 
-    final actions = [
-      _QuickActionBtn(
-        label: 'CRM',
-        icon: Icons.people_alt_outlined,
-        color: const Color(0xFF3B82F6),
-        onTap: () => context.push('/crm/dashboard'),
-      ),
-      _QuickActionBtn(
-        label: 'Deals',
-        icon: Icons.currency_rupee,
-        color: const Color(0xFF6366F1),
-        onTap: () => context.go(AppRoutes.pipelines),
-      ),
-      _QuickActionBtn(
-        label: 'Complaints',
-        icon: Icons.build_outlined,
-        color: const Color(0xFF8B5CF6),
-        onTap: () => context.go('/complaints/dashboard'),
-      ),
-      _QuickActionBtn(
-        label: 'Installations',
-        icon: Icons.build_circle_outlined,
-        color: const Color(0xFF0284C7),
-        onTap: () => context.go('/installations/dashboard'),
-      ),
-      _QuickActionBtn(
-        label: 'View Products',
-        icon: Icons.grid_view_outlined,
-        color: const Color(0xFF0D9488),
-        onTap: () => context.push('/products'),
-      ),
-      _QuickActionBtn(
-        label: 'Inventory',
-        icon: Icons.inventory_2_outlined,
-        color: const Color(0xFFEC4899),
-        onTap: () => context.push(AppRoutes.inventory),
-      ),
-      _QuickActionBtn(
-        label: "Today's Report",
-        icon: Icons.bar_chart_outlined,
-        color: const Color(0xFF10B981),
-        onTap: () => context.push('/reports/activity'),
-      ),
-      _QuickActionBtn(
-        label: 'Customer 360',
-        icon: Icons.contact_page_outlined,
-        color: const Color(0xFFF59E0B),
-        onTap: () => context.push('/reports/customer'),
-      ),
-      _QuickActionBtn(
-        label: 'Daily Tasks',
-        icon: Icons.fact_check_outlined,
-        color: const Color(0xFF8B5CF6),
-        onTap: () => context.push(AppRoutes.dailyTasks),
-      ),
-      _QuickActionBtn(
-        label: 'AMC',
-        icon: Icons.shield_outlined,
-        color: const Color(0xFF2563EB),
-        onTap: () => context.push('/amc'),
-      ),
-      _QuickActionBtn(
-        label: 'List of PDFs',
-        icon: Icons.folder_copy_outlined,
-        color: const Color(0xFFE11D48),
-        onTap: () => context.push(AppRoutes.pdfList),
-      ),
-      _QuickActionBtn(
-        label: 'Search PDF',
-        icon: Icons.picture_as_pdf_outlined,
-        color: const Color(0xFFF97316),
-        onTap: () => context.push(AppRoutes.searchPdf),
-      ),
-      _QuickActionBtn(
-        label: 'Quotation Generator',
-        icon: Icons.request_quote_outlined,
-        color: const Color(0xFF0284C7),
-        onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
-      ),
-      _QuickActionBtn(
-        label: 'Product Interests',
-        icon: Icons.shopping_cart_outlined,
-        color: const Color(0xFF0EA5E9),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ProductInterestsScreen()),
+    final categories = <_QuickActionCategory>[
+      if (!isAccountsOnly)
+        _QuickActionCategory(
+          title: 'CRM',
+          icon: Icons.people_alt_outlined,
+          color: const Color(0xFF3B82F6),
+          actions: [
+            _QuickActionBtn(
+              label: 'CRM',
+              icon: Icons.people_alt_outlined,
+              color: const Color(0xFF3B82F6),
+              onTap: () => context.push('/crm/dashboard'),
+            ),
+          ],
         ),
+      if (!isAccountsOnly)
+        _QuickActionCategory(
+          title: 'Sales',
+          icon: Icons.trending_up,
+          color: const Color(0xFF6366F1),
+          actions: [
+            _QuickActionBtn(
+              label: 'Deals',
+              icon: Icons.currency_rupee,
+              color: const Color(0xFF6366F1),
+              onTap: () => context.go(AppRoutes.pipelines),
+            ),
+            _QuickActionBtn(
+              label: 'Quotation Generator',
+              icon: Icons.request_quote_outlined,
+              color: const Color(0xFF0284C7),
+              onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
+            ),
+            _QuickActionBtn(
+              label: 'Product Interests',
+              icon: Icons.shopping_cart_outlined,
+              color: const Color(0xFF0EA5E9),
+              onTap: () => context.go(AppRoutes.productInterests),
+            ),
+          ],
+        ),
+      _QuickActionCategory(
+        title: 'Finance',
+        icon: Icons.account_balance_wallet_outlined,
+        color: const Color(0xFF005CE6),
+        actions: [
+          _QuickActionBtn(
+            label: 'Project Manager',
+            icon: Icons.solar_power_outlined,
+            color: const Color(0xFF005CE6),
+            onTap: () => context.go(AppRoutes.projectManager),
+          ),
+        ],
       ),
+      if (!isAccountsOnly)
+        _QuickActionCategory(
+          title: 'Field Operations & Service',
+          icon: Icons.engineering_outlined,
+          color: const Color(0xFF0284C7),
+          actions: [
+            _QuickActionBtn(
+              label: 'Installations',
+              icon: Icons.build_circle_outlined,
+              color: const Color(0xFF0284C7),
+              onTap: () => context.go('/installations/dashboard'),
+            ),
+            _QuickActionBtn(
+              label: 'Complaints',
+              icon: Icons.build_outlined,
+              color: const Color(0xFF8B5CF6),
+              onTap: () => context.go('/complaints/dashboard'),
+            ),
+            _QuickActionBtn(
+              label: 'AMC',
+              icon: Icons.shield_outlined,
+              color: const Color(0xFF2563EB),
+              onTap: () => context.push('/amc'),
+            ),
+          ],
+        ),
+      if (!isAccountsOnly)
+        _QuickActionCategory(
+          title: 'Reports & Analytics',
+          icon: Icons.analytics_outlined,
+          color: const Color(0xFF10B981),
+          actions: [
+            _QuickActionBtn(
+              label: 'Daily Tasks',
+              icon: Icons.fact_check_outlined,
+              color: const Color(0xFF8B5CF6),
+              onTap: () => context.push(AppRoutes.dailyTasks),
+            ),
+            _QuickActionBtn(
+              label: "Today's Report",
+              icon: Icons.bar_chart_outlined,
+              color: const Color(0xFF10B981),
+              onTap: () => context.push('/reports/activity'),
+            ),
+            _QuickActionBtn(
+              label: 'Customer 360',
+              icon: Icons.contact_page_outlined,
+              color: const Color(0xFFF59E0B),
+              onTap: () => context.push('/reports/customer'),
+            ),
+            _QuickActionBtn(
+              label: 'List of PDFs',
+              icon: Icons.folder_copy_outlined,
+              color: const Color(0xFFE11D48),
+              onTap: () => context.push(AppRoutes.pdfList),
+            ),
+            _QuickActionBtn(
+              label: 'Search PDF',
+              icon: Icons.picture_as_pdf_outlined,
+              color: const Color(0xFFF97316),
+              onTap: () => context.push(AppRoutes.searchPdf),
+            ),
+          ],
+        ),
+      if (!isAccountsOnly)
+        _QuickActionCategory(
+          title: 'Catalog & Inventory',
+          icon: Icons.inventory_2_outlined,
+          color: const Color(0xFFEC4899),
+          actions: [
+            _QuickActionBtn(
+              label: 'View Products',
+              icon: Icons.grid_view_outlined,
+              color: const Color(0xFF0D9488),
+              onTap: () => context.push('/products'),
+            ),
+            _QuickActionBtn(
+              label: 'Inventory',
+              icon: Icons.inventory_2_outlined,
+              color: const Color(0xFFEC4899),
+              onTap: () => context.push(AppRoutes.inventory),
+            ),
+          ],
+        ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth >= 700 ? 4 : 2;
-        final rows = <Widget>[];
-
-        for (int i = 0; i < actions.length; i += crossAxisCount) {
-          final rowChildren = <Widget>[];
-          for (int j = 0; j < crossAxisCount; j++) {
-            if (i + j < actions.length) {
-              final a = actions[i + j];
-              rowChildren.add(
-                Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: a.onTap,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color:
-                              isDark ? const Color(0xFF1E293B) : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark
-                                ? const Color(0xFF334155)
-                                : Colors.grey.shade200,
-                            width: 1.2,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: categories.map((cat) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8, left: 2),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: cat.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black
-                                  .withValues(alpha: isDark ? 0.2 : 0.02),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          child: Icon(cat.icon, size: 13, color: cat.color),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: a.color.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(a.icon, color: a.color, size: 20),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                a.label,
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 8),
+                        Text(
+                          cat.title.toUpperCase(),
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : const Color(0xFF64748B),
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+                  _buildActionGrid(cat.actions, constraints, isDark),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildActionGrid(
+      List<_QuickActionBtn> actions, BoxConstraints constraints, bool isDark) {
+    final crossAxisCount = constraints.maxWidth >= 700 ? 4 : 2;
+    final rows = <Widget>[];
+
+    for (int i = 0; i < actions.length; i += crossAxisCount) {
+      final rowChildren = <Widget>[];
+      for (int j = 0; j < crossAxisCount; j++) {
+        if (i + j < actions.length) {
+          final a = actions[i + j];
+          rowChildren.add(
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: a.onTap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color:
+                          isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF334155)
+                            : Colors.grey.shade200,
+                        width: 1.2,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black
+                              .withValues(alpha: isDark ? 0.2 : 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: a.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(a.icon, color: a.color, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            a.label,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              );
-            } else {
-              rowChildren.add(const Expanded(child: SizedBox.shrink()));
-            }
-
-            if (j < crossAxisCount - 1) {
-              rowChildren.add(const SizedBox(width: 10));
-            }
-          }
-
-          rows.add(Row(children: rowChildren));
-          if (i + crossAxisCount < actions.length) {
-            rows.add(const SizedBox(height: 10));
-          }
+              ),
+            ),
+          );
+        } else {
+          rowChildren.add(const Expanded(child: SizedBox.shrink()));
         }
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: rows,
-        );
-      },
+        if (j < crossAxisCount - 1) {
+          rowChildren.add(const SizedBox(width: 10));
+        }
+      }
+
+      rows.add(Row(children: rowChildren));
+      if (i + crossAxisCount < actions.length) {
+        rows.add(const SizedBox(height: 10));
+      }
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: rows,
     );
   }
 }
@@ -1675,9 +1789,9 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Request?'),
+        title: const Text('Reject Request?'),
         content: Text(
-            'Are you sure you want to cancel the interest request for "${item.productName}" from ${item.customerName}?'),
+            'Are you sure you want to reject the interest request for "${item.productName}" from ${item.customerName}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1689,7 +1803,7 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Cancel'),
+            child: const Text('Yes, Reject'),
           ),
         ],
       ),
@@ -1916,7 +2030,7 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                   },
                   icon: Icon(Icons.cancel_outlined,
                       color: Colors.red.shade600, size: 18),
-                  label: Text('Cancel Request',
+                  label: Text('Reject Request',
                       style: TextStyle(
                           color: Colors.red.shade600,
                           fontWeight: FontWeight.bold,
@@ -1993,13 +2107,7 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                 Row(
                   children: [
                     TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const ProductInterestsScreen()),
-                        );
-                      },
+                      onPressed: () => context.go(AppRoutes.productInterests),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         minimumSize: Size.zero,

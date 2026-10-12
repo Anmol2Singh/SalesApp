@@ -103,7 +103,7 @@ class QgCatalogService {
     // 1. Try querying qg_catalog table from Supabase if connected
     if (_supabase != null) {
       try {
-        final rows = await _supabase!
+        final rows = await _supabase
             .from('qg_catalog')
             .select('*')
             .eq('kind', 'domestic');
@@ -139,7 +139,7 @@ class QgCatalogService {
             final match = modelMatches.first;
             final specs = Map<String, dynamic>.from(match['specs'] as Map? ?? {});
             final sourceModel = match['model_no'] as String? ?? derivedModel;
-            final sourceKw = (match['kw'] as num?)?.toString() ?? '${targetKw}';
+            final sourceKw = (match['kw'] as num?)?.toString() ?? '$targetKw';
             return QgSpecMatchResult(
               modelNo: derivedModel,
               kw: targetKw,

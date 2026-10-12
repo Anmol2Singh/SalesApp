@@ -108,21 +108,37 @@ class DealQuotationItem {
     Map<String, dynamic> row, {
     Map<String, dynamic>? proposalRecord,
   }) {
-    final pipeline = row['sales_pipelines'] is Map
-        ? Map<String, dynamic>.from(row['sales_pipelines'] as Map)
-        : null;
+    final rawPipeline = row['sales_pipelines'];
+    Map<String, dynamic>? pipeline;
+    if (rawPipeline is Map) {
+      pipeline = Map<String, dynamic>.from(rawPipeline);
+    } else if (rawPipeline is List && rawPipeline.isNotEmpty && rawPipeline.first is Map) {
+      pipeline = Map<String, dynamic>.from(rawPipeline.first as Map);
+    }
 
-    final customer = pipeline != null && pipeline['customers'] is Map
-        ? Map<String, dynamic>.from(pipeline['customers'] as Map)
-        : null;
+    final rawCustomer = pipeline != null ? pipeline['customers'] : null;
+    Map<String, dynamic>? customer;
+    if (rawCustomer is Map) {
+      customer = Map<String, dynamic>.from(rawCustomer);
+    } else if (rawCustomer is List && rawCustomer.isNotEmpty && rawCustomer.first is Map) {
+      customer = Map<String, dynamic>.from(rawCustomer.first as Map);
+    }
 
-    final product = pipeline != null && pipeline['products'] is Map
-        ? Map<String, dynamic>.from(pipeline['products'] as Map)
-        : null;
+    final rawProduct = pipeline != null ? pipeline['products'] : null;
+    Map<String, dynamic>? product;
+    if (rawProduct is Map) {
+      product = Map<String, dynamic>.from(rawProduct);
+    } else if (rawProduct is List && rawProduct.isNotEmpty && rawProduct.first is Map) {
+      product = Map<String, dynamic>.from(rawProduct.first as Map);
+    }
 
-    final creatorProfile = pipeline != null && pipeline['profiles'] is Map
-        ? Map<String, dynamic>.from(pipeline['profiles'] as Map)
-        : null;
+    final rawProfile = pipeline != null ? pipeline['profiles'] : null;
+    Map<String, dynamic>? creatorProfile;
+    if (rawProfile is Map) {
+      creatorProfile = Map<String, dynamic>.from(rawProfile);
+    } else if (rawProfile is List && rawProfile.isNotEmpty && rawProfile.first is Map) {
+      creatorProfile = Map<String, dynamic>.from(rawProfile.first as Map);
+    }
 
     // Customer details resolution
     String cName = (row['customer_name'] as String?)?.trim() ?? '';

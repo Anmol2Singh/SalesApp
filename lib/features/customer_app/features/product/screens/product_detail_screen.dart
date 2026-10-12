@@ -102,7 +102,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     );
   }
 
-  Future<void> _handleBookNow(BuildContext context, Product product) async {
+  Future<void> _handleBookNow(Product product) async {
     if (_isBooking) return;
     setState(() => _isBooking = true);
 
@@ -304,7 +304,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ToastService.show(context, 'Error registering interest: $e', type: ToastType.error);
       }
     } finally {
@@ -1258,7 +1258,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                     GradientButton(
                                       label: 'Avail AMC Now',
                                       isLoading: _isRenewing,
-                                      onTap: () => _renewAmc(product), // Avail AMC uses same method as renew for now
+                                      onTap: () => _requestAmc(product),
                                     ),
                                   ],
                                 ),
@@ -1535,7 +1535,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                 label: _isBooking
                                     ? 'Registering...'
                                     : (isAccepted ? 'Book More' : (isRequested ? 'Requested' : 'Book Now')),
-                                onTap: _isBooking ? () {} : () => _handleBookNow(context, product),
+                                onTap: _isBooking ? () {} : () => _handleBookNow(product),
                                 icon: _isBooking
                                     ? const SizedBox(
                                         width: 18,
