@@ -490,6 +490,7 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           .from('products')
           .select('id, name, category')
           .eq('is_active', true)
+          .isFilter('deleted_at', null)
           .order('name');
       final names = <String>[];
       final prods = <Map<String, dynamic>>[];

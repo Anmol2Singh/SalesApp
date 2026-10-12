@@ -862,6 +862,15 @@ class _QuickActionsGrid extends StatelessWidget {
         color: const Color(0xFF0284C7),
         onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
       ),
+      _QuickActionBtn(
+        label: 'Product Interests',
+        icon: Icons.shopping_cart_outlined,
+        color: const Color(0xFF0EA5E9),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProductInterestsScreen()),
+        ),
+      ),
     ];
 
     return LayoutBuilder(
@@ -1655,8 +1664,9 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
     if (clean.isEmpty) return;
     final uri = Uri.parse('https://wa.me/$clean');
     try {
-      if (await canLaunchUrl(uri))
+      if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
     } catch (_) {}
   }
 
@@ -1711,14 +1721,30 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
   Future<void> _acceptRequest(
       BuildContext context, WidgetRef ref, ProductInterestItem item) async {
     try {
-      await ref.read(productInquiriesServiceProvider).acceptInquiry(item);
+      final res = await ref.read(productInquiriesServiceProvider).acceptAndCreateDeal(item);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Product request accepted successfully!'),
-            backgroundColor: Color(0xFF16A34A),
-          ),
-        );
+        if (res.isUnavailable) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res.message),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        } else if (res.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res.message),
+              backgroundColor: const Color(0xFF16A34A),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${res.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) {
@@ -1913,46 +1939,56 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
       loading: () => const SizedBox.shrink(),
       error: (e, _) => const SizedBox.shrink(),
       data: (interests) {
-        if (interests.isEmpty) return const SizedBox.shrink();
+        final pendingInterests = interests.where((e) {
+          final s = e.status.toLowerCase().trim();
+          return s == 'requested' || s == 'pending' || s == 'new';
+        }).toList();
 
-        final item = interests.first;
+        if (pendingInterests.isEmpty) return const SizedBox.shrink();
+
+        final item = pendingInterests.first;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Customer Product Interests',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${interests.length}',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2563EB),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Customer Product Interests',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${pendingInterests.length}',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Row(
                   children: [
@@ -2145,9 +2181,11 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       const Divider(height: 1),
                       const SizedBox(height: 10),
 
-                      // Action bar: quick WhatsApp / Call and Tap for options
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           Row(
                             mainAxisSize: MainAxisSize.min,

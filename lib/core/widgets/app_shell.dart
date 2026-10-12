@@ -112,7 +112,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         body: LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 800;
+            final isQuotationRoute = widget.currentRoute.startsWith('/heat-pump-quotations') ||
+                widget.currentRoute.startsWith('/quotation');
             final showsNavBar = !isWide &&
+                !isQuotationRoute &&
                 profile.primaryRole != UserRole.customer &&
                 !widget.currentRoute.startsWith('/inventory') &&
                 widget.currentRoute != AppRoutes.inventory &&
@@ -154,6 +157,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           },
         ),
         bottomNavigationBar: MediaQuery.of(context).size.width < 800 &&
+                !widget.currentRoute.startsWith('/heat-pump-quotations') &&
+                !widget.currentRoute.startsWith('/quotation') &&
                 profile.primaryRole != UserRole.customer &&
                 !widget.currentRoute.startsWith('/inventory') &&
                 widget.currentRoute != AppRoutes.inventory &&
@@ -185,7 +190,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         widget.currentRoute.startsWith('/purchase') || 
         widget.currentRoute.startsWith('/amc') ||
         widget.currentRoute.startsWith('/complaints') ||
-        widget.currentRoute == AppRoutes.dailyTasks) {
+        widget.currentRoute == AppRoutes.dailyTasks ||
+        widget.currentRoute.startsWith('/heat-pump-quotations')) {
       navBgColor = const Color(0xFF1E1B4B);
       selectedTextColor = Colors.white;
       unselectedTextColor = Colors.white70;

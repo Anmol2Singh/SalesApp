@@ -22,11 +22,11 @@ class TankSpec {
     this.testingPressure = '7 bar pressure',
     this.hotWaterInletOutlet = '2 Inch,',
     this.heatPumpCirculation = '1 Inch,',
-    this.outerTankInsulation = '50 mm with Puff Insulation',
+    this.outerTankInsulation = 'PUF',
     this.temperatureDrop = '3° C / 8 hour',
     this.innerAndOuterTank = 'GI',
     this.tankDirection = 'Horizontal / Vertical',
-    this.other = 'Other Solar Provision Additional Heat Pump Provision',
+    this.other = 'Solar Provision Additional Heat Pump Provision',
   });
 
   String get innerTankMaterial => innerAndOuterTank.isNotEmpty ? innerAndOuterTank : 'GI';

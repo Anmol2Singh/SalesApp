@@ -20,6 +20,12 @@ import '../../../core/widgets/breadcrumbs.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/models/amc_contract.dart';
 import '../../quotation/providers/quotation_provider.dart';
+import '../../quotation_generator/config/qg_noc_flags.dart';
+import '../../quotation_generator/data/qg_noc_repository.dart';
+import '../../quotation_generator/models/qg_noc_document.dart';
+import '../../quotation_generator/models/qg_noc_builder_state.dart';
+import '../../quotation_generator/services/pdf_noc_builder.dart';
+import '../../quotation_generator/services/qg_noc_extractor.dart';
 
 class PipelineDetailScreen extends ConsumerWidget {
   final String pipelineId;
@@ -623,11 +629,14 @@ class _PipelineDetailContent extends ConsumerWidget {
             userRole: userRole,
           ),
           const SizedBox(height: 16),
-          const SizedBox(height: 16),
-          if (profile?.roles.contains(UserRole.admin) == true || profile?.roles.contains(UserRole.sales) == true || profile?.roles.contains(UserRole.manager) == true || profile?.roles.contains(UserRole.salesHead) == true) ...[
+          if (isDealCompleted && (profile?.roles.contains(UserRole.admin) == true || profile?.roles.contains(UserRole.sales) == true || profile?.roles.contains(UserRole.manager) == true || profile?.roles.contains(UserRole.salesHead) == true)) ...[
             _AmcActionCard(pipeline: pipeline),
             const SizedBox(height: 12),
             _WarrantyCardActionCard(pipeline: pipeline),
+            if (kQgNocEnabled) ...[
+              const SizedBox(height: 12),
+              _NocActionCard(pipeline: pipeline),
+            ],
           ],
             const SizedBox(height: 40),
           ],
@@ -1679,6 +1688,10 @@ class _WarrantyCardActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(pipeline)) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2544,3 +2557,393 @@ Future<void> _executeApprovalFlow(
     }
   }
 }
+
+class _NocActionCard extends ConsumerStatefulWidget {
+  final SalesPipeline pipeline;
+  const _NocActionCard({required this.pipeline});
+
+  @override
+  ConsumerState<_NocActionCard> createState() => _NocActionCardState();
+}
+
+class _NocActionCardState extends ConsumerState<_NocActionCard> {
+  List<QgNocDocument>? _nocDocs;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNocs();
+  }
+
+  Future<void> _fetchNocs() async {
+    try {
+      final docs = await QgNocRepository.listNocs(dealId: widget.pipeline.id);
+      if (mounted) {
+        setState(() {
+          _nocDocs = docs;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _viewNocPdf(QgNocDocument doc) async {
+    try {
+      final payload = QgNocPayload(
+        companyName: doc.companySnapshot['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION',
+        companyAddress: doc.companySnapshot['company_address']?.toString() ?? doc.companySnapshot['short_address']?.toString() ?? '',
+        companyEmail: doc.companySnapshot['company_email']?.toString() ?? doc.companySnapshot['email']?.toString() ?? '',
+        companyPhone: doc.companySnapshot['company_phone']?.toString() ?? doc.companySnapshot['phone']?.toString() ?? '',
+        companyWebsite: doc.companySnapshot['company_website']?.toString() ?? doc.companySnapshot['website']?.toString() ?? 'www.izyheat.com',
+        logoUrl: doc.companySnapshot['logo_url']?.toString(),
+        salutation: 'M/s',
+        customerName: doc.customerName,
+        address: doc.siteAddress,
+        productName: doc.productName,
+        subject: 'No Objection Certificate for Installation & Commissioning of ${doc.productName}.',
+        date: doc.issuedDate,
+        equipmentLabel: doc.productName,
+        equipmentLines: doc.equipmentLines,
+        workType: '${doc.productName} Installation work',
+        wiring: 'Done',
+        testing: 'Done',
+        remark: 'All Installation & Commissioning work Completed as per work order',
+        confirmations: [
+          '1. The installation of the ${doc.productName} is permitted at the above location.',
+          '3. Necessary precautions has been taken.',
+        ],
+        closingSentence: 'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
+        wordingMode: NocWordingMode.templateExact,
+        quotationNumber: doc.quotationNumber,
+      );
+
+      final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
+
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: '${doc.nocNumber.replaceAll('/', '_')}.pdf',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error viewing NOC: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _generateNocDirectly() async {
+    final pipeline = widget.pipeline;
+    if (pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(pipeline)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NOC Certificate can only be generated once the deal is 100% completed.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF286B37)),
+                SizedBox(width: 16),
+                Text(
+                  'Generating NOC Certificate...',
+                  style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final pipeline = widget.pipeline;
+      final supabase = ref.read(supabaseClientProvider);
+
+      // 1. Fetch live quotation info if present
+      Map<String, dynamic>? qData;
+      if (pipeline.quotation?.id != null) {
+        final res = await supabase.from('quotations').select().eq('id', pipeline.quotation!.id).maybeSingle();
+        if (res != null) qData = res;
+      }
+      if (qData == null) {
+        final res = await supabase
+            .from('quotations')
+            .select()
+            .eq('pipeline_id', pipeline.id)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (res != null) qData = res;
+      }
+
+      // 2. Customer Name (business / contact)
+      String customerName = pipeline.customer?.companyName.trim() ?? '';
+      if (customerName.isEmpty) {
+        customerName = pipeline.customer?.customerName.trim() ?? '';
+      }
+      if (customerName.isEmpty && pipeline.customerId.isNotEmpty) {
+        final cRes = await supabase.from('customers').select().eq('id', pipeline.customerId).maybeSingle();
+        if (cRes != null) {
+          customerName = (cRes['company_name'] as String?)?.trim().isNotEmpty == true
+              ? cRes['company_name']
+              : (cRes['customer_name'] ?? '');
+        }
+      }
+      if (customerName.isEmpty) customerName = 'Customer';
+
+      // 3. Site Address
+      Map<String, dynamic>? instData;
+      try {
+        final instRes = await supabase.from('installations').select().eq('customer_id', pipeline.customerId).limit(1).maybeSingle();
+        if (instRes != null) instData = instRes;
+      } catch (_) {}
+
+      final siteAddress = QgNocExtractor.resolveSiteAddress(
+        installation: instData,
+        quotation: qData,
+        customer: pipeline.customer != null ? {'address': pipeline.customer!.address} : null,
+      );
+
+      // 4. Quotation line items & inventory products filtering
+      final rawLines = (qData?['line_items'] as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          (pipeline.quotation?.lineItems.map((i) => {
+                'description': i.description,
+                'qty': i.qty,
+                'unit': i.uom,
+              }).toList() ??
+              []);
+
+      final itemsTreatedAsProducts = await QgNocExtractor.fetchItemsTreatedAsProducts(supabase);
+
+      // 5. Product name derivation
+      String productName = pipeline.product?.name ?? '';
+      if (productName.isEmpty && pipeline.productId.isNotEmpty) {
+        final pRes = await supabase.from('products').select('name').eq('id', pipeline.productId).maybeSingle();
+        if (pRes != null && pRes['name'] != null) {
+          productName = pRes['name'].toString();
+        }
+      }
+
+      if (productName.isEmpty || productName.toLowerCase() == 'standard system' || productName.toLowerCase() == 'product') {
+        final descStr = rawLines.map((e) => (e['description'] ?? '').toString().toLowerCase()).join(' ');
+        if (descStr.contains('heat pump') || descStr.contains('iz-')) {
+          productName = 'Heat Pump';
+        } else if (descStr.contains('barrier')) {
+          productName = 'Boom Barrier';
+        } else if (descStr.contains('tank')) {
+          productName = 'Storage Tank';
+        } else {
+          productName = 'Heat Pump';
+        }
+      }
+
+      final equipmentLines = QgNocExtractor.extractEquipmentLines(
+        lineItems: rawLines,
+        defaultProductName: productName,
+        itemsTreatedAsProducts: itemsTreatedAsProducts,
+      );
+
+      // 6. Company details strictly following pdf_template
+      final compConfig = await QgNocRepository.fetchCompanyDetailsFromTemplate(supabase);
+      final companyName = compConfig['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION';
+      final companyAddress = compConfig['company_address']?.toString() ?? compConfig['address']?.toString() ?? '';
+      final companyPhone = compConfig['company_phone']?.toString() ?? compConfig['phone']?.toString() ?? '';
+      final companyEmail = compConfig['company_email']?.toString() ?? compConfig['email']?.toString() ?? '';
+      final companyWebsite = compConfig['company_website']?.toString() ?? compConfig['website']?.toString() ?? 'www.izyheat.com';
+      final logoUrl = compConfig['logo_url']?.toString();
+
+      // 7. Auto-generated Subject
+      final subject = 'No Objection Certificate for Installation & Commissioning of $productName.';
+      final quoteNumber = qData?['quotation_number']?.toString() ?? pipeline.quotation?.quotationNumber;
+
+      // 8. Build Payload
+      final payload = QgNocPayload(
+        companyName: companyName,
+        companyAddress: companyAddress,
+        companyEmail: companyEmail,
+        companyPhone: companyPhone,
+        companyWebsite: companyWebsite,
+        logoUrl: logoUrl,
+        salutation: 'M/s',
+        customerName: customerName,
+        address: siteAddress,
+        productName: productName,
+        subject: subject,
+        date: DateTime.now(),
+        equipmentLabel: productName,
+        equipmentLines: equipmentLines,
+        workType: '$productName Installation work',
+        wiring: 'Done',
+        testing: 'Done',
+        remark: 'All Installation & Commissioning work Completed as per work order',
+        confirmations: [
+          '1. The installation of the $productName is permitted at the above location.',
+          '3. Necessary precautions has been taken.',
+        ],
+        closingSentence: 'This NOC is issued upon request for installation and operation of the $productName System.',
+        wordingMode: NocWordingMode.templateExact,
+        quotationNumber: quoteNumber,
+      );
+
+      // 9. Build PDF bytes
+      final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
+
+      // 10. Issue & Finalize in database (strictly 1 per deal)
+      final issuedDoc = await QgNocRepository.finalizeAndIssueNoc(
+        dealId: pipeline.id,
+        quotationId: qData?['id']?.toString() ?? pipeline.quotation?.id,
+        customerName: customerName,
+        siteAddress: siteAddress,
+        productName: productName,
+        wordingMode: NocWordingMode.templateExact,
+        equipmentLines: equipmentLines,
+        pdfBytes: pdfBytes,
+        companySnapshot: compConfig,
+        overrideReason: 'Completed deal installation & commissioning verified for $productName',
+      );
+
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+        setState(() {
+          _nocDocs = [issuedDoc];
+        });
+
+        // Immediately open PDF in PdfPreviewScreen
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: '${issuedDoc.nocNumber.replaceAll('/', '_')}.pdf',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating NOC: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(widget.pipeline)) {
+      return const SizedBox.shrink();
+    }
+    if (_loading) return const SizedBox.shrink();
+
+    final docs = _nocDocs ?? [];
+    final hasDocs = docs.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_outlined, color: Color(0xFF286B37)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  hasDocs ? 'Installation NOC Issued' : 'Installation NOC Certificate',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (hasDocs)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF286B37).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    docs.first.nocNumber,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF286B37),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            hasDocs
+                ? 'Satisfactory installation & commissioning certificate issued for ${docs.first.productName}. Strictly 1 NOC per deal.'
+                : 'Generate official No Objection Certificate (NOC) for customer sign-off and commissioning handover.',
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (hasDocs) {
+                      _viewNocPdf(docs.first);
+                    } else {
+                      _generateNocDirectly();
+                    }
+                  },
+                  icon: Icon(hasDocs ? Icons.picture_as_pdf : Icons.add_circle_outline, size: 16, color: Colors.white),
+                  label: Text(hasDocs ? 'View NOC' : 'Generate NOC'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF286B37),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+

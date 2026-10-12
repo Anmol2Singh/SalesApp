@@ -18,7 +18,6 @@ import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/utils/file_folder_helper.dart';
 
 import '../../auth/providers/auth_provider.dart';
-import '../../../core/models/user_role.dart';
 
 final productDealCountsProvider = FutureProvider<Map<String, int>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
@@ -622,6 +621,7 @@ class ProductCatalogScreen extends ConsumerWidget {
               try {
                 final supabase = ref.read(supabaseClientProvider);
                 await supabase.from('products').update({
+                  'is_active': false,
                   'deleted_at': DateTime.now().toIso8601String(),
                 }).eq('id', product.id);
 

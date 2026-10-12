@@ -645,7 +645,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Full Name *',
+                  labelText: 'Customer/Business name *',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.person),
                 ),
@@ -689,7 +689,7 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
                     child: TextFormField(
                       controller: _companyCtrl,
                       decoration: const InputDecoration(
-                        labelText: 'Company (Optional)',
+                        labelText: 'Contact Person Name (Optional)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.business_outlined),
                       ),

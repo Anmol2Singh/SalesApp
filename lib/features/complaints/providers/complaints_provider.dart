@@ -305,7 +305,11 @@ final complaintsProvider = StateNotifierProvider<ComplaintsNotifier, List<Compla
 final productsListProvider = FutureProvider<List<String>>((ref) async {
   try {
     final supabase = ref.watch(supabaseClientProvider);
-    final response = await supabase.from('products').select('name').eq('is_active', true);
+    final response = await supabase
+        .from('products')
+        .select('name')
+        .eq('is_active', true)
+        .isFilter('deleted_at', null);
     if (response.isNotEmpty) {
       final names = (response as List).map((p) => p['name'] as String? ?? '').where((n) => n.isNotEmpty).toList();
       if (names.isNotEmpty) return names;

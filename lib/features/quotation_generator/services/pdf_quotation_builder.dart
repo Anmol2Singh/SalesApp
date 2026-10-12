@@ -16,6 +16,7 @@ import '../models/generator_company_settings.dart';
 import '../models/price_row.dart';
 import '../models/price_item.dart';
 import '../models/tank_line_item.dart';
+import '../models/heat_pump_line_item.dart';
 import '../models/pool_heat_pump_model.dart';
 import '../models/all_in_one_model.dart';
 import 'price_calculator.dart';
@@ -638,26 +639,7 @@ class PdfQuotationBuilder {
                     style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                   ),
                   pw.SizedBox(height: 1.5),
-                  pw.Text(
-                    'TECHNICAL SPECIFICATION FOR : ${settings.brandName}  HEAT PUMP –${quotation.model.modelName}',
-                    style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
-                  ),
-                  pw.SizedBox(height: 3),
-                  pw.Table(
-                    border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
-                    columnWidths: {
-                      0: const pw.FixedColumnWidth(28),
-                      1: const pw.FixedColumnWidth(200),
-                      2: const pw.FlexColumnWidth(),
-                    },
-                    children: [
-                      pw.TableRow(
-                        decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
-                        children: [_th('SL'), _th('DESCRIPTION'), _th('SPECIFICATION')],
-                      ),
-                      ..._buildHpSpecRows(quotation),
-                    ],
-                  ),
+                  _buildHpSpecTable(quotation, settings),
 
                   pw.Spacer(),
                   buildFooter(priceSchedulePage),
@@ -697,6 +679,10 @@ class PdfQuotationBuilder {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.fromLTRB(36, 24, 36, 20),
           build: (context) {
+            final tanks = quotation.effectiveTanks;
+            final isMultiTank = tanks.length > 1;
+            final titleMat = tanks.isNotEmpty ? tanks.first.innerTankMaterial : (quotation.tankSpec.innerTankMaterial.isNotEmpty ? quotation.tankSpec.innerTankMaterial : 'GI');
+
             return withWatermark(
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -704,12 +690,12 @@ class PdfQuotationBuilder {
                   buildHeader(showSubHeader: true),
                   pw.SizedBox(height: 2),
                   pw.Text(
-                    'TECHNICAL SPECIFICATION FOR : GI HOT WATER STORAGE TANK.',
+                    'TECHNICAL SPECIFICATION FOR : ${isMultiTank ? 'HOT WATER STORAGE TANK.' : '$titleMat HOT WATER STORAGE TANK.'}',
                     style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
                   ),
                   pw.SizedBox(height: 6),
 
-                  // Merged Tank Specification Table (10 rows, perfectly aligned UI)
+                  // Merged Tank Specification Table (10 rows, multi-column support)
                   _buildMergedTankSpecTable(quotation),
 
                   pw.SizedBox(height: 12),
@@ -1078,49 +1064,6 @@ class PdfQuotationBuilder {
   // ─── 8-COLUMN PRICE SCHEDULE TABLE (hpWithTank / hpOnly) ──────────────────
 
   static pw.Widget _build8ColumnPriceSchedule(GeneratorQuotation q) {
-    final hpKwInt = q.model.displayCapacityKw.toInt();
-    final hpRatedPower = q.model.specs['Rated Input Power'] ?? '8.75kw';
-    final hasTank = q.hasTank;
-    final tankCap = q.tankCapacityLitres > 0 ? q.tankCapacityLitres : 3000;
-    final tankQty = q.tankQty > 0 ? q.tankQty : 2;
-    final innerMat = q.tankSpec.innerTankMaterial.isNotEmpty ? q.tankSpec.innerTankMaterial : 'GI';
-    final pressStr = q.isTankPressurized ? 'Pressurized' : 'Non-Pressurized';
-
-    // 1. Determine Heat Pump rate and amount (show actual rate!)
-    int hpRate = 0;
-    if (q.heatPumpNumericPrice > 0) {
-      hpRate = q.heatPumpNumericPrice;
-    } else {
-      for (final r in q.priceRows) {
-        final d = r.description.toLowerCase();
-        if (d.contains('heat pump') || d.contains('air source') || d.contains('iz-')) {
-          if (r.rate > 0) {
-            hpRate = r.rate;
-            break;
-          }
-        }
-      }
-    }
-    if (hpRate == 0 && !hasTank) {
-      hpRate = q.subtotal;
-    }
-
-    final hpQty = q.heatPumpQty > 0 ? q.heatPumpQty : 1;
-    final hpAmount = hpRate * hpQty;
-
-    String hpRateStr;
-    String hpAmountStr;
-    if (hpRate > 0) {
-      hpRateStr = PriceCalculator.formatIndianCurrency(hpRate);
-      hpAmountStr = PriceCalculator.formatIndianCurrency(hpAmount);
-    } else if (hasTank && q.tankRate > 0) {
-      hpRateStr = '-';
-      hpAmountStr = 'Included';
-    } else {
-      hpRateStr = PriceCalculator.formatIndianCurrency(q.subtotal);
-      hpAmountStr = PriceCalculator.formatIndianCurrency(q.subtotal);
-    }
-
     int rowIdx = 1;
     final tableRows = <pw.TableRow>[];
 
@@ -1141,57 +1084,6 @@ class PdfQuotationBuilder {
       ),
     );
 
-    // Row 1: Heat Pump
-    tableRows.add(
-      pw.TableRow(
-        children: [
-          _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Air Source Heat pump ${hpKwInt}kw', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Make: IZYHEAT Heat Pump Model: ${q.model.modelName} ${hpKwInt}kw', style: const pw.TextStyle(fontSize: 7.5)),
-                pw.Text('Power Input $hpRatedPower, output ${hpKwInt}kw, ${q.model.powerSupply}, 50Hz With Auto Defrost.', style: const pw.TextStyle(fontSize: 7.5)),
-              ],
-            ),
-          ),
-          _tc('', center: true),
-          _tc(q.model.displayCapacityKw.toStringAsFixed(2), center: true),
-          _tc('$hpQty', center: true),
-          _tc('', center: true),
-          _tc(hpRateStr, center: true),
-          _tc(hpAmountStr, center: true),
-        ],
-      ),
-    );
-
-    // Row 2: Tank (ONLY IF TANK IS ADDED!)
-    if (hasTank) {
-      tableRows.add(
-        pw.TableRow(
-          children: [
-            _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
-              child: pw.Text(
-                '$tankCap  LTR Capacity, $innerMat $pressStr Tank, 3mm Shell, and 3mm Dish, , Thickness,19mm IC CLAD insulation.',
-                style: const pw.TextStyle(fontSize: 7.5),
-              ),
-            ),
-            _tc('$tankCap', center: true),
-            _tc('', center: true),
-            _tc('$tankQty', center: true),
-            _tc('', center: true),
-            _tc(PriceCalculator.formatIndianCurrency(q.tankRate), center: true),
-            _tc(PriceCalculator.formatIndianCurrency(q.tankRate * tankQty), center: true),
-          ],
-        ),
-      );
-    }
-
-    // Supplementary Items: ONLY those that are actually added!
     pw.TableRow buildExtraRow(String sr, String desc, {String amtStr = ''}) {
       return pw.TableRow(
         children: [
@@ -1207,6 +1099,165 @@ class PdfQuotationBuilder {
       );
     }
 
+    if (q.priceRows.isNotEmpty) {
+      // Render EVERY item from priceRows
+      for (final r in q.priceRows) {
+        final dLower = r.description.toLowerCase();
+        final isHp = r.hpKw != null ||
+            r.metadata?['type'] == 'heatPump' ||
+            (dLower.contains('heat pump') && !dLower.contains('tank')) ||
+            dLower.contains('air source') ||
+            dLower.startsWith('iz-');
+        final isTank = !isHp &&
+            (r.systemLph != null ||
+                r.metadata?['type'] == 'tank' ||
+                dLower.contains('tank') ||
+                dLower.contains('storage'));
+
+        pw.Widget descWidget;
+        String lphStr = '';
+        String kwStr = '';
+        String qtyStr = r.qty > 0 ? '${r.qty}' : '1';
+        String rateStr = '';
+        String amtStr = '';
+
+        if (isHp) {
+          final kwVal = r.hpKw ?? (r.metadata?['kw'] as num?)?.toDouble() ?? q.model.displayCapacityKw;
+          final kwFormatted = (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
+          final modelName = r.metadata?['hpModel']?.toString() ?? q.model.modelName;
+          final powerSupply = q.model.powerSupply;
+          final powerInput = q.model.specs['Rated Input Power'] ?? '8.75kw';
+
+          descWidget = pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Air Source Heat pump ${kwFormatted}kw', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Make: IZYHEAT Heat Pump Model: $modelName ${kwFormatted}kw', style: const pw.TextStyle(fontSize: 7.5)),
+                pw.Text('Power Input $powerInput, output ${kwFormatted}kw, $powerSupply, 50Hz With Auto Defrost.', style: const pw.TextStyle(fontSize: 7.5)),
+              ],
+            ),
+          );
+          kwStr = kwVal.toStringAsFixed(2);
+        } else if (isTank) {
+          final tankCap = r.systemLph ?? (r.metadata?['capacityLitres'] as num?)?.toInt() ?? q.tankCapacityLitres;
+          final mat = r.metadata?['tankMaterial']?.toString() ??
+              (q.tankSpec.innerTankMaterial.isNotEmpty ? q.tankSpec.innerTankMaterial : 'GI');
+          final isPress = r.metadata?['isPressurized'] as bool? ?? q.isTankPressurized;
+          final pressStr = isPress ? 'Pressurized' : 'Non-Pressurized';
+          final shellThick = (mat == 'Enamel') ? '2mm' : (mat == 'MS' ? '5mm' : '3mm');
+
+          descWidget = pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+            child: pw.Text(
+              '$tankCap  LTR Capacity, $mat $pressStr Tank, $shellThick Shell, and $shellThick Dish, , Thickness,19mm IC CLAD insulation.',
+              style: const pw.TextStyle(fontSize: 7.5),
+            ),
+          );
+          lphStr = '$tankCap';
+        } else {
+          descWidget = pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+            child: pw.Text(r.description, style: const pw.TextStyle(fontSize: 7.5)),
+          );
+          qtyStr = r.qty > 0 ? '${r.qty}' : '';
+        }
+
+        if (r.rate > 0) {
+          rateStr = PriceCalculator.formatIndianCurrency(r.rate);
+        } else if (r.amount > 0 && r.qty > 0) {
+          rateStr = PriceCalculator.formatIndianCurrency((r.amount / r.qty).round());
+        }
+
+        if (r.amount > 0) {
+          amtStr = PriceCalculator.formatIndianCurrency(r.amount);
+        } else if (r.rate > 0) {
+          amtStr = PriceCalculator.formatIndianCurrency(r.rate * (r.qty > 0 ? r.qty : 1));
+        }
+
+        tableRows.add(
+          pw.TableRow(
+            children: [
+              _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
+              descWidget,
+              _tc(lphStr, center: true),
+              _tc(kwStr, center: true),
+              _tc(qtyStr, center: true),
+              _tc('', center: true),
+              _tc(rateStr, center: true),
+              _tc(amtStr, center: true),
+            ],
+          ),
+        );
+      }
+    } else {
+      // Fallback for legacy quotation
+      final hpKwInt = q.model.displayCapacityKw.toInt();
+      final hpRatedPower = q.model.specs['Rated Input Power'] ?? '8.75kw';
+      final hasTank = q.hasTank;
+      final tankCap = q.tankCapacityLitres > 0 ? q.tankCapacityLitres : 3000;
+      final tankQty = q.tankQty > 0 ? q.tankQty : 2;
+      final innerMat = q.tankSpec.innerTankMaterial.isNotEmpty ? q.tankSpec.innerTankMaterial : 'GI';
+      final pressStr = q.isTankPressurized ? 'Pressurized' : 'Non-Pressurized';
+
+      int hpRate = q.heatPumpNumericPrice > 0 ? q.heatPumpNumericPrice : (hasTank ? 0 : q.subtotal);
+      final hpQty = q.heatPumpQty > 0 ? q.heatPumpQty : 1;
+      final hpAmount = hpRate * hpQty;
+
+      String hpRateStr = hpRate > 0 ? PriceCalculator.formatIndianCurrency(hpRate) : '';
+      String hpAmountStr = hpAmount > 0 ? PriceCalculator.formatIndianCurrency(hpAmount) : '';
+
+      tableRows.add(
+        pw.TableRow(
+          children: [
+            _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Air Source Heat pump ${hpKwInt}kw', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Make: IZYHEAT Heat Pump Model: ${q.model.modelName} ${hpKwInt}kw', style: const pw.TextStyle(fontSize: 7.5)),
+                  pw.Text('Power Input $hpRatedPower, output ${hpKwInt}kw, ${q.model.powerSupply}, 50Hz With Auto Defrost.', style: const pw.TextStyle(fontSize: 7.5)),
+                ],
+              ),
+            ),
+            _tc('', center: true),
+            _tc(q.model.displayCapacityKw.toStringAsFixed(2), center: true),
+            _tc('$hpQty', center: true),
+            _tc('', center: true),
+            _tc(hpRateStr, center: true),
+            _tc(hpAmountStr, center: true),
+          ],
+        ),
+      );
+
+      if (hasTank) {
+        tableRows.add(
+          pw.TableRow(
+            children: [
+              _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+                child: pw.Text(
+                  '$tankCap  LTR Capacity, $innerMat $pressStr Tank, 3mm Shell, and 3mm Dish, , Thickness,19mm IC CLAD insulation.',
+                  style: const pw.TextStyle(fontSize: 7.5),
+                ),
+              ),
+              _tc('$tankCap', center: true),
+              _tc('', center: true),
+              _tc('$tankQty', center: true),
+              _tc('', center: true),
+              _tc(PriceCalculator.formatIndianCurrency(q.tankRate), center: true),
+              _tc(PriceCalculator.formatIndianCurrency(q.tankRate * tankQty), center: true),
+            ],
+          ),
+        );
+      }
+    }
+
+    // Supplementary Items: ONLY those that are actually added!
     if (q.extraPriceRows.isNotEmpty) {
       for (final it in q.extraPriceRows) {
         String desc = it.description.trim();
@@ -1342,35 +1393,57 @@ class PdfQuotationBuilder {
 
   // ─── MERGED TANK SPECIFICATION TABLE (Page 4) ──────────────────────────────
 
+  // ─── MERGED TANK SPECIFICATION TABLE (Page 4) ──────────────────────────────
+
   static pw.Widget _buildMergedTankSpecTable(GeneratorQuotation q) {
-    final cap = q.tankCapacityLitres > 0 ? q.tankCapacityLitres : 3000;
-    final pressStr = q.isTankPressurized ? 'Pressurized' : 'Non-Pressurized';
-    final innerMat = q.tankSpec.innerTankMaterial.isNotEmpty ? q.tankSpec.innerTankMaterial : 'GI';
-    final innerThick = q.tankSpec.innerTankThickness.isNotEmpty ? q.tankSpec.innerTankThickness : '3mm';
+    final tanks = q.effectiveTanks;
+    if (tanks.isEmpty) return pw.SizedBox.shrink();
 
-    final specRowsTop = [
-      ['01', 'Capacity and Thickness', '$cap ltr, $innerThick Shell, $innerThick Dish.'],
-      ['02', 'Operating pressure', q.isTankPressurized ? 'Up to 5 Bar' : 'Atmospheric'],
-      ['03', 'Testing Pressure', q.isTankPressurized ? '7 bar pressure' : 'Atmospheric'],
-      ['04', 'Hot Water Inlet/ outlet', '2 Inch,'],
-      ['05', 'Heat Pump Circulation', '1 Inch,'],
-      ['06', 'Outer Tank Insulation', '19mm IC CLAD insulation'],
+    if (tanks.length == 1) {
+      return _buildSingleTankTableExact(tanks.first);
+    }
+
+    return pw.Column(
+      children: tanks.map((t) => pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 8),
+        child: _buildSingleTankTableExact(t),
+      )).toList(),
+    );
+  }
+
+  static pw.Widget _buildSingleTankTableExact(TankLineItem tank) {
+    const double rowH = 19.5;
+    const double col0W = 32.0;
+    const double col1W = 110.0;
+    const double col2W = 145.0;
+    const double totalDescW = col1W + col2W; // 255.0
+    const double specW = 523.28 - col0W - totalDescW; // 136.28 pt
+
+    final pressStr = tank.isPressurized ? 'Pressurized' : 'Non-Pressurized';
+    final mat = tank.innerTankMaterial.isNotEmpty ? tank.innerTankMaterial : 'GI';
+    final rawThick = tank.innerTankThickness.isNotEmpty ? tank.innerTankThickness : '3mm';
+    final thick = RegExp(r'\d+\s*mm', caseSensitive: false).firstMatch(rawThick)?.group(0) ?? '3mm';
+    final cap = tank.capacityLitres;
+
+    final insMat = tank.insulationMaterial.isNotEmpty && tank.insulationMaterial.toLowerCase() != '19mm ic clad insulation'
+        ? (tank.insulationMaterial.toLowerCase().contains('puff') || tank.insulationMaterial.toLowerCase().contains('puf') ? 'PUF' : tank.insulationMaterial)
+        : 'PUF';
+
+    final rows1to6 = [
+      ('01', 'Capacity and Thickness', '$cap ltr, $thick Shell, $thick Dish.'),
+      ('02', 'Operating pressure', tank.isPressurized ? 'Up to 5 Bar' : 'Atmospheric'),
+      ('03', 'Testing Pressure', tank.isPressurized ? '7 bar pressure' : 'Atmospheric'),
+      ('04', 'Hot Water Inlet/ outlet', '2 Inch,'),
+      ('05', 'Heat Pump Circulation', '1 Inch,'),
+      ('06', 'Outer Tank Insulation', insMat),
     ];
 
-    final specRowsBottom = [
-      ['07', 'Temperature drop', '3º C / 8 hour'],
-      ['08', 'Inner and outer Tank', innerMat],
-      ['09', 'Tank direction', 'Horizontal / Vertical'],
-      ['10', 'Other', 'Solar Provision Additional Heat Pump Provision'],
+    final rows7to10 = [
+      ('07', 'Temperature drop', '3° C / 8 hour'),
+      ('08', 'Inner and outer Tank', mat),
+      ('09', 'Tank direction', 'Horizontal / Vertical'),
+      ('10', 'Other', 'Solar Provision Additional Heat Pump Provision'),
     ];
-
-    const double col0Width = 32.0;
-    const double col1Width = 110.0;
-    const double col2Width = 368.0;
-    const double col2LabelWidth = 145.0;
-    const double col2ValueWidth = 223.0; // 368 - 145
-    const double rowHeight = 20.0;
-    const double section1Height = 6 * rowHeight; // 120.0
 
     return pw.Container(
       decoration: pw.BoxDecoration(
@@ -1378,158 +1451,203 @@ class PdfQuotationBuilder {
       ),
       child: pw.Column(
         children: [
-          // ─── Header Row ───
+          // Header Row
           pw.Container(
-            height: 24,
-            decoration: const pw.BoxDecoration(
-              color: PdfColor.fromInt(0xFFE8E8E8),
-              border: pw.Border(
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromHex('#E8E8E8'),
+              border: const pw.Border(
                 bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
               ),
             ),
             child: pw.Row(
               children: [
                 pw.Container(
-                  width: col0Width,
+                  width: col0W,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 3),
                   alignment: pw.Alignment.center,
-                  child: pw.Text('SL\nNO', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
-                ),
-                pw.Container(width: 0.6, height: 24, color: PdfColors.black),
-                pw.Container(
-                  width: col1Width + 0.6 + col2LabelWidth,
-                  alignment: pw.Alignment.center,
-                  child: pw.Text('DESCRIPTION', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.Container(width: 0.6, height: 24, color: PdfColors.black),
-                pw.Container(
-                  width: col2ValueWidth,
-                  alignment: pw.Alignment.center,
-                  child: pw.Text('SPECIFICATION', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-
-          // ─── Section 1: Rows 01–06 (Merged Middle Cell) ───
-          pw.Container(
-            height: section1Height,
-            child: pw.Row(
-              children: [
-                // Col 0: SL numbers 01 to 06
-                pw.Container(
-                  width: col0Width,
-                  child: pw.Column(
-                    children: specRowsTop.asMap().entries.map((e) {
-                      final isLast = e.key == specRowsTop.length - 1;
-                      return pw.Container(
-                        height: rowHeight,
-                        alignment: pw.Alignment.center,
-                        decoration: isLast
-                            ? null
-                            : const pw.BoxDecoration(
-                                border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black, width: 0.6)),
-                              ),
-                        child: pw.Text(e.value[0], style: const pw.TextStyle(fontSize: 7.5)),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                pw.Container(width: 0.6, height: section1Height, color: PdfColors.black),
-
-                // Col 1: Merged Description Cell (Clean, centered, no horizontal lines)
-                pw.Container(
-                  width: col1Width,
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  alignment: pw.Alignment.center,
-                  child: pw.Column(
-                    mainAxisAlignment: pw.MainAxisAlignment.center,
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
-                    children: [
-                      pw.Text('$cap Ltr', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline)),
-                      pw.SizedBox(height: 2),
-                      pw.Text('HOT WATER', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('STORRAGE $innerMat', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                      pw.Text(pressStr, style: const pw.TextStyle(fontSize: 7.5)),
-                      pw.Text('TANK', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                pw.Container(width: 0.6, height: section1Height, color: PdfColors.black),
-
-                // Col 2: Specifications (Label + Value) for rows 01 to 06
-                pw.Container(
-                  width: col2Width,
-                  child: pw.Column(
-                    children: specRowsTop.asMap().entries.map((e) {
-                      final isLast = e.key == specRowsTop.length - 1;
-                      return pw.Container(
-                        height: rowHeight,
-                        decoration: isLast
-                            ? null
-                            : const pw.BoxDecoration(
-                                border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black, width: 0.6)),
-                              ),
-                        child: pw.Row(
-                          children: [
-                            pw.Container(
-                              width: col2LabelWidth,
-                              padding: const pw.EdgeInsets.symmetric(horizontal: 4),
-                              alignment: pw.Alignment.centerLeft,
-                              child: pw.Text(e.value[1], style: const pw.TextStyle(fontSize: 7.5)),
-                            ),
-                            pw.Container(width: 0.6, height: rowHeight, color: PdfColors.black),
-                            pw.Container(
-                              width: col2ValueWidth,
-                              padding: const pw.EdgeInsets.symmetric(horizontal: 4),
-                              alignment: pw.Alignment.centerLeft,
-                              child: pw.Text(e.value[2], style: const pw.TextStyle(fontSize: 7.5)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Divider between row 06 and row 07
-          pw.Container(height: 0.6, color: PdfColors.black),
-
-          // ─── Section 2: Rows 07–10 ───
-          ...specRowsBottom.asMap().entries.map((e) {
-            final isLast = e.key == specRowsBottom.length - 1;
-            return pw.Container(
-              height: rowHeight,
-              decoration: isLast
-                  ? null
-                  : const pw.BoxDecoration(
-                      border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black, width: 0.6)),
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                      right: pw.BorderSide(color: PdfColors.black, width: 0.6),
                     ),
-              child: pw.Row(
-                children: [
-                  pw.Container(
-                    width: col0Width,
+                  ),
+                  child: pw.Text(
+                    'SL\nNO',
+                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+                pw.Container(
+                  width: totalDescW,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                  alignment: pw.Alignment.center,
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                      right: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                    ),
+                  ),
+                  child: pw.Text(
+                    'DESCRIPTION',
+                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+                pw.Container(
+                  width: specW,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                  alignment: pw.Alignment.center,
+                  child: pw.Text(
+                    'SPECIFICATION',
+                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Rows 01 to 06
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Col 0: SL NO 01..06
+              pw.Column(
+                children: rows1to6.map((r) {
+                  return pw.Container(
+                    width: col0W,
+                    height: rowH,
                     alignment: pw.Alignment.center,
-                    child: pw.Text(e.value[0], style: const pw.TextStyle(fontSize: 7.5)),
-                  ),
-                  pw.Container(width: 0.6, height: rowHeight, color: PdfColors.black),
-                  pw.Container(
-                    width: col1Width + 0.6 + col2LabelWidth,
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 4),
-                    alignment: pw.Alignment.centerLeft,
-                    child: pw.Text(e.value[1], style: const pw.TextStyle(fontSize: 7.5)),
-                  ),
-                  pw.Container(width: 0.6, height: rowHeight, color: PdfColors.black),
-                  pw.Container(
-                    width: col2ValueWidth,
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 4),
-                    alignment: pw.Alignment.centerLeft,
-                    child: pw.Text(e.value[2], style: const pw.TextStyle(fontSize: 7.5)),
-                  ),
-                ],
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(
+                        right: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                      ),
+                    ),
+                    child: pw.Text(r.$1, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
+                  );
+                }).toList(),
               ),
+
+              // Col 1: Big merged centered block spanning rows 01..06
+              pw.Container(
+                width: col1W,
+                height: rows1to6.length * rowH,
+                alignment: pw.Alignment.center,
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(
+                    right: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                    bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                  ),
+                ),
+                child: pw.Column(
+                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      '$cap Ltr',
+                      style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 1.5),
+                    pw.Text('HOT WATER', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.SizedBox(height: 1.5),
+                    pw.Text('STORAGE $mat', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.SizedBox(height: 1.5),
+                    pw.Text(pressStr, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
+                    pw.SizedBox(height: 1.5),
+                    pw.Text('TANK', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                  ],
+                ),
+              ),
+
+              // Col 2: Description for rows 01..06
+              pw.Column(
+                children: rows1to6.map((r) {
+                  return pw.Container(
+                    width: col2W,
+                    height: rowH,
+                    alignment: pw.Alignment.centerLeft,
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(
+                        right: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                      ),
+                    ),
+                    child: pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7.5)),
+                  );
+                }).toList(),
+              ),
+
+              // Col 3: Specification for rows 01..06
+              pw.Column(
+                children: rows1to6.map((r) {
+                  return pw.Container(
+                    width: specW,
+                    height: rowH,
+                    alignment: pw.Alignment.centerLeft,
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(
+                        bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                      ),
+                    ),
+                    child: pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7.5)),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+
+          // Rows 07 to 10
+          ...rows7to10.asMap().entries.map((e) {
+            final idx = e.key;
+            final r = e.value;
+            final isLast = idx == rows7to10.length - 1;
+            return pw.Row(
+              children: [
+                // Col 0: SL NO
+                pw.Container(
+                  width: col0W,
+                  height: rowH,
+                  alignment: pw.Alignment.center,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                      bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                    ),
+                  ),
+                  child: pw.Text(r.$1, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
+                ),
+
+                // Col 1 & 2 Merged: Description
+                pw.Container(
+                  width: totalDescW,
+                  height: rowH,
+                  alignment: pw.Alignment.centerLeft,
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                      bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                    ),
+                  ),
+                  child: pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7.5)),
+                ),
+
+                // Col 3: Specification
+                pw.Container(
+                  width: specW,
+                  height: rowH,
+                  alignment: pw.Alignment.centerLeft,
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                    ),
+                  ),
+                  child: pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7.5)),
+                ),
+              ],
             );
           }),
         ],
@@ -1681,34 +1799,91 @@ class PdfQuotationBuilder {
 
   // ─── SPEC HELPERS ─────────────────────────────────────────────────────────
 
-  static List<pw.TableRow> _buildHpSpecRows(GeneratorQuotation q) {
-    final m = q.model;
-    final tankCap = q.tankCapacityLitres > 0 ? '${q.tankCapacityLitres}' : '3000';
+  static pw.Widget _buildHpSpecTable(GeneratorQuotation q, GeneratorCompanySettings settings) {
+    final hpList = q.effectiveHeatPumps;
+    final isMulti = hpList.length > 1;
+
+    final titleModelText = isMulti
+        ? hpList.map((h) => h.modelName).where((s) => s.isNotEmpty).join(', ')
+        : q.model.modelName;
+
+    final Map<int, pw.TableColumnWidth> colWidths = {
+      0: const pw.FixedColumnWidth(28),
+      1: pw.FixedColumnWidth(isMulti ? 165 : 185),
+    };
+    for (int i = 0; i < hpList.length; i++) {
+      colWidths[i + 2] = const pw.FlexColumnWidth(1);
+    }
+
+    final headerChildren = <pw.Widget>[
+      _th('SL'),
+      _th('DESCRIPTION'),
+    ];
+    for (int i = 0; i < hpList.length; i++) {
+      headerChildren.add(_th(isMulti ? '${i + 1}' : 'SPECIFICATION'));
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'TECHNICAL SPECIFICATION FOR : ${settings.brandName}  HEAT PUMP –$titleModelText',
+          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 3),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+          columnWidths: colWidths,
+          children: [
+            pw.TableRow(
+              decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
+              children: headerChildren,
+            ),
+            ..._buildMultiHpSpecRows(q, hpList),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static List<pw.TableRow> _buildMultiHpSpecRows(GeneratorQuotation q, List<HeatPumpLineItem> hpList) {
+    final tankCap = q.tankCapacityLitres > 0
+        ? '${q.tankCapacityLitres}'
+        : (q.effectiveTanks.isNotEmpty ? '${q.effectiveTanks.first.capacityLitres}' : '500');
+
     final rowsData = [
-      ['01', 'Size (W x D x H) mm', m.specs['Size (W x D x H)'] ?? '1410x748x1000'],
-      ['02', 'Rated Heating Capacity', m.ratedHeatingCapacity],
-      ['03', 'Power Supply', m.powerSupply],
-      ['04', 'Rated Input Power', m.specs['Rated Input Power'] ?? '8.75kw'],
-      ['05', 'Rated COP', m.specs['Rated COP'] ?? '4.34'],
-      ['06', 'Rated Water Yield', m.specs['Rated Water Yield'] ?? '817 L/h'],
-      ['07', 'Max Outlet Water Temperature', m.specs['Max Outlet Water Temperature'] ?? '60°C'],
-      ['08', 'Water Flow Noise', m.specs['Water Flow Noise'] ?? '<=59dB(A)'],
-      ['09', 'Condenser', m.specs['Condenser'] ?? '0'],
-      ['10', 'Refrigerant', m.specs['Refrigerant'] ?? 'R134A/410A'],
-      ['11', 'Operating ambient Temp', m.specs['Operating ambient Temp'] ?? '-15~43°C'],
-      ['12', 'Capacity In litre', tankCap],
-      ['13', 'Compressor', m.specs['Compressor'] ?? 'DOUBLE'],
+      ['01', 'Size (W x D x H) mm', (HeatPumpLineItem h) => h.specs['Size (W x D x H)'] ?? '1410x748x1000'],
+      ['02', 'Rated Heating Capacity', (HeatPumpLineItem h) => h.toModel().ratedHeatingCapacity],
+      ['03', 'Power Supply', (HeatPumpLineItem h) => h.toModel().powerSupply],
+      ['04', 'Rated Input Power', (HeatPumpLineItem h) => h.specs['Rated Input Power'] ?? (h.kw > 0 ? '${(h.kw * 0.23).toStringAsFixed(2)}kw' : '8.75kw')],
+      ['05', 'Rated COP', (HeatPumpLineItem h) => h.specs['Rated COP'] ?? '4.34'],
+      ['06', 'Rated Water Yield', (HeatPumpLineItem h) => h.specs['Rated Water Yield'] ?? (h.kw > 0 ? '${(h.kw * 21.5).round()} L/h' : '817 L/h')],
+      ['07', 'Max Outlet Water Temperature', (HeatPumpLineItem h) => h.specs['Max Outlet Water Temperature'] ?? '60°C'],
+      ['08', 'Water Flow Noise', (HeatPumpLineItem h) => h.specs['Water Flow Noise'] ?? '<=59dB(A)'],
+      ['09', 'Condenser', (HeatPumpLineItem h) => h.specs['Condenser'] ?? 'Shell and tube heat exchanger'],
+      ['10', 'Refrigerant', (HeatPumpLineItem h) => h.specs['Refrigerant'] ?? 'R134A/410A'],
+      ['11', 'Operating ambient Temp', (HeatPumpLineItem h) => h.specs['Operating ambient Temp'] ?? '-15~43°C'],
+      ['12', 'Capacity In litre', (HeatPumpLineItem h) => tankCap],
+      ['13', 'Compressor', (HeatPumpLineItem h) => h.specs['Compressor'] ?? 'Double'],
     ];
 
-    return rowsData.map((r) {
+    return rowsData.map((row) {
+      final sl = row[0] as String;
+      final desc = row[1] as String;
+      final valFn = row[2] as String Function(HeatPumpLineItem);
+
       return pw.TableRow(
         children: [
-          _tc(r[0], center: true),
-          _tc(r[1]),
-          _tc(r[2]),
+          _tc(sl, center: true),
+          _tc(desc),
+          ...hpList.map((h) => _tc(valFn(h), center: true)),
         ],
       );
     }).toList();
+  }
+
+  static List<pw.TableRow> _buildHpSpecRows(GeneratorQuotation q) {
+    return _buildMultiHpSpecRows(q, q.effectiveHeatPumps);
   }
 
   static pw.Widget _buildPoolSpecTable(PoolHeatPumpModel m) {
