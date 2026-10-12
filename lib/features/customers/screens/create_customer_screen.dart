@@ -275,7 +275,7 @@ class _CreateCustomerScreenState extends ConsumerState<CreateCustomerScreen> {
 
           if ((emailDup as List).isNotEmpty) {
             setState(() => _isLoading = false);
-            final existing = emailDup.first as Map<String, dynamic>;
+            final existing = emailDup.first;
             final existingName = existing['company_name'] ?? existing['customer_name'] ?? 'Existing Customer';
             if (mounted) {
               showDialog(

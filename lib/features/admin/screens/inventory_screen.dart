@@ -282,7 +282,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -300,7 +300,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
+                    color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.solar_power, color: AppColors.primary, size: 24),
@@ -366,6 +366,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   onSelected: (val) {
                     if (val == 'edit') {
                       _showEditProductDialog(context, product);
+                    } else if (val == 'subsystems') {
+                      _showSubSystemsModal(context, product);
                     } else if (val == 'delete') {
                       _confirmDeleteProduct(context, product);
                     }
@@ -378,6 +380,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
                           SizedBox(width: 8),
                           Text('Edit Name / Category'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'subsystems',
+                      child: Row(
+                        children: [
+                          Icon(Icons.account_tree_outlined, size: 18, color: AppColors.primary),
+                          SizedBox(width: 8),
+                          Text('Manage Sub-Systems'),
                         ],
                       ),
                     ),
@@ -1720,7 +1732,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.account_tree_outlined, color: AppColors.primary, size: 22),
@@ -1800,7 +1812,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 children: [
                                   CircleAvatar(
                                     radius: 14,
-                                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                                     child: Text(
                                       '${idx + 1}',
                                       style: const TextStyle(
@@ -2775,7 +2787,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.08),
+                                  color: AppColors.primary.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(Icons.add_task, color: AppColors.primary, size: 20),

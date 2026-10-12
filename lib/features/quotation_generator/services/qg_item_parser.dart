@@ -1,6 +1,5 @@
 // lib/features/quotation_generator/services/qg_item_parser.dart
 
-import 'package:flutter/foundation.dart';
 
 enum ParsedItemType {
   heatPump,

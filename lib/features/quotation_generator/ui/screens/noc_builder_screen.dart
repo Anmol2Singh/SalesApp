@@ -36,7 +36,6 @@ class NocBuilderScreen extends ConsumerStatefulWidget {
 class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
-  String? _errorMessage;
 
   List<QgNocProfile> _profiles = [];
   QgNocProfile? _selectedProfile;
@@ -64,7 +63,6 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
   DateTime _selectedDate = DateTime.now();
   List<NocEquipmentLine> _equipmentLines = [];
   List<TextEditingController> _confirmationControllers = [];
-  bool _includeStamp = true;
 
   @override
   void initState() {
@@ -100,7 +98,6 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
   Future<void> _initializeData() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
@@ -146,7 +143,6 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
         _isLoading = false;
       });
     }
@@ -291,9 +287,11 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error generating preview: $e'), backgroundColor: AppColors.error),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating preview: $e'), backgroundColor: AppColors.error),
+        );
+      }
     }
   }
 

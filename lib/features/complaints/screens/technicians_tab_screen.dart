@@ -61,7 +61,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (modalCtx, setModalState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: const Row(
@@ -171,8 +171,10 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                             }
 
                             ref.invalidate(availableTechniciansProvider);
-                            if (mounted) {
+                            if (ctx.mounted) {
                               Navigator.pop(ctx);
+                            }
+                            if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Technician added successfully!'), backgroundColor: Color(0xFF10B981)),
                               );
@@ -184,7 +186,9 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                               );
                             }
                           } finally {
-                            setModalState(() => isSaving = false);
+                            if (ctx.mounted) {
+                              setModalState(() => isSaving = false);
+                            }
                           }
                         },
                   child: isSaving
@@ -213,7 +217,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (modalCtx, setModalState) {
             return AlertDialog(
               title: const Text('Edit Technician'),
               content: Form(
@@ -334,7 +338,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: 'Technician',
+                        initialValue: 'Technician',
                         decoration: const InputDecoration(labelText: 'Role'),
                         items: const [
                           DropdownMenuItem(
@@ -421,8 +425,10 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                             }
 
                             ref.invalidate(availableTechniciansProvider);
-                            if (mounted) {
+                            if (ctx.mounted) {
                               Navigator.pop(ctx);
+                            }
+                            if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Technician updated successfully!'),
@@ -440,7 +446,9 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                               );
                             }
                           } finally {
-                            setModalState(() => isSaving = false);
+                            if (ctx.mounted) {
+                              setModalState(() => isSaving = false);
+                            }
                           }
                         },
                   child: isSaving
@@ -546,12 +554,14 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                 ),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF6D28D9),
-        icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('Add Technician', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        onPressed: _showAddTechnicianDialog,
-      ),
+      floatingActionButton: isAdminOrManager
+          ? FloatingActionButton.extended(
+              backgroundColor: const Color(0xFF6D28D9),
+              icon: const Icon(Icons.person_add, color: Colors.white),
+              label: const Text('Add Technician', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: _showAddTechnicianDialog,
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(availableTechniciansProvider);
@@ -627,10 +637,10 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6D28D9).withOpacity(0.08),
+                          color: const Color(0xFF6D28D9).withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: const Color(0xFF6D28D9).withOpacity(0.25),
+                            color: const Color(0xFF6D28D9).withValues(alpha: 0.25),
                             width: 1,
                           ),
                         ),
@@ -639,7 +649,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6D28D9).withOpacity(0.15),
+                                color: const Color(0xFF6D28D9).withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -710,7 +720,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                                       width: 44,
                                       height: 44,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF6D28D9).withOpacity(0.12),
+                                        color: const Color(0xFF6D28D9).withValues(alpha: 0.12),
                                         shape: BoxShape.circle,
                                       ),
                                       child: Center(
@@ -799,7 +809,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.12),
+                                        color: statusColor.withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Row(

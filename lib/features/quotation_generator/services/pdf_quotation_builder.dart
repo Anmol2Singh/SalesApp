@@ -1882,9 +1882,6 @@ class PdfQuotationBuilder {
     }).toList();
   }
 
-  static List<pw.TableRow> _buildHpSpecRows(GeneratorQuotation q) {
-    return _buildMultiHpSpecRows(q, q.effectiveHeatPumps);
-  }
 
   static pw.Widget _buildPoolSpecTable(PoolHeatPumpModel m) {
     return pw.Table(

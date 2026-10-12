@@ -50,7 +50,7 @@ class PdfService {
           .select()
           .limit(1)
           .maybeSingle();
-      if (cRes != null && cRes is Map) {
+      if (cRes != null) {
         if (cRes['company_name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = cRes['company_name'].toString().trim();
         if (cRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = cRes['address'].toString().trim();
         if (cRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = cRes['phone'].toString().trim();
@@ -1169,108 +1169,6 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildLineItemsTable(List<LineItem> items) {
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(4),
-        1: const pw.FixedColumnWidth(60),
-        2: const pw.FixedColumnWidth(80),
-        3: const pw.FixedColumnWidth(80),
-      },
-      children: [
-        // Header
-        pw.TableRow(
-          decoration: const pw.BoxDecoration(
-            color: PdfColor.fromInt(0xFF1E3A5F),
-          ),
-          children: ['Description', 'Qty', 'Unit Price', 'Total'].map((h) {
-            return pw.Padding(
-              padding: const pw.EdgeInsets.all(6),
-              child: pw.Text(
-                _cleanText(h),
-                style: pw.TextStyle(
-                  color: PdfColors.white,
-                  fontSize: 9,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        // Rows
-        ...items.asMap().entries.map((entry) {
-          final i = entry.key;
-          final item = entry.value;
-          return pw.TableRow(
-            decoration: pw.BoxDecoration(
-              color: i.isEven ? PdfColors.grey50 : PdfColors.white,
-            ),
-            children: [
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(_cleanText(item.description),
-                    style: const pw.TextStyle(fontSize: 9)),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(item.qty.toInt().toString(),
-                    style: const pw.TextStyle(fontSize: 9)),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(
-                  '$_rupee${_currencyFormat.format(item.unitPrice)}',
-                  style: const pw.TextStyle(fontSize: 9),
-                  textAlign: pw.TextAlign.right,
-                ),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(
-                  '$_rupee${_currencyFormat.format(item.total)}',
-                  style: const pw.TextStyle(fontSize: 9),
-                  textAlign: pw.TextAlign.right,
-                ),
-              ),
-            ],
-          );
-        }),
-      ],
-    );
-  }
-
-  static pw.Widget _buildTotalsBlock(Quotation q) {
-    return pw.Container(
-      width: 200,
-      child: pw.Column(
-        children: [
-          _totalRow('Subtotal', q.subtotal),
-          _totalRow('CGST (${q.cgstRate}%)', q.cgstAmount),
-          _totalRow('SGST (${q.sgstRate}%)', q.sgstAmount),
-          pw.Divider(thickness: 1),
-          _totalRow('Grand Total', q.grandTotal, bold: true),
-        ],
-      ),
-    );
-  }
-
-  static pw.Widget _totalRow(String label, double amount, {bool bold = false}) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(_cleanText(label),
-            style: pw.TextStyle(
-                fontSize: 10, fontWeight: bold ? pw.FontWeight.bold : null)),
-        pw.Text(
-          '$_rupee${_currencyFormat.format(amount)}',
-          style: pw.TextStyle(
-              fontSize: 10, fontWeight: bold ? pw.FontWeight.bold : null),
-        ),
-      ],
-    );
-  }
-
   static pw.Widget _buildBoqItemsTable(List<BoqItem> items) {
     if (items.isEmpty) {
       return pw.Padding(
@@ -1399,82 +1297,6 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildSpecsTable(
-      Map<String, dynamic> specs, Product product) {
-    final rows = specs.entries.toList();
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(2),
-        1: const pw.FlexColumnWidth(3),
-      },
-      children: rows.asMap().entries.map((entry) {
-        final i = entry.key;
-        final kv = entry.value;
-        // Find display label from product field definitions
-        final field = product.baseSpecs.quotationFields
-            .where((f) => f.key == kv.key)
-            .firstOrNull;
-        final label = field?.label ?? kv.key;
-        return pw.TableRow(
-          decoration: pw.BoxDecoration(
-              color: i.isEven ? PdfColors.grey50 : PdfColors.white),
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(5),
-              child: pw.Text(_cleanText(label),
-                  style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold)),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(5),
-              child: pw.Text(_cleanText(kv.value?.toString()),
-                  style: const pw.TextStyle(fontSize: 9)),
-            ),
-          ],
-        );
-      }).toList(),
-    );
-  }
-
-  static pw.Widget _buildExtraFieldsTable(
-      Map<String, dynamic> fields, Product product) {
-    final rows = fields.entries.toList();
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(2),
-        1: const pw.FlexColumnWidth(3),
-      },
-      children: rows.asMap().entries.map((entry) {
-        final i = entry.key;
-        final kv = entry.value;
-        final field = [
-          ...product.baseSpecs.boqRequiredFields,
-          ...product.baseSpecs.quotationFields,
-        ].where((f) => f.key == kv.key).firstOrNull;
-        final label = field?.label ?? kv.key;
-        return pw.TableRow(
-          decoration: pw.BoxDecoration(
-              color: i.isEven ? PdfColors.grey50 : PdfColors.white),
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(5),
-              child: pw.Text(_cleanText(label),
-                  style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold)),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(5),
-              child: pw.Text(_cleanText(kv.value?.toString()),
-                  style: const pw.TextStyle(fontSize: 9)),
-            ),
-          ],
-        );
-      }).toList(),
-    );
-  }
-
   static pw.Widget _buildCustomFieldsTable(
       List<MapEntry<String, dynamic>> entries) {
     return pw.Table(
@@ -1529,42 +1351,6 @@ class PdfService {
           pw.Text('GSTIN: ${_cleanText(vendor.gstNumber)}',
               style: const pw.TextStyle(fontSize: 10)),
       ],
-    );
-  }
-
-  static pw.Widget _buildBankDetails(Map<String, dynamic> bank) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(10),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.grey100,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            'BANK DETAILS',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-              letterSpacing: 1,
-            ),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text('Bank: ${_cleanText(bank['bank_name']?.toString())}',
-              style: const pw.TextStyle(fontSize: 9)),
-          pw.Text(
-              'Account Name: ${_cleanText(bank['account_name']?.toString())}',
-              style: const pw.TextStyle(fontSize: 9)),
-          pw.Text(
-              'Account No.: ${_cleanText(bank['account_number']?.toString())}',
-              style: const pw.TextStyle(fontSize: 9)),
-          pw.Text('IFSC: ${_cleanText(bank['ifsc']?.toString())}',
-              style: const pw.TextStyle(fontSize: 9)),
-          pw.Text('Branch: ${_cleanText(bank['branch']?.toString())}',
-              style: const pw.TextStyle(fontSize: 9)),
-        ],
-      ),
     );
   }
 

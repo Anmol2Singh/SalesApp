@@ -15,7 +15,6 @@ import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../crm/providers/crm_providers.dart';
 import '../../complaints/providers/complaints_provider.dart';
-import 'product_interests_screen.dart';
 import '../providers/product_inquiries_provider.dart';
 import '../../../core/widgets/network_status_chip.dart';
 import '../../../core/widgets/dashboard_skeleton.dart';
