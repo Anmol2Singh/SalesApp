@@ -127,32 +127,36 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                               final isWide = constraints.maxWidth > 900;
                               final cards = [
                                 PmStatCard(
-                                  title: isPurchase ? 'Active Vendors' : 'Active Sites',
+                                  title: isPurchase ? 'Active Vendors' : 'Active Projects',
                                   value: records.length.toString(),
-                                  description: isPurchase ? 'Total vendors managed' : 'Total customer sites',
+                                  description: isPurchase ? 'Total vendors managed' : 'Total projects managed',
                                   icon: const Icon(LucideIcons.briefcase),
-                                  accentColor: pm.primary,
+                                  iconBgColor: const Color(0xFFE0F2FE),
+                                  iconColor: const Color(0xFF0284C7),
                                 ),
                                 PmStatCard(
                                   title: isPurchase ? 'Quotation Value' : 'Total Order Value',
                                   value: '₹${_currencyFormat.format(totalOrder)}',
-                                  description: 'Combined booking sum',
+                                  description: 'Combined contract values',
                                   icon: const Icon(LucideIcons.indianRupee),
-                                  accentColor: pm.info,
+                                  iconBgColor: const Color(0xFFE0F7FA),
+                                  iconColor: const Color(0xFF0284C7),
                                 ),
                                 PmStatCard(
                                   title: isPurchase ? 'Payment Paid' : 'Payment Received',
                                   value: '₹${_currencyFormat.format(totalPaid)}',
-                                  description: isPurchase ? 'Total payout made' : 'Total funds collected',
+                                  description: 'Total funds collected',
                                   icon: const Icon(LucideIcons.wallet),
-                                  accentColor: pm.success,
+                                  iconBgColor: const Color(0xFFDCFCE7),
+                                  iconColor: const Color(0xFF16A34A),
                                 ),
                                 PmStatCard(
                                   title: 'Outstanding Balance',
                                   value: '₹${_currencyFormat.format(totalBalance)}',
-                                  description: 'Total pending balance',
+                                  description: 'Remaining to be collected',
                                   icon: const Icon(LucideIcons.trendingDown),
-                                  accentColor: totalBalance > 0 ? pm.warning : pm.destructive,
+                                  iconBgColor: const Color(0xFFDCFCE7),
+                                  iconColor: const Color(0xFF16A34A),
                                 ),
                               ];
 
@@ -184,39 +188,79 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                             },
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
 
-                          // Table Title & Export Actions
+                          // Table Title & Action Bar (Matching Screenshot 1)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     isPurchase ? 'Vendor Directory' : 'Project Directory',
-                                    style: TextStyle(
-                                      fontSize: 18,
+                                    style: const TextStyle(
+                                      fontSize: 20,
                                       fontWeight: FontWeight.w800,
-                                      color: pm.foreground,
-                                      fontFamily: 'Inter',
+                                      color: Color(0xFF0F172A),
+                                      letterSpacing: -0.4,
                                     ),
                                   ),
+                                  const SizedBox(height: 2),
                                   Text(
                                     isPurchase
                                         ? 'Manage and track all vendor purchase accounts'
                                         : 'Manage and track all installation sites',
-                                    style: TextStyle(fontSize: 12, color: pm.mutedForeground),
+                                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
                                   ),
                                 ],
                               ),
                               Wrap(
                                 spacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  PmButton(
-                                    variant: PmButtonVariant.outline,
-                                    size: PmButtonSize.sm,
-                                    onPressed: () async {
+                                  // Total count pill
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF6FF),
+                                      borderRadius: BorderRadius.circular(9999),
+                                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                                    ),
+                                    child: Text(
+                                      '${filtered.length} Total',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF005CE6),
+                                      ),
+                                    ),
+                                  ),
+                                  // Filter pill
+                                  InkWell(
+                                    onTap: () => context.push('/pm/filter'),
+                                    borderRadius: BorderRadius.circular(9999),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(LucideIcons.slidersHorizontal, size: 13, color: Color(0xFF005CE6)),
+                                          SizedBox(width: 6),
+                                          Text('Filter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  // Generate PDF pill
+                                  InkWell(
+                                    onTap: () async {
                                       final pdfBytes = await PmPdfService.generateDirectoryPdf(
                                         records: filtered,
                                         companyName: activeCompany.name,
@@ -227,19 +271,27 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                         name: '${activeCompany.name}_Directory.pdf',
                                       );
                                     },
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(LucideIcons.fileText, size: 14),
-                                        SizedBox(width: 6),
-                                        Text('PDF'),
-                                      ],
+                                    borderRadius: BorderRadius.circular(9999),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(LucideIcons.fileText, size: 13, color: Color(0xFFEF4444)),
+                                          SizedBox(width: 6),
+                                          Text('Generate PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  PmButton(
-                                    variant: PmButtonVariant.outline,
-                                    size: PmButtonSize.sm,
-                                    onPressed: () {
+                                  // Export to Excel pill
+                                  InkWell(
+                                    onTap: () {
                                       final excelBytes = PmExcelService.exportDirectoryToExcel(
                                         records: filtered,
                                         isPurchase: isPurchase,
@@ -251,13 +303,72 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                         );
                                       }
                                     },
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(LucideIcons.fileSpreadsheet, size: 14),
-                                        SizedBox(width: 6),
-                                        Text('Excel'),
-                                      ],
+                                    borderRadius: BorderRadius.circular(9999),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(LucideIcons.fileSpreadsheet, size: 13, color: Color(0xFF16A34A)),
+                                          SizedBox(width: 6),
+                                          Text('Export to Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  // Update via Excel pill
+                                  InkWell(
+                                    onTap: () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Update via Excel: Ready for sync')),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(9999),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(LucideIcons.refreshCw, size: 13, color: Color(0xFF8B5CF6)),
+                                          SizedBox(width: 6),
+                                          Text('Update via Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  // Import Excel pill
+                                  InkWell(
+                                    onTap: () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Import Excel template ready')),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(9999),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(LucideIcons.upload, size: 13, color: Color(0xFF005CE6)),
+                                          SizedBox(width: 6),
+                                          Text('Import Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF005CE6))),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],

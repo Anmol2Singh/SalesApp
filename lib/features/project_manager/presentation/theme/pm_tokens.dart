@@ -29,6 +29,12 @@ class PmTokens extends ThemeExtension<PmTokens> {
   final Color info;
   final Color infoSurface;
 
+  // Dedicated UI colors for matching Project Manager tables & highlights
+  final Color paymentCellBg;
+  final Color paymentCellText;
+  final Color materialCellBg;
+  final Color tableHeaderBg;
+
   // Radii
   final double radiusSm;
   final double radiusMd;
@@ -62,6 +68,10 @@ class PmTokens extends ThemeExtension<PmTokens> {
     required this.warningSurface,
     required this.info,
     required this.infoSurface,
+    this.paymentCellBg = const Color(0xFFF0FDF4),
+    this.paymentCellText = const Color(0xFF16A34A),
+    this.materialCellBg = const Color(0xFFFEFCE8),
+    this.tableHeaderBg = const Color(0xFFF8FAFC),
     this.radiusSm = 6.0,
     this.radiusMd = 8.0,
     this.radiusLg = 12.0,
@@ -69,65 +79,73 @@ class PmTokens extends ThemeExtension<PmTokens> {
     this.radius2xl = 24.0,
   });
 
-  /// Factory for Light Theme (matches Source CSS variables)
+  /// Factory for Light Theme (matches the live web app screenshot)
   factory PmTokens.light() {
     return const PmTokens(
-      background: Color(0xFFFFFFFF),
-      foreground: Color(0xFF09090B),
-      card: Color(0xFFFFFFFF),
-      cardForeground: Color(0xFF09090B),
+      background: Color(0xFFF0FDF9), // Ice-mint soft backdrop
+      foreground: Color(0xFF0F172A), // Slate-900 primary text
+      card: Color(0xFFFFFFFF), // Pure white cards
+      cardForeground: Color(0xFF0F172A),
       popover: Color(0xFFFFFFFF),
-      popoverForeground: Color(0xFF09090B),
-      primary: Color(0xFF18181B),
-      primaryForeground: Color(0xFFFAFAFA),
-      secondary: Color(0xFFF4F4F5),
-      secondaryForeground: Color(0xFF18181B),
-      muted: Color(0xFFF4F4F5),
-      mutedForeground: Color(0xFF71717A),
-      accent: Color(0xFFF4F4F5),
-      accentForeground: Color(0xFF18181B),
+      popoverForeground: Color(0xFF0F172A),
+      primary: Color(0xFF005CE6), // Corporate royal blue
+      primaryForeground: Color(0xFFFFFFFF),
+      secondary: Color(0xFFF1F5F9), // Slate-100 pill background
+      secondaryForeground: Color(0xFF0F172A),
+      muted: Color(0xFFF8FAFC),
+      mutedForeground: Color(0xFF64748B), // Slate-500
+      accent: Color(0xFFEFF6FF), // Blue-50
+      accentForeground: Color(0xFF005CE6),
       destructive: Color(0xFFEF4444),
-      destructiveForeground: Color(0xFFFAFAFA),
-      border: Color(0xFFE4E4E7),
-      input: Color(0xFFE4E4E7),
-      ring: Color(0xFF18181B),
-      success: Color(0xFF16A34A),
-      successSurface: Color(0xFFF0FDF4),
+      destructiveForeground: Color(0xFFFFFFFF),
+      border: Color(0xFFE2E8F0), // Slate-200
+      input: Color(0xFFF8FAFC), // Slate-50 field bg
+      ring: Color(0xFF005CE6),
+      success: Color(0xFF16A34A), // Green-600
+      successSurface: Color(0xFFDCFCE7), // Green-100
       warning: Color(0xFFD97706),
-      warningSurface: Color(0xFFFFFBEB),
-      info: Color(0xFF2563EB),
-      infoSurface: Color(0xFFEFF6FF),
+      warningSurface: Color(0xFFFEF3C7),
+      info: Color(0xFF0284C7), // Sky-600
+      infoSurface: Color(0xFFE0F2FE), // Sky-100
+      paymentCellBg: Color(0xFFF0FDF4), // Pale green cell background
+      paymentCellText: Color(0xFF16A34A), // Green payment text
+      materialCellBg: Color(0xFFFEFCE8), // Light cream yellow material cell bg
+      tableHeaderBg: Color(0xFFF8FAFC), // Header row background
     );
   }
 
-  /// Factory for Dark Theme (matches Source .dark CSS variables)
+  /// Factory for Dark Theme
   factory PmTokens.dark() {
     return const PmTokens(
-      background: Color(0xFF09090B),
-      foreground: Color(0xFFFAFAFA),
-      card: Color(0xFF121215),
-      cardForeground: Color(0xFFFAFAFA),
-      popover: Color(0xFF121215),
-      popoverForeground: Color(0xFFFAFAFA),
-      primary: Color(0xFFFAFAFA),
-      primaryForeground: Color(0xFF18181B),
-      secondary: Color(0xFF27272A),
-      secondaryForeground: Color(0xFFFAFAFA),
-      muted: Color(0xFF27272A),
-      mutedForeground: Color(0xFFA1A1AA),
-      accent: Color(0xFF27272A),
-      accentForeground: Color(0xFFFAFAFA),
+      background: Color(0xFF0A0F1D),
+      foreground: Color(0xFFF8FAFC),
+      card: Color(0xFF111827),
+      cardForeground: Color(0xFFF8FAFC),
+      popover: Color(0xFF111827),
+      popoverForeground: Color(0xFFF8FAFC),
+      primary: Color(0xFF3B82F6),
+      primaryForeground: Color(0xFFFFFFFF),
+      secondary: Color(0xFF1E293B),
+      secondaryForeground: Color(0xFFF8FAFC),
+      muted: Color(0xFF1E293B),
+      mutedForeground: Color(0xFF94A3B8),
+      accent: Color(0xFF1E3A8A),
+      accentForeground: Color(0xFF93C5FD),
       destructive: Color(0xFFEF4444),
-      destructiveForeground: Color(0xFFFAFAFA),
-      border: Color(0xFF27272A),
-      input: Color(0xFF27272A),
-      ring: Color(0xFFD4D4D8),
+      destructiveForeground: Color(0xFFFFFFFF),
+      border: Color(0xFF334155),
+      input: Color(0xFF1E293B),
+      ring: Color(0xFF3B82F6),
       success: Color(0xFF22C55E),
       successSurface: Color(0xFF052E16),
       warning: Color(0xFFF59E0B),
       warningSurface: Color(0xFF451A03),
-      info: Color(0xFF3B82F6),
-      infoSurface: Color(0xFF1E3A8A),
+      info: Color(0xFF38BDF8),
+      infoSurface: Color(0xFF082F49),
+      paymentCellBg: Color(0xFF064E3B),
+      paymentCellText: Color(0xFF4ADE80),
+      materialCellBg: Color(0xFF451A03),
+      tableHeaderBg: Color(0xFF0F172A),
     );
   }
 
@@ -158,6 +176,10 @@ class PmTokens extends ThemeExtension<PmTokens> {
     Color? warningSurface,
     Color? info,
     Color? infoSurface,
+    Color? paymentCellBg,
+    Color? paymentCellText,
+    Color? materialCellBg,
+    Color? tableHeaderBg,
     double? radiusSm,
     double? radiusMd,
     double? radiusLg,
@@ -190,6 +212,10 @@ class PmTokens extends ThemeExtension<PmTokens> {
       warningSurface: warningSurface ?? this.warningSurface,
       info: info ?? this.info,
       infoSurface: infoSurface ?? this.infoSurface,
+      paymentCellBg: paymentCellBg ?? this.paymentCellBg,
+      paymentCellText: paymentCellText ?? this.paymentCellText,
+      materialCellBg: materialCellBg ?? this.materialCellBg,
+      tableHeaderBg: tableHeaderBg ?? this.tableHeaderBg,
       radiusSm: radiusSm ?? this.radiusSm,
       radiusMd: radiusMd ?? this.radiusMd,
       radiusLg: radiusLg ?? this.radiusLg,
@@ -227,6 +253,10 @@ class PmTokens extends ThemeExtension<PmTokens> {
       warningSurface: Color.lerp(warningSurface, other.warningSurface, t)!,
       info: Color.lerp(info, other.info, t)!,
       infoSurface: Color.lerp(infoSurface, other.infoSurface, t)!,
+      paymentCellBg: Color.lerp(paymentCellBg, other.paymentCellBg, t)!,
+      paymentCellText: Color.lerp(paymentCellText, other.paymentCellText, t)!,
+      materialCellBg: Color.lerp(materialCellBg, other.materialCellBg, t)!,
+      tableHeaderBg: Color.lerp(tableHeaderBg, other.tableHeaderBg, t)!,
       radiusSm: radiusSm + (other.radiusSm - radiusSm) * t,
       radiusMd: radiusMd + (other.radiusMd - radiusMd) * t,
       radiusLg: radiusLg + (other.radiusLg - radiusLg) * t,

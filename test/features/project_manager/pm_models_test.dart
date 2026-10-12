@@ -214,11 +214,11 @@ void main() {
       final light = PmTokens.light();
       final dark = PmTokens.dark();
 
-      expect(light.background, const Color(0xFFFFFFFF));
-      expect(dark.background, const Color(0xFF09090B));
+      expect(light.background, const Color(0xFFF0FDF9));
+      expect(dark.background, const Color(0xFF0A0F1D));
 
-      expect(light.primary, const Color(0xFF18181B));
-      expect(dark.primary, const Color(0xFFFAFAFA));
+      expect(light.primary, const Color(0xFF005CE6));
+      expect(dark.primary, const Color(0xFF3B82F6));
       expect(light.destructive, const Color(0xFFEF4444));
     });
   });
