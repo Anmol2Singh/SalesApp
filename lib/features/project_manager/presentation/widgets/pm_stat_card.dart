@@ -13,7 +13,7 @@ class PmStatCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.value,
-    required this.description,
+    this.description = '',
     required this.icon,
     this.accentColor,
   });

@@ -32,7 +32,7 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
     final isPurchase = mode.isPurchase;
     final activeCompany = ref.watch(pmActiveCompanyProvider);
 
-    final recordsAsync = isPurchase
+    final AsyncValue<List<dynamic>> recordsAsync = isPurchase
         ? ref.watch(pmPurchasesListProvider)
         : ref.watch(pmProjectsListProvider);
 
@@ -83,7 +83,7 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                 data: (records) {
                   final filtered = _searchQuery.isEmpty
                       ? records
-                      : records.where((r) {
+                      : records.where((dynamic r) {
                           final q = _searchQuery.toLowerCase();
                           final siteName = (r.siteName ?? '').toString().toLowerCase();
                           final party = (r.partyPrintName ?? '').toString().toLowerCase();
@@ -102,7 +102,7 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                   double totalPaid = 0;
                   double totalBalance = 0;
 
-                  for (final r in records) {
+                  for (final dynamic r in records) {
                     totalOrder += (r.orderValue as num).toDouble();
                     totalPaid += (r.paymentReceived as num).toDouble();
                     totalBalance += (r.balance as num).toDouble();

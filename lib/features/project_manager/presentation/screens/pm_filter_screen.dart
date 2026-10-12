@@ -47,7 +47,7 @@ class _PmFilterScreenState extends ConsumerState<PmFilterScreen> {
     final isPurchase = mode.isPurchase;
     final activeCompany = ref.watch(pmActiveCompanyProvider);
 
-    final recordsAsync = isPurchase
+    final AsyncValue<List<dynamic>> recordsAsync = isPurchase
         ? ref.watch(pmPurchasesListProvider)
         : ref.watch(pmProjectsListProvider);
 
@@ -69,7 +69,7 @@ class _PmFilterScreenState extends ConsumerState<PmFilterScreen> {
           error: (err, _) => Center(child: Text('Error: $err', style: TextStyle(color: pm.destructive))),
           data: (records) {
             // Filter logic
-            final filtered = records.where((r) {
+            final filtered = records.where((dynamic r) {
               if (_selectedCategory != 'ALL' && r.orderType != _selectedCategory) {
                 return false;
               }

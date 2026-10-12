@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/pm_company.dart';
-import '../../../../core/providers/supabase_provider.dart';
 
 class PmCompaniesNotifier extends StateNotifier<List<PmCompany>> {
   PmCompaniesNotifier() : super(PmCompany.defaultCompanies);

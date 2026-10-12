@@ -14,7 +14,6 @@ import '../data/repositories/pm_purchases_repository.dart';
 import '../data/repositories/pm_ledger_repository.dart';
 import '../data/repositories/pm_daily_transactions_repository.dart';
 import 'pm_company_provider.dart';
-import 'pm_mode_provider.dart';
 
 // -----------------------------------------------------------------------------
 // REPOSITORIES

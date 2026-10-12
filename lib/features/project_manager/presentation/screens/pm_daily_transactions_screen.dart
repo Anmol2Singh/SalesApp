@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -8,7 +9,6 @@ import '../widgets/pm_card.dart';
 import '../widgets/pm_badge.dart';
 import '../widgets/pm_button.dart';
 import '../widgets/pm_stat_card.dart';
-import '../widgets/pm_header_bar.dart';
 import '../../data/models/pm_daily_transaction.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../providers/pm_providers.dart';
@@ -40,6 +40,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
   }
 
   Future<void> _confirmDelete(PmDailyTransaction tx) async {
+    final pm = context.pm;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -51,7 +52,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: PmTokens.destructive),
+            style: FilledButton.styleFrom(backgroundColor: pm.destructive),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
@@ -81,26 +82,62 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pm = context.pm;
     final filter = ref.watch(dailyTransactionsFilterProvider);
     final txAsync = ref.watch(pmDailyTransactionsListProvider);
 
     return Scaffold(
-      backgroundColor: PmTokens.bg(isDark),
+      backgroundColor: pm.background,
       body: SafeArea(
         child: Column(
           children: [
             // Top Nav Header
-            PmHeaderBar(
-              title: 'Daily Transactions',
-              subtitle: 'Day-Book & Cashflow Register',
-              actions: [
-                PmButton(
-                  label: 'Add Entry',
-                  icon: LucideIcons.plus,
-                  onPressed: () => _openTransactionDialog(),
-                ),
-              ],
+            Container(
+              decoration: BoxDecoration(
+                color: pm.card,
+                border: Border(bottom: BorderSide(color: pm.border)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  if (context.canPop()) ...[
+                    IconButton(
+                      icon: const Icon(LucideIcons.arrowLeft, size: 20),
+                      onPressed: () => context.pop(),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Daily Transactions',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: pm.foreground,
+                        ),
+                      ),
+                      Text(
+                        'Day-Book & Cashflow Register',
+                        style: TextStyle(fontSize: 12, color: pm.mutedForeground),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  PmButton(
+                    onPressed: () => _openTransactionDialog(),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.plus, size: 14),
+                        SizedBox(width: 6),
+                        Text('Add Entry'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             Expanded(
@@ -110,15 +147,21 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(LucideIcons.triangleAlert, size: 40, color: PmTokens.destructive),
+                      Icon(LucideIcons.triangleAlert, size: 40, color: pm.destructive),
                       const SizedBox(height: 12),
-                      Text('Error loading day-book: $err', style: TextStyle(color: PmTokens.textMuted(isDark))),
+                      Text('Error loading day-book: $err', style: TextStyle(color: pm.mutedForeground)),
                       const SizedBox(height: 12),
                       PmButton(
-                        label: 'Retry',
-                        icon: LucideIcons.refreshCw,
                         variant: PmButtonVariant.outline,
                         onPressed: () => ref.invalidate(pmDailyTransactionsListProvider),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.refreshCw, size: 14),
+                            SizedBox(width: 6),
+                            Text('Retry'),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -153,26 +196,26 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                                 PmStatCard(
                                   title: 'Total Inflow (Credits)',
                                   value: _currencyFmt.format(totalCredit),
-                                  icon: LucideIcons.arrowDownLeft,
-                                  iconColor: PmTokens.badgeCompletedFg,
+                                  icon: Icon(LucideIcons.arrowDownLeft, color: pm.success, size: 20),
+                                  accentColor: pm.success,
                                 ),
                                 PmStatCard(
                                   title: 'Total Outflow (Debits)',
                                   value: _currencyFmt.format(totalDebit),
-                                  icon: LucideIcons.arrowUpRight,
-                                  iconColor: PmTokens.destructive,
+                                  icon: Icon(LucideIcons.arrowUpRight, color: pm.destructive, size: 20),
+                                  accentColor: pm.destructive,
                                 ),
                                 PmStatCard(
                                   title: 'Net Cash Balance',
                                   value: _currencyFmt.format(netBalance),
-                                  icon: LucideIcons.wallet,
-                                  iconColor: netBalance >= 0 ? PmTokens.badgeCompletedFg : PmTokens.destructive,
+                                  icon: Icon(LucideIcons.wallet, color: netBalance >= 0 ? pm.success : pm.destructive, size: 20),
+                                  accentColor: netBalance >= 0 ? pm.success : pm.destructive,
                                 ),
                                 PmStatCard(
                                   title: 'Entries Count',
                                   value: transactions.length.toString(),
-                                  icon: LucideIcons.receipt,
-                                  iconColor: PmTokens.accent,
+                                  icon: Icon(LucideIcons.receipt, color: pm.primary, size: 20),
+                                  accentColor: pm.primary,
                                 ),
                               ],
                             );
@@ -197,9 +240,9 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                                       child: ChoiceChip(
                                         label: Text(tf),
                                         selected: isSelected,
-                                        selectedColor: PmTokens.primary,
+                                        selectedColor: pm.primary,
                                         labelStyle: TextStyle(
-                                          color: isSelected ? Colors.white : PmTokens.textMuted(isDark),
+                                          color: isSelected ? pm.primaryForeground : pm.mutedForeground,
                                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                                           fontSize: 12,
                                         ),
@@ -229,17 +272,17 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                                       controller: _searchController,
                                       decoration: InputDecoration(
                                         hintText: 'Search party, firm, transaction...',
-                                        hintStyle: TextStyle(color: PmTokens.textMuted(isDark), fontSize: 13),
-                                        prefixIcon: Icon(LucideIcons.search, size: 16, color: PmTokens.textMuted(isDark)),
+                                        hintStyle: TextStyle(color: pm.mutedForeground, fontSize: 13),
+                                        prefixIcon: Icon(LucideIcons.search, size: 16, color: pm.mutedForeground),
                                         isDense: true,
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide(color: PmTokens.border(isDark)),
+                                          borderSide: BorderSide(color: pm.border),
                                         ),
                                         enabledBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide(color: PmTokens.border(isDark)),
+                                          borderSide: BorderSide(color: pm.border),
                                         ),
                                       ),
                                       onChanged: (val) {
@@ -256,7 +299,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                       decoration: BoxDecoration(
-                                        border: BorderBorder.all(color: PmTokens.border(isDark)),
+                                        border: Border.all(color: pm.border),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: DropdownButton<String>(
@@ -285,7 +328,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                       decoration: BoxDecoration(
-                                        border: BorderBorder.all(color: PmTokens.border(isDark)),
+                                        border: Border.all(color: pm.border),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: DropdownButton<String>(
@@ -321,27 +364,27 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(LucideIcons.inbox, size: 48, color: PmTokens.textMuted(isDark)),
+                                  Icon(LucideIcons.inbox, size: 48, color: pm.mutedForeground),
                                   const SizedBox(height: 12),
                                   Text(
                                     'No transactions found for selected period',
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
-                                      color: PmTokens.text(isDark),
+                                      color: pm.foreground,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
                                     'Change filters or tap "+ Add Entry" to record cash movements.',
-                                    style: TextStyle(fontSize: 13, color: PmTokens.textMuted(isDark)),
+                                    style: TextStyle(fontSize: 13, color: pm.mutedForeground),
                                   ),
                                 ],
                               ),
                             ),
                           )
                         else
-                          ...transactions.map((tx) => _buildTransactionCard(context, tx, isDark)),
+                          ...transactions.map((tx) => _buildTransactionCard(context, tx)),
                       ],
                     ),
                   );
@@ -354,7 +397,8 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
     );
   }
 
-  Widget _buildTransactionCard(BuildContext context, PmDailyTransaction tx, bool isDark) {
+  Widget _buildTransactionCard(BuildContext context, PmDailyTransaction tx) {
+    final pm = context.pm;
     final isCredit = tx.type == PmTransactionFlow.credit;
     final amount = isCredit ? tx.creditAmount : tx.debitAmount;
 
@@ -371,14 +415,14 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
               height: 40,
               decoration: BoxDecoration(
                 color: isCredit
-                    ? PmTokens.badgeCompletedBg
-                    : PmTokens.destructive.withOpacity(0.12),
+                    ? pm.successSurface
+                    : pm.destructive.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Center(
                 child: Icon(
                   isCredit ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight,
-                  color: isCredit ? PmTokens.badgeCompletedFg : PmTokens.destructive,
+                  color: isCredit ? pm.success : pm.destructive,
                   size: 20,
                 ),
               ),
@@ -397,17 +441,17 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: PmTokens.text(isDark),
+                          color: pm.foreground,
                         ),
                       ),
                       const SizedBox(width: 8),
                       PmBadge(
                         label: tx.entryNature.displayName,
                         variant: tx.entryNature == PmEntryNature.sale
-                            ? PmBadgeVariant.completed
+                            ? PmBadgeVariant.success
                             : tx.entryNature == PmEntryNature.purchase
-                                ? PmBadgeVariant.active
-                                : PmBadgeVariant.pipeline,
+                                ? PmBadgeVariant.info
+                                : PmBadgeVariant.warning,
                       ),
                       const Spacer(),
                       Text(
@@ -415,7 +459,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: isCredit ? PmTokens.badgeCompletedFg : PmTokens.destructive,
+                          color: isCredit ? pm.success : pm.destructive,
                         ),
                       ),
                     ],
@@ -426,20 +470,20 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                     children: [
                       Text(
                         '${_dateFmt.format(tx.date)}  •  ${tx.paymentMode}',
-                        style: TextStyle(fontSize: 12, color: PmTokens.textMuted(isDark)),
+                        style: TextStyle(fontSize: 12, color: pm.mutedForeground),
                       ),
                       if (tx.firmName.isNotEmpty) ...[
-                        Text('  •  ', style: TextStyle(color: PmTokens.textMuted(isDark))),
+                        Text('  •  ', style: TextStyle(color: pm.mutedForeground)),
                         Text(
                           tx.firmName,
-                          style: TextStyle(fontSize: 12, color: PmTokens.textMuted(isDark)),
+                          style: TextStyle(fontSize: 12, color: pm.mutedForeground),
                         ),
                       ],
                       if (tx.transactionName.isNotEmpty) ...[
-                        Text('  •  ', style: TextStyle(color: PmTokens.textMuted(isDark))),
+                        Text('  •  ', style: TextStyle(color: pm.mutedForeground)),
                         Text(
                           tx.transactionName,
-                          style: TextStyle(fontSize: 12, color: PmTokens.accent, fontWeight: FontWeight.w500),
+                          style: TextStyle(fontSize: 12, color: pm.primary, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ],
@@ -449,7 +493,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                     const SizedBox(height: 4),
                     Text(
                       tx.remark!,
-                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: PmTokens.textMuted(isDark)),
+                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: pm.mutedForeground),
                     ),
                   ],
                 ],
@@ -458,7 +502,7 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
 
             // Row actions
             PopupMenuButton<String>(
-              icon: Icon(LucideIcons.ellipsisVertical, size: 16, color: PmTokens.textMuted(isDark)),
+              icon: Icon(LucideIcons.ellipsisVertical, size: 16, color: pm.mutedForeground),
               onSelected: (action) {
                 if (action == 'edit') {
                   _openTransactionDialog(tx);
@@ -477,13 +521,13 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(LucideIcons.trash2, size: 15, color: PmTokens.destructive),
-                      SizedBox(width: 8),
-                      Text('Delete Entry', style: TextStyle(color: PmTokens.destructive)),
+                      Icon(LucideIcons.trash2, size: 15, color: pm.destructive),
+                      const SizedBox(width: 8),
+                      Text('Delete Entry', style: TextStyle(color: pm.destructive)),
                     ],
                   ),
                 ),
@@ -643,7 +687,7 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pm = context.pm;
     final isEdit = widget.editing != null;
 
     return AlertDialog(
@@ -707,7 +751,7 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                         groupValue: _flow,
                         dense: true,
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Credit (Inflow +)', style: TextStyle(fontSize: 13, color: PmTokens.badgeCompletedFg)),
+                        title: Text('Credit (Inflow +)', style: TextStyle(fontSize: 13, color: pm.success)),
                         onChanged: (v) {
                           if (v != null) setState(() => _flow = v);
                         },
@@ -719,7 +763,7 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                         groupValue: _flow,
                         dense: true,
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Debit (Outflow -)', style: TextStyle(fontSize: 13, color: PmTokens.destructive)),
+                        title: Text('Debit (Outflow -)', style: TextStyle(fontSize: 13, color: pm.destructive)),
                         onChanged: (v) {
                           if (v != null) setState(() => _flow = v);
                         },
@@ -788,7 +832,7 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                         decoration: const InputDecoration(labelText: 'Payment Mode *'),
                         items: _modes.map((m) {
                           return DropdownMenuItem(value: m, child: Text(m));
-                        }).toList>,
+                        }).toList(),
                         onChanged: (v) {
                           if (v != null) setState(() => _paymentMode = v);
                         },
@@ -829,7 +873,7 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
           child: const Text('Cancel'),
         ),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: PmTokens.primary),
+          style: FilledButton.styleFrom(backgroundColor: pm.primary),
           onPressed: _saving ? null : _save,
           child: _saving
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))

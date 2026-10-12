@@ -3,8 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme/pm_tokens.dart';
-import '../../data/models/pm_project.dart';
-import '../../data/models/pm_purchase.dart';
 import 'pm_badge.dart';
 import 'pm_button.dart';
 import 'pm_card.dart';

@@ -5,11 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme/pm_tokens.dart';
 import '../../providers/pm_providers.dart';
-import '../../data/models/pm_project.dart';
-import '../../data/models/pm_purchase.dart';
 import '../widgets/pm_badge.dart';
 import '../widgets/pm_button.dart';
-import '../widgets/pm_card.dart';
 import '../tabs/pm_ledger_tab.dart';
 import '../tabs/pm_payment_terms_tab.dart';
 import '../tabs/pm_expenses_tab.dart';
@@ -72,7 +69,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
   Widget build(BuildContext context) {
     final pm = context.pm;
 
-    final detailAsync = widget.isPurchase
+    final AsyncValue<dynamic> detailAsync = widget.isPurchase
         ? ref.watch(pmPurchaseDetailProvider(widget.id))
         : ref.watch(pmProjectDetailProvider(widget.id));
 
@@ -93,7 +90,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
               ],
             ),
           ),
-          data: (record) {
+          data: (dynamic record) {
             if (record == null) {
               return Center(
                 child: Text('Record not found.', style: TextStyle(color: pm.mutedForeground)),
