@@ -8,7 +8,7 @@ import '../widgets/pm_button.dart';
 import '../widgets/pm_card.dart';
 import '../widgets/pm_badge.dart';
 
-class PmSwhChecklistTab extends ConsumerWidget {
+class PmSwhChecklistTab extends ConsumerStatefulWidget {
   final String projectId;
   final VoidCallback onRefresh;
 
@@ -19,9 +19,22 @@ class PmSwhChecklistTab extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PmSwhChecklistTab> createState() => _PmSwhChecklistTabState();
+}
+
+class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
+  final ScrollController _hScrollCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _hScrollCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final pm = context.pm;
-    final itemsAsync = ref.watch(pmChecklistItemsProvider(projectId));
+    final itemsAsync = ref.watch(pmChecklistItemsProvider(widget.projectId));
 
     return itemsAsync.when(
       loading: () => const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator())),
@@ -77,9 +90,17 @@ class PmSwhChecklistTab extends ConsumerWidget {
             else
               PmCard(
                 padding: EdgeInsets.zero,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
+                child: Scrollbar(
+                  controller: _hScrollCtrl,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _hScrollCtrl,
+                    scrollDirection: Axis.horizontal,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 1200),
+                      child: DataTable(
                     headingRowColor: WidgetStateProperty.all(pm.secondary.withOpacity(0.6)),
                     columns: const [
                       DataColumn(label: Text('SR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
@@ -106,14 +127,14 @@ class PmSwhChecklistTab extends ConsumerWidget {
                             value: item.customerScope,
                             onChanged: (val) async {
                               await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'customer_scope': val ?? false});
-                              ref.invalidate(pmChecklistItemsProvider(projectId));
+                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
                             },
                           )),
                           DataCell(Checkbox(
                             value: item.ourScope,
                             onChanged: (val) async {
                               await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'our_scope': val ?? false});
-                              ref.invalidate(pmChecklistItemsProvider(projectId));
+                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
                             },
                           )),
                           DataCell(Text('${item.dispatchQty}', style: const TextStyle(fontSize: 12))),
@@ -121,7 +142,7 @@ class PmSwhChecklistTab extends ConsumerWidget {
                             value: item.dispatchYesNo,
                             onChanged: (val) async {
                               await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'dispatch_yes_no': val ?? false});
-                              ref.invalidate(pmChecklistItemsProvider(projectId));
+                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
                             },
                           )),
                           DataCell(Text('${item.installedQty}', style: const TextStyle(fontSize: 12))),
@@ -129,7 +150,7 @@ class PmSwhChecklistTab extends ConsumerWidget {
                             value: item.installationYesNo,
                             onChanged: (val) async {
                               await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'installation_yes_no': val ?? false});
-                              ref.invalidate(pmChecklistItemsProvider(projectId));
+                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
                             },
                           )),
                           DataCell(Text(
@@ -149,8 +170,8 @@ class PmSwhChecklistTab extends ConsumerWidget {
                                   icon: Icon(LucideIcons.trash2, size: 14, color: pm.destructive),
                                   onPressed: () async {
                                     await ref.read(pmLedgerRepositoryProvider).deleteChecklistItem(item.id);
-                                    ref.invalidate(pmChecklistItemsProvider(projectId));
-                                    onRefresh();
+                                    ref.invalidate(pmChecklistItemsProvider(widget.projectId));
+                                    widget.onRefresh();
                                   },
                                 ),
                               ],
@@ -159,6 +180,8 @@ class PmSwhChecklistTab extends ConsumerWidget {
                         ],
                       );
                     }).toList(),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -172,11 +195,11 @@ class PmSwhChecklistTab extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => _ChecklistDialog(
-        projectId: projectId,
+        projectId: widget.projectId,
         item: item,
         onSaved: () {
-          ref.invalidate(pmChecklistItemsProvider(projectId));
-          onRefresh();
+          ref.invalidate(pmChecklistItemsProvider(widget.projectId));
+          widget.onRefresh();
         },
       ),
     );

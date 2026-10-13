@@ -213,6 +213,33 @@ final routerProvider = Provider<GoRouter>((ref) {
           if (isOnAuth) {
             return _getRoleHome(profile.primaryRole);
           }
+          final bool isAdmin = profile.roles.contains(UserRole.admin);
+          final bool isManager = profile.roles.contains(UserRole.manager);
+          final bool isSalesHead = profile.roles.contains(UserRole.salesHead);
+          final bool isAdminOrManager = isAdmin || isManager;
+
+          // Guard Admin screens: strictly admin or manager
+          if (location.startsWith('/admin') && !isAdminOrManager) {
+            return _getRoleHome(profile.primaryRole);
+          }
+
+          // Guard Product Interests: strictly Admin & Sales Head (Item 4)
+          if ((location == AppRoutes.productInterests || location.startsWith('/product-interests')) &&
+              !isAdminOrManager && !isSalesHead) {
+            return _getRoleHome(profile.primaryRole);
+          }
+
+          // Guard PDF Library (Item 5):
+          // List PDFs: strictly admin or manager
+          if (location == AppRoutes.pdfList && !isAdminOrManager) {
+            return _getRoleHome(profile.primaryRole);
+          }
+          // Search PDF: strictly admin, manager, or salesHead
+          if ((location == AppRoutes.searchPdf || location.startsWith('/search-pdf')) &&
+              !isAdminOrManager && !isSalesHead) {
+            return _getRoleHome(profile.primaryRole);
+          }
+
           // Guard pure CRM Staff (without sales or admin roles) from accessing customer screens
           if (profile.roles.contains(UserRole.crmStaff) &&
               !profile.roles.any((r) => r.isSalesOrAdmin)) {
@@ -223,11 +250,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             }
           }
 
-          // Guard Quotation Generator (strictly admin only per requirement)
+          // Guard Quotation Generator routes
           if (location == AppRoutes.heatPumpQuotationHub ||
               location == AppRoutes.heatPumpQuotationCreate ||
+              location.startsWith('/heat-pump-quotations') ||
               location.startsWith('/quotation-generator')) {
-            if (!profile.roles.contains(UserRole.admin)) {
+            if (!profile.roles.any((r) => r.canCreateQuotation)) {
               return _getRoleHome(profile.primaryRole);
             }
           }

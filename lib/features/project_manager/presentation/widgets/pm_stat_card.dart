@@ -26,7 +26,7 @@ class PmStatCard extends StatelessWidget {
     final bgBubble = iconBgColor ?? (accentColor != null ? accentColor!.withOpacity(0.12) : const Color(0xFFE0F2FE));
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -51,25 +51,26 @@ class PmStatCard extends StatelessWidget {
                 child: Text(
                   title.toUpperCase(),
                   style: const TextStyle(
-                    fontSize: 10.5,
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
+                    letterSpacing: 0.6,
                     color: Color(0xFF64748B),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 6),
               Container(
-                width: 34,
-                height: 34,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: bgBubble,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Center(
                   child: IconTheme(
-                    data: IconThemeData(color: fgBubble, size: 17),
+                    data: IconThemeData(color: fgBubble, size: 16),
                     child: icon,
                   ),
                 ),
@@ -77,13 +78,17 @@ class PmStatCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF0F172A),
-              letterSpacing: -0.6,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF0F172A),
+                letterSpacing: -0.6,
+              ),
             ),
           ),
           if (description.isNotEmpty) ...[
@@ -91,10 +96,12 @@ class PmStatCard extends StatelessWidget {
             Text(
               description,
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF64748B),
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ],

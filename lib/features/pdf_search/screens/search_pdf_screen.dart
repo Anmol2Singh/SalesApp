@@ -596,7 +596,7 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Search PDF Documents'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.navBarColor,
         foregroundColor: Colors.white,
         elevation: 0,
       ),

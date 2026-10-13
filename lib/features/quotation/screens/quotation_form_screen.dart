@@ -2345,6 +2345,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _existingQuotation?.status == QuotationStatus.pendingApproval;
     final profile = ref.watch(currentProfileProvider);
     final isSales = profile?.primaryRole == UserRole.sales;
+    final isAdminOrSalesHead = (profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false)) ||
+        (profile?.primaryRole == UserRole.salesHead || (profile?.roles.contains(UserRole.salesHead) ?? false)) ||
+        (profile?.primaryRole == UserRole.manager || (profile?.roles.contains(UserRole.manager) ?? false));
+    final canEditItemRateAndName = (widget.leadId == null) || isAdminOrSalesHead;
     final enabled = _isEditing;
     final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
 
@@ -2460,6 +2464,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         : () => _removeLineItem(entry.key),
                     onChanged: () => setState(() {}),
                     enabled: enabled,
+                    canEditRate: canEditItemRateAndName,
+                    canEditName: canEditItemRateAndName,
                   ),
                 ),
             if (enabled)
@@ -4008,6 +4014,8 @@ class _LineItemRow extends StatelessWidget {
   final VoidCallback? onRemove;
   final VoidCallback onChanged;
   final bool enabled;
+  final bool canEditRate;
+  final bool canEditName;
 
   const _LineItemRow({
     required this.index,
@@ -4015,6 +4023,8 @@ class _LineItemRow extends StatelessWidget {
     this.onRemove,
     required this.onChanged,
     required this.enabled,
+    this.canEditRate = true,
+    this.canEditName = true,
   });
 
   @override
@@ -4071,6 +4081,7 @@ class _LineItemRow extends StatelessWidget {
           InventoryAutocomplete(
             controller: item['description'] as TextEditingController,
             enabled: enabled,
+            allowCustomEdit: canEditName,
             onChanged: onChanged,
             onItemSelected: (selection) {
               final hsnController = item['hsn_sac'] as TextEditingController;
@@ -4082,7 +4093,8 @@ class _LineItemRow extends StatelessWidget {
                 hsnController.text = selection.hsnSac ?? '';
               if (uomController.text.isEmpty)
                 uomController.text = selection.uom ?? '';
-              if (priceController.text.isEmpty ||
+              if (!canEditRate ||
+                  priceController.text.isEmpty ||
                   priceController.text == '0.00' ||
                   priceController.text == '0') {
                 priceController.text =
@@ -4179,13 +4191,17 @@ class _LineItemRow extends StatelessWidget {
           const SizedBox(height: 10),
           TextFormField(
             controller: item['unit_price'] as TextEditingController,
-            enabled: enabled,
+            enabled: enabled && canEditRate,
+            readOnly: !canEditRate,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textInputAction: TextInputAction.done,
             onChanged: (_) => onChanged(),
-            decoration: const InputDecoration(
-              labelText: 'Item Rate (₹) *',
+            decoration: InputDecoration(
+              labelText: canEditRate ? 'Item Rate (₹) *' : 'Item Rate (₹) [Locked]',
               prefixText: '₹ ',
+              suffixIcon: !canEditRate
+                  ? const Icon(Icons.lock_outline, size: 16, color: AppColors.textDisabled)
+                  : null,
             ),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Required';

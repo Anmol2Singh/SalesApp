@@ -56,7 +56,7 @@ class FactoryQueueScreen extends ConsumerWidget {
             SliverAppBar(
               expandedHeight: 180,
               pinned: true,
-              backgroundColor: const Color(0xFF0F172A),
+              backgroundColor: AppColors.navBarColor,
               clipBehavior: Clip.antiAlias,
               automaticallyImplyLeading: false,
               shape: const RoundedRectangleBorder(

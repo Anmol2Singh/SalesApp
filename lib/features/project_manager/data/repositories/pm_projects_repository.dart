@@ -103,7 +103,32 @@ class PmProjectsRepository {
         ''')
         .single();
 
-    return PmProject.fromJson(Map<String, dynamic>.from(response));
+    final project = PmProject.fromJson(Map<String, dynamic>.from(response));
+
+    // Automatic Order Value row adding in Ledger Record upon creating customer with order value > 0
+    final orderVal = (data['order_value'] as num?)?.toDouble() ?? 0.0;
+    if (orderVal > 0) {
+      try {
+        await _supabase.from('pm_ledger_entries').insert({
+          'project_id': project.id,
+          'sr_no': 1,
+          'date': data['created_at'] ?? DateTime.now().toIso8601String(),
+          'payment_type': 'Order',
+          'particulars': 'Initial Order Value',
+          'bill_status': 'BOOKED',
+          'order_value': orderVal,
+          'sales_matrix': 0.0,
+          'material_outward': 0.0,
+          'extra_work': 0.0,
+          'payment_received': 0.0,
+          'created_by': userId,
+        });
+      } catch (e) {
+        // Fallback gracefully without breaking project creation
+      }
+    }
+
+    return project;
   }
 
   /// Update an existing project

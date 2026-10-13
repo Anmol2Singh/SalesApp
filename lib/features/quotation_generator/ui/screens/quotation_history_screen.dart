@@ -117,7 +117,7 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
               onPressed: _refresh,
             ),
           ],
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.navBarColor,
           foregroundColor: Colors.white,
           elevation: 0,
           bottom: TabBar(

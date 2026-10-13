@@ -3,6 +3,9 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
+  // Navigation & Page Header palette — sleek deep indigo navy matching nav bar
+  static const Color navBarColor = Color(0xFF1E1B4B);
+
   // Primary brand palette — deep navy inspired by industrial reliability
   static const Color primary = Color(0xFF1E3A5F);
   static const Color primaryLight = Color(0xFF2E5490);
@@ -182,18 +185,19 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.background,
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.navBarColor,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: AppTypography.headlineMedium.copyWith(
           color: Colors.white,
           fontFamily: AppTypography.fontFamily,
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actionsIconTheme: const IconThemeData(color: Colors.white),
-        scrolledUnderElevation: 4,
-        shadowColor: AppColors.primary.withOpacity(0.3),
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
@@ -393,7 +397,7 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: const Color(0xFF0F172A),
       appBarTheme: AppBarTheme(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: AppColors.navBarColor,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,

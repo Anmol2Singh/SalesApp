@@ -11,6 +11,7 @@ class InventoryAutocomplete extends ConsumerStatefulWidget {
   final void Function(InventoryItem item) onItemSelected;
   final VoidCallback onChanged;
   final String labelText;
+  final bool allowCustomEdit;
 
   const InventoryAutocomplete({
     super.key,
@@ -19,6 +20,7 @@ class InventoryAutocomplete extends ConsumerStatefulWidget {
     required this.onItemSelected,
     required this.onChanged,
     this.labelText = 'Description *',
+    this.allowCustomEdit = true,
   });
 
   /// Formats rate / price in Indian number system with commas,
@@ -188,11 +190,17 @@ class _InventoryAutocompleteState extends ConsumerState<InventoryAutocomplete> {
           controller: textEditingController,
           focusNode: focusNode,
           enabled: widget.enabled,
+          readOnly: !widget.allowCustomEdit,
+          onTap: !widget.allowCustomEdit && widget.enabled
+              ? () => _openSearchSheet(context, items)
+              : null,
           textInputAction: TextInputAction.next,
           onChanged: (_) => widget.onChanged(),
           decoration: InputDecoration(
             labelText: widget.labelText,
-            hintText: 'Search inventory or type custom...',
+            hintText: widget.allowCustomEdit
+                ? 'Search inventory or type custom...'
+                : 'Select from inventory...',
             suffixIcon: IconButton(
               icon: const Icon(Icons.search, size: 20, color: AppColors.primary),
               tooltip: 'Browse inventory items',

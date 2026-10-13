@@ -713,6 +713,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
             // 4. Communication History (Only inside Lead)
             _LeadCommunicationSection(
               leadId: lead.id,
+              isWon: lead.status == 'Won',
               onDownloadPdf: () => _downloadReportPdf(context, ref, lead, prospect),
             ),
             const SizedBox(height: 24),
@@ -1284,9 +1285,14 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
   }
 
   void _promptLogCommunication(BuildContext context, WidgetRef ref, String leadId, String type) {
+    final currentLead = ref.read(leadByIdProvider(leadId));
+    final isWon = currentLead?.status.toLowerCase() == 'won';
+    final profile = ref.read(currentProfileProvider);
+    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
+    if (isWon && !isAdmin) return;
     Future.delayed(const Duration(milliseconds: 500), () {
       if (context.mounted) {
-        _showLogDialog(context, ref, leadId, defaultType: type);
+        _showLogDialog(context, ref, leadId, defaultType: type, isWon: isWon);
       }
     });
   }
@@ -1409,7 +1415,19 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
     );
   }
 
-  static void _showLogDialog(BuildContext context, WidgetRef ref, String leadId, {String defaultType = 'Call'}) {
+  static void _showLogDialog(BuildContext context, WidgetRef ref, String leadId, {String defaultType = 'Call', bool isWon = false}) {
+    final profile = ref.read(currentProfileProvider);
+    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
+    if (isWon && !isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customer is Won. Adding communication logs is disabled.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     final summaryCtrl = TextEditingController();
     String selectedType = defaultType;
 
@@ -2085,13 +2103,21 @@ class _EditLeadSheetState extends ConsumerState<_EditLeadSheet> {
 
 class _LeadCommunicationSection extends ConsumerWidget {
   final String leadId;
+  final bool isWon;
   final VoidCallback onDownloadPdf;
 
-  const _LeadCommunicationSection({required this.leadId, required this.onDownloadPdf});
+  const _LeadCommunicationSection({
+    required this.leadId,
+    this.isWon = false,
+    required this.onDownloadPdf,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final commsAsync = ref.watch(leadCommunicationsProvider(leadId));
+    final profile = ref.watch(currentProfileProvider);
+    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
+    final canAddLog = !isWon || isAdmin;
 
     return Card(
       elevation: 0,
@@ -2116,11 +2142,12 @@ class _LeadCommunicationSection extends ConsumerWidget {
                       tooltip: 'Download PDF',
                       onPressed: onDownloadPdf,
                     ),
-                    TextButton.icon(
-                      onPressed: () => _LeadDetailScreenState._showLogDialog(context, ref, leadId),
-                      icon: const Icon(Icons.add_comment_outlined, size: 18),
-                      label: const Text('Add Log', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+                    if (canAddLog)
+                      TextButton.icon(
+                        onPressed: () => _LeadDetailScreenState._showLogDialog(context, ref, leadId, isWon: isWon),
+                        icon: const Icon(Icons.add_comment_outlined, size: 18),
+                        label: const Text('Add Log', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
                   ],
                 ),
               ],
@@ -2728,7 +2755,118 @@ class _LeadQuotationsSectionState
     }
   }
 
+  Future<void> _approveQuotation(Quotation quot) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Approve Quotation'),
+        content: Text('Are you sure you want to approve quotation ${quot.quotationNumber.isNotEmpty ? quot.quotationNumber : quot.id}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Approve', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('quotations').update({
+        'status': 'confirmed',
+        'confirmed_by': supabase.auth.currentUser?.id,
+        'confirmed_at': DateTime.now().toIso8601String(),
+      }).eq('id', quot.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✓ Quotation approved successfully!'), backgroundColor: AppColors.success),
+        );
+      }
+      _loadQuotations();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error approving quotation: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectQuotation(Quotation quot) async {
+    final reasonCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject Quotation'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Specify reason for rejecting quotation ${quot.quotationNumber.isNotEmpty ? quot.quotationNumber : quot.id}:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                hintText: 'Enter rejection notes...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reject', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('quotations').update({
+        'status': 'rejected',
+        'rejection_reason': reasonCtrl.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', quot.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quotation rejected.'), backgroundColor: AppColors.error),
+        );
+      }
+      _loadQuotations();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error rejecting quotation: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
   void _openCreateQuotation({Quotation? initialQuotation}) async {
+    final profile = ref.read(currentProfileProvider);
+    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
+    final isWon = widget.lead.status == 'Won';
+    if (isWon && !isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customer is Won. Creating new quotations or revisions is blocked.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     if (!widget.canCreateQuotation) return;
     await Navigator.push(
       context,
@@ -2746,8 +2884,12 @@ class _LeadQuotationsSectionState
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
-    final isLeadClosed = widget.lead.status == 'Won' || widget.lead.status == 'Lost';
+    final profile = ref.watch(currentProfileProvider);
+    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
+    final canApprove = (profile?.primaryRole.canApproveQuotations ?? false) || (profile?.roles.any((r) => r.canApproveQuotations) ?? false);
+    final isSalesExecutive = !canApprove;
     final isWon = widget.lead.status == 'Won';
+    final isLeadClosed = (isWon || widget.lead.status == 'Lost') && !isAdmin;
 
     return Card(
       elevation: 0,
@@ -3008,16 +3150,62 @@ class _LeadQuotationsSectionState
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          OutlinedButton.icon(
-                            onPressed: () => _viewPdf(quot),
-                            icon: const Icon(Icons.picture_as_pdf, size: 14),
-                            label: const Text('View PDF', style: TextStyle(fontSize: 12)),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              minimumSize: const Size(60, 30),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          if (canApprove && quot.status == QuotationStatus.pendingApproval) ...[
+                            ElevatedButton.icon(
+                              onPressed: () => _approveQuotation(quot),
+                              icon: const Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
+                              label: const Text('Approve', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.success,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                minimumSize: const Size(60, 30),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _rejectQuotation(quot),
+                              icon: const Icon(Icons.cancel_outlined, size: 14, color: AppColors.error),
+                              label: const Text('Reject', style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.bold)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.error),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                minimumSize: const Size(60, 30),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          if (isSalesExecutive && quot.status != QuotationStatus.confirmed)
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Quotation PDF is locked until approved by Sales Head / Admin.'),
+                                    backgroundColor: AppColors.warning,
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.lock_outline, size: 14, color: AppColors.textDisabled),
+                              label: const Text('PDF Locked', style: TextStyle(fontSize: 12, color: AppColors.textDisabled)),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                minimumSize: const Size(60, 30),
+                                side: const BorderSide(color: AppColors.border),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                            )
+                          else
+                            OutlinedButton.icon(
+                              onPressed: () => _viewPdf(quot),
+                              icon: const Icon(Icons.picture_as_pdf, size: 14),
+                              label: const Text('View PDF', style: TextStyle(fontSize: 12)),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                minimumSize: const Size(60, 30),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                            ),
                           if (widget.canCreateQuotation && !isLeadClosed) ...[
                             const SizedBox(width: 8),
                             ElevatedButton.icon(

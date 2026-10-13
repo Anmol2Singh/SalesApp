@@ -137,8 +137,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           onPressed: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
+            } else if (context.canPop()) {
+              context.pop();
             } else {
-              context.go(AppRoutes.adminDashboard);
+              final profile = ref.read(currentProfileProvider);
+              context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
             }
           },
         ),

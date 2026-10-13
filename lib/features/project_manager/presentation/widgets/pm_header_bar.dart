@@ -9,7 +9,7 @@ import '../../data/models/pm_company.dart';
 import '../../../../core/providers/sidebar_provider.dart';
 import 'pm_app_settings_dialog.dart';
 
-class PmHeaderBar extends ConsumerWidget {
+class PmHeaderBar extends ConsumerStatefulWidget {
   final String searchQuery;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback? onRefresh;
@@ -22,7 +22,40 @@ class PmHeaderBar extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PmHeaderBar> createState() => _PmHeaderBarState();
+}
+
+class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.searchQuery);
+    _focusNode.addListener(() {
+      if (mounted) setState(() => _isFocused = _focusNode.hasFocus);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant PmHeaderBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.searchQuery != _controller.text) {
+      _controller.text = widget.searchQuery;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final pm = context.pm;
     final mode = ref.watch(pmRecordModeProvider);
     final isPurchase = mode.isPurchase;
@@ -41,10 +74,11 @@ class PmHeaderBar extends ConsumerWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 1050;
+          final isUltraWide = constraints.maxWidth >= 1250;
+          final isMedium = constraints.maxWidth >= 720 && constraints.maxWidth < 1250;
 
           // 1. Company Logo & Title Block
           final companyBlock = Row(
@@ -68,62 +102,68 @@ class PmHeaderBar extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               // Name + Subtitle
-              PopupMenuButton<PmCompany>(
-                initialValue: activeCompany,
-                tooltip: 'Switch Company',
-                onSelected: (comp) {
-                  ref.read(pmActiveCompanyProvider.notifier).setCompany(comp);
-                },
-                itemBuilder: (ctx) => companies.map((comp) {
-                  return PopupMenuItem<PmCompany>(
-                    value: comp,
-                    child: Row(
-                      children: [
-                        const Icon(LucideIcons.building2, size: 16, color: Color(0xFF005CE6)),
-                        const SizedBox(width: 8),
-                        Text(
-                          comp.name,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          activeCompany.name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                            letterSpacing: -0.2,
+              Flexible(
+                child: PopupMenuButton<PmCompany>(
+                  initialValue: activeCompany,
+                  tooltip: 'Switch Company',
+                  onSelected: (comp) {
+                    ref.read(pmActiveCompanyProvider.notifier).setCompany(comp);
+                  },
+                  itemBuilder: (ctx) => companies.map((comp) {
+                    return PopupMenuItem<PmCompany>(
+                      value: comp,
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.building2, size: 16, color: Color(0xFF005CE6)),
+                          const SizedBox(width: 8),
+                          Text(
+                            comp.name,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          LucideIcons.chevronDown,
-                          size: 15,
-                          color: Color(0xFF64748B),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'TRADING & SUPPLY PROJECT MANAGER',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF005CE6),
-                        letterSpacing: 0.6,
+                        ],
                       ),
-                    ),
-                  ],
+                    );
+                  }).toList(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              activeCompany.name,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: -0.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            LucideIcons.chevronDown,
+                            size: 15,
+                            color: Color(0xFF64748B),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'TRADING & SUPPLY PROJECT MANAGER',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF005CE6),
+                          letterSpacing: 0.6,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -226,83 +266,117 @@ class PmHeaderBar extends ConsumerWidget {
             ),
           );
 
-          // 3. Search Bar Pill
-          final searchBar = Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                const Icon(
-                  LucideIcons.search,
-                  size: 15,
-                  color: Color(0xFF94A3B8),
+          // 3. Search Bar Pill (Entire pill clickable & focused, crisp white, full text space)
+          final searchBar = GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _focusNode.requestFocus(),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(9999),
+                border: Border.all(
+                  color: _isFocused ? const Color(0xFF005CE6) : const Color(0xFFCBD5E1),
+                  width: _isFocused ? 1.5 : 1.0,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: TextEditingController(text: searchQuery)
-                      ..selection = TextSelection.fromPosition(
-                        TextPosition(offset: searchQuery.length),
+                boxShadow: _isFocused
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF005CE6).withOpacity(0.12),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.search,
+                    size: 16,
+                    color: _isFocused ? const Color(0xFF005CE6) : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      onChanged: widget.onSearchChanged,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0F172A),
                       ),
-                    onChanged: onSearchChanged,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF0F172A),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Search ${activeCompany.name} (name, phone, ...)',
-                      hintStyle: const TextStyle(
-                        fontSize: 12.5,
-                        color: Color(0xFF94A3B8),
+                      decoration: InputDecoration(
+                        hintText: 'Search ${activeCompany.name} (name, phone, site)...',
+                        hintStyle: const TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                ),
-                if (searchQuery.isNotEmpty)
-                  GestureDetector(
-                    onTap: () => onSearchChanged(''),
-                    child: const Icon(LucideIcons.x, size: 14, color: Color(0xFF94A3B8)),
-                  ),
-              ],
+                  if (_controller.text.isNotEmpty)
+                    InkWell(
+                      onTap: () {
+                        _controller.clear();
+                        widget.onSearchChanged('');
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(LucideIcons.x, size: 14, color: Color(0xFF64748B)),
+                      ),
+                    ),
+                ],
+              ),
             ),
           );
 
           // 4. Daily Transaction Entry Button
-          final dailyTxButton = InkWell(
+          Widget buildDailyTxButton({bool isMobile = false}) => InkWell(
             onTap: () => context.push('/pm/daily-transactions'),
             borderRadius: BorderRadius.circular(9999),
             child: Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 40,
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 16),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(9999),
                 border: Border.all(color: const Color(0xFFBFDBFE)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
+                  const Icon(
                     LucideIcons.receiptText,
                     size: 15,
                     color: Color(0xFF005CE6),
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Daily Transaction Entry',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF005CE6),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      isMobile ? 'Daily Entry' : 'Daily Transaction Entry',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF005CE6),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -311,12 +385,13 @@ class PmHeaderBar extends ConsumerWidget {
           );
 
           // 5. Add Customer / Vendor Button
-          final addCustomerButton = InkWell(
+          Widget buildAddCustomerButton({bool isMobile = false}) => InkWell(
             onTap: () => context.push('/pm/projects/new${isPurchase ? "?mode=purchase" : ""}'),
             borderRadius: BorderRadius.circular(9999),
             child: Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              height: 40,
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: const Color(0xFF005CE6),
                 borderRadius: BorderRadius.circular(9999),
@@ -330,19 +405,24 @@ class PmHeaderBar extends ConsumerWidget {
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(
                     LucideIcons.plus,
-                    size: 16,
+                    size: 15,
                     color: Colors.white,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    isPurchase ? 'Add Vendor' : 'Add Customer',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                  Flexible(
+                    child: Text(
+                      isPurchase ? 'Add Vendor' : 'Add Customer',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -350,7 +430,7 @@ class PmHeaderBar extends ConsumerWidget {
             ),
           );
 
-          // 0. Collapse/Expand Left Navigation Bar Button (Requirement 4)
+          // 0. Collapse/Expand Left Navigation Bar Button
           final isSidebarCollapsed = ref.watch(sidebarCollapsedProvider);
           final collapseButton = Tooltip(
             message: isSidebarCollapsed ? 'Expand Navigation' : 'Collapse Navigation (Icons Only)',
@@ -358,8 +438,8 @@ class PmHeaderBar extends ConsumerWidget {
               onTap: () => ref.read(sidebarCollapsedProvider.notifier).state = !isSidebarCollapsed,
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                height: 38,
-                width: 38,
+                height: 40,
+                width: 40,
                 decoration: BoxDecoration(
                   color: isSidebarCollapsed ? const Color(0xFFEFF6FF) : Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -378,7 +458,7 @@ class PmHeaderBar extends ConsumerWidget {
             ),
           );
 
-          // 6. Settings gear button (Requirement 1: App Settings & Company Management)
+          // 6. Settings gear button
           final settingsButton = Tooltip(
             message: 'App Settings & Company Management',
             child: InkWell(
@@ -388,8 +468,8 @@ class PmHeaderBar extends ConsumerWidget {
               ),
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                height: 38,
-                width: 38,
+                height: 40,
+                width: 40,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -406,7 +486,8 @@ class PmHeaderBar extends ConsumerWidget {
             ),
           );
 
-          if (isWide) {
+          // 1. Desktop Ultra-Wide (>= 1250px): Single clean row with ample space
+          if (isUltraWide) {
             return Row(
               children: [
                 collapseButton,
@@ -417,43 +498,68 @@ class PmHeaderBar extends ConsumerWidget {
                 const SizedBox(width: 16),
                 Expanded(child: searchBar),
                 const SizedBox(width: 16),
-                dailyTxButton,
+                buildDailyTxButton(isMobile: false),
                 const SizedBox(width: 12),
-                addCustomerButton,
+                buildAddCustomerButton(isMobile: false),
                 const SizedBox(width: 10),
                 settingsButton,
               ],
             );
           }
 
-          // Responsive Wrap layout for smaller screen widths
-          return Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            alignment: WrapAlignment.spaceBetween,
+          // 2. Medium Screens (720px - 1249px): 2 clean rows so search bar is not squashed
+          if (isMedium) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    collapseButton,
+                    const SizedBox(width: 10),
+                    companyBlock,
+                    const Spacer(),
+                    modeSwitcher,
+                    const SizedBox(width: 10),
+                    settingsButton,
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: searchBar),
+                    const SizedBox(width: 12),
+                    buildDailyTxButton(isMobile: false),
+                    const SizedBox(width: 8),
+                    buildAddCustomerButton(isMobile: false),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          // 3. Mobile Screens (< 720px): Adaptive stacked layout with touch-friendly targets
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   collapseButton,
                   const SizedBox(width: 10),
-                  companyBlock,
+                  Expanded(child: companyBlock),
+                  settingsButton,
                 ],
               ),
-              modeSwitcher,
-              SizedBox(
-                width: constraints.maxWidth > 550 ? 300 : constraints.maxWidth,
-                child: searchBar,
-              ),
+              const SizedBox(height: 10),
+              Center(child: modeSwitcher),
+              const SizedBox(height: 10),
+              searchBar,
+              const SizedBox(height: 10),
               Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  dailyTxButton,
+                  Expanded(child: buildDailyTxButton(isMobile: true)),
                   const SizedBox(width: 8),
-                  addCustomerButton,
-                  const SizedBox(width: 8),
-                  settingsButton,
+                  Expanded(child: buildAddCustomerButton(isMobile: true)),
                 ],
               ),
             ],

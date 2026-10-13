@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -81,6 +82,36 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
     }
   }
 
+  void _openFullScreenLedger() {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Ledger Full Screen',
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 280),
+      transitionBuilder: (context, anim1, anim2, child) {
+        final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic);
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
+      pageBuilder: (ctx, anim1, anim2) {
+        return _FullScreenLedgerDialog(
+          recordId: widget.recordId,
+          project: widget.project,
+          isPurchase: widget.isPurchase,
+          onRefresh: widget.onRefresh,
+          onAddEdit: (entry) => _showAddEditDialog(entry),
+          onDelete: (id) => _deleteEntry(id),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pm = context.pm;
@@ -106,50 +137,35 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
           totalReceived += e.paymentReceived;
         }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header Row matching Screenshot 2
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Ledger Records',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Detailed financial history for this project',
-                        style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                      ),
-                    ],
+        return LayoutBuilder(
+          builder: (context, cardConstraints) {
+            final isNarrow = cardConstraints.maxWidth < 750;
+
+            final titleWidget = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ledger Records',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.3,
                   ),
-                  Wrap(
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Detailed financial history for this project',
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                ),
+              ],
+            );
+
+            final actionsWrap = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
                       // Export PDF
                       InkWell(
                         onTap: () async {
@@ -236,6 +252,27 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                           ),
                         ),
                       ),
+                      // Full Screen Button
+                      InkWell(
+                        onTap: () => _openFullScreenLedger(),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(9999),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.maximize2, size: 14, color: Color(0xFF0F172A)),
+                              SizedBox(width: 6),
+                              Text('Full Screen', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                            ],
+                          ),
+                        ),
+                      ),
                       // + Add New Entry Button
                       InkWell(
                         onTap: () => _showAddEditDialog(),
@@ -264,11 +301,40 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                         ),
                       ),
                     ],
-                  ),
-                ],
-              ),
+                  );
 
-              const SizedBox(height: 16),
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (isNarrow) ...[
+                      titleWidget,
+                      const SizedBox(height: 12),
+                      actionsWrap,
+                    ] else
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          titleWidget,
+                          actionsWrap,
+                        ],
+                      ),
+                    const SizedBox(height: 16),
 
               if (entries.isEmpty)
                 Container(
@@ -297,15 +363,27 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                   ),
                 )
               else
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                    headingRowHeight: 44,
-                    dataRowMinHeight: 48,
-                    dataRowMaxHeight: 52,
-                    horizontalMargin: 16,
-                    columnSpacing: 22,
+                LayoutBuilder(
+                  builder: (context, ledgerConstraints) {
+                    final double availableWidth = ledgerConstraints.maxWidth;
+                    // 11 columns, 10 gaps. Estimated base content width ~ 780.
+                    const baseSpacing = 20.0;
+                    double dynamicSpacing = baseSpacing;
+                    if (availableWidth > 780) {
+                      dynamicSpacing = math.max(baseSpacing, (availableWidth - 780) / 10 + 16.0);
+                    }
+
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: availableWidth),
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                          headingRowHeight: 44,
+                          dataRowMinHeight: 48,
+                          dataRowMaxHeight: 52,
+                          horizontalMargin: 16,
+                          columnSpacing: dynamicSpacing,
                     columns: const [
                       DataColumn(label: Text('SR', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
                       DataColumn(label: Text('DATE', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
@@ -499,9 +577,15 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                     ],
                   ),
                 ),
+              );
+            },
+          ),
             ],
           ),
-        );
+        ),
+      );
+    },
+  );
       },
     );
   }
@@ -1041,6 +1125,370 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FullScreenLedgerDialog extends ConsumerWidget {
+  final String recordId;
+  final dynamic project;
+  final bool isPurchase;
+  final VoidCallback onRefresh;
+  final void Function(PmLedgerEntry? entry) onAddEdit;
+  final Future<void> Function(String id) onDelete;
+
+  const _FullScreenLedgerDialog({
+    required this.recordId,
+    required this.project,
+    required this.isPurchase,
+    required this.onRefresh,
+    required this.onAddEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entriesAsync = ref.watch(pmLedgerEntriesProvider((id: recordId, isPurchase: isPurchase)));
+    final activeCompany = ref.watch(pmActiveCompanyProvider);
+    final currencyFormat = NumberFormat('#,##,##0', 'en_IN');
+    final dateFormat = DateFormat('dd/MM/yyyy');
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          children: [
+            // Top Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF005CE6).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(LucideIcons.receipt, size: 20, color: Color(0xFF005CE6)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              project.siteName ?? 'Ledger Records',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE0F2FE),
+                                borderRadius: BorderRadius.circular(9999),
+                              ),
+                              child: Text(
+                                '#${project.idNo}',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Full Screen Ledger Record View • ${activeCompany.name}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      // Add Entry
+                      InkWell(
+                        onTap: () => onAddEdit(null),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF005CE6),
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.plus, size: 14, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text('+ Add Entry', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Close / Minimize
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(9999),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.minimize2, size: 14, color: Color(0xFF0F172A)),
+                              SizedBox(width: 6),
+                              Text('Exit Full Screen', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Body
+            Expanded(
+              child: entriesAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Center(child: Text('Error: $err')),
+                data: (entries) {
+                  if (entries.isEmpty) {
+                    return const Center(child: Text('No ledger entries recorded yet.'));
+                  }
+
+                  double totalSalesM = 0;
+                  double totalMOutward = 0;
+                  double totalOrderVal = 0;
+                  double totalExtraWork = 0;
+                  double totalReceived = 0;
+
+                  for (final e in entries) {
+                    totalSalesM += e.salesMValue;
+                    totalMOutward += e.mOutwardValue;
+                    totalOrderVal += e.orderValue;
+                    totalExtraWork += e.extraWorkValue;
+                    totalReceived += e.paymentReceived;
+                  }
+
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                            headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                            headingRowHeight: 46,
+                            dataRowMinHeight: 48,
+                            dataRowMaxHeight: 52,
+                            horizontalMargin: 20,
+                            columnSpacing: 28,
+                            columns: const [
+                              DataColumn(label: Text('SR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(label: Text('DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(label: Text('PAYMENT TYPE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(label: Text('PARTICULARS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(label: Text('BILL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(numeric: true, label: Text('SALES M', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(numeric: true, label: Text('M OUTWARD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(numeric: true, label: Text('ORDER VAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(numeric: true, label: Text('EXTRA WRK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(numeric: true, label: Text('RECEIVED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                              DataColumn(label: Text('ACTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                            ],
+                            rows: [
+                              ...entries.map((e) {
+                                final isReceipt = (e.particulars ?? '').toLowerCase().contains('advance') ||
+                                    (e.particulars ?? '').toLowerCase().contains('receipt') ||
+                                    e.paymentReceived > 0;
+
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text('${e.srNo}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)))),
+                                    DataCell(Text(dateFormat.format(e.date), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
+                                    DataCell(
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE0F2FE),
+                                          borderRadius: BorderRadius.circular(9999),
+                                        ),
+                                        child: Text(
+                                          (e.paymentType ?? 'ONLINE').toUpperCase(),
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF0284C7)),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 240),
+                                        child: Text(
+                                          e.particulars ?? '-',
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: isReceipt ? const Color(0xFF0284C7) : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(9999),
+                                          border: isReceipt ? null : Border.all(color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: Text(
+                                          isReceipt ? 'RECEIPT' : 'PENDING',
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: isReceipt ? Colors.white : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Container(
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEFCE8),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          e.salesMValue > 0 ? '₹${currencyFormat.format(e.salesMValue)}' : '',
+                                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Container(
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEFCE8),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          e.mOutwardValue > 0 ? '₹${currencyFormat.format(e.mOutwardValue)}' : '',
+                                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        e.orderValue > 0 ? '₹${currencyFormat.format(e.orderValue)}' : '',
+                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        e.extraWorkValue > 0 ? '₹${currencyFormat.format(e.extraWorkValue)}' : '',
+                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Container(
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: e.paymentReceived > 0 ? const Color(0xFFF0FDF4) : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          e.paymentReceived > 0 ? '₹${currencyFormat.format(e.paymentReceived)}' : '',
+                                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF16A34A)),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(LucideIcons.pencil, size: 15, color: Color(0xFF64748B)),
+                                            onPressed: () => onAddEdit(e),
+                                            tooltip: 'Edit',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(LucideIcons.trash2, size: 15, color: Color(0xFFEF4444)),
+                                            onPressed: () => onDelete(e.id),
+                                            tooltip: 'Delete',
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }),
+                              DataRow(
+                                color: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                                cells: [
+                                  const DataCell(Text('')),
+                                  const DataCell(Text('')),
+                                  const DataCell(Text('')),
+                                  const DataCell(Text('')),
+                                  const DataCell(
+                                    Text(
+                                      'NET TOTALS:',
+                                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '₹${currencyFormat.format(totalSalesM)}.00',
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '₹${currencyFormat.format(totalMOutward)}.00',
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '₹${currencyFormat.format(totalOrderVal)}.00',
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '₹${currencyFormat.format(totalExtraWork)}.00',
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '₹${currencyFormat.format(totalReceived)}.00',
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: Color(0xFF16A34A)),
+                                    ),
+                                  ),
+                                  const DataCell(Text('')),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+              ),
+            ),
+          ],
         ),
       ),
     );

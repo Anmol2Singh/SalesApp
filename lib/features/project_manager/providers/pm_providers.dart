@@ -38,6 +38,26 @@ final pmDailyTransactionsRepositoryProvider = Provider<PmDailyTransactionsReposi
   return PmDailyTransactionsRepository(supabase);
 });
 
+final pmSalesStaffProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    final res = await supabase
+        .from('profiles')
+        .select('id, full_name, role, roles')
+        .eq('is_active', true)
+        .order('full_name', ascending: true);
+    final list = (res as List).cast<Map<String, dynamic>>();
+    return list.where((p) {
+      final role = (p['role'] ?? '').toString();
+      final roles = (p['roles'] is List) ? (p['roles'] as List).map((e) => e.toString()).toList() : [];
+      return role == 'sales' || role == 'salesHead' || role == 'admin' || role == 'manager' ||
+          roles.contains('sales') || roles.contains('salesHead') || roles.contains('admin') || roles.contains('manager');
+    }).toList();
+  } catch (e) {
+    return [];
+  }
+});
+
 // -----------------------------------------------------------------------------
 // PROJECTS (Sales Mode)
 // -----------------------------------------------------------------------------

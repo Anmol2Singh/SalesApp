@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/notification.dart';
 import '../../../core/router/app_router.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 
 class NotificationCenterScreen extends ConsumerWidget {
@@ -21,9 +22,18 @@ class NotificationCenterScreen extends ConsumerWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go(AppRoutes.adminDashboard),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else if (context.canPop()) {
+              context.pop();
+            } else {
+              final profile = ref.read(currentProfileProvider);
+              context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+            }
+          },
         ),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.navBarColor,
         title: const Text('Notifications'),
         actions: [
           TextButton(
