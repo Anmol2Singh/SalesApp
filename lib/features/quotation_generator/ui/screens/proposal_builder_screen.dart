@@ -81,6 +81,16 @@ class _ProposalBuilderScreenState extends ConsumerState<ProposalBuilderScreen> {
         return;
       }
 
+      final pName = dealItem.productName.toLowerCase();
+      if (!pName.contains('heat pump') && !pName.contains('heatpump')) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Quotation Generator is restricted strictly to Heat Pump products.\nSelected product "${dealItem!.productName}" is not eligible.';
+        });
+        return;
+      }
+
       _dealQuotation = dealItem;
 
       // 2. Check for local Hive draft

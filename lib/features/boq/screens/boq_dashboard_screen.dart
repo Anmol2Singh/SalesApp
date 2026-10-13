@@ -356,44 +356,55 @@ class BoqDashboardScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Unified 2x2 KPI Metric Cards Grid
-                        GridView.count(
-                          crossAxisCount: 2,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 1.34,
-                          children: [
-                            _buildMetricCard(
-                              title: 'Active\nDeals',
-                              count: activeDealsCount.toString(),
-                              icon: Icons.alt_route,
-                              color: const Color(0xFF2563EB),
-                              onTap: () => context.go(AppRoutes.pipelines),
-                            ),
-                            _buildMetricCard(
-                              title: 'Pending\n${pendingLabel.isEmpty ? "Actions" : pendingLabel}',
-                              count: pendingBoqDeals.length.toString(),
-                              icon: Icons.pending_actions_outlined,
-                              color: const Color(0xFFF59E0B),
-                              onTap: () => context.go(AppRoutes.pipelines),
-                            ),
-                            _buildMetricCard(
-                              title: 'Configured\nItems',
-                              count: totalBoqItems.toString(),
-                              icon: Icons.inventory_2_outlined,
-                              color: const Color(0xFF10B981),
-                              onTap: () => context.push('/boq/manage-items'),
-                            ),
-                            _buildMetricCard(
-                              title: 'Prospects\nToday',
-                              count: todayProspectsCount.toString(),
-                              icon: Icons.person_add_alt_1_outlined,
-                              color: const Color(0xFF8B5CF6),
-                              onTap: () => context.go('/crm/prospects'),
-                            ),
-                          ],
+                        // Responsive KPI Metric Cards Grid
+                        Builder(
+                          builder: (context) {
+                            final screenWidth = MediaQuery.of(context).size.width;
+                            final int kpiCols = screenWidth >= 1000 ? 4 : (screenWidth >= 600 ? 4 : 2);
+                            final double kpiRatio = screenWidth >= 1200
+                                ? 2.3
+                                : (screenWidth >= 1000
+                                    ? 2.0
+                                    : (screenWidth >= 600 ? 1.6 : 1.34));
+                            return GridView.count(
+                              crossAxisCount: kpiCols,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: kpiRatio,
+                              children: [
+                                _buildMetricCard(
+                                  title: 'Active\nDeals',
+                                  count: activeDealsCount.toString(),
+                                  icon: Icons.alt_route,
+                                  color: const Color(0xFF2563EB),
+                                  onTap: () => context.go(AppRoutes.pipelines),
+                                ),
+                                _buildMetricCard(
+                                  title: 'Pending\n${pendingLabel.isEmpty ? "Actions" : pendingLabel}',
+                                  count: pendingBoqDeals.length.toString(),
+                                  icon: Icons.pending_actions_outlined,
+                                  color: const Color(0xFFF59E0B),
+                                  onTap: () => context.go(AppRoutes.pipelines),
+                                ),
+                                _buildMetricCard(
+                                  title: 'Configured\nItems',
+                                  count: totalBoqItems.toString(),
+                                  icon: Icons.inventory_2_outlined,
+                                  color: const Color(0xFF10B981),
+                                  onTap: () => context.push('/boq/manage-items'),
+                                ),
+                                _buildMetricCard(
+                                  title: 'Prospects\nToday',
+                                  count: todayProspectsCount.toString(),
+                                  icon: Icons.person_add_alt_1_outlined,
+                                  color: const Color(0xFF8B5CF6),
+                                  onTap: () => context.go('/crm/prospects'),
+                                ),
+                              ],
+                            );
+                          },
                         ),
 
                         const SizedBox(height: 24),

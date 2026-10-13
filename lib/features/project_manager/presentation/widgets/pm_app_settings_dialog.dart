@@ -121,11 +121,12 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
 
     return Dialog(
       backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 680),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -133,21 +134,28 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(LucideIcons.settings, size: 20, color: Color(0xFF005CE6)),
-                      SizedBox(width: 8),
-                      Text(
-                        'App Settings & Company Management',
-                        style: TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.2,
+                  const Expanded(
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.settings, size: 20, color: Color(0xFF005CE6)),
+                        SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'App Settings & Company Management',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(LucideIcons.x, size: 18, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.of(context).pop(),
@@ -156,7 +164,7 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               Expanded(
                 child: SingleChildScrollView(
@@ -319,15 +327,24 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Account Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                                    SizedBox(height: 2),
-                                    Text('Manage your credentials or system users', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                                  ],
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Account Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Manage your credentials or system users',
+                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                const SizedBox(width: 8),
                                 Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     InkWell(
                                       onTap: () {
@@ -336,16 +353,16 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                       },
                                       borderRadius: BorderRadius.circular(9999),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFEFF6FF),
                                           borderRadius: BorderRadius.circular(9999),
                                           border: Border.all(color: const Color(0xFFBFDBFE)),
                                         ),
-                                        child: const Text('Users', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF005CE6))),
+                                        child: const Text('Users', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF005CE6))),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     InkWell(
                                       onTap: () {
                                         ScaffoldMessenger.of(context).showSnackBar(
@@ -354,13 +371,13 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                       },
                                       borderRadius: BorderRadius.circular(9999),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
                                           borderRadius: BorderRadius.circular(9999),
                                           border: Border.all(color: const Color(0xFFCBD5E1)),
                                         ),
-                                        child: const Text('Change', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                        child: const Text('Change', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                                       ),
                                     ),
                                   ],
@@ -408,14 +425,22 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('PDF Export Columns', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                                SizedBox(height: 2),
-                                Text('Choose columns for Directory PDF', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                              ],
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('PDF Export Columns', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Choose columns for Directory PDF',
+                                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             InkWell(
                               onTap: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -424,13 +449,13 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                               },
                               borderRadius: BorderRadius.circular(9999),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(9999),
                                   border: Border.all(color: const Color(0xFFCBD5E1)),
                                 ),
-                                child: const Text('Configure', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                child: const Text('Configure', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                               ),
                             ),
                           ],

@@ -41,8 +41,8 @@ class CustomerDetailScreen extends ConsumerWidget {
                 items: [
                   BreadcrumbItem(
                     label: 'Dashboard',
-                    route: profile?.primaryRole == UserRole.admin
-                        ? AppRoutes.adminDashboard
+                    route: profile != null
+                        ? getRoleHome(profile.primaryRole)
                         : AppRoutes.salesDashboard,
                   ),
                   BreadcrumbItem(

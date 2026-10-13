@@ -26,10 +26,18 @@ final allCustomersForReportProvider = FutureProvider<List<Customer>>((ref) async
     return [];
   }
 
-  final response = await supabase
+  final canViewAll = isAdmin || isSalesHead || isManager || profile.primaryRole.canViewAllCustomers;
+
+  var query = supabase
       .from('customers')
       .select('*')
-      .order('customer_name', ascending: true);
+      .isFilter('deleted_at', null);
+
+  if (!canViewAll) {
+    query = query.or('created_by.eq.${profile.id},assigned_to.eq.${profile.id}');
+  }
+
+  final response = await query.order('customer_name', ascending: true);
 
   return (response as List).map((c) => Customer.fromJson(c)).toList();
 });
@@ -68,7 +76,7 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Customer 360 Report'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.navBarColor,
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),

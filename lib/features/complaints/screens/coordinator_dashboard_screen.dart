@@ -87,7 +87,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: AppColors.navBarColor,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -95,8 +95,11 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             onPressed: () {
               if (Navigator.of(context).canPop()) {
                 Navigator.of(context).pop();
+              } else if (context.canPop()) {
+                context.pop();
               } else {
-                context.go(AppRoutes.adminDashboard);
+                final profile = ref.read(currentProfileProvider);
+                context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
               }
             },
           ),
@@ -144,7 +147,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: AppColors.navBarColor,
           icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
           label: const Text(
             'Book Complaint',
@@ -162,7 +165,7 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
-            backgroundColor: const Color(0xFF0F172A),
+            backgroundColor: AppColors.navBarColor,
             elevation: 0,
             clipBehavior: Clip.antiAlias,
             automaticallyImplyLeading: false,

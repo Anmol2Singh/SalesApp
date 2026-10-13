@@ -29,30 +29,36 @@ class _AppShellState extends ConsumerState<AppShell> {
   String? _fieldOpsSubGroup; // 'installations', 'complaints'
   bool _pdfLibraryExpanded = false;
 
-  void _toggleGroup(String group) {
+  void _openGroup(String group, String route) {
+    final willExpand = _expandedGroup != group;
     setState(() {
-      if (_expandedGroup == group) {
-        _expandedGroup = null;
-      } else {
-        _expandedGroup = group;
-      }
+      _expandedGroup = willExpand ? group : null;
     });
+    if (willExpand && widget.currentRoute != route) {
+      context.go(route);
+    }
   }
 
-  void _toggleFieldOpsSubGroup(String subGroup) {
+  void _openFieldOpsSubGroup(String subGroup, String route) {
+    final willExpand = _fieldOpsSubGroup != subGroup;
     setState(() {
-      if (_fieldOpsSubGroup == subGroup) {
-        _fieldOpsSubGroup = null;
-      } else {
-        _fieldOpsSubGroup = subGroup;
-      }
+      _expandedGroup = 'fieldOps';
+      _fieldOpsSubGroup = willExpand ? subGroup : null;
     });
+    if (willExpand && widget.currentRoute != route) {
+      context.go(route);
+    }
   }
 
-  void _togglePdfLibrary() {
+  void _openPdfLibrary(String route) {
+    final willExpand = !_pdfLibraryExpanded;
     setState(() {
-      _pdfLibraryExpanded = !_pdfLibraryExpanded;
+      _expandedGroup = 'reports';
+      _pdfLibraryExpanded = willExpand;
     });
+    if (willExpand && widget.currentRoute != route) {
+      context.go(route);
+    }
   }
 
   String? _detectGroup(String route) {
@@ -266,49 +272,19 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   Widget _buildNavRail(BuildContext context, List<UserRole> roles, int unreadCount, bool isWide) {
-    // Determine nav rail colors based on current route
-    Color navBgColor = Theme.of(context).scaffoldBackgroundColor;
-    Color selectedTextColor = AppColors.primary;
-    Color unselectedTextColor = AppColors.textSecondary;
-    Color selectedBgColor = AppColors.primary.withValues(alpha: 0.1);
-    Color logoColor = AppColors.textPrimary;
-    Color logoIconBg = AppColors.primary.withValues(alpha: 0.1);
-    Color logoIcon = AppColors.primary;
-
-    if (widget.currentRoute == AppRoutes.adminDashboard || 
-        widget.currentRoute == AppRoutes.salesDashboard || 
-        widget.currentRoute.startsWith('/pipelines') || 
-        widget.currentRoute.startsWith('/customers') ||
-        widget.currentRoute.startsWith('/factory') || 
-        widget.currentRoute.startsWith('/purchase') || 
-        widget.currentRoute.startsWith('/amc') ||
-        widget.currentRoute.startsWith('/complaints') ||
-        widget.currentRoute == AppRoutes.dailyTasks ||
-        widget.currentRoute.startsWith('/heat-pump-quotations') ||
-        widget.currentRoute.startsWith('/pm')) {
-      navBgColor = const Color(0xFF1E1B4B);
-      selectedTextColor = Colors.white;
-      unselectedTextColor = Colors.white70;
-      selectedBgColor = Colors.white.withValues(alpha: 0.2);
-      logoColor = Colors.white;
-      logoIconBg = Colors.white.withValues(alpha: 0.2);
-      logoIcon = Colors.white;
-    } else if (widget.currentRoute.startsWith('/crm') || 
-               widget.currentRoute.startsWith('/admin') || 
-               widget.currentRoute.startsWith('/inventory') ||
-               widget.currentRoute.startsWith('/notifications')) {
-      navBgColor = AppColors.primary;
-      selectedTextColor = Colors.white;
-      unselectedTextColor = Colors.white70;
-      selectedBgColor = Colors.white.withValues(alpha: 0.2);
-      logoColor = Colors.white;
-      logoIconBg = Colors.white.withValues(alpha: 0.2);
-      logoIcon = Colors.white;
-    }
+    // Unified nav rail colors matching brand aesthetic across all pages
+    final Color navBgColor = AppColors.navBarColor;
+    const Color selectedTextColor = Colors.white;
+    const Color unselectedTextColor = Color(0xFF94A3B8); // Slate 400
+    final Color selectedBgColor = Colors.white.withValues(alpha: 0.18);
+    const Color logoColor = Colors.white;
+    final Color logoIconBg = Colors.white.withValues(alpha: 0.12);
+    const Color logoIcon = Colors.white;
 
     final hasAdmin = roles.any((r) => r == UserRole.admin);
     final hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
     final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
+    final hasSalesHead = roles.any((r) => r == UserRole.salesHead);
     final hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.sales || r == UserRole.salesHead);
     final hasComplaints = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead);
     final hasInstallations = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead || r == UserRole.salesHead);
@@ -317,6 +293,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     final isFactory = roles.any((r) => r == UserRole.factory);
     final isPurchase = roles.any((r) => r == UserRole.purchase);
     final hasAccounts = roles.any((r) => r == UserRole.accounts);
+
+    final canAccessProductInterests = hasAdminOrManager || hasSalesHead;
+    final canAccessPdfList = hasAdminOrManager;
+    final canAccessSearchPdf = hasAdminOrManager || hasSalesHead;
+    final canAccessPdfLibrary = canAccessPdfList || canAccessSearchPdf;
 
     // Expansion status & active flags
     final isCrmActive = widget.currentRoute.startsWith('/crm');
@@ -368,6 +349,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final isReportsExpanded = _expandedGroup == 'reports';
     final isCatalogExpanded = _expandedGroup == 'catalog';
     final isSidebarCollapsed = ref.watch(sidebarCollapsedProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark || navBgColor != Colors.white;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -457,47 +439,53 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _toggleGroup('crm'),
+                    onTap: () => _openGroup('crm', '/crm/dashboard'),
                   ),
-                  if (isCrmExpanded) ...[
-                    _buildChildTile(
-                      label: 'Dashboard',
-                      route: '/crm/dashboard',
-                      icon: const Icon(Icons.dashboard_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
+                  _AnimatedExpandableSection(
+                    isExpanded: isCrmExpanded,
+                    child: _buildChildContainer(
+                      isDark: isDark,
+                      children: [
+                        _buildChildTile(
+                          label: 'Dashboard',
+                          route: '/crm/dashboard',
+                          icon: const Icon(Icons.dashboard_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Prospects',
+                          route: '/crm/prospects',
+                          icon: const Icon(Icons.person_search_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Leads',
+                          route: '/crm/leads',
+                          icon: const Icon(Icons.trending_up_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        if (hasAdminOrManager || hasSales)
+                          _buildChildTile(
+                            label: 'Customers',
+                            route: '/crm/customers',
+                            icon: const Icon(Icons.people_outline),
+                            selectedTextColor: selectedTextColor,
+                            unselectedTextColor: unselectedTextColor,
+                            selectedBgColor: selectedBgColor,
+                          ),
+                      ],
                     ),
-                    _buildChildTile(
-                      label: 'Prospects',
-                      route: '/crm/prospects',
-                      icon: const Icon(Icons.person_search_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                    _buildChildTile(
-                      label: 'Leads',
-                      route: '/crm/leads',
-                      icon: const Icon(Icons.trending_up_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                    if (hasAdminOrManager || hasSales)
-                      _buildChildTile(
-                        label: 'Customers',
-                        route: '/crm/customers',
-                        icon: const Icon(Icons.people_outline),
-                        selectedTextColor: selectedTextColor,
-                        unselectedTextColor: unselectedTextColor,
-                        selectedBgColor: selectedBgColor,
-                      ),
-                  ],
+                  ),
                 ],
 
-                // 3. Sales Group (Expandable)
-                if ((hasAdminOrManager || hasSales || isBoq) && !hasAccounts) ...[
+                // 3. Sales Group (Expandable) - Not shown to BOQ per Item 9
+                if ((hasAdminOrManager || hasSales) && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Sales',
                     icon: isSalesActive ? Icons.point_of_sale : Icons.point_of_sale_outlined,
@@ -506,42 +494,49 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _toggleGroup('sales'),
+                    onTap: () => _openGroup('sales', AppRoutes.customers),
                   ),
-                  if (isSalesExpanded) ...[
-                    _buildChildTile(
-                      label: 'Customers',
-                      route: AppRoutes.customers,
-                      icon: const Icon(Icons.business_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
+                  _AnimatedExpandableSection(
+                    isExpanded: isSalesExpanded,
+                    child: _buildChildContainer(
+                      isDark: isDark,
+                      children: [
+                        _buildChildTile(
+                          label: 'Customers',
+                          route: AppRoutes.customers,
+                          icon: const Icon(Icons.business_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Deals',
+                          route: AppRoutes.pipelines,
+                          icon: const Icon(Icons.handshake_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Quotations',
+                          route: AppRoutes.heatPumpQuotationHub,
+                          icon: const Icon(Icons.request_quote_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        if (canAccessProductInterests)
+                          _buildChildTile(
+                            label: 'Product Interests',
+                            route: AppRoutes.productInterests,
+                            icon: const Icon(Icons.shopping_cart_outlined),
+                            selectedTextColor: selectedTextColor,
+                            unselectedTextColor: unselectedTextColor,
+                            selectedBgColor: selectedBgColor,
+                          ),
+                      ],
                     ),
-                    _buildChildTile(
-                      label: 'Deals',
-                      route: AppRoutes.pipelines,
-                      icon: const Icon(Icons.handshake_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                    _buildChildTile(
-                      label: 'Quotations',
-                      route: AppRoutes.heatPumpQuotationHub,
-                      icon: const Icon(Icons.request_quote_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                    _buildChildTile(
-                      label: 'Product Interests',
-                      route: AppRoutes.productInterests,
-                      icon: const Icon(Icons.shopping_cart_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                  ],
+                  ),
                 ],
 
                 // 4. Finance Group (Expandable)
@@ -554,18 +549,32 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _toggleGroup('finance'),
+                    onTap: () => _openGroup('finance', AppRoutes.projectManager),
                   ),
-                  if (isFinanceExpanded) ...[
-                    _buildChildTile(
-                      label: 'Projects',
-                      route: AppRoutes.projectManager,
-                      icon: const Icon(Icons.solar_power_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
+                  _AnimatedExpandableSection(
+                    isExpanded: isFinanceExpanded,
+                    child: _buildChildContainer(
+                      isDark: isDark,
+                      children: [
+                        _buildChildTile(
+                          label: 'Projects',
+                          route: AppRoutes.projectManager,
+                          icon: const Icon(Icons.solar_power_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Daily Transaction Entry',
+                          route: AppRoutes.pmDailyTransactions,
+                          icon: const Icon(Icons.receipt_long_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
 
                 // 5. Field Operations & Service Group (Expandable)
@@ -578,123 +587,141 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _toggleGroup('fieldOps'),
+                    onTap: () => _openGroup('fieldOps', hasInstallations ? AppRoutes.installationsDashboard : (hasComplaints ? AppRoutes.complaintsDashboard : AppRoutes.amcList)),
                   ),
-                  if (isFieldOpsExpanded) ...[
-                    // Sub-Group 1: Installations (Extending buttons)
-                    if (hasInstallations) ...[
-                      _buildSubGroupHeader(
-                        label: 'Installations',
-                        icon: isInstallationsActive ? Icons.build_circle : Icons.build_circle_outlined,
-                        isExpanded: _fieldOpsSubGroup == 'installations',
-                        isActive: isInstallationsActive,
-                        selectedTextColor: selectedTextColor,
-                        unselectedTextColor: unselectedTextColor,
-                        selectedBgColor: selectedBgColor,
-                        onTap: () => _toggleFieldOpsSubGroup('installations'),
-                      ),
-                      if (_fieldOpsSubGroup == 'installations') ...[
-                        _buildSubChildTile(
-                          label: 'Dashboard',
-                          route: AppRoutes.installationsDashboard,
-                          icon: const Icon(Icons.dashboard_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'All Installations',
-                          route: AppRoutes.installationsList,
-                          icon: const Icon(Icons.assignment_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'Assign Techs',
-                          route: AppRoutes.assignInstallation,
-                          icon: const Icon(Icons.assignment_ind_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'History',
-                          route: AppRoutes.installationHistory,
-                          icon: const Icon(Icons.history_outlined),
+                  _AnimatedExpandableSection(
+                    isExpanded: isFieldOpsExpanded,
+                    child: _buildChildContainer(
+                      isDark: isDark,
+                      children: [
+                        // Sub-Group 1: Installations (Extending buttons)
+                        if (hasInstallations) ...[
+                          _buildSubGroupHeader(
+                            label: 'Installations',
+                            icon: isInstallationsActive ? Icons.build_circle : Icons.build_circle_outlined,
+                            isExpanded: _fieldOpsSubGroup == 'installations',
+                            isActive: isInstallationsActive,
+                            selectedTextColor: selectedTextColor,
+                            unselectedTextColor: unselectedTextColor,
+                            selectedBgColor: selectedBgColor,
+                            onTap: () => _openFieldOpsSubGroup('installations', AppRoutes.installationsDashboard),
+                          ),
+                          _AnimatedExpandableSection(
+                            isExpanded: _fieldOpsSubGroup == 'installations',
+                            child: _buildSubChildContainer(
+                              isDark: isDark,
+                              children: [
+                                _buildSubChildTile(
+                                  label: 'Dashboard',
+                                  route: AppRoutes.installationsDashboard,
+                                  icon: const Icon(Icons.dashboard_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'All Installations',
+                                  route: AppRoutes.installationsList,
+                                  icon: const Icon(Icons.assignment_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'Assign Techs',
+                                  route: AppRoutes.assignInstallation,
+                                  icon: const Icon(Icons.assignment_ind_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'History',
+                                  route: AppRoutes.installationHistory,
+                                  icon: const Icon(Icons.history_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Sub-Group 2: Complaints (Extending buttons)
+                        if (hasComplaints) ...[
+                          _buildSubGroupHeader(
+                            label: 'Complaints',
+                            icon: isComplaintsActive ? Icons.support_agent : Icons.support_agent_outlined,
+                            isExpanded: _fieldOpsSubGroup == 'complaints',
+                            isActive: isComplaintsActive,
+                            selectedTextColor: selectedTextColor,
+                            unselectedTextColor: unselectedTextColor,
+                            selectedBgColor: selectedBgColor,
+                            onTap: () => _openFieldOpsSubGroup('complaints', AppRoutes.complaintsDashboard),
+                          ),
+                          _AnimatedExpandableSection(
+                            isExpanded: _fieldOpsSubGroup == 'complaints',
+                            child: _buildSubChildContainer(
+                              isDark: isDark,
+                              children: [
+                                _buildSubChildTile(
+                                  label: 'Dashboard',
+                                  route: AppRoutes.complaintsDashboard,
+                                  icon: const Icon(Icons.dashboard_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'All Complaints',
+                                  route: AppRoutes.complaintsList,
+                                  icon: const Icon(Icons.assignment_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'Assign Techs',
+                                  route: AppRoutes.assignTechnician,
+                                  icon: const Icon(Icons.assignment_ind_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'Technicians',
+                                  route: '/complaints/technicians',
+                                  icon: const Icon(Icons.engineering_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                                _buildSubChildTile(
+                                  label: 'History',
+                                  route: AppRoutes.serviceHistory,
+                                  icon: const Icon(Icons.history_outlined),
+                                  selectedTextColor: selectedTextColor,
+                                  unselectedTextColor: unselectedTextColor,
+                                  selectedBgColor: selectedBgColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Sub-item 3: AMC (Annual Maintenance)
+                        _buildChildTile(
+                          label: 'AMC (Annual Maintenance)',
+                          route: AppRoutes.amcList,
+                          icon: const Icon(Icons.shield_outlined),
                           selectedTextColor: selectedTextColor,
                           unselectedTextColor: unselectedTextColor,
                           selectedBgColor: selectedBgColor,
                         ),
                       ],
-                    ],
-
-                    // Sub-Group 2: Complaints (Extending buttons)
-                    if (hasComplaints) ...[
-                      _buildSubGroupHeader(
-                        label: 'Complaints',
-                        icon: isComplaintsActive ? Icons.support_agent : Icons.support_agent_outlined,
-                        isExpanded: _fieldOpsSubGroup == 'complaints',
-                        isActive: isComplaintsActive,
-                        selectedTextColor: selectedTextColor,
-                        unselectedTextColor: unselectedTextColor,
-                        selectedBgColor: selectedBgColor,
-                        onTap: () => _toggleFieldOpsSubGroup('complaints'),
-                      ),
-                      if (_fieldOpsSubGroup == 'complaints') ...[
-                        _buildSubChildTile(
-                          label: 'Dashboard',
-                          route: AppRoutes.complaintsDashboard,
-                          icon: const Icon(Icons.dashboard_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'All Complaints',
-                          route: AppRoutes.complaintsList,
-                          icon: const Icon(Icons.assignment_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'Assign Techs',
-                          route: AppRoutes.assignTechnician,
-                          icon: const Icon(Icons.assignment_ind_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'Technicians',
-                          route: '/complaints/technicians',
-                          icon: const Icon(Icons.engineering_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                        _buildSubChildTile(
-                          label: 'History',
-                          route: AppRoutes.serviceHistory,
-                          icon: const Icon(Icons.history_outlined),
-                          selectedTextColor: selectedTextColor,
-                          unselectedTextColor: unselectedTextColor,
-                          selectedBgColor: selectedBgColor,
-                        ),
-                      ],
-                    ],
-
-                    // Sub-item 3: AMC (Annual Maintenance)
-                    _buildChildTile(
-                      label: 'AMC (Annual Maintenance)',
-                      route: AppRoutes.amcList,
-                      icon: const Icon(Icons.shield_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
                     ),
-                  ],
+                  ),
                 ],
 
                 // 6. Reports & Analytics Group (Expandable)
@@ -707,63 +734,78 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _toggleGroup('reports'),
+                    onTap: () => _openGroup('reports', AppRoutes.dailyTasks),
                   ),
-                  if (isReportsExpanded) ...[
-                    _buildChildTile(
-                      label: 'Daily Tasks',
-                      route: AppRoutes.dailyTasks,
-                      icon: const Icon(Icons.fact_check_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
+                  _AnimatedExpandableSection(
+                    isExpanded: isReportsExpanded,
+                    child: _buildChildContainer(
+                      isDark: isDark,
+                      children: [
+                        _buildChildTile(
+                          label: 'Daily Tasks',
+                          route: AppRoutes.dailyTasks,
+                          icon: const Icon(Icons.fact_check_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: "Today's Report",
+                          route: AppRoutes.userActivityReport,
+                          icon: const Icon(Icons.bar_chart_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Customer 360 Report',
+                          route: AppRoutes.customerReport,
+                          icon: const Icon(Icons.contact_page_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        if (canAccessPdfLibrary) ...[
+                          _buildSubGroupHeader(
+                            label: 'PDF Library',
+                            icon: isPdfLibraryActive ? Icons.picture_as_pdf : Icons.picture_as_pdf_outlined,
+                            isExpanded: _pdfLibraryExpanded,
+                            isActive: isPdfLibraryActive,
+                            selectedTextColor: selectedTextColor,
+                            unselectedTextColor: unselectedTextColor,
+                            selectedBgColor: selectedBgColor,
+                            onTap: () => _openPdfLibrary(canAccessPdfList ? AppRoutes.pdfList : AppRoutes.searchPdf),
+                          ),
+                          _AnimatedExpandableSection(
+                            isExpanded: _pdfLibraryExpanded,
+                            child: _buildSubChildContainer(
+                              isDark: isDark,
+                              children: [
+                                if (canAccessPdfList)
+                                  _buildSubChildTile(
+                                    label: 'List PDFs',
+                                    route: AppRoutes.pdfList,
+                                    icon: const Icon(Icons.folder_copy_outlined),
+                                    selectedTextColor: selectedTextColor,
+                                    unselectedTextColor: unselectedTextColor,
+                                    selectedBgColor: selectedBgColor,
+                                  ),
+                                if (canAccessSearchPdf)
+                                  _buildSubChildTile(
+                                    label: 'Search PDF',
+                                    route: AppRoutes.searchPdf,
+                                    icon: const Icon(Icons.search_outlined),
+                                    selectedTextColor: selectedTextColor,
+                                    unselectedTextColor: unselectedTextColor,
+                                    selectedBgColor: selectedBgColor,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    _buildChildTile(
-                      label: "Today's Report",
-                      route: AppRoutes.userActivityReport,
-                      icon: const Icon(Icons.bar_chart_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                    _buildChildTile(
-                      label: 'Customer 360 Report',
-                      route: AppRoutes.customerReport,
-                      icon: const Icon(Icons.contact_page_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                    // PDF Library Sub-Group (Extending: List PDFs & Search PDF)
-                    _buildSubGroupHeader(
-                      label: 'PDF Library',
-                      icon: isPdfLibraryActive ? Icons.picture_as_pdf : Icons.picture_as_pdf_outlined,
-                      isExpanded: _pdfLibraryExpanded,
-                      isActive: isPdfLibraryActive,
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                      onTap: _togglePdfLibrary,
-                    ),
-                    if (_pdfLibraryExpanded) ...[
-                      _buildSubChildTile(
-                        label: 'List PDFs',
-                        route: AppRoutes.pdfList,
-                        icon: const Icon(Icons.folder_copy_outlined),
-                        selectedTextColor: selectedTextColor,
-                        unselectedTextColor: unselectedTextColor,
-                        selectedBgColor: selectedBgColor,
-                      ),
-                      _buildSubChildTile(
-                        label: 'Search PDF',
-                        route: AppRoutes.searchPdf,
-                        icon: const Icon(Icons.search_outlined),
-                        selectedTextColor: selectedTextColor,
-                        unselectedTextColor: unselectedTextColor,
-                        selectedBgColor: selectedBgColor,
-                      ),
-                    ],
-                  ],
+                  ),
                 ],
 
                 // 7. Alerts & Notifications
@@ -788,26 +830,32 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _toggleGroup('catalog'),
+                    onTap: () => _openGroup('catalog', AppRoutes.products),
                   ),
-                  if (isCatalogExpanded) ...[
-                    _buildChildTile(
-                      label: 'View Products',
-                      route: AppRoutes.products,
-                      icon: const Icon(Icons.grid_view_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
+                  _AnimatedExpandableSection(
+                    isExpanded: isCatalogExpanded,
+                    child: _buildChildContainer(
+                      isDark: isDark,
+                      children: [
+                        _buildChildTile(
+                          label: 'View Products',
+                          route: AppRoutes.products,
+                          icon: const Icon(Icons.grid_view_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                        _buildChildTile(
+                          label: 'Inventory',
+                          route: AppRoutes.inventory,
+                          icon: const Icon(Icons.warehouse_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
+                      ],
                     ),
-                    _buildChildTile(
-                      label: 'Inventory',
-                      route: AppRoutes.inventory,
-                      icon: const Icon(Icons.warehouse_outlined),
-                      selectedTextColor: selectedTextColor,
-                      unselectedTextColor: unselectedTextColor,
-                      selectedBgColor: selectedBgColor,
-                    ),
-                  ],
+                  ),
                 ],
 
                 // Specific role tasks for technicians, factory, purchase, boq
@@ -851,7 +899,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
                   ),
-                if (isBoq && !hasAdminOrManager)
+                if (isBoq && !hasAdminOrManager) ...[
                   _buildNavItemTile(
                     route: AppRoutes.boqDashboard,
                     label: 'BOQ',
@@ -861,6 +909,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
                   ),
+                  _buildNavItemTile(
+                    route: AppRoutes.pipelines,
+                    label: 'Deals',
+                    icon: const Icon(Icons.handshake_outlined),
+                    selectedIcon: const Icon(Icons.handshake),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
+                ],
               ],
             ),
           ),
@@ -926,34 +984,46 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      decoration: BoxDecoration(
-        color: isSelected ? selectedBgColor : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        dense: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        leading: IconTheme(
-          data: IconThemeData(
-            color: isSelected ? selectedTextColor : unselectedTextColor,
-            size: 20,
-          ),
-          child: isSelected ? selectedIcon : icon,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: isSelected ? selectedBgColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
         ),
-        title: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 250),
-          style: TextStyle(
-            fontFamily: 'Inter',
-            color: isSelected ? selectedTextColor : unselectedTextColor,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            fontSize: 14,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          hoverColor: Colors.white.withValues(alpha: 0.08),
+          onTap: () => context.go(route),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                IconTheme(
+                  data: IconThemeData(
+                    color: isSelected ? selectedTextColor : unselectedTextColor,
+                    size: 20,
+                  ),
+                  child: isSelected ? selectedIcon : icon,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: isSelected ? selectedTextColor : unselectedTextColor,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Text(label),
         ),
-        onTap: () => context.go(route),
       ),
     );
   }
@@ -969,6 +1039,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     required VoidCallback onTap,
   }) {
     final isCollapsed = ref.watch(sidebarCollapsedProvider);
+    final isHighlighted = isActive || isExpanded;
 
     if (isCollapsed) {
       return Tooltip(
@@ -977,7 +1048,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
-            color: isActive ? selectedBgColor.withValues(alpha: 0.12) : Colors.transparent,
+            color: isHighlighted ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: InkWell(
@@ -989,7 +1060,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: Icon(
                   icon,
                   size: 20,
-                  color: isActive ? selectedTextColor : unselectedTextColor,
+                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
               ),
             ),
@@ -998,40 +1069,54 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      decoration: BoxDecoration(
-        color: isActive ? selectedBgColor.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        dense: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        leading: Icon(
-          icon,
-          size: 20,
-          color: isActive ? selectedTextColor : unselectedTextColor,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: isHighlighted ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
         ),
-        title: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            color: isActive ? selectedTextColor : unselectedTextColor,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-            fontSize: 14,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          hoverColor: Colors.white.withValues(alpha: 0.08),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                      fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                    color: isHighlighted ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        trailing: AnimatedRotation(
-          turns: isExpanded ? 0.5 : 0.0,
-          duration: const Duration(milliseconds: 250),
-          child: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 18,
-            color: (isActive ? selectedTextColor : unselectedTextColor).withValues(alpha: 0.7),
-          ),
-        ),
-        onTap: onTap,
       ),
     );
   }
@@ -1052,7 +1137,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         message: label,
         waitDuration: const Duration(milliseconds: 200),
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           decoration: BoxDecoration(
             color: isSelected ? selectedBgColor : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
@@ -1065,7 +1150,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               child: Center(
                 child: IconTheme(
                   data: IconThemeData(
-                    color: isSelected ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.8),
+                    color: isSelected ? selectedTextColor : unselectedTextColor,
                     size: 16,
                   ),
                   child: icon,
@@ -1078,37 +1163,85 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(left: 32, right: 16, top: 1, bottom: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
         decoration: BoxDecoration(
           color: isSelected ? selectedBgColor : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected ? Border.all(color: Colors.white.withValues(alpha: 0.15)) : null,
         ),
-        child: ListTile(
-          dense: true,
-          visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          leading: IconTheme(
-            data: IconThemeData(
-              color: isSelected ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.8),
-              size: 16,
-            ),
-            child: icon,
-          ),
-          title: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              color: isSelected ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.85),
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 13,
-            ),
-          ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: Colors.white.withValues(alpha: 0.08),
           onTap: () => context.go(route),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                IconTheme(
+                  data: IconThemeData(
+                    color: isSelected ? selectedTextColor : unselectedTextColor,
+                    size: 17,
+                  ),
+                  child: icon,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: isSelected ? selectedTextColor : unselectedTextColor,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 13.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildChildContainer({
+    required bool isDark,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildSubChildContainer({
+    required bool isDark,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(left: 12, right: 4, top: 2, bottom: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
       ),
     );
   }
@@ -1124,6 +1257,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     required VoidCallback onTap,
   }) {
     final isCollapsed = ref.watch(sidebarCollapsedProvider);
+    final isHighlighted = isActive || isExpanded;
 
     if (isCollapsed) {
       return Tooltip(
@@ -1132,7 +1266,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
           decoration: BoxDecoration(
-            color: isActive ? selectedBgColor.withValues(alpha: 0.12) : Colors.transparent,
+            color: isHighlighted ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: InkWell(
@@ -1144,7 +1278,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: Icon(
                   icon,
                   size: 18,
-                  color: isActive ? selectedTextColor : unselectedTextColor,
+                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
               ),
             ),
@@ -1154,24 +1288,26 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(left: 24, right: 16, top: 1, bottom: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
         decoration: BoxDecoration(
-          color: isActive ? selectedBgColor.withValues(alpha: 0.12) : Colors.transparent,
+          color: isHighlighted ? Colors.white.withValues(alpha: 0.10) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
+          hoverColor: Colors.white.withValues(alpha: 0.08),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
                 Icon(
                   icon,
                   size: 17,
-                  color: isActive ? selectedTextColor : unselectedTextColor,
+                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1179,19 +1315,20 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isActive ? selectedTextColor : unselectedTextColor,
-                      fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                      color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                      fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
                       fontSize: 13.5,
                     ),
                   ),
                 ),
                 AnimatedRotation(
                   turns: isExpanded ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
                   child: Icon(
                     Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: (isActive ? selectedTextColor : unselectedTextColor).withValues(alpha: 0.7),
+                    size: 18,
+                    color: isHighlighted ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -1231,7 +1368,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               child: Center(
                 child: IconTheme(
                   data: IconThemeData(
-                    color: isSelected ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.8),
+                    color: isSelected ? selectedTextColor : unselectedTextColor,
                     size: 14,
                   ),
                   child: icon,
@@ -1244,24 +1381,25 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(left: 40, right: 16, top: 1, bottom: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
         decoration: BoxDecoration(
           color: isSelected ? selectedBgColor : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected ? Border.all(color: Colors.white.withValues(alpha: 0.15)) : null,
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
+          hoverColor: Colors.white.withValues(alpha: 0.08),
           onTap: () => context.go(route),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             child: Row(
               children: [
                 IconTheme(
                   data: IconThemeData(
-                    color: isSelected ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.8),
+                    color: isSelected ? selectedTextColor : unselectedTextColor,
                     size: 15,
                   ),
                   child: icon,
@@ -1272,9 +1410,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isSelected ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.85),
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 12.8,
+                      color: isSelected ? selectedTextColor : unselectedTextColor,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 13,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1607,3 +1745,30 @@ class _NavItem {
     required this.selectedIcon,
   });
 }
+
+class _AnimatedExpandableSection extends StatelessWidget {
+  final bool isExpanded;
+  final Widget child;
+
+  const _AnimatedExpandableSection({
+    required this.isExpanded,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topCenter,
+      clipBehavior: Clip.hardEdge,
+      child: isExpanded
+          ? child
+          : const SizedBox(
+              width: double.infinity,
+              height: 0,
+            ),
+    );
+  }
+}
+

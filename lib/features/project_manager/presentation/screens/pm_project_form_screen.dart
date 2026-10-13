@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/models/customer.dart';
+import '../../../admin/providers/inventory_provider.dart';
 import '../theme/pm_tokens.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../providers/pm_providers.dart';
@@ -30,6 +32,8 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
   Customer? _selectedCustomer;
   int? _idNo;
   String _orderType = 'Heat Pump';
+  DateTime _customerSinceDate = DateTime.now();
+
   final _siteNameCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
@@ -67,6 +71,25 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _siteNameCtrl.dispose();
+    _mobileCtrl.dispose();
+    _addressCtrl.dispose();
+    _firmNameCtrl.dispose();
+    _partyPrintNameCtrl.dispose();
+    _salesmanNameCtrl.dispose();
+    _hpTypeCtrl.dispose();
+    _hpQtyCtrl.dispose();
+    _tankTypeCtrl.dispose();
+    _tankQtyCtrl.dispose();
+    _glCtrl.dispose();
+    _orderValueCtrl.dispose();
+    _extraWorkValueCtrl.dispose();
+    _workRemarkCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     if (widget.editId != null) {
       setState(() => _isLoading = true);
@@ -81,6 +104,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           _firmNameCtrl.text = purchase.firmName ?? '';
           _partyPrintNameCtrl.text = purchase.partyPrintName ?? '';
           _orderValueCtrl.text = purchase.quotationValue.toStringAsFixed(0);
+          _customerSinceDate = purchase.createdAt;
         }
       } else {
         final project = await ref.read(pmProjectsRepositoryProvider).getProjectById(widget.editId!);
@@ -100,6 +124,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           _extraWorkValueCtrl.text = project.extraWorkValue.toStringAsFixed(0);
           _workRemarkCtrl.text = project.workRemark ?? '';
           _salesmanNameCtrl.text = project.salesmanName ?? '';
+          _customerSinceDate = project.createdAt;
         }
       }
       setState(() => _isLoading = false);
@@ -136,6 +161,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           'party_print_name': _partyPrintNameCtrl.text.trim(),
           'quotation_value': double.tryParse(_orderValueCtrl.text) ?? 0.0,
           'company_id': activeCompany.id,
+          'created_at': _customerSinceDate.toIso8601String(),
         };
 
         if (widget.editId != null) {
@@ -165,6 +191,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           'work_remark': _workRemarkCtrl.text.trim(),
           'salesman_name': _salesmanNameCtrl.text.trim(),
           'company_id': activeCompany.id,
+          'created_at': _customerSinceDate.toIso8601String(),
         };
 
         if (widget.editId != null) {
@@ -187,6 +214,293 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _pickInventoryItem({
+    required String title,
+    required TextEditingController targetCtrl,
+  }) async {
+    final inventoryItems = await ref.read(inventoryProvider.future);
+
+    if (!mounted) return;
+
+    showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = inventoryItems.where((item) {
+              if (searchQuery.trim().isEmpty) return true;
+              return item.itemName.toLowerCase().contains(searchQuery.toLowerCase());
+            }).toList();
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x, size: 18),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Select strictly from active inventory stock items',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search inventory items...',
+                      prefixIcon: const Icon(LucideIcons.search, size: 18),
+                      isDense: true,
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setModalState(() => searchQuery = val);
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                height: 380,
+                child: filtered.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No matching inventory items found.',
+                          style: TextStyle(color: Color(0xFF94A3B8)),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, i) {
+                          final item = filtered[i];
+                          final isSelected = targetCtrl.text == item.itemName;
+                          return ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            title: Text(
+                              item.itemName,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? const Color(0xFF005CE6) : const Color(0xFF0F172A),
+                              ),
+                            ),
+                            subtitle: Text(
+                              '₹${NumberFormat('#,##,##0', 'en_IN').format(item.price)}${item.uom != null ? ' / ${item.uom}' : ''}',
+                              style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                            ),
+                            trailing: isSelected
+                                ? const Icon(LucideIcons.check, size: 18, color: Color(0xFF005CE6))
+                                : null,
+                            onTap: () => Navigator.of(ctx).pop(item.itemName),
+                          );
+                        },
+                      ),
+              ),
+              actionsPadding: const EdgeInsets.all(12),
+              actions: [
+                if (targetCtrl.text.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(ctx).pop(''),
+                    icon: const Icon(LucideIcons.trash2, size: 14, color: Colors.red),
+                    label: const Text('Clear Selection', style: TextStyle(color: Colors.red, fontSize: 13)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((selected) {
+      if (selected != null) {
+        setState(() {
+          targetCtrl.text = selected;
+        });
+      }
+    });
+  }
+
+  void _pickSalesStaff() async {
+    final staffList = await ref.read(pmSalesStaffProvider.future);
+
+    if (!mounted) return;
+
+    showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = staffList.where((staff) {
+              final name = (staff['full_name'] ?? '').toString();
+              if (searchQuery.trim().isEmpty) return true;
+              return name.toLowerCase().contains(searchQuery.toLowerCase());
+            }).toList();
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Select Sales Executive / Head',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x, size: 18),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Search salesman & sales head names',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search by employee name...',
+                      prefixIcon: const Icon(LucideIcons.search, size: 18),
+                      isDense: true,
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setModalState(() => searchQuery = val);
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 440,
+                height: 360,
+                child: filtered.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No sales staff found.',
+                          style: TextStyle(color: Color(0xFF94A3B8)),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, i) {
+                          final staff = filtered[i];
+                          final name = (staff['full_name'] ?? '').toString();
+                          final role = (staff['role'] ?? '').toString();
+                          final isSelected = _salesmanNameCtrl.text == name;
+
+                          String roleDisplay = 'Sales Executive';
+                          Color roleColor = const Color(0xFF005CE6);
+                          if (role == 'salesHead') {
+                            roleDisplay = 'Sales Head';
+                            roleColor = const Color(0xFF7C3AED);
+                          } else if (role == 'admin') {
+                            roleDisplay = 'Admin';
+                            roleColor = const Color(0xFFDC2626);
+                          } else if (role == 'manager') {
+                            roleDisplay = 'Manager';
+                            roleColor = const Color(0xFF059669);
+                          }
+
+                          return ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            title: Text(
+                              name,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? const Color(0xFF005CE6) : const Color(0xFF0F172A),
+                              ),
+                            ),
+                            subtitle: Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: roleColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    roleDisplay,
+                                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: roleColor),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            trailing: isSelected
+                                ? const Icon(LucideIcons.check, size: 18, color: Color(0xFF005CE6))
+                                : null,
+                            onTap: () => Navigator.of(ctx).pop(name),
+                          );
+                        },
+                      ),
+              ),
+              actionsPadding: const EdgeInsets.all(12),
+              actions: [
+                if (_salesmanNameCtrl.text.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(ctx).pop(''),
+                    icon: const Icon(LucideIcons.trash2, size: 14, color: Colors.red),
+                    label: const Text('Clear Selection', style: TextStyle(color: Colors.red, fontSize: 13)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((selected) {
+      if (selected != null) {
+        setState(() {
+          _salesmanNameCtrl.text = selected;
+        });
+      }
+    });
   }
 
   @override
@@ -248,7 +562,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Phase 2 Customer Picker (Sales mode)
+                        // Customer Picker (Sales mode)
                         if (!widget.isPurchase) ...[
                           PmCard(
                             child: CustomerSearchPicker(
@@ -295,6 +609,23 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                                 ],
                               ),
                               const SizedBox(height: 12),
+                              // Customer Since Date Picker
+                              _buildDateField(
+                                'Customer Since Date',
+                                _customerSinceDate,
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _customerSinceDate,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (picked != null) {
+                                    setState(() => _customerSinceDate = picked);
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 12),
                               _buildTextField(
                                 widget.isPurchase ? 'Vendor / Company Name*' : 'Site / Project Name*',
                                 _siteNameCtrl,
@@ -316,7 +647,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
 
                         const SizedBox(height: 16),
 
-                        // Technical Specifications Card (Sales mode)
+                        // Technical Specifications Card (Strictly inventory items for HP & Tank Type)
                         if (!widget.isPurchase) ...[
                           PmCard(
                             child: Column(
@@ -326,17 +657,41 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                                 const SizedBox(height: 16),
                                 Row(
                                   children: [
-                                    Expanded(child: _buildTextField('Heat Pump Type', _hpTypeCtrl)),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _buildSearchablePickerField(
+                                        label: 'Heat Pump Type (Inventory)*',
+                                        value: _hpTypeCtrl.text,
+                                        hintText: 'Select Heat Pump model...',
+                                        onTap: () => _pickInventoryItem(title: 'Select Heat Pump Type', targetCtrl: _hpTypeCtrl),
+                                        onClear: _hpTypeCtrl.text.isNotEmpty ? () => setState(() => _hpTypeCtrl.clear()) : null,
+                                      ),
+                                    ),
                                     const SizedBox(width: 12),
-                                    Expanded(child: _buildTextField('HP Qty', _hpQtyCtrl, keyboardType: TextInputType.number)),
+                                    Expanded(
+                                      flex: 1,
+                                      child: _buildTextField('HP Qty', _hpQtyCtrl, keyboardType: TextInputType.number),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
                                 Row(
                                   children: [
-                                    Expanded(child: _buildTextField('Tank Type', _tankTypeCtrl)),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _buildSearchablePickerField(
+                                        label: 'Tank Type (Inventory)*',
+                                        value: _tankTypeCtrl.text,
+                                        hintText: 'Select Tank model...',
+                                        onTap: () => _pickInventoryItem(title: 'Select Tank Type', targetCtrl: _tankTypeCtrl),
+                                        onClear: _tankTypeCtrl.text.isNotEmpty ? () => setState(() => _tankTypeCtrl.clear()) : null,
+                                      ),
+                                    ),
                                     const SizedBox(width: 12),
-                                    Expanded(child: _buildTextField('Tank Qty', _tankQtyCtrl, keyboardType: TextInputType.number)),
+                                    Expanded(
+                                      flex: 1,
+                                      child: _buildTextField('Tank Qty', _tankQtyCtrl, keyboardType: TextInputType.number),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
@@ -379,7 +734,13 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                                 const SizedBox(height: 12),
                                 _buildTextField('Initial Work Remark', _workRemarkCtrl, maxLines: 2),
                                 const SizedBox(height: 12),
-                                _buildTextField('Salesman Name', _salesmanNameCtrl),
+                                _buildSearchablePickerField(
+                                  label: 'Salesman / Sales Head Name',
+                                  value: _salesmanNameCtrl.text,
+                                  hintText: 'Select Sales Executive or Sales Head...',
+                                  onTap: _pickSalesStaff,
+                                  onClear: _salesmanNameCtrl.text.isNotEmpty ? () => setState(() => _salesmanNameCtrl.clear()) : null,
+                                ),
                               ],
                             ],
                           ),
@@ -399,6 +760,98 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildDateField(
+    String label,
+    DateTime date, {
+    required VoidCallback onTap,
+  }) {
+    final pm = context.pm;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: pm.mutedForeground)),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(pm.radiusMd),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: pm.card,
+              borderRadius: BorderRadius.circular(pm.radiusMd),
+              border: Border.all(color: pm.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.calendar, size: 16, color: Color(0xFF005CE6)),
+                const SizedBox(width: 10),
+                Text(
+                  DateFormat('dd/MM/yyyy').format(date),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: pm.foreground),
+                ),
+                const Spacer(),
+                Text('Change', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: pm.primary)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchablePickerField({
+    required String label,
+    required String value,
+    required String hintText,
+    required VoidCallback onTap,
+    VoidCallback? onClear,
+  }) {
+    final pm = context.pm;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: pm.mutedForeground)),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(pm.radiusMd),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: pm.card,
+              borderRadius: BorderRadius.circular(pm.radiusMd),
+              border: Border.all(color: pm.border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value.isNotEmpty ? value : hintText,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: value.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
+                      color: value.isNotEmpty ? pm.foreground : pm.mutedForeground,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (value.isNotEmpty && onClear != null)
+                  GestureDetector(
+                    onTap: onClear,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(LucideIcons.x, size: 14, color: pm.mutedForeground),
+                    ),
+                  ),
+                Icon(LucideIcons.chevronDown, size: 16, color: pm.mutedForeground),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

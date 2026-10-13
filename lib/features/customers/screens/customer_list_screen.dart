@@ -82,7 +82,14 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        context.go(AppRoutes.adminDashboard);
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else if (context.canPop()) {
+          context.pop();
+        } else {
+          final profile = ref.read(currentProfileProvider);
+          context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+        }
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -252,7 +259,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
         children: [
           // Search bar (seamless extension of AppBar)
           Container(
-            color: AppColors.primary,
+            color: AppColors.navBarColor,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Center(
               child: ConstrainedBox(

@@ -734,7 +734,7 @@ class _QuotationGeneratorFormScreenState
               widget.existingQuotation != null ? 'Edit Quotation' : 'New Quotation',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.navBarColor,
             foregroundColor: Colors.white,
             elevation: 0,
             actions: [

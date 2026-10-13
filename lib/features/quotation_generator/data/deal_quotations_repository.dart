@@ -11,7 +11,7 @@ class DealQuotationsRepository {
 
   DealQuotationsRepository(this._supabase);
 
-  static const List<String> defaultProductFilter = [];
+  static const List<String> defaultProductFilter = ['Heat Pump', 'Heatpump'];
 
   /// Fetches deal quotations for all deals, newest first.
   Future<List<DealQuotationItem>> getDealQuotations({

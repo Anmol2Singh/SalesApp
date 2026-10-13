@@ -143,8 +143,8 @@ class PipelineDetailScreen extends ConsumerWidget {
             items: [
               BreadcrumbItem(
                 label: 'Dashboard',
-                route: profile?.primaryRole == UserRole.admin
-                    ? AppRoutes.adminDashboard
+                route: profile != null
+                    ? getRoleHome(profile.primaryRole)
                     : AppRoutes.salesDashboard,
               ),
               BreadcrumbItem(label: 'Deals', route: AppRoutes.pipelines),
@@ -479,7 +479,7 @@ class _PipelineDetailContent extends ConsumerWidget {
                   stepsConfig: pipeline.stepsConfig,
                   pdfUrls: {
                     if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.sales || profile?.primaryRole == UserRole.salesHead) ...{
-                      PipelineStep.quotation: (pipeline.quotation != null && (profile?.primaryRole != UserRole.sales || pipeline.quotation?.status == QuotationStatus.confirmed)) ? 'available' : null,
+                      PipelineStep.quotation: (pipeline.quotation != null && ((profile?.roles.any((r) => r.canApproveQuotations) ?? false) || pipeline.quotation?.status == QuotationStatus.confirmed)) ? 'available' : null,
                       PipelineStep.salesOrder: pipeline.salesOrder != null ? 'available' : null,
                       PipelineStep.boq: pipeline.boq != null ? 'available' : null,
                       PipelineStep.factoryOrder: pipeline.factoryOrder != null ? 'available' : null,
@@ -494,7 +494,8 @@ class _PipelineDetailContent extends ConsumerWidget {
                     }
                   },
                   onStepTap: (step) async {
-                    if (step == PipelineStep.quotation && profile?.primaryRole == UserRole.sales && pipeline.quotation?.status != QuotationStatus.confirmed) {
+                    final canApproveQuotes = profile?.roles.any((r) => r.canApproveQuotations) ?? false;
+                    if (step == PipelineStep.quotation && !canApproveQuotes && pipeline.quotation?.status != QuotationStatus.confirmed) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Quotation PDF is locked until approved by Sales Head / Admin.'),

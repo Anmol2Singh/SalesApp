@@ -31,6 +31,9 @@ class PmPaymentTermsTab extends ConsumerWidget {
       loading: () => const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator())),
       error: (err, _) => Center(child: Text('Error: $err', style: TextStyle(color: pm.destructive))),
       data: (terms) {
+        final totalPercentage = terms.fold<double>(0.0, (acc, t) => acc + t.termPercentage);
+        final is100PercentReached = totalPercentage >= 100.0;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -41,18 +44,21 @@ class PmPaymentTermsTab extends ConsumerWidget {
                   children: [
                     Text('Payment Terms Breakdown', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
                     const SizedBox(width: 8),
-                    PmBadge(label: '${terms.length} Terms', variant: PmBadgeVariant.secondary),
+                    PmBadge(
+                      label: '${terms.length} Terms (${totalPercentage.toStringAsFixed(0)}%)',
+                      variant: is100PercentReached ? PmBadgeVariant.defaultVariant : PmBadgeVariant.secondary,
+                    ),
                   ],
                 ),
                 PmButton(
                   size: PmButtonSize.sm,
-                  onPressed: () => _showAddEditModal(context, ref),
-                  child: const Row(
+                  onPressed: is100PercentReached ? null : () => _showAddEditModal(context, ref, terms),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.plus, size: 14),
-                      SizedBox(width: 6),
-                      Text('Add Term'),
+                      Icon(is100PercentReached ? LucideIcons.lock : LucideIcons.plus, size: 14),
+                      const SizedBox(width: 6),
+                      Text(is100PercentReached ? '100% Reached (Locked)' : 'Add Term'),
                     ],
                   ),
                 ),
@@ -71,7 +77,7 @@ class PmPaymentTermsTab extends ConsumerWidget {
                       const SizedBox(height: 12),
                       PmButton(
                         size: PmButtonSize.sm,
-                        onPressed: () => _showAddEditModal(context, ref),
+                        onPressed: is100PercentReached ? null : () => _showAddEditModal(context, ref, terms),
                         child: const Text('+ Add Milestone Term'),
                       ),
                     ],
@@ -109,7 +115,7 @@ class PmPaymentTermsTab extends ConsumerWidget {
                               children: [
                                 IconButton(
                                   icon: const Icon(LucideIcons.pencil, size: 14),
-                                  onPressed: () => _showAddEditModal(context, ref, t),
+                                  onPressed: () => _showAddEditModal(context, ref, terms, t),
                                 ),
                                 IconButton(
                                   icon: Icon(LucideIcons.trash2, size: 14, color: pm.destructive),
@@ -134,13 +140,29 @@ class PmPaymentTermsTab extends ConsumerWidget {
     );
   }
 
-  void _showAddEditModal(BuildContext context, WidgetRef ref, [PmPaymentTerm? term]) {
+  void _showAddEditModal(BuildContext context, WidgetRef ref, List<PmPaymentTerm> terms, [PmPaymentTerm? term]) {
+    final currentOtherTotal = terms
+        .where((t) => term == null || t.id != term.id)
+        .fold<double>(0.0, (acc, t) => acc + t.termPercentage);
+    final maxAllowed = (100.0 - currentOtherTotal).clamp(0.0, 100.0);
+
+    if (term == null && currentOtherTotal >= 100.0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment terms already total 100%. Cannot add more terms.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => _PaymentTermDialog(
         projectId: projectId,
         orderValue: orderValue,
         term: term,
+        maxAllowedPercent: maxAllowed,
         onSaved: () {
           ref.invalidate(pmPaymentTermsProvider(projectId));
           onRefresh();
@@ -154,12 +176,14 @@ class _PaymentTermDialog extends StatefulWidget {
   final String projectId;
   final double orderValue;
   final PmPaymentTerm? term;
+  final double maxAllowedPercent;
   final VoidCallback onSaved;
 
   const _PaymentTermDialog({
     required this.projectId,
     required this.orderValue,
     this.term,
+    this.maxAllowedPercent = 100.0,
     required this.onSaved,
   });
 
@@ -297,10 +321,19 @@ class _PaymentTermDialogState extends State<_PaymentTermDialog> {
                       Expanded(
                         child: TextFormField(
                           controller: _percentCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           onChanged: _onPercentChanged,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Required';
+                            final p = double.tryParse(v);
+                            if (p == null || p <= 0) return 'Must be > 0';
+                            if (p > widget.maxAllowedPercent + 0.001) {
+                              return 'Max ${widget.maxAllowedPercent.toStringAsFixed(1)}%';
+                            }
+                            return null;
+                          },
                           decoration: InputDecoration(
-                            labelText: 'Percentage (%)',
+                            labelText: 'Percentage (%) [Max ${widget.maxAllowedPercent.toStringAsFixed(0)}%]',
                             isDense: true,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(pm.radiusMd)),
                           ),

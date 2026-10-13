@@ -67,7 +67,7 @@ class _InstallationDashboardScreenState
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: AppColors.navBarColor,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -75,8 +75,11 @@ class _InstallationDashboardScreenState
             onPressed: () {
               if (Navigator.of(context).canPop()) {
                 Navigator.of(context).pop();
+              } else if (context.canPop()) {
+                context.pop();
               } else {
-                context.go(AppRoutes.adminDashboard);
+                final profile = ref.read(currentProfileProvider);
+                context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
               }
             },
           ),
@@ -102,7 +105,7 @@ class _InstallationDashboardScreenState
         ),
         body: _buildOperationsView(installations, isLoading, isAdmin: true),
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: AppColors.navBarColor,
           icon: const Icon(Icons.build_circle_outlined, color: Colors.white),
           label: const Text(
             'New Installation',
@@ -123,7 +126,7 @@ class _InstallationDashboardScreenState
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
-            backgroundColor: const Color(0xFF0F172A),
+            backgroundColor: AppColors.navBarColor,
             elevation: 0,
             clipBehavior: Clip.antiAlias,
             automaticallyImplyLeading: false,

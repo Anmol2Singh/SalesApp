@@ -146,7 +146,7 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
             ),
           ],
         ),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.navBarColor,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
