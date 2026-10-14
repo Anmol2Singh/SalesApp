@@ -11,6 +11,7 @@ import 'tank_spec.dart';
 import 'generator_company_settings.dart';
 import '../config/quote_type.dart';
 import '../services/qg_item_parser.dart';
+import '../services/price_calculator.dart';
 
 /// Represents the in-memory and locally persisted draft of a Heat Pump Proposal.
 /// Encapsulates all salesperson edits, item resolutions, specifications,
@@ -291,7 +292,16 @@ class QgProposalDraft {
       refNumberMode: 'deal_number',
       refNumber: q.quotationNumber,
       items: parsedItems,
-      supplementaryItems: List<Map<String, dynamic>>.from(q.supplementaryTerms),
+      supplementaryItems: q.supplementaryTerms.map((st) {
+        final qVal = (st['qty'] as num?)?.toInt();
+        return {
+          'name': (st['name'] ?? st['term'] ?? st['item_name'] ?? '').toString(),
+          'type': (st['type'] ?? st['status'] ?? 'Included').toString(),
+          'qty': (qVal != null && qVal > 0) ? qVal : 1,
+          'rate': (st['rate'] as num?)?.toDouble() ?? 0.0,
+          'amount': (st['amount'] as num?)?.toDouble() ?? 0.0,
+        };
+      }).toList(),
       paymentTerms: List<Map<String, dynamic>>.from(q.paymentTerms),
       paymentTermsText: pTermsText,
       subtotal: q.subtotal,
@@ -597,30 +607,31 @@ class QgProposalDraft {
       if (term.isEmpty) continue;
       final typeStr = (supp['type'] ?? supp['status'] ?? 'Included').toString().trim();
       final isExtra = typeStr.toLowerCase() == 'extra';
-      final isNa = typeStr.toLowerCase() == 'na';
-      final rateNum = (supp['rate'] as num?)?.toInt() ?? (supp['amount'] as num?)?.toInt() ?? 0;
+      final isNa = typeStr.toLowerCase() == 'na' || typeStr.toLowerCase() == 'n/a';
+      final rateNum = (supp['rate'] as num?)?.toInt() ?? 0;
+      final qtyNum = (supp['qty'] as num?)?.toInt() ?? 1;
+      final totalNum = isExtra ? (rateNum * qtyNum) : 0;
 
       PriceRowType rowType;
-      String statusLabel;
       if (isExtra) {
-        rowType = rateNum > 0 ? PriceRowType.amount : PriceRowType.extra;
-        statusLabel = 'Extra';
+        rowType = totalNum > 0 ? PriceRowType.amount : PriceRowType.extra;
       } else if (isNa) {
         rowType = PriceRowType.customText;
-        statusLabel = 'NA';
       } else {
         rowType = PriceRowType.included;
-        statusLabel = 'Included';
       }
 
-      final desc = '$term - $statusLabel';
+      // Requirement 6: "and don't display 'extra' text in price table"
+      final desc = term;
 
       mappedExtraRows.add(PriceItem(
         serialNo: (items.length + i + 1).toString().padLeft(2, '0'),
         description: desc,
+        qty: '$qtyNum',
+        systemRate: (isExtra && rateNum > 0) ? PriceCalculator.formatIndianCurrency(rateNum) : '',
         amountType: rowType,
         customText: isNa ? 'NA' : '',
-        numericAmount: isExtra ? rateNum : 0,
+        numericAmount: totalNum,
       ));
     }
 

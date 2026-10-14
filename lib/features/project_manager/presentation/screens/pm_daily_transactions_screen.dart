@@ -26,7 +26,26 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
   final _dateFmt = DateFormat('dd MMM yyyy');
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final currentQuery = ref.read(dailyTransactionsFilterProvider).searchQuery;
+      if (currentQuery.isNotEmpty) {
+        ref.read(dailyTransactionsFilterProvider.notifier).update(
+              (s) => s.copyWith(searchQuery: ''),
+            );
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    try {
+      ref.read(dailyTransactionsFilterProvider.notifier).update(
+            (s) => s.copyWith(searchQuery: ''),
+          );
+    } catch (_) {}
     _searchController.dispose();
     super.dispose();
   }

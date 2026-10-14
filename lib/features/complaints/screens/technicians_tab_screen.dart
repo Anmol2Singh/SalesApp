@@ -145,7 +145,11 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                               await supabase.from('profiles').update({'phone': phone}).eq('id', newUserId);
                             }
 
-                            // 2. Insert into technicians table
+                            // 2. Ensure technicians table does not have duplicate rows with this email or id
+                            try {
+                              await supabase.from('technicians').delete().or('id.eq.$newUserId,email.ilike.$email');
+                            } catch (_) {}
+
                             try {
                               await supabase.from('technicians').insert({
                                 'id': newUserId,
@@ -489,6 +493,15 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
         final supabase = ref.read(supabaseClientProvider);
         if (tech.id.isNotEmpty) {
           await supabase.from('technicians').delete().eq('id', tech.id);
+          try {
+            await supabase.from('profiles').update({'is_active': false}).eq('id', tech.id);
+          } catch (_) {}
+        }
+        if (tech.email != null && tech.email!.isNotEmpty) {
+          try {
+            await supabase.from('technicians').delete().ilike('email', tech.email!);
+            await supabase.from('profiles').update({'is_active': false}).ilike('email', tech.email!);
+          } catch (_) {}
         } else {
           await supabase.from('technicians').delete().eq('name', tech.name);
         }

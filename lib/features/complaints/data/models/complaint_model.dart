@@ -251,4 +251,31 @@ class TechnicianInfo {
     required this.activeTasksCount,
     required this.rating,
   });
+
+  TechnicianInfo copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    String? plainPassword,
+    String? avatarUrl,
+    String? status,
+    String? distance,
+    int? activeTasksCount,
+    double? rating,
+  }) {
+    return TechnicianInfo(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      plainPassword: plainPassword ?? this.plainPassword,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      status: status ?? this.status,
+      distance: distance ?? this.distance,
+      activeTasksCount: activeTasksCount ?? this.activeTasksCount,
+      rating: rating ?? this.rating,
+    );
+  }
 }
+

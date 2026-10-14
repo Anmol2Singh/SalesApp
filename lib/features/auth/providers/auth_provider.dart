@@ -384,6 +384,22 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
 
             if (retryResponse.user != null) {
               final authUser = retryResponse.user!;
+              final oldTechId = tech['id']?.toString() ?? '';
+
+              // Sync technicians table ID with auth UID to guarantee singular matching account
+              if (oldTechId.isNotEmpty && oldTechId != authUser.id) {
+                try {
+                  await _supabase.from('technicians').update({'id': authUser.id}).eq('id', oldTechId);
+                  await _supabase.from('complaints').update({'technician_id': authUser.id}).eq('technician_id', oldTechId);
+                  await _supabase.from('installations').update({'technician_id': authUser.id}).eq('technician_id', oldTechId);
+                } catch (_) {}
+              }
+              if (tech['phone'] != null && tech['phone'].toString().trim().isNotEmpty) {
+                try {
+                  await _supabase.from('profiles').update({'phone': tech['phone'].toString().trim()}).eq('id', authUser.id);
+                } catch (_) {}
+              }
+
               final techProfile = Profile(
                 id: authUser.id,
                 fullName: tech['name'] ?? 'Technician',

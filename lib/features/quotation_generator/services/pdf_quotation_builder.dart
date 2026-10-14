@@ -1084,17 +1084,17 @@ class PdfQuotationBuilder {
       ),
     );
 
-    pw.TableRow buildExtraRow(String sr, String desc, {String amtStr = ''}) {
+    pw.TableRow buildExtraRow(String sr, String desc, {String qty = '', String rateStr = '', String amtStr = ''}) {
       return pw.TableRow(
         children: [
           _tc(sr, center: true),
           _tc(desc),
           _tc('', center: true),
           _tc('', center: true),
+          _tc(qty, center: true),
           _tc('', center: true),
-          _tc('', center: true),
-          _tc(amtStr, center: true),
-          _tc(amtStr, center: true),
+          _tc(rateStr, center: true),
+          _tc(amtStr.isEmpty ? 'Included' : amtStr, center: true),
         ],
       );
     }
@@ -1186,7 +1186,7 @@ class PdfQuotationBuilder {
               _tc(qtyStr, center: true),
               _tc('', center: true),
               _tc(rateStr, center: true),
-              _tc(amtStr, center: true),
+              _tc(amtStr.isEmpty ? 'Included' : amtStr, center: true),
             ],
           ),
         );
@@ -1228,7 +1228,7 @@ class PdfQuotationBuilder {
             _tc('$hpQty', center: true),
             _tc('', center: true),
             _tc(hpRateStr, center: true),
-            _tc(hpAmountStr, center: true),
+            _tc(hpAmountStr.isEmpty ? 'Included' : hpAmountStr, center: true),
           ],
         ),
       );
@@ -1258,23 +1258,32 @@ class PdfQuotationBuilder {
     }
 
     // Supplementary Items: ONLY those that are actually added!
+    int supplementaryTotal = 0;
     if (q.extraPriceRows.isNotEmpty) {
       for (final it in q.extraPriceRows) {
         String desc = it.description.trim();
-        if (!desc.contains(' - ')) {
-          final statusDesc = it.amountType == PriceRowType.included
-              ? 'Included'
-              : (it.amountType == PriceRowType.extra
-                  ? 'Extra'
-                  : (it.amountType == PriceRowType.customText
-                      ? (it.customText.isNotEmpty ? it.customText : 'Extra')
-                      : 'Extra'));
-          desc = '$desc - $statusDesc';
+        desc = desc.replaceAll(RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '').trim();
+        final isCharged = (it.amountType == PriceRowType.extra || it.amountType == PriceRowType.amount) && it.numericAmount > 0;
+        final amt = isCharged ? PriceCalculator.formatIndianCurrency(it.numericAmount) : '';
+        if (isCharged) {
+          supplementaryTotal += it.numericAmount;
         }
-        final amt = (it.amountType == PriceRowType.extra || it.amountType == PriceRowType.amount) && it.numericAmount > 0
-            ? PriceCalculator.formatIndianCurrency(it.numericAmount)
-            : '';
-        tableRows.add(buildExtraRow((rowIdx++).toString().padLeft(2, '0'), desc, amtStr: amt));
+        final qtyVal = int.tryParse(it.qty) ?? 0;
+        final qtyStr = qtyVal > 0 ? '$qtyVal' : (it.qty.isNotEmpty ? it.qty : '1');
+        final rateStr = it.systemRate.isNotEmpty
+            ? it.systemRate
+            : (isCharged
+                ? (qtyVal > 0
+                    ? PriceCalculator.formatIndianCurrency((it.numericAmount / qtyVal).round())
+                    : amt)
+                : '');
+        tableRows.add(buildExtraRow(
+          (rowIdx++).toString().padLeft(2, '0'),
+          desc,
+          qty: qtyStr,
+          rateStr: rateStr,
+          amtStr: amt,
+        ));
       }
     } else {
       // Check priceRows for supplementary items (skip HP and Tank)
@@ -1284,24 +1293,22 @@ class PdfQuotationBuilder {
         if (d.contains('tank') || d.contains('storage')) continue;
         if (r.description == '-' || r.description.trim().isEmpty) continue;
 
-        String statusStr;
-        if (r.status == PriceRowStatus.included) {
-          statusStr = 'Included';
-        } else if (r.status == PriceRowStatus.extra) {
-          statusStr = 'Extra';
-        } else if (r.status == PriceRowStatus.na) {
-          statusStr = 'NA';
-        } else {
-          statusStr = r.amount > 0 ? PriceCalculator.formatIndianCurrency(r.amount) : 'Extra';
-        }
         String desc = r.description.trim();
-        if (!desc.contains(' - ')) {
-          desc = '$desc - $statusStr';
+        desc = desc.replaceAll(RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '').trim();
+        final isCharged = (r.status == PriceRowStatus.extra || r.status == PriceRowStatus.priced) && r.amount > 0;
+        final amt = isCharged ? PriceCalculator.formatIndianCurrency(r.amount) : '';
+        if (isCharged) {
+          supplementaryTotal += r.amount;
         }
-        final amt = (r.status == PriceRowStatus.extra || r.status == PriceRowStatus.priced) && r.amount > 0
-            ? PriceCalculator.formatIndianCurrency(r.amount)
-            : '';
-        tableRows.add(buildExtraRow((rowIdx++).toString().padLeft(2, '0'), desc, amtStr: amt));
+        final qtyStr = r.qty > 0 ? '${r.qty}' : '1';
+        final rateStr = r.rate > 0 ? PriceCalculator.formatIndianCurrency(r.rate) : '';
+        tableRows.add(buildExtraRow(
+          (rowIdx++).toString().padLeft(2, '0'),
+          desc,
+          qty: qtyStr,
+          rateStr: rateStr,
+          amtStr: amt,
+        ));
       }
     }
 
@@ -1357,6 +1364,21 @@ class PdfQuotationBuilder {
                 ),
               ],
             ),
+            if (supplementaryTotal > 0)
+              pw.TableRow(
+                children: [
+                  pw.Container(
+                    alignment: pw.Alignment.centerRight,
+                    padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 8),
+                    child: pw.Text('Supplementary Charges', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Container(
+                    alignment: pw.Alignment.center,
+                    padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 4),
+                    child: pw.Text(PriceCalculator.formatIndianCurrency(supplementaryTotal), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ],
+              ),
             pw.TableRow(
               children: [
                 pw.Container(
@@ -1416,8 +1438,7 @@ class PdfQuotationBuilder {
     const double col0W = 32.0;
     const double col1W = 110.0;
     const double col2W = 145.0;
-    const double totalDescW = col1W + col2W; // 255.0
-    const double specW = 523.28 - col0W - totalDescW; // 136.28 pt
+    const double specW = 523.28 - col0W - col1W - col2W; // 236.28 pt
 
     final pressStr = tank.isPressurized ? 'Pressurized' : 'Non-Pressurized';
     final mat = tank.innerTankMaterial.isNotEmpty ? tank.innerTankMaterial : 'GI';
@@ -1429,16 +1450,13 @@ class PdfQuotationBuilder {
         ? (tank.insulationMaterial.toLowerCase().contains('puff') || tank.insulationMaterial.toLowerCase().contains('puf') ? 'PUF' : tank.insulationMaterial)
         : 'PUF';
 
-    final rows1to6 = [
+    final all10Rows = [
       ('01', 'Capacity and Thickness', '$cap ltr, $thick Shell, $thick Dish.'),
       ('02', 'Operating pressure', tank.isPressurized ? 'Up to 5 Bar' : 'Atmospheric'),
       ('03', 'Testing Pressure', tank.isPressurized ? '7 bar pressure' : 'Atmospheric'),
       ('04', 'Hot Water Inlet/ outlet', '2 Inch,'),
       ('05', 'Heat Pump Circulation', '1 Inch,'),
       ('06', 'Outer Tank Insulation', insMat),
-    ];
-
-    final rows7to10 = [
       ('07', 'Temperature drop', '3° C / 8 hour'),
       ('08', 'Inner and outer Tank', mat),
       ('09', 'Tank direction', 'Horizontal / Vertical'),
@@ -1463,7 +1481,7 @@ class PdfQuotationBuilder {
               children: [
                 pw.Container(
                   width: col0W,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                  height: 22.0,
                   alignment: pw.Alignment.center,
                   decoration: const pw.BoxDecoration(
                     border: pw.Border(
@@ -1477,8 +1495,8 @@ class PdfQuotationBuilder {
                   ),
                 ),
                 pw.Container(
-                  width: totalDescW,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                  width: col1W + col2W,
+                  height: 22.0,
                   alignment: pw.Alignment.center,
                   decoration: const pw.BoxDecoration(
                     border: pw.Border(
@@ -1493,7 +1511,7 @@ class PdfQuotationBuilder {
                 ),
                 pw.Container(
                   width: specW,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                  height: 22.0,
                   alignment: pw.Alignment.center,
                   child: pw.Text(
                     'SPECIFICATION',
@@ -1505,37 +1523,37 @@ class PdfQuotationBuilder {
             ),
           ),
 
-          // Rows 01 to 06
+          // Body: Single Row with Col 0, Merged Col 1, Col 2, Col 3
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Col 0: SL NO 01..06
+              // Col 0: SL NO 01..10
               pw.Column(
-                children: rows1to6.map((r) {
+                children: all10Rows.asMap().entries.map((e) {
+                  final isLast = e.key == all10Rows.length - 1;
                   return pw.Container(
                     width: col0W,
                     height: rowH,
                     alignment: pw.Alignment.center,
-                    decoration: const pw.BoxDecoration(
+                    decoration: pw.BoxDecoration(
                       border: pw.Border(
-                        right: pw.BorderSide(color: PdfColors.black, width: 0.6),
-                        bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(r.$1, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
+                    child: pw.Text(e.value.$1, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
                   );
                 }).toList(),
               ),
 
-              // Col 1: Big merged centered block spanning rows 01..06
+              // Col 1: Big merged centered block spanning all 10 rows
               pw.Container(
                 width: col1W,
-                height: rows1to6.length * rowH,
+                height: all10Rows.length * rowH,
                 alignment: pw.Alignment.center,
                 decoration: const pw.BoxDecoration(
                   border: pw.Border(
                     right: pw.BorderSide(color: PdfColors.black, width: 0.6),
-                    bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
                   ),
                 ),
                 child: pw.Column(
@@ -1559,97 +1577,46 @@ class PdfQuotationBuilder {
                 ),
               ),
 
-              // Col 2: Description for rows 01..06
+              // Col 2: Description for all 10 rows
               pw.Column(
-                children: rows1to6.map((r) {
+                children: all10Rows.asMap().entries.map((e) {
+                  final isLast = e.key == all10Rows.length - 1;
                   return pw.Container(
                     width: col2W,
                     height: rowH,
                     alignment: pw.Alignment.centerLeft,
                     padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                    decoration: const pw.BoxDecoration(
+                    decoration: pw.BoxDecoration(
                       border: pw.Border(
-                        right: pw.BorderSide(color: PdfColors.black, width: 0.6),
-                        bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7.5)),
+                    child: pw.Text(e.value.$2, style: const pw.TextStyle(fontSize: 7.5)),
                   );
                 }).toList(),
               ),
 
-              // Col 3: Specification for rows 01..06
+              // Col 3: Specification for all 10 rows
               pw.Column(
-                children: rows1to6.map((r) {
+                children: all10Rows.asMap().entries.map((e) {
+                  final isLast = e.key == all10Rows.length - 1;
                   return pw.Container(
                     width: specW,
                     height: rowH,
                     alignment: pw.Alignment.centerLeft,
                     padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                    decoration: const pw.BoxDecoration(
+                    decoration: pw.BoxDecoration(
                       border: pw.Border(
-                        bottom: pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7.5)),
+                    child: pw.Text(e.value.$3, style: const pw.TextStyle(fontSize: 7.5)),
                   );
                 }).toList(),
               ),
             ],
           ),
-
-          // Rows 07 to 10
-          ...rows7to10.asMap().entries.map((e) {
-            final idx = e.key;
-            final r = e.value;
-            final isLast = idx == rows7to10.length - 1;
-            return pw.Row(
-              children: [
-                // Col 0: SL NO
-                pw.Container(
-                  width: col0W,
-                  height: rowH,
-                  alignment: pw.Alignment.center,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border(
-                      right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                      bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                    ),
-                  ),
-                  child: pw.Text(r.$1, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
-                ),
-
-                // Col 1 & 2 Merged: Description
-                pw.Container(
-                  width: totalDescW,
-                  height: rowH,
-                  alignment: pw.Alignment.centerLeft,
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border(
-                      right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                      bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                    ),
-                  ),
-                  child: pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7.5)),
-                ),
-
-                // Col 3: Specification
-                pw.Container(
-                  width: specW,
-                  height: rowH,
-                  alignment: pw.Alignment.centerLeft,
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border(
-                      bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                    ),
-                  ),
-                  child: pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7.5)),
-                ),
-              ],
-            );
-          }),
         ],
       ),
     );

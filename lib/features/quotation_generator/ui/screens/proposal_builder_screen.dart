@@ -738,8 +738,7 @@ class _ProposalBuilderScreenState extends ConsumerState<ProposalBuilderScreen> {
     final isIncluded = (item['type']?.toString().toLowerCase() ?? 'included') == 'included';
     final name = item['name']?.toString() ?? 'Item';
     final rate = (item['rate'] as num?)?.toDouble() ?? 0.0;
-    final qty = (item['qty'] as num?)?.toInt() ?? 1;
-    final displayName = qty > 1 ? '$name (x$qty)' : name;
+    final qty = (item['qty'] as num?)?.toInt() ?? (isIncluded ? 0 : 1);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -747,7 +746,7 @@ class _ProposalBuilderScreenState extends ConsumerState<ProposalBuilderScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: Text(displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           ),
           SegmentedButton<String>(
             segments: const [
@@ -757,18 +756,58 @@ class _ProposalBuilderScreenState extends ConsumerState<ProposalBuilderScreen> {
             selected: {isIncluded ? 'Included' : 'Extra'},
             onSelectionChanged: (set) {
               setState(() {
-                draft.supplementaryItems[index]['type'] = set.first;
+                final chosen = set.first;
+                draft.supplementaryItems[index]['type'] = chosen;
+                if (chosen == 'Included') {
+                  draft.supplementaryItems[index]['rate'] = 0.0;
+                  if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
+                    draft.supplementaryItems[index]['qty'] = 1;
+                  }
+                } else {
+                  if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
+                    draft.supplementaryItems[index]['qty'] = 1;
+                  }
+                }
                 _recalculateSupplementarySubtotal(draft);
               });
               _triggerAutoSave();
             },
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          // Qty field
           SizedBox(
-            width: 90,
+            width: 65,
             child: TextFormField(
-              initialValue: rate > 0 ? rate.toStringAsFixed(0) : '',
-              decoration: const InputDecoration(labelText: 'Rate', border: OutlineInputBorder(), isDense: true),
+              key: ValueKey('supp_qty_${index}_$isIncluded'),
+              initialValue: qty > 0 ? qty.toString() : '1',
+              enabled: true,
+              decoration: const InputDecoration(
+                labelText: 'Qty',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              keyboardType: TextInputType.number,
+              onChanged: (val) {
+                final newQty = int.tryParse(val) ?? 1;
+                draft.supplementaryItems[index]['qty'] = newQty;
+                _recalculateSupplementarySubtotal(draft);
+                _triggerAutoSave();
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Rate field (Disabled when Included)
+          SizedBox(
+            width: 95,
+            child: TextFormField(
+              key: ValueKey('supp_rate_${index}_$isIncluded'),
+              initialValue: isIncluded ? '' : (rate > 0 ? rate.toStringAsFixed(0) : ''),
+              enabled: !isIncluded,
+              decoration: const InputDecoration(
+                labelText: 'Rate',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
               keyboardType: TextInputType.number,
               onChanged: (val) {
                 final newRate = double.tryParse(val) ?? 0.0;

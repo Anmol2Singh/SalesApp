@@ -107,7 +107,7 @@ class PmExcelService {
       final r = rowIdx + 1;
       List<String> values = isPurchase
           ? [
-              e.srNo.toString(),
+              r.toString(),
               _dateFormat.format(e.date),
               e.paymentType ?? '',
               e.referenceNumber ?? '',
@@ -119,7 +119,7 @@ class PmExcelService {
               e.paymentReceived.toStringAsFixed(2),
             ]
           : [
-              e.srNo.toString(),
+              r.toString(),
               _dateFormat.format(e.date),
               e.paymentType ?? '',
               e.referenceNumber ?? '',

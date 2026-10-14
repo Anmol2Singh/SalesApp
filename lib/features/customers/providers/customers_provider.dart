@@ -576,6 +576,7 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
   bool get hasMore => _hasMore;
   String get filterBy => _filterBy;
   String get sortBy => _sortBy;
+  String get searchQuery => _searchQuery;
 }
 
 final customersNotifierProvider =

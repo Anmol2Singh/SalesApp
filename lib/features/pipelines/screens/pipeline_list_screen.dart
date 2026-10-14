@@ -624,6 +624,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           setState(() {
             _selectedTabIndex = index;
             _quickFilter = 'all';
+            _searchController.clear();
+            _searchQuery = '';
           });
         },
         child: AnimatedContainer(

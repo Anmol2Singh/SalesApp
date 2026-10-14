@@ -35,25 +35,45 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
   void initState() {
     super.initState();
     _searchController.text = widget.initialSearch;
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _scrollController.addListener(_onScroll);
-    if (widget.initialSearch.isNotEmpty || widget.initialFilter.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final notifier = ref.read(customersNotifierProvider.notifier);
-        if (widget.initialSearch.isNotEmpty) {
-          notifier.search(widget.initialSearch);
-        }
-        if (widget.initialFilter.isNotEmpty) {
-          notifier.setFilterAndSort(
-            filter: widget.initialFilter,
-            sort: notifier.sortBy,
-          );
-        }
-      });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final notifier = ref.read(customersNotifierProvider.notifier);
+      if (widget.initialSearch.isNotEmpty) {
+        notifier.search(widget.initialSearch);
+      } else if (notifier.searchQuery.isNotEmpty) {
+        // Auto-clear lingering search query when re-entering cleanly
+        notifier.search('');
+      }
+      if (widget.initialFilter.isNotEmpty) {
+        notifier.setFilterAndSort(
+          filter: widget.initialFilter,
+          sort: notifier.sortBy,
+        );
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomerListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSearch != oldWidget.initialSearch) {
+      _searchController.text = widget.initialSearch;
+      ref.read(customersNotifierProvider.notifier).search(widget.initialSearch);
     }
   }
 
   @override
   void dispose() {
+    try {
+      final notifier = ref.read(customersNotifierProvider.notifier);
+      if (notifier.searchQuery.isNotEmpty) {
+        notifier.search('');
+      }
+    } catch (_) {}
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();

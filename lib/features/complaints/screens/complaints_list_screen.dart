@@ -27,6 +27,16 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging || !_tabController.animation!.isAnimating) {
+        if (_searchQuery.isNotEmpty || _searchController.text.isNotEmpty) {
+          setState(() {
+            _searchController.clear();
+            _searchQuery = '';
+          });
+        }
+      }
+    });
   }
 
   @override

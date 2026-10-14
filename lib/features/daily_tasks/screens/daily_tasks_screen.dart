@@ -27,6 +27,16 @@ class _DailyTasksScreenState extends ConsumerState<DailyTasksScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final currentQuery = ref.read(dailyTaskFilterProvider).searchQuery;
+      if (currentQuery.isNotEmpty) {
+        ref.read(dailyTaskFilterProvider.notifier).update(
+              (state) => state.copyWith(searchQuery: ''),
+            );
+        ref.read(dailyTasksProvider.notifier).loadTasks();
+      }
+    });
   }
 
   void _onSearchChanged() {
@@ -38,6 +48,11 @@ class _DailyTasksScreenState extends ConsumerState<DailyTasksScreen> {
 
   @override
   void dispose() {
+    try {
+      ref.read(dailyTaskFilterProvider.notifier).update(
+            (state) => state.copyWith(searchQuery: ''),
+          );
+    } catch (_) {}
     _searchController.dispose();
     super.dispose();
   }

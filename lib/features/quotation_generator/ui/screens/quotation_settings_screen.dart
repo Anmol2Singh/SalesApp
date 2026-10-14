@@ -1093,53 +1093,242 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
             const SizedBox(height: 14),
 
             ...profiles.map((p) {
-              return Card(
-                elevation: 0,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: const BorderSide(color: AppColors.border),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              p.profileName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF286B37).withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              p.productName,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF286B37)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Subject: ${p.defaultSubject}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      const SizedBox(height: 4),
-                      Text('Work Type: ${p.workType}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      const SizedBox(height: 4),
-                      Text('Confirmations: ${p.defaultConfirmations.length} points', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
+              return _NocProfileCard(
+                key: ValueKey('noc_profile_${p.id}'),
+                profile: p,
+                onSaved: () => setState(() {}),
               );
             }),
           ],
         );
       },
+    );
+  }
+}
+
+class _NocProfileCard extends StatefulWidget {
+  final QgNocProfile profile;
+  final VoidCallback onSaved;
+
+  const _NocProfileCard({
+    super.key,
+    required this.profile,
+    required this.onSaved,
+  });
+
+  @override
+  State<_NocProfileCard> createState() => _NocProfileCardState();
+}
+
+class _NocProfileCardState extends State<_NocProfileCard> {
+  bool _isExpanded = false;
+  bool _isSaving = false;
+  late List<TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = widget.profile.defaultConfirmations
+        .map((c) => TextEditingController(text: c))
+        .toList();
+  }
+
+  @override
+  void didUpdateWidget(_NocProfileCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.id != widget.profile.id ||
+        oldWidget.profile.defaultConfirmations.length != widget.profile.defaultConfirmations.length) {
+      for (final c in _controllers) {
+        c.dispose();
+      }
+      _controllers = widget.profile.defaultConfirmations
+          .map((c) => TextEditingController(text: c))
+          .toList();
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _handleSave() async {
+    setState(() => _isSaving = true);
+    final points = _controllers
+        .map((c) => c.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    try {
+      await QgNocRepository.saveProfileConfirmations(widget.profile.id, points);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.success,
+            content: Text('Saved ${points.length} confirmation points for ${widget.profile.profileName}'),
+          ),
+        );
+      }
+      widget.onSaved();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text('Failed to save profile confirmations: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.profile.profileName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF286B37).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    widget.profile.productName,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF286B37)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: _isExpanded ? 'Collapse' : 'Manage Confirmations',
+                  icon: Icon(_isExpanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () => setState(() => _isExpanded = !_isExpanded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text('Subject: ${widget.profile.defaultSubject}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            Text('Work Type: ${widget.profile.workType}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            Text('Confirmations: ${_controllers.length} points', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+
+            if (_isExpanded) ...[
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'We confirm that: (Manage Points)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Point', style: TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      setState(() {
+                        final nextIndex = _controllers.length + 1;
+                        _controllers.add(TextEditingController(text: '$nextIndex. '));
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_controllers.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No confirmation points added. Click "Add Point" to create one.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                  ),
+                )
+              else
+                for (int i = 0; i < _controllers.length; i++) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10, right: 8),
+                          child: Text(
+                            '${i + 1}.',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _controllers[i],
+                            maxLines: null,
+                            style: const TextStyle(fontSize: 12),
+                            decoration: InputDecoration(
+                              hintText: 'Enter confirmation text for point ${i + 1}',
+                              isDense: true,
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                          tooltip: 'Delete Point',
+                          onPressed: () {
+                            setState(() {
+                              final removed = _controllers.removeAt(i);
+                              removed.dispose();
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF174895),
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: _isSaving
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.save, size: 16),
+                    label: Text(_isSaving ? 'Saving...' : 'Save Confirmations'),
+                    onPressed: _isSaving ? null : _handleSave,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

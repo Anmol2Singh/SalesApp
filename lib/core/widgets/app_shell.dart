@@ -13,6 +13,9 @@ import '../../features/notifications/providers/notifications_provider.dart';
 import '../router/app_router.dart';
 import '../providers/realtime_provider.dart';
 import '../providers/sidebar_provider.dart';
+import '../../features/customers/providers/customers_provider.dart';
+import '../../features/daily_tasks/providers/daily_tasks_provider.dart';
+import '../../features/project_manager/providers/pm_providers.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -136,18 +139,32 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentRoute != widget.currentRoute) {
       final activeGroup = _detectGroup(widget.currentRoute);
-      if (activeGroup != null) {
-        _expandedGroup = activeGroup;
-      }
+      _expandedGroup = activeGroup;
       final activeSub = _detectFieldOpsSubGroup(widget.currentRoute);
-      if (activeSub != null) {
-        _fieldOpsSubGroup = activeSub;
-      }
-      if (widget.currentRoute == AppRoutes.pdfList ||
+      _fieldOpsSubGroup = activeSub;
+      _pdfLibraryExpanded = widget.currentRoute == AppRoutes.pdfList ||
           widget.currentRoute == AppRoutes.searchPdf ||
-          widget.currentRoute.startsWith('/search-pdf')) {
-        _pdfLibraryExpanded = true;
-      }
+          widget.currentRoute.startsWith('/search-pdf');
+
+      // Auto-clear lingering search queries from background providers when switching routes/tabs
+      try {
+        final custNotifier = ref.read(customersNotifierProvider.notifier);
+        if (custNotifier.searchQuery.isNotEmpty) {
+          custNotifier.search('');
+        }
+      } catch (_) {}
+      try {
+        final taskFilter = ref.read(dailyTaskFilterProvider);
+        if (taskFilter.searchQuery.isNotEmpty) {
+          ref.read(dailyTaskFilterProvider.notifier).update((s) => s.copyWith(searchQuery: ''));
+        }
+      } catch (_) {}
+      try {
+        final txFilter = ref.read(dailyTransactionsFilterProvider);
+        if (txFilter.searchQuery.isNotEmpty) {
+          ref.read(dailyTransactionsFilterProvider.notifier).update((s) => s.copyWith(searchQuery: ''));
+        }
+      } catch (_) {}
     }
   }
 
@@ -966,7 +983,14 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
-            onTap: () => context.go(route),
+            onTap: () {
+              setState(() {
+                _expandedGroup = null;
+                _fieldOpsSubGroup = null;
+                _pdfLibraryExpanded = false;
+              });
+              context.go(route);
+            },
             child: SizedBox(
               height: 42,
               child: Center(
@@ -996,7 +1020,14 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           hoverColor: Colors.white.withValues(alpha: 0.08),
-          onTap: () => context.go(route),
+          onTap: () {
+            setState(() {
+              _expandedGroup = null;
+              _fieldOpsSubGroup = null;
+              _pdfLibraryExpanded = false;
+            });
+            context.go(route);
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(

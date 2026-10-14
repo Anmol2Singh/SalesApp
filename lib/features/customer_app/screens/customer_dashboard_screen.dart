@@ -266,6 +266,7 @@ class CustomerDashboardScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
               error: (e, _) => Text('Error: $e'),
             ),
+            const SizedBox(height: 140),
           ],
         ),
       ),

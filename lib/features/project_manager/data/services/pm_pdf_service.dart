@@ -106,11 +106,14 @@ class PmPdfService {
         : ['Sr', 'Date', 'Type', 'Particulars', 'Ref/Inv', 'Bill Sub', 'Order Value', 'Payment Recd', 'Balance'];
 
     double runningBal = 0;
-    final rows = entries.map((e) {
+    final rows = entries.asMap().entries.map((entryMap) {
+      final i = entryMap.key;
+      final e = entryMap.value;
+      final srNumber = (i + 1).toString();
       if (isPurchase) {
         runningBal += e.orderValue - e.paymentReceived;
         return [
-          e.srNo.toString(),
+          srNumber,
           _dateFormat.format(e.date),
           e.paymentType ?? '-',
           e.particulars ?? '-',
@@ -123,7 +126,7 @@ class PmPdfService {
       } else {
         runningBal += (e.orderValue + e.extraWorkValue) - e.paymentReceived;
         return [
-          e.srNo.toString(),
+          srNumber,
           _dateFormat.format(e.date),
           e.paymentType ?? '-',
           e.particulars ?? '-',

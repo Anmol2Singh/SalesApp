@@ -138,6 +138,7 @@ class QgNocPayload {
   // Header & Subject
   final String salutation; // e.g. 'M/s'
   final String customerName; // e.g. 'TURQUOISE PUNE'
+  final String recipient; // e.g. 'The Project Mannager.'
   final String address;
   final String productName; // e.g. 'Boom Barrier'
   final String subject;
@@ -150,6 +151,7 @@ class QgNocPayload {
   final String equipmentLabel;
   final List<NocEquipmentLine> equipmentLines;
   final String workType;
+  final String leakage; // 'Done' | 'Not Applicable'
   final String wiring; // 'Done' | 'Not Applicable'
   final String testing; // 'Done' | 'Not Applicable'
   final String remark;
@@ -171,6 +173,7 @@ class QgNocPayload {
     this.stampImagePath,
     this.salutation = 'M/s',
     required this.customerName,
+    this.recipient = 'The Project Mannager.',
     required this.address,
     required this.productName,
     required this.subject,
@@ -181,6 +184,7 @@ class QgNocPayload {
     required this.equipmentLabel,
     required this.equipmentLines,
     required this.workType,
+    this.leakage = 'Done',
     this.wiring = 'Done',
     this.testing = 'Done',
     required this.remark,
@@ -200,6 +204,7 @@ class QgNocPayload {
       'stamp_image_path': stampImagePath,
       'salutation': salutation,
       'customer_name': customerName,
+      'recipient': recipient,
       'address': address,
       'product_name': productName,
       'subject': subject,
@@ -210,6 +215,7 @@ class QgNocPayload {
       'equipment_label': equipmentLabel,
       'equipment_lines': equipmentLines.map((e) => e.toMap()).toList(),
       'work_type': workType,
+      'leakage': leakage,
       'wiring': wiring,
       'testing': testing,
       'remark': remark,
@@ -242,6 +248,7 @@ class QgNocPayload {
       stampImagePath: map['stamp_image_path']?.toString(),
       salutation: map['salutation']?.toString() ?? 'M/s',
       customerName: map['customer_name']?.toString() ?? '',
+      recipient: map['recipient']?.toString() ?? 'The Project Mannager.',
       address: map['address']?.toString() ?? '',
       productName: map['product_name']?.toString() ?? '',
       subject: map['subject']?.toString() ?? '',
@@ -252,6 +259,7 @@ class QgNocPayload {
       equipmentLabel: map['equipment_label']?.toString() ?? '',
       equipmentLines: lines,
       workType: map['work_type']?.toString() ?? '',
+      leakage: map['leakage']?.toString() ?? 'Done',
       wiring: map['wiring']?.toString() ?? 'Done',
       testing: map['testing']?.toString() ?? 'Done',
       remark: map['remark']?.toString() ?? '',

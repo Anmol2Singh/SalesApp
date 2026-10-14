@@ -56,7 +56,22 @@ class QgNocRepository {
     } catch (e) {
       debugPrint('QgNocRepository.getProfileForProduct error: $e');
     }
+    if (productName.toLowerCase().contains('heat pump')) {
+      return QgNocProfile.defaultHeatPumpProfile();
+    }
     return QgNocProfile.defaultProfile(productName: productName);
+  }
+
+  Future<void> updateProfileConfirmations(String profileId, List<String> confirmations) async {
+    try {
+      await _supabase
+          .from('qg_noc_profiles')
+          .update({'confirmation_lines': confirmations})
+          .eq('id', profileId);
+    } catch (e) {
+      debugPrint('QgNocRepository.updateProfileConfirmations error: $e');
+      rethrow;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -203,6 +218,9 @@ class QgNocRepository {
   static QgNocRepository get instance => QgNocRepository(Supabase.instance.client);
 
   static Future<List<QgNocProfile>> fetchProfiles() => instance.getProfiles();
+
+  static Future<void> saveProfileConfirmations(String profileId, List<String> confirmations) =>
+      instance.updateProfileConfirmations(profileId, confirmations);
 
   static Future<List<QgNocDocument>> listNocs({
     String? dealId,

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -33,12 +32,13 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
   final _currencyFormat = NumberFormat('#,##,##0', 'en_IN');
   final _dateFormat = DateFormat('dd/MM/yyyy');
 
-  void _showAddEditDialog([PmLedgerEntry? entry]) {
+  void _showAddEditDialog([PmLedgerEntry? entry, int? nextSr]) {
     showDialog(
       context: context,
       builder: (ctx) => _AddEditLedgerModal(
         recordId: widget.recordId,
         entry: entry,
+        nextSrNo: nextSr ?? 1,
         isPurchase: widget.isPurchase,
         onSaved: () async {
           if (widget.isPurchase) {
@@ -87,7 +87,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Ledger Full Screen',
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 280),
       transitionBuilder: (context, anim1, anim2, child) {
         final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic);
@@ -105,7 +105,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
           project: widget.project,
           isPurchase: widget.isPurchase,
           onRefresh: widget.onRefresh,
-          onAddEdit: (entry) => _showAddEditDialog(entry),
+          onAddEdit: (entry, [nextSr]) => _showAddEditDialog(entry, nextSr),
           onDelete: (id) => _deleteEntry(id),
         );
       },
@@ -275,7 +275,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                       ),
                       // + Add New Entry Button
                       InkWell(
-                        onTap: () => _showAddEditDialog(),
+                        onTap: () => _showAddEditDialog(null, entries.length + 1),
                         borderRadius: BorderRadius.circular(9999),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -284,7 +284,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                             borderRadius: BorderRadius.circular(9999),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF005CE6).withOpacity(0.3),
+                                color: const Color(0xFF005CE6).withValues(alpha: 0.3),
                                 blurRadius: 4,
                                 offset: const Offset(0, 1),
                               ),
@@ -312,7 +312,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
+                      color: Colors.black.withValues(alpha: 0.02),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -342,12 +342,12 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                   child: Center(
                     child: Column(
                       children: [
-                        Icon(LucideIcons.receipt, size: 40, color: const Color(0xFF94A3B8).withOpacity(0.5)),
+                        Icon(LucideIcons.receipt, size: 40, color: const Color(0xFF94A3B8).withValues(alpha: 0.5)),
                         const SizedBox(height: 10),
                         const Text('No ledger entries yet.', style: TextStyle(color: Color(0xFF64748B))),
                         const SizedBox(height: 12),
                         InkWell(
-                          onTap: () => _showAddEditDialog(),
+                          onTap: () => _showAddEditDialog(null, 1),
                           borderRadius: BorderRadius.circular(9999),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
@@ -366,12 +366,9 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                 LayoutBuilder(
                   builder: (context, ledgerConstraints) {
                     final double availableWidth = ledgerConstraints.maxWidth;
-                    // 11 columns, 10 gaps. Estimated base content width ~ 780.
-                    const baseSpacing = 20.0;
-                    double dynamicSpacing = baseSpacing;
-                    if (availableWidth > 780) {
-                      dynamicSpacing = math.max(baseSpacing, (availableWidth - 780) / 10 + 16.0);
-                    }
+                    // 11 columns. Clamped spacing ensures all columns including ACTIONS
+                    // fit comfortably within standard desktop views without getting pushed off-screen.
+                    final double dynamicSpacing = ((availableWidth - 900) / 10).clamp(10.0, 24.0);
 
                     return SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -382,7 +379,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                           headingRowHeight: 44,
                           dataRowMinHeight: 48,
                           dataRowMaxHeight: 52,
-                          horizontalMargin: 16,
+                          horizontalMargin: 12,
                           columnSpacing: dynamicSpacing,
                     columns: const [
                       DataColumn(label: Text('SR', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
@@ -395,17 +392,20 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                       DataColumn(numeric: true, label: Text('ORDER VAL', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
                       DataColumn(numeric: true, label: Text('EXTRA WRK', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
                       DataColumn(numeric: true, label: Text('RECEIVED', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                      DataColumn(label: Text('ACTION', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
+                      DataColumn(label: Text('ACTIONS', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
                     ],
                     rows: [
-                      ...entries.map((e) {
+                      ...entries.asMap().entries.map((mapEntry) {
+                        final index = mapEntry.key;
+                        final e = mapEntry.value;
+                        final sr = index + 1;
                         final isReceipt = (e.particulars ?? '').toLowerCase().contains('advance') ||
                             (e.particulars ?? '').toLowerCase().contains('receipt') ||
                             e.paymentReceived > 0;
 
                         return DataRow(
                           cells: [
-                            DataCell(Text('${e.srNo}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)))),
+                            DataCell(Text('$sr', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)))),
                             DataCell(Text(_dateFormat.format(e.date), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
                             // PAYMENT TYPE (Pill badge)
                             DataCell(
@@ -511,15 +511,38 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(LucideIcons.pencil, size: 14, color: Color(0xFF64748B)),
-                                    onPressed: () => _showAddEditDialog(e),
-                                    tooltip: 'Edit',
+                                  Tooltip(
+                                    message: 'Edit Entry',
+                                    child: InkWell(
+                                      onTap: () => _showAddEditDialog(e),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFFDBEAFE)),
+                                        ),
+                                        child: const Icon(LucideIcons.pencil, size: 13, color: Color(0xFF005CE6)),
+                                      ),
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(LucideIcons.trash2, size: 14, color: Color(0xFFEF4444)),
-                                    onPressed: () => _deleteEntry(e.id),
-                                    tooltip: 'Delete',
+                                  const SizedBox(width: 6),
+                                  Tooltip(
+                                    message: 'Delete Entry',
+                                    child: InkWell(
+                                      onTap: () => _deleteEntry(e.id),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEF2F2),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFFFEE2E2)),
+                                        ),
+                                        child: const Icon(LucideIcons.trash2, size: 13, color: Color(0xFFEF4444)),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -595,12 +618,14 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
 class _AddEditLedgerModal extends StatefulWidget {
   final String recordId;
   final PmLedgerEntry? entry;
+  final int nextSrNo;
   final bool isPurchase;
   final VoidCallback onSaved;
 
   const _AddEditLedgerModal({
     required this.recordId,
     this.entry,
+    this.nextSrNo = 1,
     this.isPurchase = false,
     required this.onSaved,
   });
@@ -680,7 +705,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
 
       final data = {
         if (widget.isPurchase) 'purchase_id': widget.recordId else 'project_id': widget.recordId,
-        'sr_no': widget.entry?.srNo ?? 1,
+        'sr_no': widget.entry?.srNo ?? widget.nextSrNo,
         'date': _date.toIso8601String().split('T').first,
         'payment_type': _paymentType,
         'particulars': actualParticulars.isNotEmpty ? actualParticulars : 'Bill',
@@ -1105,7 +1130,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF005CE6).withOpacity(0.3),
+                                color: const Color(0xFF005CE6).withValues(alpha: 0.3),
                                 blurRadius: 6,
                                 offset: const Offset(0, 2),
                               ),
@@ -1136,7 +1161,7 @@ class _FullScreenLedgerDialog extends ConsumerWidget {
   final dynamic project;
   final bool isPurchase;
   final VoidCallback onRefresh;
-  final void Function(PmLedgerEntry? entry) onAddEdit;
+  final void Function(PmLedgerEntry? entry, [int? nextSr]) onAddEdit;
   final Future<void> Function(String id) onDelete;
 
   const _FullScreenLedgerDialog({
@@ -1175,7 +1200,7 @@ class _FullScreenLedgerDialog extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF005CE6).withOpacity(0.1),
+                      color: const Color(0xFF005CE6).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(LucideIcons.receipt, size: 20, color: Color(0xFF005CE6)),
@@ -1311,14 +1336,17 @@ class _FullScreenLedgerDialog extends ConsumerWidget {
                               DataColumn(label: Text('ACTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
                             ],
                             rows: [
-                              ...entries.map((e) {
+                              ...entries.asMap().entries.map((mapEntry) {
+                                final index = mapEntry.key;
+                                final e = mapEntry.value;
+                                final sr = index + 1;
                                 final isReceipt = (e.particulars ?? '').toLowerCase().contains('advance') ||
                                     (e.particulars ?? '').toLowerCase().contains('receipt') ||
                                     e.paymentReceived > 0;
 
                                 return DataRow(
                                   cells: [
-                                    DataCell(Text('${e.srNo}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)))),
+                                    DataCell(Text('$sr', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)))),
                                     DataCell(Text(dateFormat.format(e.date), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
                                     DataCell(
                                       Container(
@@ -1419,15 +1447,38 @@ class _FullScreenLedgerDialog extends ConsumerWidget {
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          IconButton(
-                                            icon: const Icon(LucideIcons.pencil, size: 15, color: Color(0xFF64748B)),
-                                            onPressed: () => onAddEdit(e),
-                                            tooltip: 'Edit',
+                                          Tooltip(
+                                            message: 'Edit Entry',
+                                            child: InkWell(
+                                              onTap: () => onAddEdit(e),
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFEFF6FF),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: const Color(0xFFDBEAFE)),
+                                                ),
+                                                child: const Icon(LucideIcons.pencil, size: 13, color: Color(0xFF005CE6)),
+                                              ),
+                                            ),
                                           ),
-                                          IconButton(
-                                            icon: const Icon(LucideIcons.trash2, size: 15, color: Color(0xFFEF4444)),
-                                            onPressed: () => onDelete(e.id),
-                                            tooltip: 'Delete',
+                                          const SizedBox(width: 6),
+                                          Tooltip(
+                                            message: 'Delete Entry',
+                                            child: InkWell(
+                                              onTap: () => onDelete(e.id),
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFEF2F2),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: const Color(0xFFFEE2E2)),
+                                                ),
+                                                child: const Icon(LucideIcons.trash2, size: 13, color: Color(0xFFEF4444)),
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),

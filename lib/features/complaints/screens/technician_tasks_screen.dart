@@ -433,7 +433,7 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
                       itemCount: filtered.length,
                       itemBuilder: (context, idx) {
                         final c = filtered[idx];

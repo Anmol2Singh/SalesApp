@@ -180,7 +180,7 @@ class PdfNocBuilder {
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      'NO OBJECTION CERTIFICATE (NOC) FOR ${payload.productName.toUpperCase()}',
+                      '.NO OBJECTION CERTIFICATE (NOC) FOR ${payload.productName.toUpperCase()}',
                       style: pw.TextStyle(
                         fontSize: 11,
                         fontWeight: pw.FontWeight.bold,
@@ -190,9 +190,7 @@ class PdfNocBuilder {
                     ),
                     pw.SizedBox(height: 1.5),
                     pw.Text(
-                      isExact
-                          ? 'SATISFACTORY INSTALLATION & COMMISSION'
-                          : 'SATISFACTORY INSTALLATION & COMMISSIONING',
+                      'SATISFACTORY INSTALLATION & COMMISSION',
                       style: pw.TextStyle(
                         fontSize: 11,
                         fontWeight: pw.FontWeight.bold,
@@ -207,55 +205,48 @@ class PdfNocBuilder {
               pw.SizedBox(height: 12),
 
               // ─── RECIPIENT & DATE ──────────────────────────────────────────────
-              if (isExact)
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('To,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 2),
-                    pw.Text('    The Chairman / Secretary / Sir / Madam', style: const pw.TextStyle(fontSize: 9)),
-                  ],
-                )
-              else
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('To,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 2),
-                        pw.Text('  The Chairman / Secretary / Sir / Madam', style: const pw.TextStyle(fontSize: 9)),
-                      ],
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Row(
-                          children: [
-                            pw.Text('Date: ', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                            pw.Text(dateStr, style: const pw.TextStyle(fontSize: 9)),
-                          ],
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('To,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        payload.recipient.isNotEmpty ? payload.recipient : 'The Project Mannager.',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Row(
+                        children: [
+                          pw.Text('Date: ', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(dateStr, style: const pw.TextStyle(fontSize: 9)),
+                        ],
+                      ),
+                      if (!isExact && payload.quotationNumber != null) ...[
+                        pw.SizedBox(height: 1.5),
+                        pw.Text(
+                          'Ref. Quotation: ${payload.quotationNumber}',
+                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
                         ),
-                        if (payload.quotationNumber != null) ...[
-                          pw.SizedBox(height: 1.5),
-                          pw.Text(
-                            'Ref. Quotation: ${payload.quotationNumber}',
-                            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                          ),
-                        ],
-                        if (payload.installationTicketNo != null) ...[
-                          pw.SizedBox(height: 1),
-                          pw.Text(
-                            'Installation Ref.: ${payload.installationTicketNo}',
-                            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                          ),
-                        ],
                       ],
-                    ),
-                  ],
-                ),
+                      if (!isExact && payload.installationTicketNo != null) ...[
+                        pw.SizedBox(height: 1),
+                        pw.Text(
+                          'Installation Ref.: ${payload.installationTicketNo}',
+                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
 
               pw.SizedBox(height: 9),
 
@@ -311,7 +302,7 @@ class PdfNocBuilder {
                 text: pw.TextSpan(
                   children: [
                     pw.TextSpan(text: 'Equipment: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                    pw.TextSpan(text: payload.equipmentLabel, style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.TextSpan(text: payload.equipmentLabel.isNotEmpty ? payload.equipmentLabel : 'HEAT PUMP', style: const pw.TextStyle(fontSize: 8.5)),
                   ],
                 ),
               ),
@@ -319,18 +310,18 @@ class PdfNocBuilder {
 
               // Model No & Quantity lines
               ...payload.equipmentLines.map((line) {
+                final pLower = line.product.toLowerCase();
+                String lineText;
+                if (pLower.contains('heat pump')) {
+                  lineText = 'Heat Pump Capacity: ${line.model} & Quantity:  ${line.quantity} ${line.uom}';
+                } else if (pLower.contains('tank')) {
+                  lineText = 'Tank ${line.model}, Qty:${line.quantity} , Total Tank Volume: ${line.model}';
+                } else {
+                  lineText = '${line.product} Model No:  ${line.model}  & Quantity:  ${line.quantity}  ${line.uom}';
+                }
                 return pw.Padding(
                   padding: const pw.EdgeInsets.only(bottom: 3),
-                  child: pw.RichText(
-                    text: pw.TextSpan(
-                      children: [
-                        pw.TextSpan(text: '${line.product} Model No:  ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                        pw.TextSpan(text: '${line.model}  & Quantity:  ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.TextSpan(text: '${line.quantity}  ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                        pw.TextSpan(text: line.uom, style: const pw.TextStyle(fontSize: 8.5)),
-                      ],
-                    ),
-                  ),
+                  child: pw.Text(lineText, style: const pw.TextStyle(fontSize: 8.5)),
                 );
               }),
 
@@ -347,8 +338,8 @@ class PdfNocBuilder {
               pw.RichText(
                 text: pw.TextSpan(
                   children: [
-                    pw.TextSpan(text: 'Wiring: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                    pw.TextSpan(text: payload.wiring, style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.TextSpan(text: 'Leakage: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    pw.TextSpan(text: payload.leakage, style: const pw.TextStyle(fontSize: 8.5)),
                   ],
                 ),
               ),
@@ -379,24 +370,18 @@ class PdfNocBuilder {
               pw.Text('We confirm that:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 3),
 
-              if (isExact) ...[
-                pw.Text('1. The installation of the ${payload.productName} is permitted at the above location.', style: const pw.TextStyle(fontSize: 8.5)),
-                pw.SizedBox(height: 2),
-                pw.Text('3. Necessary precautions has been.', style: const pw.TextStyle(fontSize: 8.5)),
-              ] else ...[
-                ...payload.confirmations.asMap().entries.map((e) {
-                  final idx = e.key + 1;
-                  var txt = e.value.trim();
-                  // Strip existing leading number if present
-                  if (RegExp(r'^\d+\.?\s*').hasMatch(txt)) {
-                    txt = txt.replaceFirst(RegExp(r'^\d+\.?\s*'), '');
-                  }
-                  return pw.Padding(
-                    padding: const pw.EdgeInsets.only(bottom: 2),
-                    child: pw.Text('$idx. $txt', style: const pw.TextStyle(fontSize: 8.5)),
-                  );
-                }),
-              ],
+              ...payload.confirmations.asMap().entries.map((e) {
+                final idx = e.key + 1;
+                var txt = e.value.trim();
+                // Strip existing leading number if present
+                if (RegExp(r'^\d+\.?\s*').hasMatch(txt)) {
+                  txt = txt.replaceFirst(RegExp(r'^\d+\.?\s*'), '');
+                }
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 2.5),
+                  child: pw.Text('$idx. $txt', style: const pw.TextStyle(fontSize: 8.5)),
+                );
+              }),
 
               pw.SizedBox(height: 8),
 
@@ -405,125 +390,58 @@ class PdfNocBuilder {
                 payload.closingSentence,
                 style: const pw.TextStyle(fontSize: 8.5),
               ),
-              if (!isExact) ...[
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'This certificate is issued in good faith for record purposes and may be produced wherever required.',
-                  style: const pw.TextStyle(fontSize: 8.5),
-                ),
-              ],
 
               pw.Spacer(),
 
               // ─── SIGNATURE BLOCK ─────────────────────────────────────────────
-              if (isExact) ...[
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Customer', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    pw.Text(payload.companyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                  ],
-                ),
-                pw.SizedBox(height: 2),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Authorized Signatory', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Authorised Signatory', style: const pw.TextStyle(fontSize: 8.5)),
-                  ],
-                ),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.SizedBox(height: 3),
-                        pw.Text('Name: ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Designation: ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Signature: ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Seal: ', style: const pw.TextStyle(fontSize: 8.5)),
-                      ],
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
-                      children: [
-                        if (finalStamp != null)
-                          pw.Container(
-                            width: 80,
-                            height: 72,
-                            alignment: pw.Alignment.center,
-                            child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
-                          )
-                        else
-                          pw.SizedBox(height: 60),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 8.5)),
-                      ],
-                    ),
-                  ],
-                ),
-              ] else ...[
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Left: Customer / Authorized Signatory
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('Customer / Authorized Signatory', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 2),
-                        pw.Text('Place: ____________', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.Text('Date:  ____________', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Name: ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Designation: ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Signature: ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.SizedBox(height: 3),
-                        pw.Text('Seal: ', style: const pw.TextStyle(fontSize: 8.5)),
-                      ],
-                    ),
-
-                    // Right: Company Signatory + Stamp
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
-                      children: [
-                        pw.Text(
-                          payload.companyName,
-                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.Text(
-                          'Authorised Signatory',
-                          style: const pw.TextStyle(fontSize: 8.5),
-                        ),
-                        pw.SizedBox(height: 4),
-
-                        // Stamp Image
-                        if (finalStamp != null)
-                          pw.Container(
-                            width: 80,
-                            height: 72,
-                            alignment: pw.Alignment.center,
-                            child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
-                          )
-                        else
-                          pw.Container(
-                            width: 80,
-                            height: 60,
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Customer', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(payload.companyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Authorized Signatory', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Authorised Signatory', style: const pw.TextStyle(fontSize: 8.5)),
+                ],
+              ),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.SizedBox(height: 3),
+                      pw.Text('Name: ', style: const pw.TextStyle(fontSize: 8.5)),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Designation: ', style: const pw.TextStyle(fontSize: 8.5)),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Signature: ', style: const pw.TextStyle(fontSize: 8.5)),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Seal: ', style: const pw.TextStyle(fontSize: 8.5)),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      if (finalStamp != null)
+                        pw.Container(
+                          width: 80,
+                          height: 72,
+                          alignment: pw.Alignment.center,
+                          child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
+                        )
+                      else
+                        pw.SizedBox(height: 60),
+                    ],
+                  ),
+                ],
+              ),
               pw.SizedBox(height: 6),
 
               // ─── FOOTER (ENHANCED MODE) ──────────────────────────────────────

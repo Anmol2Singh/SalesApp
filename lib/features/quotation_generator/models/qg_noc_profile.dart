@@ -87,6 +87,65 @@ class QgNocProfile {
     };
   }
 
+  QgNocProfile copyWith({
+    String? id,
+    String? productName,
+    String? equipmentLabel,
+    String? workTypeText,
+    String? wiringDefault,
+    String? testingDefault,
+    String? remarkDefault,
+    List<String>? confirmationLines,
+    String? closingSentence,
+    String? companyNameOverride,
+    String? companyAddressOverride,
+    String? companyEmailOverride,
+    String? companyMobileOverride,
+    String? companyWebOverride,
+    String? logoUrlOverride,
+    String? stampPathOverride,
+    bool? isActive,
+  }) {
+    return QgNocProfile(
+      id: id ?? this.id,
+      productName: productName ?? this.productName,
+      equipmentLabel: equipmentLabel ?? this.equipmentLabel,
+      workTypeText: workTypeText ?? this.workTypeText,
+      wiringDefault: wiringDefault ?? this.wiringDefault,
+      testingDefault: testingDefault ?? this.testingDefault,
+      remarkDefault: remarkDefault ?? this.remarkDefault,
+      confirmationLines: confirmationLines ?? this.confirmationLines,
+      closingSentence: closingSentence ?? this.closingSentence,
+      companyNameOverride: companyNameOverride ?? this.companyNameOverride,
+      companyAddressOverride: companyAddressOverride ?? this.companyAddressOverride,
+      companyEmailOverride: companyEmailOverride ?? this.companyEmailOverride,
+      companyMobileOverride: companyMobileOverride ?? this.companyMobileOverride,
+      companyWebOverride: companyWebOverride ?? this.companyWebOverride,
+      logoUrlOverride: logoUrlOverride ?? this.logoUrlOverride,
+      stampPathOverride: stampPathOverride ?? this.stampPathOverride,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+
+  /// Heat pump profile matching standard NOC template
+  factory QgNocProfile.defaultHeatPumpProfile() {
+    return const QgNocProfile(
+      id: 'heat_pump',
+      productName: 'Heat Pump',
+      equipmentLabel: 'HEAT PUMP',
+      workTypeText: 'Heat Pump Water Heater System Installation & Commissioning work',
+      wiringDefault: 'Done',
+      testingDefault: 'Done',
+      remarkDefault: 'All Installation & Commissioning work Completed as per work order',
+      confirmationLines: [
+        '1. The installation of the heat pump system is permitted at the above location.',
+        '2. The system installed as per standard safety norms and guidelines.',
+        '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.',
+      ],
+      closingSentence: 'This NOC is issued upon request for installation and operation of the heat pump system.',
+    );
+  }
+
   /// Default fallback profile when no specific product match exists
   factory QgNocProfile.defaultProfile({String productName = 'System'}) {
     return QgNocProfile(
@@ -96,15 +155,13 @@ class QgNocProfile {
       workTypeText: '$productName Installation work',
       wiringDefault: 'Done',
       testingDefault: 'Done',
-      remarkDefault: 'All Installation & Commissioning work completed as per work order',
+      remarkDefault: 'All Installation & Commissioning work Completed as per work order',
       confirmationLines: [
-        '1. The installation of the $productName is permitted at the above location.',
-        '2. The installation and commissioning work has been completed as per the work order and to our satisfaction.',
-        '3. The $productName has been tested and handed over in proper working condition.',
-        '4. Necessary precautions have been taken during installation and commissioning.',
-        '5. We have no objection to the operation of the $productName at the above location.',
+        '1. The installation of the $productName system is permitted at the above location.',
+        '2. The system installed as per standard safety norms and guidelines.',
+        '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.',
       ],
-      closingSentence: 'This NOC is issued upon request for installation and operation of the $productName System.',
+      closingSentence: 'This NOC is issued upon request for installation and operation of the $productName system.',
     );
   }
 

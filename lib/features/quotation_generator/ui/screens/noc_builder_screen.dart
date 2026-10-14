@@ -44,16 +44,18 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
   // Controllers
   final _customerNameCtrl = TextEditingController();
   final _salutationCtrl = TextEditingController(text: 'M/s');
+  final _recipientCtrl = TextEditingController(text: 'The Project Mannager.');
   final _addressCtrl = TextEditingController();
   final _productNameCtrl = TextEditingController();
   final _subjectCtrl = TextEditingController();
   final _equipmentLabelCtrl = TextEditingController();
   final _workTypeCtrl = TextEditingController();
+  final _leakageCtrl = TextEditingController(text: 'Done');
   final _wiringCtrl = TextEditingController(text: 'Done');
   final _testingCtrl = TextEditingController(text: 'Done');
   final _remarkCtrl = TextEditingController(text: 'All Installation & Commissioning work Completed as per work order');
   final _closingSentenceCtrl = TextEditingController();
-  final _companyNameCtrl = TextEditingController(text: 'INSIYA TRADING CORPORATION');
+  final _companyNameCtrl = TextEditingController(text: 'INSIYA SOLAR INDUSTRY');
   final _companyAddressCtrl = TextEditingController(text: 'Office no.807,finswell,behind Hyatt Hotel,\n Viman Nagar, Pune 411014');
   final _companyEmailCtrl = TextEditingController(text: 'insiyaindia@gmail.com    info@insiyacorp.com');
   final _companyPhoneCtrl = TextEditingController(text: '+91 7588874019 & +91 9292922992');
@@ -74,11 +76,13 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
   void dispose() {
     _customerNameCtrl.dispose();
     _salutationCtrl.dispose();
+    _recipientCtrl.dispose();
     _addressCtrl.dispose();
     _productNameCtrl.dispose();
     _subjectCtrl.dispose();
     _equipmentLabelCtrl.dispose();
     _workTypeCtrl.dispose();
+    _leakageCtrl.dispose();
     _wiringCtrl.dispose();
     _testingCtrl.dispose();
     _remarkCtrl.dispose();
@@ -240,10 +244,21 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       _equipmentLines = extractedLines;
     }
 
-    _confirmationControllers = [
-      TextEditingController(text: '1. The installation of the $product is permitted at the above location.'),
-      TextEditingController(text: '3. Necessary precautions has been taken.'),
-    ];
+    if (product.toLowerCase().contains('heat pump')) {
+      _workTypeCtrl.text = 'Heat Pump Water Heater System Installation & Commissioning work';
+      _closingSentenceCtrl.text = 'This NOC is issued upon request for installation and operation of the heat pump system.';
+      _confirmationControllers = [
+        TextEditingController(text: '1. The installation of the heat pump system is permitted at the above location.'),
+        TextEditingController(text: '2. The system installed as per standard safety norms and guidelines.'),
+        TextEditingController(text: '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.'),
+      ];
+    } else {
+      _confirmationControllers = [
+        TextEditingController(text: '1. The installation of the $product system is permitted at the above location.'),
+        TextEditingController(text: '2. The system installed as per standard safety norms and guidelines.'),
+        TextEditingController(text: '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.'),
+      ];
+    }
   }
 
   QgNocPayload _buildCurrentPayload() {
@@ -255,6 +270,7 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       companyWebsite: _companyWebsiteCtrl.text.trim(),
       salutation: _salutationCtrl.text.trim(),
       customerName: _customerNameCtrl.text.trim(),
+      recipient: _recipientCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
       productName: _productNameCtrl.text.trim(),
       subject: _subjectCtrl.text.trim(),
@@ -262,6 +278,7 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       equipmentLabel: _equipmentLabelCtrl.text.trim(),
       equipmentLines: _equipmentLines,
       workType: _workTypeCtrl.text.trim(),
+      leakage: _leakageCtrl.text.trim(),
       wiring: _wiringCtrl.text.trim(),
       testing: _testingCtrl.text.trim(),
       remark: _remarkCtrl.text.trim(),

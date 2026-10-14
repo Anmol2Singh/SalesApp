@@ -42,6 +42,25 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
           'Work Remarks',
         ];
 
+  IconData _getTabIcon(String tab) {
+    switch (tab) {
+      case 'Financial Ledger':
+        return LucideIcons.receipt;
+      case 'Payment Terms':
+        return LucideIcons.calendar;
+      case 'Project Expenses':
+        return LucideIcons.wallet;
+      case 'Call Records':
+        return LucideIcons.phoneCall;
+      case 'Checklist':
+        return LucideIcons.checkSquare;
+      case 'Work Remarks':
+        return LucideIcons.messageSquare;
+      default:
+        return LucideIcons.fileText;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -530,40 +549,76 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                     SliverPersistentHeader(
                       pinned: true,
                       delegate: _SliverTabBarDelegate(
-                        height: 56,
+                        height: 58,
                         child: Container(
-                          color: Colors.white,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border(
+                              bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                            ),
+                          ),
                           padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24, vertical: 8),
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFFEFF6FF),
+                                color: const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(9999),
-                                border: Border.all(color: const Color(0xFFDBEAFE)),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
                               ),
-                              padding: const EdgeInsets.all(4),
+                              padding: const EdgeInsets.all(3.5),
                               child: TabBar(
                                 controller: _tabController,
                                 isScrollable: true,
                                 tabAlignment: TabAlignment.start,
+                                indicatorSize: TabBarIndicatorSize.tab,
+                                indicatorPadding: EdgeInsets.zero,
+                                labelPadding: const EdgeInsets.symmetric(horizontal: 20),
                                 indicator: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(9999),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
+                                      color: const Color(0xFF0F172A).withOpacity(0.08),
                                       blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                    BoxShadow(
+                                      color: const Color(0xFF005CE6).withOpacity(0.06),
+                                      blurRadius: 2,
                                       offset: const Offset(0, 1),
                                     ),
                                   ],
                                 ),
                                 labelColor: const Color(0xFF005CE6),
-                                unselectedLabelColor: const Color(0xFF475569),
-                                labelStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                                unselectedLabelStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                                unselectedLabelColor: const Color(0xFF64748B),
+                                labelStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.4,
+                                ),
+                                unselectedLabelStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.4,
+                                ),
                                 dividerColor: Colors.transparent,
-                                tabs: _tabs.map((t) => Tab(text: t.toUpperCase(), height: 32)).toList(),
+                                overlayColor: WidgetStateProperty.all(Colors.transparent),
+                                tabs: _tabs.map((t) {
+                                  final icon = _getTabIcon(t);
+                                  return Tab(
+                                    height: 35,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(icon, size: 14),
+                                        const SizedBox(width: 7),
+                                        Text(t.toUpperCase()),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
                               ),
                             ),
                           ),

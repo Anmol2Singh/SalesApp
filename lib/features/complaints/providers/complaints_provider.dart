@@ -428,30 +428,38 @@ Future<String> generateNextTicketNumber(dynamic ref) async {
 }
 
 final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) async {
-  List<TechnicianInfo> allTechs = [];
+  final Map<String, TechnicianInfo> techMap = {};
   try {
     final supabase = ref.watch(supabaseClientProvider);
     
+    // 1. Fetch from technicians table
     try {
       final techsResponse = await supabase.from('technicians').select();
       if (techsResponse.isNotEmpty) {
-        allTechs.addAll((techsResponse as List).map((json) {
-          return TechnicianInfo(
-            id: json['id'] as String? ?? '',
+        for (final json in (techsResponse as List)) {
+          final id = json['id'] as String? ?? '';
+          final rawEmail = json['email'] as String?;
+          final normEmail = rawEmail?.trim().toLowerCase();
+          final key = (normEmail != null && normEmail.isNotEmpty) ? normEmail : id;
+          if (key.isEmpty) continue;
+
+          techMap[key] = TechnicianInfo(
+            id: id,
             name: json['name'] as String? ?? 'Staff Tech',
-            email: json['email'] as String?,
+            email: rawEmail,
             phone: json['phone'] as String?,
             plainPassword: json['password'] as String?,
-            avatarUrl: '',
+            avatarUrl: json['avatar_url'] as String? ?? '',
             status: json['status'] as String? ?? 'Available',
             distance: 'Nearby',
-            activeTasksCount: 0,
-            rating: 4.9,
+            activeTasksCount: json['active_tasks_count'] as int? ?? 0,
+            rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
           );
-        }));
+        }
       }
     } catch (_) {}
 
+    // 2. Fetch from profiles table (authenticated staff with technician role)
     try {
       final profilesResponse = await supabase
           .from('profiles')
@@ -461,30 +469,80 @@ final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) 
       if (profilesResponse.isNotEmpty) {
         for (var json in (profilesResponse as List)) {
           final id = json['id'] as String? ?? '';
-          if (!allTechs.any((t) => t.id == id)) {
-            allTechs.add(TechnicianInfo(
-              id: id,
-              name: json['full_name'] as String? ?? 'Staff Tech',
-              email: json['email'] as String?,
-              phone: json['phone'] as String?,
-              plainPassword: json['plain_password'] as String?,
-              avatarUrl: '',
-              status: 'Available',
-              distance: 'Nearby',
-              activeTasksCount: 0,
-              rating: 4.9,
-            ));
+          final rawEmail = json['email'] as String?;
+          final normEmail = rawEmail?.trim().toLowerCase();
+          final key = (normEmail != null && normEmail.isNotEmpty) ? normEmail : id;
+          if (key.isEmpty) continue;
+
+          if (techMap.containsKey(key)) {
+            // MERGE: Prefer the Auth user UID from profiles and combine non-empty info
+            final existing = techMap[key]!;
+            final mergedPhone = (existing.phone != null && existing.phone!.trim().isNotEmpty)
+                ? existing.phone
+                : (json['phone'] as String?);
+            final mergedPass = (existing.plainPassword != null && existing.plainPassword!.isNotEmpty)
+                ? existing.plainPassword
+                : (json['plain_password'] as String?);
+            final mergedName = (existing.name.isNotEmpty && existing.name != 'Staff Tech')
+                ? existing.name
+                : (json['full_name'] as String? ?? 'Staff Tech');
+
+            techMap[key] = existing.copyWith(
+              id: id.isNotEmpty ? id : existing.id,
+              name: mergedName,
+              phone: mergedPhone,
+              plainPassword: mergedPass,
+            );
+          } else {
+            // Also check if existing technician matches by ID
+            final matchById = techMap.values.where((t) => t.id == id).firstOrNull;
+            if (matchById != null) {
+              final existingKey = (matchById.email?.trim().toLowerCase().isNotEmpty == true)
+                  ? matchById.email!.trim().toLowerCase()
+                  : matchById.id;
+              final mergedPhone = (matchById.phone != null && matchById.phone!.trim().isNotEmpty)
+                  ? matchById.phone
+                  : (json['phone'] as String?);
+              final mergedPass = (matchById.plainPassword != null && matchById.plainPassword!.isNotEmpty)
+                  ? matchById.plainPassword
+                  : (json['plain_password'] as String?);
+              final mergedName = (matchById.name.isNotEmpty && matchById.name != 'Staff Tech')
+                  ? matchById.name
+                  : (json['full_name'] as String? ?? 'Staff Tech');
+
+              techMap[existingKey] = matchById.copyWith(
+                id: id,
+                name: mergedName,
+                phone: mergedPhone,
+                plainPassword: mergedPass,
+              );
+            } else {
+              techMap[key] = TechnicianInfo(
+                id: id,
+                name: json['full_name'] as String? ?? 'Staff Tech',
+                email: rawEmail,
+                phone: json['phone'] as String?,
+                plainPassword: json['plain_password'] as String?,
+                avatarUrl: '',
+                status: 'Available',
+                distance: 'Nearby',
+                activeTasksCount: 0,
+                rating: 4.9,
+              );
+            }
           }
         }
       }
     } catch (_) {}
     
+    final allTechs = techMap.values.toList();
     allTechs.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return allTechs;
   } catch (_) {
-    return allTechs;
+    return techMap.values.toList();
   }
 });
+
 
 class ErrorCodesNotifier extends StateNotifier<List<ErrorCodeItem>> {
   final Ref ref;
