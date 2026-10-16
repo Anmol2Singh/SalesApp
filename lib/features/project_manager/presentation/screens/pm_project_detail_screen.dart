@@ -12,6 +12,10 @@ import '../tabs/pm_expenses_tab.dart';
 import '../tabs/pm_calling_records_tab.dart';
 import '../tabs/pm_swh_checklist_tab.dart';
 import '../tabs/pm_work_remarks_tab.dart';
+import '../../../../core/providers/company_provider.dart';
+import '../../../../core/models/app_company.dart';
+import '../../providers/pm_company_provider.dart';
+import '../../data/models/pm_company.dart';
 
 class PmProjectDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -123,8 +127,19 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
             final customerSince = record.createdAt != null
                 ? DateFormat('dd/MM/yyyy').format(record.createdAt!)
                 : (record.reminderDate != null ? DateFormat('dd/MM/yyyy').format(record.reminderDate!) : '10/10/2026');
-            final salesMan = record.salesMan ?? record.salesmanName ?? 'Sagar Farate';
-            final firmName = record.firmName ?? 'Insiya Trading Corporation';
+            final smCandidate = (record.salesMan != null && record.salesMan!.trim().isNotEmpty)
+                ? record.salesMan!.trim()
+                : ((record.salesmanName != null && record.salesmanName!.trim().isNotEmpty)
+                    ? record.salesmanName!.trim()
+                    : (record.customer?.salesmanName ?? record.customer?.assignedToName ?? ''));
+            final salesMan = smCandidate.isNotEmpty ? smCandidate : 'Unassigned';
+
+            final companies = ref.watch(pmCompaniesListProvider);
+            final matchedCompany = companies.cast<PmCompany?>().firstWhere(
+              (c) => c?.id == record.companyId,
+              orElse: () => null,
+            );
+            final firmName = matchedCompany?.name ?? (record.firmName.isNotEmpty ? record.firmName : 'Insiya Solar Industry');
 
             return LayoutBuilder(
               builder: (context, screenConstraints) {
@@ -163,8 +178,18 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
 
                 final moveCopyBtn = InkWell(
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Move / Copy Customer')),
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => _MoveCopyCustomerDialog(
+                        project: record,
+                        onSuccess: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/pm');
+                          }
+                        },
+                      ),
                     );
                   },
                   borderRadius: BorderRadius.circular(9999),
@@ -272,7 +297,15 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
 
                 final newCallRemarkBtn = InkWell(
                   onTap: () {
-                    context.push('/pm/quick-call-remark?id=${widget.id}&type=${widget.isPurchase ? "purchase" : "project"}');
+                    showPmCallingRecordDialog(
+                      context,
+                      recordId: widget.id,
+                      isPurchase: widget.isPurchase,
+                      onSaved: () {
+                        ref.invalidate(pmCallingRecordsProvider((id: widget.id, isPurchase: widget.isPurchase)));
+                        _refreshAll();
+                      },
+                    );
                   },
                   borderRadius: BorderRadius.circular(9999),
                   child: Container(
@@ -283,7 +316,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                       borderRadius: BorderRadius.circular(9999),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF005CE6).withOpacity(0.25),
+                          color: const Color(0xFF005CE6).withValues(alpha: 0.25),
                           blurRadius: 4,
                           offset: const Offset(0, 1),
                         ),
@@ -580,12 +613,12 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                                   borderRadius: BorderRadius.circular(9999),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF0F172A).withOpacity(0.08),
+                                      color: const Color(0xFF0F172A).withValues(alpha: 0.08),
                                       blurRadius: 4,
                                       offset: const Offset(0, 1),
                                     ),
                                     BoxShadow(
-                                      color: const Color(0xFF005CE6).withOpacity(0.06),
+                                      color: const Color(0xFF005CE6).withValues(alpha: 0.06),
                                       blurRadius: 2,
                                       offset: const Offset(0, 1),
                                     ),
@@ -779,6 +812,365 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
     return oldDelegate.height != height || oldDelegate.child != child;
+  }
+}
+
+class _MoveCopyCustomerDialog extends ConsumerStatefulWidget {
+  final dynamic project;
+  final VoidCallback onSuccess;
+
+  const _MoveCopyCustomerDialog({
+    required this.project,
+    required this.onSuccess,
+  });
+
+  @override
+  ConsumerState<_MoveCopyCustomerDialog> createState() => _MoveCopyCustomerDialogState();
+}
+
+class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog> {
+  bool _isMove = true;
+  String? _selectedCompanyId;
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final companiesAsync = ref.watch(appCompaniesProvider);
+    final companies = companiesAsync.valueOrNull ?? AppCompany.defaultCompanies;
+
+    if (_selectedCompanyId == null && companies.isNotEmpty) {
+      final other = companies.firstWhere(
+        (c) => c.id != widget.project.companyId,
+        orElse: () => companies.first,
+      );
+      _selectedCompanyId = other.id;
+    }
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(LucideIcons.copyPlus, color: Color(0xFF005CE6), size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Move / Copy Customer',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.x, size: 18, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.of(context).pop(),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Subtitle
+              Text.rich(
+                TextSpan(
+                  style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569), height: 1.4),
+                  children: [
+                    const TextSpan(text: 'Transfer or duplicate customer '),
+                    TextSpan(
+                      text: widget.project.siteName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    const TextSpan(text: ' to another company directory.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // TARGET COMPANY Label
+              const Text(
+                'TARGET COMPANY',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Target Company Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCompanyId,
+                    isExpanded: true,
+                    icon: const Icon(LucideIcons.chevronDown, size: 18, color: Color(0xFF64748B)),
+                    items: companies.map((c) {
+                      final isCurrent = c.id == widget.project.companyId;
+                      return DropdownMenuItem<String>(
+                        value: c.id,
+                        child: Text(
+                          c.name + (isCurrent ? ' (Current)' : ''),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: isCurrent ? FontWeight.w500 : FontWeight.w600,
+                            color: isCurrent ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedCompanyId = val);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // TRANSFER MODE Label
+              const Text(
+                'TRANSFER MODE',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Mode toggle cards
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => setState(() => _isMove = true),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _isMove ? const Color(0xFFEFF6FF) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _isMove ? const Color(0xFF005CE6) : const Color(0xFFE2E8F0),
+                            width: _isMove ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _isMove ? const Color(0xFF005CE6) : const Color(0xFF94A3B8),
+                                  width: 2,
+                                ),
+                              ),
+                              child: _isMove
+                                  ? Center(
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Color(0xFF005CE6),
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(LucideIcons.arrowLeftRight, size: 16, color: Color(0xFF005CE6)),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Move Customer',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => setState(() => _isMove = false),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: !_isMove ? const Color(0xFFEFF6FF) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: !_isMove ? const Color(0xFF005CE6) : const Color(0xFFE2E8F0),
+                            width: !_isMove ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: !_isMove ? const Color(0xFF005CE6) : const Color(0xFF94A3B8),
+                                  width: 2,
+                                ),
+                              ),
+                              child: !_isMove
+                                  ? Center(
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Color(0xFF005CE6),
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(LucideIcons.copy, size: 16, color: Color(0xFF005CE6)),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Copy Customer',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Helper message
+              Text(
+                _isMove
+                    ? 'Removes the customer from current company and transfers all records to the target company.'
+                    : 'Creates a duplicate copy of this customer and all associated records under the target company.',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+              ),
+
+              const SizedBox(height: 20),
+              const Divider(color: Color(0xFFE2E8F0), height: 1),
+              const SizedBox(height: 16),
+
+              // Action buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _execute,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF005CE6),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Text(
+                            _isMove ? 'Move Customer' : 'Copy Customer',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _execute() async {
+    if (_selectedCompanyId == null) return;
+    if (_isMove && _selectedCompanyId == widget.project.companyId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Target company is already the current company.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(pmProjectsRepositoryProvider);
+      if (_isMove) {
+        await repo.moveProject(widget.project.id, _selectedCompanyId!);
+        ref.invalidate(pmProjectsListProvider);
+        if (mounted) {
+          Navigator.of(context).pop();
+          widget.onSuccess();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Customer successfully moved to target company.')),
+          );
+        }
+      } else {
+        await repo.copyProject(widget.project.id, _selectedCompanyId!);
+        ref.invalidate(pmProjectsListProvider);
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Customer duplicate created in target company.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }
 

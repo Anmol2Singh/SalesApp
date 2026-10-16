@@ -69,10 +69,20 @@ class PmCallingRecordsTab extends ConsumerWidget {
                       const SizedBox(height: 10),
                       Text('No calling records logged yet.', style: TextStyle(color: pm.mutedForeground)),
                       const SizedBox(height: 12),
-                      PmButton(
-                        size: PmButtonSize.sm,
-                        onPressed: () => _showAddEditModal(context, ref),
-                        child: const Text('+ Log First Call'),
+                      InkWell(
+                        onTap: () => _showAddEditModal(context, ref),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF005CE6),
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: const Text(
+                            '+ Log First Call',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -150,28 +160,45 @@ class PmCallingRecordsTab extends ConsumerWidget {
   }
 
   void _showAddEditModal(BuildContext context, WidgetRef ref, [PmCallingRecord? record]) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _CallingRecordDialog(
-        recordId: recordId,
-        isPurchase: isPurchase,
-        record: record,
-        onSaved: () {
-          ref.invalidate(pmCallingRecordsProvider((id: recordId, isPurchase: isPurchase)));
-          onRefresh();
-        },
-      ),
+    showPmCallingRecordDialog(
+      context,
+      recordId: recordId,
+      isPurchase: isPurchase,
+      record: record,
+      onSaved: () {
+        ref.invalidate(pmCallingRecordsProvider((id: recordId, isPurchase: isPurchase)));
+        onRefresh();
+      },
     );
   }
 }
 
-class _CallingRecordDialog extends StatefulWidget {
+void showPmCallingRecordDialog(
+  BuildContext context, {
+  required String recordId,
+  bool isPurchase = false,
+  PmCallingRecord? record,
+  required VoidCallback onSaved,
+}) {
+  showDialog(
+    context: context,
+    builder: (ctx) => PmCallingRecordDialog(
+      recordId: recordId,
+      isPurchase: isPurchase,
+      record: record,
+      onSaved: onSaved,
+    ),
+  );
+}
+
+class PmCallingRecordDialog extends StatefulWidget {
   final String recordId;
   final bool isPurchase;
   final PmCallingRecord? record;
   final VoidCallback onSaved;
 
-  const _CallingRecordDialog({
+  const PmCallingRecordDialog({
+    super.key,
     required this.recordId,
     this.isPurchase = false,
     this.record,
@@ -179,10 +206,10 @@ class _CallingRecordDialog extends StatefulWidget {
   });
 
   @override
-  State<_CallingRecordDialog> createState() => _CallingRecordDialogState();
+  State<PmCallingRecordDialog> createState() => _PmCallingRecordDialogState();
 }
 
-class _CallingRecordDialogState extends State<_CallingRecordDialog> {
+class _PmCallingRecordDialogState extends State<PmCallingRecordDialog> {
   final _formKey = GlobalKey<FormState>();
   DateTime _date = DateTime.now();
   final _descCtrl = TextEditingController();

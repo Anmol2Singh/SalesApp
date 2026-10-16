@@ -43,6 +43,13 @@ class _PmQuickCallRemarkScreenState extends ConsumerState<PmQuickCallRemarkScree
 
       await ref.read(pmLedgerRepositoryProvider).addCallingRecord(data);
       ref.invalidate(pmCallingRecordsProvider((id: widget.id, isPurchase: widget.isPurchase)));
+      if (widget.isPurchase) {
+        ref.invalidate(pmPurchaseDetailProvider(widget.id));
+        ref.invalidate(pmPurchasesListProvider);
+      } else {
+        ref.invalidate(pmProjectDetailProvider(widget.id));
+        ref.invalidate(pmProjectsListProvider);
+      }
 
       if (mounted) context.pop();
     } catch (e) {

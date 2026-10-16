@@ -1,6 +1,7 @@
 // lib/features/quotation_generator/models/deal_quotation_item.dart
 
 import 'package:intl/intl.dart';
+import '../../../core/utils/financial_year_helper.dart';
 
 /// Represents a source quotation originating from a deal in core CRM/Pipelines.
 /// Strictly read-only representation.
@@ -212,7 +213,7 @@ class DealQuotationItem {
 
     return DealQuotationItem(
       id: row['id'] as String? ?? '',
-      quotationNumber: row['quotation_number'] as String? ?? '',
+      quotationNumber: FinancialYearHelper.formatDocumentNumber(row['quotation_number'] as String? ?? '', orderD),
       status: row['status'] as String? ?? 'Draft',
       revision: (row['revision'] as num?)?.toInt() ?? 1,
       orderDate: orderD,

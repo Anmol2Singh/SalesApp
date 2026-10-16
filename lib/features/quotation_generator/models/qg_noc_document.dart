@@ -102,6 +102,14 @@ class QgNocDocument {
     }
     return const [];
   }
+  List<String> get confirmations {
+    final raw = payload['confirmations'];
+    if (raw is List) {
+      return raw.map((e) => e.toString()).toList();
+    }
+    return const [];
+  }
+  String? get closingSentence => payload['closing_sentence']?.toString();
   String get equipmentSummary => equipmentLines.isNotEmpty
       ? equipmentLines.map((e) => '${e.model} (${e.quantity} ${e.uom})').join(', ')
       : productName;

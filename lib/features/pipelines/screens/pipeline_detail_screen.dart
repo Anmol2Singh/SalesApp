@@ -2614,11 +2614,14 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         wiring: 'Done',
         testing: 'Done',
         remark: 'All Installation & Commissioning work Completed as per work order',
-        confirmations: [
-          '1. The installation of the ${doc.productName} is permitted at the above location.',
-          '3. Necessary precautions has been taken.',
-        ],
-        closingSentence: 'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
+        confirmations: doc.confirmations.isNotEmpty
+            ? doc.confirmations
+            : (await QgNocRepository.instance.getProfileForProduct(doc.productName))
+                .confirmationLines
+                .map((l) => l.replaceAll('{Product}', doc.productName))
+                .toList(),
+        closingSentence: doc.closingSentence ??
+            'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
         wordingMode: NocWordingMode.templateExact,
         quotationNumber: doc.quotationNumber,
       );
@@ -2769,8 +2772,12 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         itemsTreatedAsProducts: itemsTreatedAsProducts,
       );
 
-      // 6. Company details strictly following pdf_template
-      final compConfig = await QgNocRepository.fetchCompanyDetailsFromTemplate(supabase);
+      // 6. Company details strictly following assigned product company
+      final compConfig = await QgNocRepository.fetchCompanyDetailsFromTemplate(
+        supabase,
+        productId: pipeline.productId,
+        productName: productName,
+      );
       final companyName = compConfig['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION';
       final companyAddress = compConfig['company_address']?.toString() ?? compConfig['address']?.toString() ?? '';
       final companyPhone = compConfig['company_phone']?.toString() ?? compConfig['phone']?.toString() ?? '';
@@ -2782,7 +2789,18 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       final subject = 'No Objection Certificate for Installation & Commissioning of $productName.';
       final quoteNumber = qData?['quotation_number']?.toString() ?? pipeline.quotation?.quotationNumber;
 
-      // 8. Build Payload
+      // 8. Fetch Profile and Build Payload
+      final nocProfile = await QgNocRepository.instance.getProfileForProduct(productName);
+      final profileConfirmations = nocProfile.confirmationLines.isNotEmpty
+          ? nocProfile.confirmationLines.map((l) => l.replaceAll('{Product}', productName)).toList()
+          : [
+              '1. The installation of the $productName system is permitted at the above location.',
+              '2. The system installed as per standard safety norms and guidelines.',
+              '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.',
+            ];
+      final profileClosing = (nocProfile.closingSentence ?? 'This NOC is issued upon request for installation and operation of the {Product} System.')
+          .replaceAll('{Product}', productName);
+
       final payload = QgNocPayload(
         companyName: companyName,
         companyAddress: companyAddress,
@@ -2802,11 +2820,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         wiring: 'Done',
         testing: 'Done',
         remark: 'All Installation & Commissioning work Completed as per work order',
-        confirmations: [
-          '1. The installation of the $productName is permitted at the above location.',
-          '3. Necessary precautions has been taken.',
-        ],
-        closingSentence: 'This NOC is issued upon request for installation and operation of the $productName System.',
+        confirmations: profileConfirmations,
+        closingSentence: profileClosing,
         wordingMode: NocWordingMode.templateExact,
         quotationNumber: quoteNumber,
       );
@@ -2825,6 +2840,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         equipmentLines: equipmentLines,
         pdfBytes: pdfBytes,
         companySnapshot: compConfig,
+        confirmations: profileConfirmations,
+        closingSentence: profileClosing,
         overrideReason: 'Completed deal installation & commissioning verified for $productName',
       );
 
@@ -2940,11 +2957,70 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
                   ),
                 ),
               ),
+              if (hasDocs) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _confirmDeleteNoc(docs.first),
+                  icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                  label: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFFECACA)),
+                    backgroundColor: const Color(0xFFFEF2F2),
+                    elevation: 0,
+                  ),
+                ),
+              ],
             ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDeleteNoc(QgNocDocument doc) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete NOC Certificate'),
+        content: Text(
+          'Are you sure you want to delete this No Objection Certificate (${doc.nocNumber})?\n\nYou can generate a new NOC afterwards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await QgNocRepository.deleteNoc(doc.id);
+        if (mounted) {
+          setState(() {
+            _nocDocs = [];
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('NOC deleted successfully. You can now re-generate it.'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting NOC: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
   }
 }
 

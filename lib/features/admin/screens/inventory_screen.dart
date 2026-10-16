@@ -2,14 +2,15 @@ import 'dart:io';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
+import '../../../core/models/app_company.dart';
 import '../../../core/models/inventory_item.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/providers/company_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/manage_boq_items_provider.dart';
 import 'product_catalog_screen.dart';
@@ -356,6 +357,33 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               ),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          Builder(builder: (context) {
+                            final assignedCompany = ref.watch(companyForProductProvider(product.id));
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.apartment, size: 12, color: Colors.indigo.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    assignedCompany.name,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.indigo.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     ],
@@ -961,6 +989,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   void _showAddProductDialog(BuildContext context) {
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
+    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final defaultCompany = ref.read(defaultCompanyProvider);
+    String selectedCompanyId = defaultCompany.id;
     final formKey = GlobalKey<FormState>();
     bool isSaving = false;
 
@@ -978,29 +1009,53 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ),
           content: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Product Name *',
-                    hintText: 'e.g. Commercial Heat Pump',
-                    prefixIcon: Icon(Icons.label_outline),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Product Name *',
+                      hintText: 'e.g. Commercial Heat Pump',
+                      prefixIcon: Icon(Icons.label_outline),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: categoryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Category *',
-                    hintText: 'e.g. HVAC, Access Control, SWH',
-                    prefixIcon: Icon(Icons.category_outlined),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Category *',
+                      hintText: 'e.g. HVAC, Access Control, SWH',
+                      prefixIcon: Icon(Icons.category_outlined),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCompanyId,
+                    decoration: const InputDecoration(
+                      labelText: 'Default Company (Quotations & Deals)',
+                      prefixIcon: Icon(Icons.apartment),
+                    ),
+                    items: companies.map((c) {
+                      return DropdownMenuItem<String>(
+                        value: c.id,
+                        child: Text(
+                          c.isDefault ? '${c.name} (Default)' : c.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setModalState(() => selectedCompanyId = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -1020,10 +1075,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         await supabase.from('products').insert({
                           'name': nameController.text.trim(),
                           'category': categoryController.text.trim(),
+                          'company_id': selectedCompanyId,
                           'base_specs': {
                             'quotation_fields': [],
                             'boq_required_fields': [],
                             'capacities': [],
+                            'company_id': selectedCompanyId,
                           },
                           'is_active': true,
                         });
@@ -1057,6 +1114,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   void _showEditProductDialog(BuildContext context, Product product) {
     final nameController = TextEditingController(text: product.name);
     final categoryController = TextEditingController(text: product.category ?? '');
+    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final defaultCompany = ref.read(defaultCompanyProvider);
+    String selectedCompanyId = product.companyId ?? defaultCompany.id;
+    if (!companies.any((c) => c.id == selectedCompanyId)) {
+      selectedCompanyId = defaultCompany.id;
+    }
     bool isActive = product.isActive;
     final formKey = GlobalKey<FormState>();
     bool isSaving = false;
@@ -1069,28 +1132,52 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           title: const Text('Edit Product', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
           content: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Product Name *', prefixIcon: Icon(Icons.label_outline)),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: categoryController,
-                  decoration: const InputDecoration(labelText: 'Category *', prefixIcon: Icon(Icons.category_outlined)),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Product is Active', style: TextStyle(fontFamily: 'Inter', fontSize: 14)),
-                  value: isActive,
-                  onChanged: (val) => setModalState(() => isActive = val),
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Product Name *', prefixIcon: Icon(Icons.label_outline)),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(labelText: 'Category *', prefixIcon: Icon(Icons.category_outlined)),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCompanyId,
+                    decoration: const InputDecoration(
+                      labelText: 'Default Company (Quotations & Deals)',
+                      prefixIcon: Icon(Icons.apartment),
+                    ),
+                    items: companies.map((c) {
+                      return DropdownMenuItem<String>(
+                        value: c.id,
+                        child: Text(
+                          c.isDefault ? '${c.name} (Default)' : c.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setModalState(() => selectedCompanyId = val);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Product is Active', style: TextStyle(fontFamily: 'Inter', fontSize: 14)),
+                    value: isActive,
+                    onChanged: (val) => setModalState(() => isActive = val),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -1104,10 +1191,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       setModalState(() => isSaving = true);
                       try {
                         final supabase = ref.read(supabaseClientProvider);
+                        final updatedSpecs = Map<String, dynamic>.from(product.baseSpecs.toJson());
+                        updatedSpecs['company_id'] = selectedCompanyId;
+
                         await supabase.from('products').update({
                           'name': nameController.text.trim(),
                           'category': categoryController.text.trim(),
                           'is_active': isActive,
+                          'company_id': selectedCompanyId,
+                          'base_specs': updatedSpecs,
                           'updated_at': DateTime.now().toIso8601String(),
                         }).eq('id', product.id);
 

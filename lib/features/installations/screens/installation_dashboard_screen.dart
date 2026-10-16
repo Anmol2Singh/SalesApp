@@ -280,62 +280,41 @@ class _InstallationDashboardScreenState
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 800;
-              final card1 = _buildKpiCard(
-                title: 'Total\nInstallations',
-                value: '$totalCount',
-                badgeColor: const Color(0xFF2563EB),
-                icon: Icons.assignment_outlined,
-              );
-              final card2 = _buildKpiCard(
-                title: 'Pending\nAllocation',
-                value: '$pendingCount',
-                badgeColor: const Color(0xFFEF4444),
-                icon: Icons.hourglass_empty_rounded,
-              );
-              final card3 = _buildKpiCard(
-                title: 'In\nProgress',
-                value: '$inProgressCount',
-                badgeColor: const Color(0xFF06B6D4),
-                icon: Icons.engineering_outlined,
-              );
-              final card4 = _buildKpiCard(
-                title: 'Completed\nInstalls',
-                value: '$closedCount',
-                badgeColor: const Color(0xFF10B981),
-                icon: Icons.check_circle_outline,
-              );
+              final crossAxisCount = isWide ? 4 : 2;
+              final childAspectRatio = isWide ? 1.6 : 1.34;
 
-              if (isWide) {
-                return Row(
-                  children: [
-                    Expanded(child: card1),
-                    const SizedBox(width: 10),
-                    Expanded(child: card2),
-                    const SizedBox(width: 10),
-                    Expanded(child: card3),
-                    const SizedBox(width: 10),
-                    Expanded(child: card4),
-                  ],
-                );
-              }
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: childAspectRatio,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(child: card1),
-                      const SizedBox(width: 10),
-                      Expanded(child: card2),
-                    ],
+                  _buildKpiCard(
+                    title: 'Total\nInstallations',
+                    value: '$totalCount',
+                    badgeColor: const Color(0xFF2563EB),
+                    icon: Icons.assignment_outlined,
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(child: card3),
-                      const SizedBox(width: 10),
-                      Expanded(child: card4),
-                    ],
+                  _buildKpiCard(
+                    title: 'Pending\nAllocation',
+                    value: '$pendingCount',
+                    badgeColor: const Color(0xFFEF4444),
+                    icon: Icons.hourglass_empty_rounded,
+                  ),
+                  _buildKpiCard(
+                    title: 'In\nProgress',
+                    value: '$inProgressCount',
+                    badgeColor: const Color(0xFF06B6D4),
+                    icon: Icons.engineering_outlined,
+                  ),
+                  _buildKpiCard(
+                    title: 'Completed\nInstalls',
+                    value: '$closedCount',
+                    badgeColor: const Color(0xFF10B981),
+                    icon: Icons.check_circle_outline,
                   ),
                 ],
               );
@@ -474,20 +453,22 @@ class _InstallationDashboardScreenState
     required Color badgeColor,
     required IconData icon,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Colors.grey.shade200,
+            color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
             width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -495,29 +476,29 @@ class _InstallationDashboardScreenState
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     color: badgeColor,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: Colors.white, size: 18),
+                  child: Icon(icon, color: Colors.white, size: 22),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.grey.shade300 : const Color(0xFF1E293B),
                       height: 1.2,
                     ),
                     maxLines: 2,
@@ -525,17 +506,17 @@ class _InstallationDashboardScreenState
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                   letterSpacing: -0.5,
                 ),
               ),

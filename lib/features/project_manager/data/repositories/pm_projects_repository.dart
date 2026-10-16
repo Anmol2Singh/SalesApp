@@ -109,19 +109,22 @@ class PmProjectsRepository {
     final orderVal = (data['order_value'] as num?)?.toDouble() ?? 0.0;
     if (orderVal > 0) {
       try {
+        final dateStr = (data['created_at'] != null && data['created_at'].toString().isNotEmpty)
+            ? data['created_at'].toString().split('T').first
+            : DateTime.now().toIso8601String().split('T').first;
         await _supabase.from('pm_ledger_entries').insert({
           'project_id': project.id,
           'sr_no': 1,
-          'date': data['created_at'] ?? DateTime.now().toIso8601String(),
-          'payment_type': 'Order',
-          'particulars': 'Initial Order Value',
-          'bill_status': 'BOOKED',
+          'date': dateStr,
+          'payment_type': 'Cash',
+          'particulars': 'Order Value',
+          'bill_submitted': true,
+          'payment_receipt': false,
           'order_value': orderVal,
-          'sales_matrix': 0.0,
-          'material_outward': 0.0,
-          'extra_work': 0.0,
+          'sales_m_value': 0.0,
+          'm_outward_value': 0.0,
+          'extra_work_value': 0.0,
           'payment_received': 0.0,
-          'created_by': userId,
         });
       } catch (e) {
         // Fallback gracefully without breaking project creation
@@ -186,7 +189,6 @@ class PmProjectsRepository {
         .order('sr_no', ascending: true);
 
     final entries = (entriesRes as List<dynamic>);
-    if (entries.isEmpty) return;
 
     double totalSalesM = 0;
     double totalMOutward = 0;
@@ -222,4 +224,63 @@ class PmProjectsRepository {
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', projectId);
   }
+
+  /// Move a project and all its records to a target company
+  Future<void> moveProject(String projectId, String targetCompanyId) async {
+    await _supabase.from('pm_projects').update({
+      'company_id': targetCompanyId,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', projectId);
+  }
+
+  /// Copy/duplicate a project and all its child records into a target company
+  Future<String> copyProject(String projectId, String targetCompanyId) async {
+    final origRes = await _supabase.from('pm_projects').select().eq('id', projectId).single();
+    final orig = Map<String, dynamic>.from(origRes);
+
+    orig.remove('id');
+    orig.remove('created_at');
+    orig.remove('updated_at');
+
+    final nextId = await getNextIdNo();
+    orig['id_no'] = nextId;
+    orig['company_id'] = targetCompanyId;
+    orig['created_at'] = DateTime.now().toIso8601String();
+    orig['updated_at'] = DateTime.now().toIso8601String();
+
+    final inserted = await _supabase.from('pm_projects').insert(orig).select('id').single();
+    final newId = inserted['id'] as String;
+
+    // Duplicate child tables
+    final childTables = [
+      'pm_ledger_entries',
+      'pm_payment_terms',
+      'pm_expenses',
+      'pm_calling_records',
+      'pm_checklist_items',
+      'pm_work_remarks',
+    ];
+
+    for (final tbl in childTables) {
+      try {
+        final rows = await _supabase.from(tbl).select().eq('project_id', projectId);
+        final list = (rows as List<dynamic>);
+        if (list.isNotEmpty) {
+          final toInsert = list.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            m.remove('id');
+            m.remove('created_at');
+            m['project_id'] = newId;
+            return m;
+          }).toList();
+          await _supabase.from(tbl).insert(toInsert);
+        }
+      } catch (e) {
+        // Continue copying other tables if one fails
+      }
+    }
+
+    return newId;
+  }
 }
+

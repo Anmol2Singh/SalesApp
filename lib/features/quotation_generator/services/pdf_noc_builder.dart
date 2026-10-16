@@ -52,7 +52,24 @@ class PdfNocBuilder {
     );
 
     final isExact = payload.wordingMode == NocWordingMode.templateExact;
+    final isHeatPump = payload.productName.toLowerCase().contains('heat pump');
     final dateStr = DateFormat('dd/MM/yyyy').format(payload.date);
+    
+    final effectiveCompanyName = payload.companyName.isNotEmpty
+        ? payload.companyName
+        : (isHeatPump ? 'INSIYA SOLAR INDUSTRY' : 'INSIYA TRADING CORPORATION');
+    final effectiveCompanyAddress = payload.companyAddress.isNotEmpty
+        ? payload.companyAddress
+        : 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final effectiveCompanyEmail = payload.companyEmail.isNotEmpty
+        ? payload.companyEmail
+        : 'insiyasolarindustry@gmail.com';
+    final effectiveCompanyPhone = payload.companyPhone.isNotEmpty
+        ? payload.companyPhone
+        : '+91 9292922992';
+    final effectiveCompanyWebsite = payload.companyWebsite.isNotEmpty
+        ? payload.companyWebsite
+        : 'www.izyheat.com';
 
     pdf.addPage(
       pw.Page(
@@ -84,7 +101,7 @@ class PdfNocBuilder {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            payload.companyName,
+                            effectiveCompanyName,
                             style: pw.TextStyle(
                               fontSize: 13,
                               fontWeight: pw.FontWeight.bold,
@@ -102,7 +119,7 @@ class PdfNocBuilder {
                               pw.Container(
                                 width: 310,
                                 child: pw.Text(
-                                  payload.companyAddress,
+                                  effectiveCompanyAddress,
                                   style: pw.TextStyle(fontSize: 7.5, fontStyle: pw.FontStyle.italic),
                                 ),
                               ),
@@ -116,7 +133,7 @@ class PdfNocBuilder {
                                 style: pw.TextStyle(fontSize: 7.5, fontStyle: pw.FontStyle.italic),
                               ),
                               pw.Text(
-                                payload.companyEmail,
+                                effectiveCompanyEmail,
                                 style: pw.TextStyle(
                                   fontSize: 7.5,
                                   fontStyle: pw.FontStyle.italic,
@@ -134,7 +151,7 @@ class PdfNocBuilder {
                                 style: pw.TextStyle(fontSize: 7.5, fontStyle: pw.FontStyle.italic),
                               ),
                               pw.Text(
-                                payload.companyPhone,
+                                effectiveCompanyPhone,
                                 style: pw.TextStyle(fontSize: 7.5, fontStyle: pw.FontStyle.italic),
                               ),
                             ],
@@ -147,7 +164,7 @@ class PdfNocBuilder {
                                 style: pw.TextStyle(fontSize: 7.5, fontStyle: pw.FontStyle.italic),
                               ),
                               pw.Text(
-                                payload.companyWebsite,
+                                effectiveCompanyWebsite,
                                 style: pw.TextStyle(
                                   fontSize: 7.5,
                                   fontStyle: pw.FontStyle.italic,
@@ -180,7 +197,7 @@ class PdfNocBuilder {
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      '.NO OBJECTION CERTIFICATE (NOC) FOR ${payload.productName.toUpperCase()}',
+                      'NO OBJECTION CERTIFICATE (NOC) FOR ${payload.productName.toUpperCase()}',
                       style: pw.TextStyle(
                         fontSize: 11,
                         fontWeight: pw.FontWeight.bold,
@@ -190,7 +207,9 @@ class PdfNocBuilder {
                     ),
                     pw.SizedBox(height: 1.5),
                     pw.Text(
-                      'SATISFACTORY INSTALLATION & COMMISSION',
+                      isExact
+                          ? 'SATISFACTORY INSTALLATION & COMMISSION'
+                          : 'SATISFACTORY INSTALLATION & COMMISSIONING',
                       style: pw.TextStyle(
                         fontSize: 11,
                         fontWeight: pw.FontWeight.bold,
@@ -205,48 +224,58 @@ class PdfNocBuilder {
               pw.SizedBox(height: 12),
 
               // ─── RECIPIENT & DATE ──────────────────────────────────────────────
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('To,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 2),
-                      pw.Text(
-                        payload.recipient.isNotEmpty ? payload.recipient : 'The Project Mannager.',
-                        style: const pw.TextStyle(fontSize: 9),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Row(
-                        children: [
-                          pw.Text('Date: ', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                          pw.Text(dateStr, style: const pw.TextStyle(fontSize: 9)),
+              if (isExact)
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('To,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 2),
+                    pw.Text('    The Chairman / Secretary / Sir / Madam', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                )
+              else
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('To,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          payload.recipient.isNotEmpty ? payload.recipient : 'The Project Mannager.',
+                          style: const pw.TextStyle(fontSize: 9),
+                        ),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Row(
+                          children: [
+                            pw.Text('Date: ', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                            pw.Text(dateStr, style: const pw.TextStyle(fontSize: 9)),
+                          ],
+                        ),
+                        if (payload.quotationNumber != null) ...[
+                          pw.SizedBox(height: 1.5),
+                          pw.Text(
+                            'Ref. Quotation: ${payload.quotationNumber}',
+                            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                          ),
                         ],
-                      ),
-                      if (!isExact && payload.quotationNumber != null) ...[
-                        pw.SizedBox(height: 1.5),
-                        pw.Text(
-                          'Ref. Quotation: ${payload.quotationNumber}',
-                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                        ),
+                        if (payload.installationTicketNo != null) ...[
+                          pw.SizedBox(height: 1),
+                          pw.Text(
+                            'Installation Ref.: ${payload.installationTicketNo}',
+                            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                          ),
+                        ],
                       ],
-                      if (!isExact && payload.installationTicketNo != null) ...[
-                        pw.SizedBox(height: 1),
-                        pw.Text(
-                          'Installation Ref.: ${payload.installationTicketNo}',
-                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
 
               pw.SizedBox(height: 9),
 
@@ -308,28 +337,56 @@ class PdfNocBuilder {
               ),
               pw.SizedBox(height: 3.5),
 
-              // Model No & Quantity lines
+              // Model No & Quantity lines strictly as per reference template
               ...payload.equipmentLines.map((line) {
                 final pLower = line.product.toLowerCase();
-                String lineText;
-                if (pLower.contains('heat pump')) {
-                  lineText = 'Heat Pump Capacity: ${line.model} & Quantity:  ${line.quantity} ${line.uom}';
-                } else if (pLower.contains('tank')) {
-                  lineText = 'Tank ${line.model}, Qty:${line.quantity} , Total Tank Volume: ${line.model}';
+                final isHpLine = pLower.contains('heat pump') || isHeatPump;
+                final isTank = pLower.contains('tank');
+                
+                if (isHpLine && !isTank && !pLower.contains('barrier')) {
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 3),
+                    child: pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(text: 'Heat Pump Capacity: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                          pw.TextSpan(text: '${line.model} & Quantity:  ', style: const pw.TextStyle(fontSize: 8.5)),
+                          pw.TextSpan(text: '${line.quantity} ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                          pw.TextSpan(text: line.uom, style: const pw.TextStyle(fontSize: 8.5)),
+                        ],
+                      ),
+                    ),
+                  );
+                } else if (isTank) {
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 3),
+                    child: pw.Text(
+                      'Tank ${line.model}, Qty:${line.quantity} , Total Tank Volume: ${line.model}',
+                      style: const pw.TextStyle(fontSize: 8.5),
+                    ),
+                  );
                 } else {
-                  lineText = '${line.product} Model No:  ${line.model}  & Quantity:  ${line.quantity}  ${line.uom}';
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 3),
+                    child: pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(text: 'Boom Barrier Model No:  ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                          pw.TextSpan(text: '${line.model}  & Quantity:  ', style: const pw.TextStyle(fontSize: 8.5)),
+                          pw.TextSpan(text: '${line.quantity}  ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                          pw.TextSpan(text: line.uom, style: const pw.TextStyle(fontSize: 8.5)),
+                        ],
+                      ),
+                    ),
+                  );
                 }
-                return pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 3),
-                  child: pw.Text(lineText, style: const pw.TextStyle(fontSize: 8.5)),
-                );
               }),
 
               pw.RichText(
                 text: pw.TextSpan(
                   children: [
                     pw.TextSpan(text: 'Work type : ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                    pw.TextSpan(text: payload.workType, style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.TextSpan(text: payload.workType.isNotEmpty ? payload.workType : (isHeatPump ? 'Heat pump Installation work' : 'Boom Barrier Installation work'), style: const pw.TextStyle(fontSize: 8.5)),
                   ],
                 ),
               ),
@@ -338,8 +395,8 @@ class PdfNocBuilder {
               pw.RichText(
                 text: pw.TextSpan(
                   children: [
-                    pw.TextSpan(text: 'Leakage: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                    pw.TextSpan(text: payload.leakage, style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.TextSpan(text: isHeatPump ? 'Leakage: ' : 'Wiring: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    pw.TextSpan(text: isHeatPump ? (payload.leakage.isNotEmpty ? payload.leakage : 'Done') : (payload.wiring.isNotEmpty ? payload.wiring : 'Done'), style: const pw.TextStyle(fontSize: 8.5)),
                   ],
                 ),
               ),
@@ -349,7 +406,7 @@ class PdfNocBuilder {
                 text: pw.TextSpan(
                   children: [
                     pw.TextSpan(text: 'Testing : ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                    pw.TextSpan(text: payload.testing, style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.TextSpan(text: payload.testing.isNotEmpty ? payload.testing : 'Done', style: const pw.TextStyle(fontSize: 8.5)),
                   ],
                 ),
               ),
@@ -359,7 +416,7 @@ class PdfNocBuilder {
                 text: pw.TextSpan(
                   children: [
                     pw.TextSpan(text: 'Remark: ', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                    pw.TextSpan(text: payload.remark, style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.TextSpan(text: payload.remark.isNotEmpty ? payload.remark : 'All Installation & Commissioning work Completed as per work order', style: const pw.TextStyle(fontSize: 8.5)),
                   ],
                 ),
               ),
@@ -370,24 +427,39 @@ class PdfNocBuilder {
               pw.Text('We confirm that:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 3),
 
-              ...payload.confirmations.asMap().entries.map((e) {
-                final idx = e.key + 1;
-                var txt = e.value.trim();
-                // Strip existing leading number if present
-                if (RegExp(r'^\d+\.?\s*').hasMatch(txt)) {
-                  txt = txt.replaceFirst(RegExp(r'^\d+\.?\s*'), '');
-                }
-                return pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 2.5),
-                  child: pw.Text('$idx. $txt', style: const pw.TextStyle(fontSize: 8.5)),
-                );
-              }),
+              if (payload.confirmations.isNotEmpty)
+                ...payload.confirmations.map((line) {
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 2),
+                    child: pw.Text(
+                      line,
+                      style: const pw.TextStyle(fontSize: 8.5),
+                    ),
+                  );
+                })
+              else if (isHeatPump) ...[
+                pw.Text('1. The installation of the heat pump system is permitted at the above location.', style: const pw.TextStyle(fontSize: 8.5)),
+                pw.SizedBox(height: 2),
+                pw.Text('2. The system installed as per standard safety norms and guidelines.', style: const pw.TextStyle(fontSize: 8.5)),
+                pw.SizedBox(height: 2),
+                pw.Text('3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.', style: const pw.TextStyle(fontSize: 8.5)),
+              ] else ...[
+                pw.Text('1. The installation of the ${payload.productName} is permitted at the above location.', style: const pw.TextStyle(fontSize: 8.5)),
+                pw.SizedBox(height: 2),
+                pw.Text('2. The system installed as per standard safety norms and guidelines.', style: const pw.TextStyle(fontSize: 8.5)),
+                pw.SizedBox(height: 2),
+                pw.Text('3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.', style: const pw.TextStyle(fontSize: 8.5)),
+              ],
 
               pw.SizedBox(height: 8),
 
               // ─── CLOSING PARAGRAPH ───────────────────────────────────────────
               pw.Text(
-                payload.closingSentence,
+                payload.closingSentence.isNotEmpty
+                    ? payload.closingSentence
+                    : (isHeatPump
+                        ? 'This NOC is issued upon request for installation and operation of the Heat Pump System.'
+                        : 'This NOC is issued upon request for installation and operation of the ${payload.productName} System.'),
                 style: const pw.TextStyle(fontSize: 8.5),
               ),
 
@@ -398,7 +470,7 @@ class PdfNocBuilder {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text('Customer', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                  pw.Text(payload.companyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(effectiveCompanyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
               pw.SizedBox(height: 2),
@@ -438,6 +510,10 @@ class PdfNocBuilder {
                         )
                       else
                         pw.SizedBox(height: 60),
+                      if (isExact) ...[
+                        pw.SizedBox(height: 3),
+                        pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 8.5)),
+                      ],
                     ],
                   ),
                 ],

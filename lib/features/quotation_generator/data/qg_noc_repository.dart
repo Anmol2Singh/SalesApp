@@ -277,6 +277,8 @@ class QgNocRepository {
     required NocWordingMode wordingMode,
     required List<NocEquipmentLine> equipmentLines,
     required Map<String, dynamic> companySnapshot,
+    List<String>? confirmations,
+    String? closingSentence,
   }) async {
     final payload = {
       'status': 'draft',
@@ -286,6 +288,8 @@ class QgNocRepository {
       'wording_mode': wordingMode == NocWordingMode.enhanced ? 'enhanced' : 'template_exact',
       'equipment_lines': equipmentLines.map((e) => e.toMap()).toList(),
       'company_snapshot': companySnapshot,
+      if (confirmations != null && confirmations.isNotEmpty) 'confirmations': confirmations,
+      if (closingSentence != null && closingSentence.isNotEmpty) 'closing_sentence': closingSentence,
     };
 
     final docMap = {
@@ -307,7 +311,46 @@ class QgNocRepository {
     return QgNocDocument.fromMap(Map<String, dynamic>.from(res as Map));
   }
 
-  static Future<Map<String, dynamic>> fetchCompanyDetailsFromTemplate(SupabaseClient supabase) async {
+  static Future<Map<String, dynamic>> fetchCompanyDetailsFromTemplate(
+    SupabaseClient supabase, {
+    String? productId,
+    String? productName,
+  }) async {
+    // 1. Check if product has assigned company in app_companies
+    try {
+      String? companyId;
+      if (productId != null && productId.isNotEmpty) {
+        final pRes = await supabase.from('products').select('company_id, base_specs').eq('id', productId).maybeSingle();
+        if (pRes != null) {
+          companyId = pRes['company_id'] as String? ?? (pRes['base_specs'] is Map ? (pRes['base_specs'] as Map)['company_id'] as String? : null);
+        }
+      }
+
+      if (companyId == null && productName != null) {
+        final pLower = productName.toLowerCase();
+        if (pLower.contains('boom') || pLower.contains('barrier')) {
+          companyId = 'insiya-trading';
+        } else if (pLower.contains('heat') || pLower.contains('pump')) {
+          companyId = 'insiya-solar';
+        }
+      }
+
+      if (companyId != null && companyId.isNotEmpty) {
+        final compRes = await supabase.from('app_companies').select().eq('id', companyId).maybeSingle();
+        if (compRes != null) {
+          return {
+            'company_name': compRes['name'],
+            'company_address': compRes['address'],
+            'company_phone': compRes['phone'],
+            'company_email': compRes['email'],
+            'company_website': compRes['website'],
+            'logo_url': compRes['logo_url'],
+            'stamp_url': compRes['stamp_url'],
+          };
+        }
+      }
+    } catch (_) {}
+
     try {
       final tRes = await supabase
           .from('pdf_templates')
@@ -357,6 +400,8 @@ class QgNocRepository {
     required List<NocEquipmentLine> equipmentLines,
     required Uint8List pdfBytes,
     required Map<String, dynamic> companySnapshot,
+    List<String>? confirmations,
+    String? closingSentence,
     String? overrideReason,
   }) async {
     final client = Supabase.instance.client;
@@ -370,22 +415,14 @@ class QgNocRepository {
       'wording_mode': wordingMode == NocWordingMode.enhanced ? 'enhanced' : 'template_exact',
       'equipment_lines': equipmentLines.map((e) => e.toMap()).toList(),
       'company_snapshot': companySnapshot,
+      if (confirmations != null && confirmations.isNotEmpty) 'confirmations': confirmations,
+      if (closingSentence != null && closingSentence.isNotEmpty) 'closing_sentence': closingSentence,
     };
 
-    // Upload PDF
+    // Generate virtual pdf reference (no file stored in Supabase storage as per requirement)
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fileName = 'noc_${pipelineId}_$timestamp.pdf';
-    final pdfPath = 'noc/$pipelineId/$fileName';
-
-    try {
-      await client.storage.from('quotation-generator').uploadBinary(
-        pdfPath,
-        pdfBytes,
-        fileOptions: const FileOptions(contentType: 'application/pdf', upsert: true),
-      );
-    } catch (e) {
-      debugPrint('Warning: Upload binary error: $e');
-    }
+    final pdfPath = 'virtual/noc/$fileName';
 
     // Check if an existing NOC already exists for this deal (strictly 1 per deal)
     if (pipelineId != '00000000-0000-0000-0000-000000000000') {
@@ -433,5 +470,11 @@ class QgNocRepository {
     );
 
     return QgNocDocument.fromMap(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Deletes an issued NOC from a deal so it can be re-generated if required.
+  static Future<void> deleteNoc(String docId) async {
+    final client = Supabase.instance.client;
+    await client.from('qg_noc_documents').delete().eq('id', docId);
   }
 }

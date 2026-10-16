@@ -21,6 +21,7 @@ import '../../../core/models/warranty_card.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
+import '../../../core/utils/financial_year_helper.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../complaints/data/models/complaint_model.dart';
 import '../../complaints/services/complaint_pdf_service.dart';
@@ -496,7 +497,10 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               _PdfDocItem(
                 id: row['id']?.toString() ?? '',
                 docType: 'quotation',
-                docNumber: row['quotation_number']?.toString() ?? 'Quotation',
+                docNumber: FinancialYearHelper.formatDocumentNumber(
+                  row['quotation_number']?.toString() ?? 'Quotation',
+                  DateTime.tryParse(row['created_at']?.toString() ?? ''),
+                ),
                 customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString() ?? row['product_name']?.toString(),
@@ -561,7 +565,10 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               _PdfDocItem(
                 id: row['id']?.toString() ?? '',
                 docType: 'boq',
-                docNumber: row['boq_number']?.toString() ?? 'BOQ',
+                docNumber: FinancialYearHelper.formatDocumentNumber(
+                  row['boq_number']?.toString() ?? 'BOQ',
+                  DateTime.tryParse(row['created_at']?.toString() ?? ''),
+                ),
                 customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
@@ -591,7 +598,10 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               _PdfDocItem(
                 id: row['id']?.toString() ?? '',
                 docType: 'factory_order',
-                docNumber: row['fo_number']?.toString() ?? 'Factory Order',
+                docNumber: FinancialYearHelper.formatDocumentNumber(
+                  row['fo_number']?.toString() ?? row['order_number']?.toString() ?? 'Factory Order',
+                  DateTime.tryParse(row['created_at']?.toString() ?? ''),
+                ),
                 customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
@@ -621,7 +631,10 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               _PdfDocItem(
                 id: row['id']?.toString() ?? '',
                 docType: 'purchase_order',
-                docNumber: row['po_number']?.toString() ?? 'Purchase Order',
+                docNumber: FinancialYearHelper.formatDocumentNumber(
+                  row['po_number']?.toString() ?? 'Purchase Order',
+                  DateTime.tryParse(row['created_at']?.toString() ?? ''),
+                ),
                 customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),

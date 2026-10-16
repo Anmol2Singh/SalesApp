@@ -13,7 +13,9 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
+import '../../../core/models/app_company.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/providers/company_provider.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/utils/file_folder_helper.dart';
 
@@ -187,6 +189,37 @@ class ProductCatalogScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
+                        Consumer(builder: (context, ref, _) {
+                          final company = ref.watch(companyForProductProvider(product.id));
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.apartment,
+                                      size: 11, color: Colors.indigo.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    company.name,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.indigo.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
                         if (isAdmin) ...[
                           const SizedBox(width: 4),
                           PopupMenuButton<String>(
@@ -429,133 +462,65 @@ class ProductCatalogScreen extends ConsumerWidget {
   void _showAddProductDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add New Product'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Product Name *',
-                  hintText: 'e.g. Boom Barrier',
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: categoryController,
-                decoration: const InputDecoration(
-                  labelText: 'Category *',
-                  hintText: 'e.g. Security',
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-
-              try {
-                final supabase = ref.read(supabaseClientProvider);
-                await supabase.from('products').insert({
-                  'name': nameController.text.trim(),
-                  'category': categoryController.text.trim(),
-                  'base_specs': {
-                    'quotation_fields': [],
-                    'boq_required_fields': [],
-                  },
-                  'is_active': true,
-                });
-
-                ref.invalidate(productsProvider);
-                Navigator.pop(ctx);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Product added successfully'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error: $e'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditProductDialog(BuildContext context, WidgetRef ref, Product product) {
-    final nameController = TextEditingController(text: product.name);
-    final categoryController = TextEditingController(text: product.category);
-    bool isActive = product.isActive;
+    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final defaultCompany = ref.read(defaultCompanyProvider);
+    String selectedCompanyId = defaultCompany.id;
     final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
-          title: const Text('Edit Product'),
+          title: const Text('Add New Product'),
           content: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Product Name *',
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: categoryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Category *',
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: isActive,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setModalState(() => isActive = val);
-                        }
-                      },
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Product Name *',
+                      hintText: 'e.g. Boom Barrier',
                     ),
-                    const Text('Product is Active'),
-                  ],
-                ),
-              ],
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Category *',
+                      hintText: 'e.g. Security',
+                    ),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCompanyId,
+                    decoration: const InputDecoration(
+                      labelText: 'Default Company (Quotations & Deals)',
+                      prefixIcon: Icon(Icons.apartment),
+                    ),
+                    items: companies.map((c) {
+                      return DropdownMenuItem<String>(
+                        value: c.id,
+                        child: Text(
+                          c.isDefault ? '${c.name} (Default)' : c.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setModalState(() => selectedCompanyId = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -569,10 +534,143 @@ class ProductCatalogScreen extends ConsumerWidget {
 
                 try {
                   final supabase = ref.read(supabaseClientProvider);
+                  await supabase.from('products').insert({
+                    'name': nameController.text.trim(),
+                    'category': categoryController.text.trim(),
+                    'company_id': selectedCompanyId,
+                    'base_specs': {
+                      'quotation_fields': [],
+                      'boq_required_fields': [],
+                      'company_id': selectedCompanyId,
+                    },
+                    'is_active': true,
+                  });
+
+                  ref.invalidate(productsProvider);
+                  Navigator.pop(ctx);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Product added successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  void _showEditProductDialog(BuildContext context, WidgetRef ref, Product product) {
+    final nameController = TextEditingController(text: product.name);
+    final categoryController = TextEditingController(text: product.category);
+    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final defaultCompany = ref.read(defaultCompanyProvider);
+    String selectedCompanyId = product.companyId ?? defaultCompany.id;
+    if (!companies.any((c) => c.id == selectedCompanyId)) {
+      selectedCompanyId = defaultCompany.id;
+    }
+    bool isActive = product.isActive;
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          title: const Text('Edit Product'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Product Name *',
+                    ),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Category *',
+                    ),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCompanyId,
+                    decoration: const InputDecoration(
+                      labelText: 'Default Company (Quotations & Deals)',
+                      prefixIcon: Icon(Icons.apartment),
+                    ),
+                    items: companies.map((c) {
+                      return DropdownMenuItem<String>(
+                        value: c.id,
+                        child: Text(
+                          c.isDefault ? '${c.name} (Default)' : c.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setModalState(() => selectedCompanyId = val);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: isActive,
+                        onChanged: (val) {
+                          if (val != null) {
+                            setModalState(() => isActive = val);
+                          }
+                        },
+                      ),
+                      const Text('Product is Active'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+
+                try {
+                  final supabase = ref.read(supabaseClientProvider);
+                  final updatedSpecs = Map<String, dynamic>.from(product.baseSpecs.toJson());
+                  updatedSpecs['company_id'] = selectedCompanyId;
+
                   await supabase.from('products').update({
                     'name': nameController.text.trim(),
                     'category': categoryController.text.trim(),
                     'is_active': isActive,
+                    'company_id': selectedCompanyId,
+                    'base_specs': updatedSpecs,
                   }).eq('id', product.id);
 
                   ref.invalidate(productsProvider);

@@ -7,11 +7,53 @@ import '../../../core/models/supplementary_item.dart';
 
 final inventoryProvider = FutureProvider<List<InventoryItem>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
+
+  try {
+    // 1. Fetch active products to ensure all configured capacities are present in inventory_items
+    final prodsData = await supabase.from('products').select('name, base_specs');
+    final existingItems = await supabase.from('inventory_items').select('item_name');
+    final existingNames = <String>{};
+    for (final row in (existingItems as List)) {
+      final n = row['item_name']?.toString().trim();
+      if (n != null && n.isNotEmpty) existingNames.add(n.toLowerCase());
+    }
+
+    final List<Map<String, dynamic>> missing = [];
+    for (final prod in (prodsData as List)) {
+      final pName = (prod['name'] as String?)?.trim();
+      if (pName == null || pName.isEmpty) continue;
+      final specs = prod['base_specs'] as Map<String, dynamic>?;
+      if (specs != null && specs['capacities'] is List) {
+        for (final cap in specs['capacities'] as List) {
+          final capStr = cap.toString().trim();
+          if (capStr.isNotEmpty) {
+            final expectedName = '$pName - $capStr';
+            if (!existingNames.contains(expectedName.toLowerCase())) {
+              missing.add({
+                'item_name': expectedName,
+                'price': 0.0,
+                'uom': 'NOS',
+                'created_at': DateTime.now().toIso8601String(),
+              });
+              existingNames.add(expectedName.toLowerCase());
+            }
+          }
+        }
+      }
+    }
+
+    if (missing.isNotEmpty) {
+      await supabase.from('inventory_items').insert(missing);
+    }
+  } catch (_) {
+    // Gracefully proceed if offline or table has constraint
+  }
+
   final data = await supabase
       .from('inventory_items')
       .select()
       .order('item_name');
-  return data.map((json) => InventoryItem.fromJson(json)).toList();
+  return (data as List).map((json) => InventoryItem.fromJson(json)).toList();
 });
 
 final supplementaryItemsProvider = FutureProvider<List<SupplementaryItem>>((ref) async {

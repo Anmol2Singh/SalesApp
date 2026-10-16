@@ -17,6 +17,7 @@ import '../../../core/models/purchase_order.dart';
 import '../../../core/models/boq.dart';
 import '../../../core/models/warranty_card.dart';
 import '../../../core/models/amc_contract.dart';
+import '../../../core/utils/financial_year_helper.dart';
 
 class SearchPdfScreen extends ConsumerStatefulWidget {
   const SearchPdfScreen({super.key});
@@ -253,10 +254,12 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
         final pipeline = row['sales_pipelines'] as Map<String, dynamic>? ?? {};
         final customer = pipeline['customers'] as Map<String, dynamic>? ?? {};
         final product = pipeline['products'] as Map<String, dynamic>? ?? {};
+        final rawNum = row['quotation_number']?.toString() ?? 'Quotation';
+        final formattedNum = FinancialYearHelper.formatDocumentNumber(rawNum, DateTime.tryParse(row['created_at']?.toString() ?? ''));
         return DocSearchResult(
           docType: 'quotation',
-          docNumber: row['quotation_number']?.toString() ?? 'Quotation',
-          title: 'Quotation • ${row['quotation_number']}',
+          docNumber: formattedNum,
+          title: 'Quotation • $formattedNum',
           customerName: customer['customer_name']?.toString() ?? customer['company_name']?.toString() ?? 'Customer',
           productName: product['name']?.toString(),
           date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -318,10 +321,12 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
         final pipeline = row['sales_pipelines'] as Map<String, dynamic>? ?? {};
         final customer = pipeline['customers'] as Map<String, dynamic>? ?? {};
         final product = pipeline['products'] as Map<String, dynamic>? ?? {};
+        final rawNum = row['order_number']?.toString() ?? 'Factory Order';
+        final formattedNum = FinancialYearHelper.formatDocumentNumber(rawNum, DateTime.tryParse(row['created_at']?.toString() ?? ''));
         return DocSearchResult(
           docType: 'factory_order',
-          docNumber: row['order_number']?.toString() ?? 'Factory Order',
-          title: 'Factory Order • ${row['order_number']}',
+          docNumber: formattedNum,
+          title: 'Factory Order • $formattedNum',
           customerName: customer['customer_name']?.toString() ?? customer['company_name']?.toString() ?? 'Customer',
           productName: product['name']?.toString(),
           date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -348,10 +353,12 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
         final pipeline = row['sales_pipelines'] as Map<String, dynamic>? ?? {};
         final customer = pipeline['customers'] as Map<String, dynamic>? ?? {};
         final product = pipeline['products'] as Map<String, dynamic>? ?? {};
+        final rawNum = row['po_number']?.toString() ?? 'Purchase Order';
+        final formattedNum = FinancialYearHelper.formatDocumentNumber(rawNum, DateTime.tryParse(row['created_at']?.toString() ?? ''));
         return DocSearchResult(
           docType: 'purchase_order',
-          docNumber: row['po_number']?.toString() ?? 'Purchase Order',
-          title: 'Purchase Order • ${row['po_number']}',
+          docNumber: formattedNum,
+          title: 'Purchase Order • $formattedNum',
           customerName: customer['customer_name']?.toString() ?? customer['company_name']?.toString() ?? 'Customer',
           productName: product['name']?.toString(),
           date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -379,10 +386,12 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
         final pipeline = row['sales_pipelines'] as Map<String, dynamic>? ?? {};
         final customer = pipeline['customers'] as Map<String, dynamic>? ?? {};
         final product = pipeline['products'] as Map<String, dynamic>? ?? {};
+        final rawNum = row['boq_number']?.toString() ?? 'BOQ';
+        final formattedNum = FinancialYearHelper.formatDocumentNumber(rawNum, DateTime.tryParse(row['created_at']?.toString() ?? ''));
         return DocSearchResult(
           docType: 'boq',
-          docNumber: row['boq_number']?.toString() ?? 'BOQ',
-          title: 'BOQ • ${row['boq_number']}',
+          docNumber: formattedNum,
+          title: 'BOQ • $formattedNum',
           customerName: customer['customer_name']?.toString() ?? customer['company_name']?.toString() ?? 'Customer',
           productName: product['name']?.toString(),
           date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -709,7 +718,7 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Enter full or partial reference number from any document (e.g. IZY/QT/2026/0030, IZY/SO/2026/0012, etc.)',
+                      'Enter full or partial reference number from any document (e.g. IZY/QT/26-27/0030, IZY/SO/26-27/0012, etc.)',
                       style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 12),
@@ -717,7 +726,7 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
                       controller: _directNumberCtrl,
                       textCapitalization: TextCapitalization.characters,
                       decoration: InputDecoration(
-                        hintText: 'e.g. IZY/QT/2026/0030',
+                        hintText: 'e.g. IZY/QT/26-27/0030',
                         prefixIcon: const Icon(Icons.search, color: AppColors.primary),
                         suffixIcon: _directNumberCtrl.text.isNotEmpty
                             ? IconButton(
@@ -742,7 +751,7 @@ class _SearchPdfScreenState extends ConsumerState<SearchPdfScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Select the document type and just enter the last digits (e.g. enter 30 for IZY/QT/2026/0030).',
+                      'Select the document type and just enter the last digits (e.g. enter 30 for IZY/QT/26-27/0030).',
                       style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 12),

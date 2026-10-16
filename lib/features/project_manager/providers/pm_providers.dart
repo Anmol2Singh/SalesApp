@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/providers/supabase_provider.dart';
 import '../data/models/pm_project.dart';
 import '../data/models/pm_purchase.dart';
@@ -241,3 +242,65 @@ final pmDailyTransactionsListProvider = FutureProvider.autoDispose<List<PmDailyT
         (t.remark?.toLowerCase().contains(q) ?? false);
   }).toList();
 });
+
+// -----------------------------------------------------------------------------
+// DROPDOWN OPTIONS (Payment Types & Particulars)
+// -----------------------------------------------------------------------------
+final pmDropdownOptionsProvider = FutureProvider.family<List<String>, String>((ref, category) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    final response = await supabase
+        .from('pm_dropdown_options')
+        .select('label')
+        .eq('category', category)
+        .order('sort_order', ascending: true);
+    final list = (response as List).map((r) => r['label'] as String).toList();
+    if (list.isNotEmpty) return list;
+  } catch (_) {}
+
+  // Fallback defaults
+  if (category == 'payment_type') {
+    return ['Cash', 'Cheque', 'Online', 'Advance', 'Final Settlement', 'RTGS / NEFT', 'UPI'];
+  } else if (category == 'particulars') {
+    return ['Bill', 'System work', 'Advance', 'Material Supply', 'Installation Charges', 'Transport / Freight', 'Other'];
+  }
+  return [];
+});
+
+class PmDropdownService {
+  final SupabaseClient _supabase;
+  PmDropdownService(this._supabase);
+
+  Future<void> addOption(String category, String label) async {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      final countRes = await _supabase
+          .from('pm_dropdown_options')
+          .select('id')
+          .eq('category', category);
+      final count = (countRes as List).length;
+      await _supabase.from('pm_dropdown_options').insert({
+        'category': category,
+        'label': trimmed,
+        'sort_order': count + 1,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> deleteOption(String category, String label) async {
+    try {
+      await _supabase
+          .from('pm_dropdown_options')
+          .delete()
+          .eq('category', category)
+          .eq('label', label.trim());
+    } catch (_) {}
+  }
+}
+
+final pmDropdownServiceProvider = Provider<PmDropdownService>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  return PmDropdownService(supabase);
+});
+

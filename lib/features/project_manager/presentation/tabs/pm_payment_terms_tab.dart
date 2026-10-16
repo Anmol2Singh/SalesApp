@@ -75,10 +75,20 @@ class PmPaymentTermsTab extends ConsumerWidget {
                       const SizedBox(height: 10),
                       Text('No payment milestone terms defined yet.', style: TextStyle(color: pm.mutedForeground)),
                       const SizedBox(height: 12),
-                      PmButton(
-                        size: PmButtonSize.sm,
-                        onPressed: is100PercentReached ? null : () => _showAddEditModal(context, ref, terms),
-                        child: const Text('+ Add Milestone Term'),
+                      InkWell(
+                        onTap: is100PercentReached ? null : () => _showAddEditModal(context, ref, terms),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: is100PercentReached ? Colors.grey : const Color(0xFF005CE6),
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: Text(
+                            is100PercentReached ? '100% Reached (Locked)' : '+ Add Milestone Term',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
                       ),
                     ],
                   ),

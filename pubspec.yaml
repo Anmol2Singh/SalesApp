@@ -100,6 +100,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/boom_barrier/
     - assets/icons/
     - assets/fonts/
     - assets/data/

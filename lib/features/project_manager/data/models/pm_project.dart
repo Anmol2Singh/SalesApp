@@ -1,4 +1,5 @@
 import '../../../../core/models/customer.dart';
+import 'pm_company.dart';
 
 class PmProject {
   final String id;
@@ -69,8 +70,30 @@ class PmProject {
   /// Dynamic getters from joined Customer record
   String? get partyPrintName => customer?.companyName;
   String? get mobileNumber => customer?.phone;
-  String? get firmName => customer?.companyName;
-  String? get salesMan => salesmanName;
+  String get firmName {
+    try {
+      final comp = PmCompany.defaultCompanies.firstWhere(
+        (c) => c.id == companyId,
+        orElse: () => const PmCompany(id: 'insiya-solar', name: 'Insiya Solar Industry'),
+      );
+      return comp.name;
+    } catch (_) {
+      return 'Insiya Solar Industry';
+    }
+  }
+
+  String? get salesMan {
+    if (salesmanName != null && salesmanName!.trim().isNotEmpty) {
+      return salesmanName!.trim();
+    }
+    if (customer?.salesmanName != null && customer!.salesmanName!.trim().isNotEmpty) {
+      return customer!.salesmanName!.trim();
+    }
+    if (customer?.assignedToName != null && customer!.assignedToName!.trim().isNotEmpty) {
+      return customer!.assignedToName!.trim();
+    }
+    return null;
+  }
   String? get gstNo => customer?.gstNumber;
   String? get itemPurchased => hpType ?? tankType;
   int get itemQuantity => hpQty > 0 ? hpQty : tankQty;

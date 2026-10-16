@@ -10,10 +10,13 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../models/deal_quotation_item.dart';
 import '../../providers/quotation_generator_providers.dart';
+import '../../templates/boom_barrier_template.dart';
+import '../../templates/heat_pump_template.dart';
+import '../../templates/qg_template_registry.dart';
 import 'quotation_settings_screen.dart';
 import 'proposal_builder_screen.dart';
 
-/// Automated Deal Hub listing all deal quotations created for the Heat Pump product.
+/// Automated Deal Hub listing all deal quotations created for supported products.
 /// Strictly read-only against existing deal quotations.
 class QuotationHistoryScreen extends ConsumerStatefulWidget {
   const QuotationHistoryScreen({super.key});
@@ -27,6 +30,7 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchCtrl = TextEditingController();
+  String _selectedProductFilter = 'All Products'; // All Products, Heat Pump, Boom Barrier
   String _selectedStatusFilter = 'All'; // All, Draft, Pending, Confirmed, Rejected
   Timer? _pollingTimer;
 
@@ -107,7 +111,7 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                   onPressed: _navigateBack,
                 ),
           title: const Text(
-            'Proposal PDF Generator (Heat Pump Hub)',
+            'Proposal PDF Generator (Deal Hub)',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
           actions: [
@@ -169,9 +173,18 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
         ),
       ),
       data: (quotes) {
+        // Filter by product chip
+        final prodFilteredQuotes = quotes.where((q) {
+          if (_selectedProductFilter == 'All Products') return true;
+          final t = QgTemplateRegistry.findTemplateForProduct(q.productName);
+          if (_selectedProductFilter == 'Heat Pump') return t is HeatPumpTemplate;
+          if (_selectedProductFilter == 'Boom Barrier') return t is BoomBarrierTemplate;
+          return q.productName.toLowerCase().contains(_selectedProductFilter.toLowerCase());
+        }).toList();
+
         // Filter by search query
         final query = _searchCtrl.text.trim().toLowerCase();
-        final filteredBySearch = quotes.where((q) {
+        final filteredBySearch = prodFilteredQuotes.where((q) {
           if (query.isEmpty) return true;
           return q.customerName.toLowerCase().contains(query) ||
               q.quotationNumber.toLowerCase().contains(query) ||
@@ -189,10 +202,10 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
           return true;
         }).toList();
 
-        // Calculate KPI summaries
-        final totalCount = quotes.length;
-        final confirmedCount = quotes.where((q) => q.isConfirmed).length;
-        final finalizedCount = quotes.where((q) => q.hasFinalizedProposal).length;
+        // Calculate KPI summaries based on the product filter selection
+        final totalCount = prodFilteredQuotes.length;
+        final confirmedCount = prodFilteredQuotes.where((q) => q.isConfirmed).length;
+        final finalizedCount = prodFilteredQuotes.where((q) => q.hasFinalizedProposal).length;
 
         return Column(
           children: [
@@ -245,6 +258,44 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                     onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 8),
+                  // Product Filter Chips
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final prod in ['All Products', 'Heat Pump', 'Boom Barrier'])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text(
+                                prod,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: _selectedProductFilter == prod ? FontWeight.w600 : FontWeight.w500,
+                                  color: _selectedProductFilter == prod
+                                      ? Colors.white
+                                      : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                ),
+                              ),
+                              selected: _selectedProductFilter == prod,
+                              onSelected: (_) => setState(() => _selectedProductFilter = prod),
+                              selectedColor: AppColors.primary,
+                              backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              side: BorderSide(
+                                color: _selectedProductFilter == prod
+                                    ? AppColors.primary
+                                    : (isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1)),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Status Filter Chips
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -256,7 +307,7 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                               label: Text(
                                 filter,
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: _selectedStatusFilter == filter ? FontWeight.w600 : FontWeight.w500,
                                   color: _selectedStatusFilter == filter
                                       ? AppColors.primary
@@ -274,6 +325,8 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                                     ? AppColors.primary
                                     : (isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1)),
                               ),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              visualDensity: VisualDensity.compact,
                             ),
                           ),
                       ],
@@ -304,7 +357,7 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'Quotations created in Heat Pump deals automatically appear here.',
+                                  'Quotations created in Heat Pump and Boom Barrier deals automatically appear here.',
                                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                 ),
                               ],
@@ -382,12 +435,20 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          q.customerName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                q.customerName,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildProductBadge(q.productName, isDark),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -524,6 +585,38 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProductBadge(String productName, bool isDark) {
+    final template = QgTemplateRegistry.findTemplateForProduct(productName);
+    final isBoomBarrier = template is BoomBarrierTemplate;
+    final label = template?.label ?? (productName.isNotEmpty ? productName : 'Heat Pump');
+    final badgeColor = isBoomBarrier ? const Color(0xFF0D9488) : AppColors.primaryLight;
+    final icon = isBoomBarrier ? Icons.fence_outlined : Icons.heat_pump_outlined;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: badgeColor.withAlpha(isDark ? 40 : 20),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: badgeColor.withAlpha(isDark ? 90 : 60)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: badgeColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: badgeColor,
+            ),
+          ),
+        ],
       ),
     );
   }

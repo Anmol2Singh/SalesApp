@@ -5,6 +5,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/models/customer.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../customers/providers/customers_provider.dart';
+import '../../providers/pm_providers.dart';
+import '../../providers/pm_company_provider.dart';
 import '../theme/pm_tokens.dart';
 import 'pm_button.dart';
 
@@ -216,15 +218,27 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
                     child: Text('Error loading customers: $err', style: TextStyle(color: pm.destructive)),
                   ),
                   data: (customers) {
-                    final filtered = _query.isEmpty
-                        ? customers
-                        : customers.where((c) {
-                            final q = _query.toLowerCase();
-                            return c.companyName.toLowerCase().contains(q) ||
-                                (c.contactPerson?.toLowerCase().contains(q) ?? false) ||
-                                (c.phone?.toLowerCase().contains(q) ?? false) ||
-                                (c.address?.toLowerCase().contains(q) ?? false);
-                          }).toList();
+                    final existingProjectsAsync = ref.watch(pmProjectsListProvider);
+                    final existingCustomerIds = existingProjectsAsync.valueOrNull
+                            ?.map((p) => p.customerId)
+                            .toSet() ??
+                        {};
+
+                    final filtered = customers.where((c) {
+                      // Check if customer's ledger is already created for this company.
+                      // If yes, don't show name. If no, show name.
+                      if (existingCustomerIds.contains(c.id)) {
+                        return false;
+                      }
+                      if (_query.isNotEmpty) {
+                        final q = _query.toLowerCase();
+                        return c.companyName.toLowerCase().contains(q) ||
+                            (c.contactPerson?.toLowerCase().contains(q) ?? false) ||
+                            (c.phone?.toLowerCase().contains(q) ?? false) ||
+                            (c.address?.toLowerCase().contains(q) ?? false);
+                      }
+                      return true;
+                    }).toList();
 
                     if (filtered.isEmpty) {
                       return Center(

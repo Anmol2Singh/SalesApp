@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:printing/printing.dart';
 import '../theme/pm_tokens.dart';
 import '../../providers/pm_providers.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../data/models/pm_ledger_entry.dart';
 import '../../data/services/pm_pdf_service.dart';
 import '../../data/services/pm_excel_service.dart';
+import '../../../../core/widgets/pdf_preview_screen.dart';
+import '../../../../core/widgets/export_preview_dialog.dart';
 
 class PmLedgerTab extends ConsumerStatefulWidget {
   final String recordId;
@@ -175,9 +176,14 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                             companyName: activeCompany.name,
                             isPurchase: widget.isPurchase,
                           );
-                          await Printing.layoutPdf(
-                            onLayout: (_) => pdfBytes,
-                            name: 'Ledger_${widget.project.siteName}.pdf',
+                          if (!context.mounted) return;
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => PdfPreviewScreen(
+                                pdfBytes: pdfBytes,
+                                fileName: 'Ledger_${widget.project.siteName}.pdf',
+                              ),
+                            ),
                           );
                         },
                         borderRadius: BorderRadius.circular(9999),
@@ -206,7 +212,37 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                             isPurchase: widget.isPurchase,
                           );
                           if (excelBytes != null) {
-                            Printing.sharePdf(bytes: excelBytes, filename: 'Ledger_${widget.project.siteName}.xlsx');
+                            final headers = widget.isPurchase
+                                ? ['Sr', 'Date', 'Payment Type', 'Particulars', 'Sales M', 'M Outward', 'Order Value', 'Extra Work', 'Paid', 'Status']
+                                : ['Sr', 'Date', 'Payment Type', 'Particulars', 'Bill Status', 'Sales M', 'M Outward', 'Order Value', 'Extra Work', 'Received', 'Remarks'];
+
+                            final rows = entries.asMap().entries.map((mapEntry) {
+                              final idx = mapEntry.key + 1;
+                              final e = mapEntry.value;
+                              return [
+                                '$idx',
+                                DateFormat('dd-MM-yyyy').format(e.date),
+                                e.paymentType ?? '-',
+                                e.particulars ?? '-',
+                                if (!widget.isPurchase) (e.billSubmitted ? 'Submitted' : 'Pending'),
+                                e.salesMValue > 0 ? e.salesMValue.toStringAsFixed(0) : '-',
+                                e.mOutwardValue > 0 ? e.mOutwardValue.toStringAsFixed(0) : '-',
+                                e.orderValue > 0 ? e.orderValue.toStringAsFixed(0) : '-',
+                                e.extraWorkValue > 0 ? e.extraWorkValue.toStringAsFixed(0) : '-',
+                                e.paymentReceived > 0 ? e.paymentReceived.toStringAsFixed(0) : '-',
+                                if (widget.isPurchase) (e.billReceived ? 'Received' : 'Pending'),
+                                if (!widget.isPurchase) (e.workRemark ?? '-'),
+                              ];
+                            }).toList();
+
+                            ExportPreviewDialog.show(
+                              context,
+                              title: 'Project Ledger — ${widget.project.siteName}',
+                              fileName: 'Ledger_${widget.project.siteName}.xlsx',
+                              headers: headers,
+                              rows: rows,
+                              fileBytes: excelBytes,
+                            );
                           }
                         },
                         borderRadius: BorderRadius.circular(9999),
@@ -615,7 +651,7 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
 }
 
 // Add/Edit Modal matching Screenshot 3
-class _AddEditLedgerModal extends StatefulWidget {
+class _AddEditLedgerModal extends ConsumerStatefulWidget {
   final String recordId;
   final PmLedgerEntry? entry;
   final int nextSrNo;
@@ -631,10 +667,10 @@ class _AddEditLedgerModal extends StatefulWidget {
   });
 
   @override
-  State<_AddEditLedgerModal> createState() => _AddEditLedgerModalState();
+  ConsumerState<_AddEditLedgerModal> createState() => _AddEditLedgerModalState();
 }
 
-class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
+class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
   final _formKey = GlobalKey<FormState>();
   DateTime _date = DateTime.now();
   String _paymentType = 'Cash';
@@ -653,7 +689,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
   bool _paymentReceipt = false;
   bool _isLoading = false;
 
-  final List<String> _types = [
+  static const List<String> _defaultTypes = [
     'Cash',
     'Bank Transfer / NEFT',
     'RTGS',
@@ -663,7 +699,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
     'Final Settlement',
   ];
 
-  final List<String> _particularsOptions = [
+  static const List<String> _defaultParticularsOptions = [
     'Bill',
     'System work',
     'Advance',
@@ -680,7 +716,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
       _date = widget.entry!.date;
       _paymentType = widget.entry!.paymentType ?? 'Cash';
       _particulars = widget.entry!.particulars ?? 'Bill';
-      if (!_particularsOptions.contains(_particulars)) {
+      if (!_defaultParticularsOptions.contains(_particulars)) {
         _particularsCustomCtrl.text = _particulars;
         _particulars = 'Other';
       }
@@ -694,6 +730,19 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
       _billSubmitted = widget.isPurchase ? widget.entry!.billReceived : widget.entry!.billSubmitted;
       _paymentReceipt = widget.entry!.paymentReceived > 0;
     }
+  }
+
+  @override
+  void dispose() {
+    _particularsCustomCtrl.dispose();
+    _refNoCtrl.dispose();
+    _invNoCtrl.dispose();
+    _salesMCtrl.dispose();
+    _mOutwardCtrl.dispose();
+    _orderValueCtrl.dispose();
+    _extraWorkCtrl.dispose();
+    _paymentRecdCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _submit() async {
@@ -721,11 +770,11 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
         if (widget.isPurchase) 'bill_received': _billSubmitted else 'bill_submitted': _billSubmitted,
       };
 
-      final ref = ProviderScope.containerOf(context);
+      final repo = ref.read(pmLedgerRepositoryProvider);
       if (widget.entry != null) {
-        await ref.read(pmLedgerRepositoryProvider).updateLedgerEntry(widget.entry!.id, data, isPurchase: widget.isPurchase);
+        await repo.updateLedgerEntry(widget.entry!.id, data, isPurchase: widget.isPurchase);
       } else {
-        await ref.read(pmLedgerRepositoryProvider).addLedgerEntry(data, isPurchase: widget.isPurchase);
+        await repo.addLedgerEntry(data, isPurchase: widget.isPurchase);
       }
 
       widget.onSaved();
@@ -739,20 +788,69 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
     }
   }
 
-  Widget _buildFieldBox({required Widget child}) {
+  InputDecoration _fieldDecoration({String? hintText}) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+      isDense: true,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF005CE6), width: 1.5),
+      ),
+    );
+  }
+
+  Widget _buildDropdownWrapper({required Widget child}) {
     return Container(
+      height: 44,
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      alignment: Alignment.center,
       child: child,
+    );
+  }
+
+  void _openEditDropdown(String category, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _EditDropdownOptionsDialog(category: category, title: title),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final paymentTypesAsync = ref.watch(pmDropdownOptionsProvider('payment_type'));
+    final particularsAsync = ref.watch(pmDropdownOptionsProvider('particulars'));
+
+    final typesFromDb = paymentTypesAsync.valueOrNull ?? [];
+    final currentTypes = typesFromDb.isNotEmpty ? typesFromDb : _defaultTypes;
+    if (!currentTypes.contains(_paymentType) && currentTypes.isNotEmpty) {
+      _paymentType = currentTypes.first;
+    }
+
+    final particularsFromDb = particularsAsync.valueOrNull ?? [];
+    final currentParticulars = particularsFromDb.isNotEmpty
+        ? (particularsFromDb.contains('Other') ? particularsFromDb : [...particularsFromDb, 'Other'])
+        : _defaultParticularsOptions;
+    if (!currentParticulars.contains(_particulars) && currentParticulars.isNotEmpty) {
+      _particulars = currentParticulars.first;
+    }
+
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -767,7 +865,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Title + Close Icon (Screenshot 3)
+                  // Title + Close Icon
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -811,16 +909,13 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                                 );
                                 if (picked != null) setState(() => _date = picked);
                               },
-                              child: _buildFieldBox(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(DateFormat('dd-MM-yyyy').format(_date), style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))),
-                                      const Icon(LucideIcons.calendar, size: 16, color: Color(0xFF0F172A)),
-                                    ],
-                                  ),
+                              child: _buildDropdownWrapper(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(DateFormat('dd-MM-yyyy').format(_date), style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))),
+                                    const Icon(LucideIcons.calendar, size: 16, color: Color(0xFF0F172A)),
+                                  ],
                                 ),
                               ),
                             ),
@@ -838,19 +933,19 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                               children: [
                                 const Text('Payment Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                                 InkWell(
-                                  onTap: () {},
+                                  onTap: () => _openEditDropdown('payment_type', 'Payment Types'),
                                   child: const Text('Edit Dropdown List', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF005CE6))),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
+                            _buildDropdownWrapper(
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
-                                  value: _types.contains(_paymentType) ? _paymentType : _types.first,
+                                  value: currentTypes.contains(_paymentType) ? _paymentType : currentTypes.first,
                                   isExpanded: true,
                                   icon: const Icon(LucideIcons.chevronDown, size: 16, color: Color(0xFF64748B)),
-                                  items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))))).toList(),
+                                  items: currentTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))))).toList(),
                                   onChanged: (val) {
                                     if (val != null) setState(() => _paymentType = val);
                                   },
@@ -874,12 +969,10 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('Reference Number', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _refNoCtrl,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _refNoCtrl,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -891,12 +984,10 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('Invoice No', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _invNoCtrl,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _invNoCtrl,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -915,19 +1006,19 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                         children: [
                           const Text('Particulars', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                           InkWell(
-                            onTap: () {},
+                            onTap: () => _openEditDropdown('particulars', 'Particulars'),
                             child: const Text('Edit Dropdown List', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF005CE6))),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
-                      _buildFieldBox(
+                      _buildDropdownWrapper(
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: _particularsOptions.contains(_particulars) ? _particulars : 'Bill',
+                            value: currentParticulars.contains(_particulars) ? _particulars : currentParticulars.first,
                             isExpanded: true,
                             icon: const Icon(LucideIcons.chevronDown, size: 16, color: Color(0xFF64748B)),
-                            items: _particularsOptions.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))))).toList(),
+                            items: currentParticulars.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))))).toList(),
                             onChanged: (val) {
                               if (val != null) setState(() => _particulars = val);
                             },
@@ -936,16 +1027,10 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                       ),
                       if (_particulars == 'Other') ...[
                         const SizedBox(height: 8),
-                        _buildFieldBox(
-                          child: TextFormField(
-                            controller: _particularsCustomCtrl,
-                            style: const TextStyle(fontSize: 13.5),
-                            decoration: const InputDecoration(
-                              hintText: 'Enter custom particulars...',
-                              border: InputBorder.none,
-                              isDense: true,
-                            ),
-                          ),
+                        TextFormField(
+                          controller: _particularsCustomCtrl,
+                          style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                          decoration: _fieldDecoration(hintText: 'Enter custom particulars...'),
                         ),
                       ],
                     ],
@@ -986,7 +1071,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
 
                   const Divider(color: Color(0xFFE2E8F0), height: 28),
 
-                  // Material Section (Screenshot 3)
+                  // Material Section
                   const Text(
                     'Material Section',
                     style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
@@ -1000,13 +1085,11 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('Sales M Value', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _salesMCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _salesMCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -1018,13 +1101,11 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('M Outward Value', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _mOutwardCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _mOutwardCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -1034,7 +1115,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
 
                   const Divider(color: Color(0xFFE2E8F0), height: 28),
 
-                  // Account Section (Screenshot 3: bright sky blue header)
+                  // Account Section
                   const Text(
                     'Account Section',
                     style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF0284C7)),
@@ -1048,13 +1129,11 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('Order Value', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _orderValueCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _orderValueCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -1066,13 +1145,11 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('Extra Work Value', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _extraWorkCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _extraWorkCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -1084,13 +1161,11 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                           children: [
                             const Text('Payment Received', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                             const SizedBox(height: 6),
-                            _buildFieldBox(
-                              child: TextFormField(
-                                controller: _paymentRecdCtrl,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                              ),
+                            TextFormField(
+                              controller: _paymentRecdCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                              decoration: _fieldDecoration(),
                             ),
                           ],
                         ),
@@ -1100,7 +1175,7 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
 
                   const SizedBox(height: 24),
 
-                  // Bottom Action Buttons (Screenshot 3)
+                  // Bottom Action Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -1149,6 +1224,168 @@ class _AddEditLedgerModalState extends State<_AddEditLedgerModal> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditDropdownOptionsDialog extends ConsumerStatefulWidget {
+  final String category;
+  final String title;
+
+  const _EditDropdownOptionsDialog({
+    required this.category,
+    required this.title,
+  });
+
+  @override
+  ConsumerState<_EditDropdownOptionsDialog> createState() => _EditDropdownOptionsDialogState();
+}
+
+class _EditDropdownOptionsDialogState extends ConsumerState<_EditDropdownOptionsDialog> {
+  final _textCtrl = TextEditingController();
+  bool _isAdding = false;
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addOption() async {
+    final text = _textCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _isAdding = true);
+    try {
+      await ref.read(pmDropdownServiceProvider).addOption(widget.category, text);
+      _textCtrl.clear();
+      ref.invalidate(pmDropdownOptionsProvider(widget.category));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
+  }
+
+  Future<void> _deleteOption(String label) async {
+    try {
+      await ref.read(pmDropdownServiceProvider).deleteOption(widget.category, label);
+      ref.invalidate(pmDropdownOptionsProvider(widget.category));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final optionsAsync = ref.watch(pmDropdownOptionsProvider(widget.category));
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Edit ${widget.title}',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.x, size: 18),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Add option row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _textCtrl,
+                      onSubmitted: (_) => _addOption(),
+                      style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        hintText: 'Add new option...',
+                        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _isAdding ? null : _addOption,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF005CE6),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: _isAdding
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('+ Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 8),
+              // Options list
+              Expanded(
+                child: optionsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, _) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.red))),
+                  data: (items) {
+                    if (items.isEmpty) {
+                      return const Center(child: Text('No options added yet.', style: TextStyle(color: Color(0xFF94A3B8))));
+                    }
+                    return ListView.separated(
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                      itemBuilder: (ctx, idx) {
+                        final item = items[idx];
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                          title: Text(item, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                          trailing: IconButton(
+                            icon: const Icon(LucideIcons.trash2, size: 16, color: Color(0xFFEF4444)),
+                            onPressed: () => _deleteOption(item),
+                            tooltip: 'Delete Option',
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF005CE6))),
+                ),
+              ),
+            ],
           ),
         ),
       ),

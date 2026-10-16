@@ -392,9 +392,10 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                     crossAxisCount: isWide ? 4 : 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: isWide ? 2.0 : 1.82,
+                    padding: EdgeInsets.zero,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: isWide ? 1.6 : 1.34,
                     children: [
                       _buildTechStatCard(
                         title: 'Active\nComplaints',
@@ -834,10 +835,10 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
             width: 1.2,
@@ -845,8 +846,8 @@ class TechnicianDashboardScreen extends ConsumerWidget {
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -858,31 +859,31 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: Colors.white, size: 18),
+                  child: Icon(icon, color: Colors.white, size: 22),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.grey.shade300 : const Color(0xFF1E293B),
-                      height: 1.15,
+                      height: 1.2,
                     ),
                     maxLines: 2,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 10),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -890,7 +891,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                 value,
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: FontWeight.w800,
                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                   letterSpacing: -0.5,

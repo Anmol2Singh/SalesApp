@@ -104,6 +104,7 @@ class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String adminDashboard = '/admin/dashboard';
+  static const String dashboard = adminDashboard;
   static const String salesDashboard = '/sales/dashboard';
   static const String inventory = '/inventory';
   static const String customers = '/customers';
@@ -152,6 +153,7 @@ class AppRoutes {
   static const String pmProjectDetail = '/pm/projects/:id';
   static const String pmProjectEdit = '/pm/projects/:id/edit';
   static const String pmCallRemark = '/pm/projects/:id/call-remark';
+  static const String pmQuickCallRemark = '/pm/quick-call-remark';
   static const String pmFilter = '/pm/filter';
   static const String pmDailyTransactions = '/pm/daily-transactions';
   static const String productInterests = '/product-interests';
@@ -613,6 +615,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           final isPurchase = state.uri.queryParameters['mode'] == 'purchase';
+          return PmQuickCallRemarkScreen(id: id, isPurchase: isPurchase);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pmQuickCallRemark,
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'] ?? '';
+          final type = state.uri.queryParameters['type'];
+          final isPurchase = type == 'purchase' || state.uri.queryParameters['mode'] == 'purchase';
           return PmQuickCallRemarkScreen(id: id, isPurchase: isPurchase);
         },
       ),

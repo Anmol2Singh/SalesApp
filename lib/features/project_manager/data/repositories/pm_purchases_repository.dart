@@ -137,7 +137,6 @@ class PmPurchasesRepository {
         .order('sr_no', ascending: true);
 
     final entries = (entriesRes as List<dynamic>);
-    if (entries.isEmpty) return;
 
     double totalQuotation = 0;
     double totalPaid = 0;

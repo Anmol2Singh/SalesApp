@@ -434,11 +434,14 @@ class _NocHubScreenState extends ConsumerState<NocHubScreen> {
         wiring: 'Done',
         testing: 'Done',
         remark: 'All Installation & Commissioning work Completed as per work order',
-        confirmations: [
-          '1. The installation of the ${doc.productName} is permitted at the above location.',
-          '3. Necessary precautions has been taken.',
-        ],
-        closingSentence: 'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
+        confirmations: doc.confirmations.isNotEmpty
+            ? doc.confirmations
+            : (await QgNocRepository.instance.getProfileForProduct(doc.productName))
+                .confirmationLines
+                .map((l) => l.replaceAll('{Product}', doc.productName))
+                .toList(),
+        closingSentence: doc.closingSentence ??
+            'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
         wordingMode: doc.wordingMode,
         quotationNumber: doc.quotationNumber,
       );

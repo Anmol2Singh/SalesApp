@@ -7,6 +7,8 @@ import '../../data/models/pm_checklist_item.dart';
 import '../widgets/pm_button.dart';
 import '../widgets/pm_card.dart';
 import '../widgets/pm_badge.dart';
+import '../../../admin/providers/inventory_provider.dart';
+import '../../../../core/models/inventory_item.dart';
 
 class PmSwhChecklistTab extends ConsumerStatefulWidget {
   final String projectId;
@@ -24,6 +26,7 @@ class PmSwhChecklistTab extends ConsumerStatefulWidget {
 
 class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
   final ScrollController _hScrollCtrl = ScrollController();
+  String _searchQuery = '';
 
   @override
   void dispose() {
@@ -40,6 +43,13 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
       loading: () => const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator())),
       error: (err, _) => Center(child: Text('Error: $err', style: TextStyle(color: pm.destructive))),
       data: (items) {
+        final filteredItems = items.where((it) {
+          if (_searchQuery.trim().isEmpty) return true;
+          final q = _searchQuery.toLowerCase();
+          return it.itemName.toLowerCase().contains(q) ||
+              (it.remark != null && it.remark!.toLowerCase().contains(q));
+        }).toList();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -50,20 +60,53 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                   children: [
                     Text('SWH & Heat Pump Technical Checklist', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
                     const SizedBox(width: 8),
-                    PmBadge(label: '${items.length} Items', variant: PmBadgeVariant.secondary),
+                    PmBadge(label: '${filteredItems.length} Items', variant: PmBadgeVariant.secondary),
                   ],
                 ),
-                PmButton(
-                  size: PmButtonSize.sm,
-                  onPressed: () => _showAddEditModal(context, ref),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.plus, size: 14),
-                      SizedBox(width: 6),
-                      Text('Add Item'),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (items.isNotEmpty) ...[
+                      SizedBox(
+                        width: 220,
+                        height: 36,
+                        child: TextField(
+                          onChanged: (val) => setState(() => _searchQuery = val),
+                          style: TextStyle(fontSize: 13, color: pm.foreground),
+                          decoration: InputDecoration(
+                            hintText: 'Search checklist...',
+                            hintStyle: TextStyle(fontSize: 13, color: pm.mutedForeground),
+                            prefixIcon: Icon(LucideIcons.search, size: 14, color: pm.mutedForeground),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                            isDense: true,
+                            filled: true,
+                            fillColor: pm.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(pm.radiusMd),
+                              borderSide: BorderSide(color: pm.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(pm.radiusMd),
+                              borderSide: BorderSide(color: pm.border),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                     ],
-                  ),
+                    PmButton(
+                      size: PmButtonSize.sm,
+                      onPressed: () => _showAddEditModal(context, ref),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.plus, size: 14),
+                          SizedBox(width: 6),
+                          Text('Add Item'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -78,10 +121,20 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                       const SizedBox(height: 10),
                       Text('No checklist items added for this installation yet.', style: TextStyle(color: pm.mutedForeground)),
                       const SizedBox(height: 12),
-                      PmButton(
-                        size: PmButtonSize.sm,
-                        onPressed: () => _showAddEditModal(context, ref),
-                        child: const Text('+ Add Checklist Item'),
+                      InkWell(
+                        onTap: () => _showAddEditModal(context, ref),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF005CE6),
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: const Text(
+                            '+ Add Checklist Item',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -116,7 +169,7 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                       DataColumn(label: Text('REMARK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
                     ],
-                    rows: items.map((item) {
+                    rows: filteredItems.map((item) {
                       final balQty = item.reqQty - item.dispatchQty;
                       return DataRow(
                         cells: [
@@ -126,14 +179,22 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                           DataCell(Checkbox(
                             value: item.customerScope,
                             onChanged: (val) async {
-                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'customer_scope': val ?? false});
+                              final newCust = val ?? false;
+                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {
+                                'customer_scope': newCust,
+                                if (newCust) 'our_scope': false,
+                              });
                               ref.invalidate(pmChecklistItemsProvider(widget.projectId));
                             },
                           )),
                           DataCell(Checkbox(
                             value: item.ourScope,
                             onChanged: (val) async {
-                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'our_scope': val ?? false});
+                              final newOur = val ?? false;
+                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {
+                                'our_scope': newOur,
+                                if (newOur) 'customer_scope': false,
+                              });
                               ref.invalidate(pmChecklistItemsProvider(widget.projectId));
                             },
                           )),
@@ -206,7 +267,7 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
   }
 }
 
-class _ChecklistDialog extends StatefulWidget {
+class _ChecklistDialog extends ConsumerStatefulWidget {
   final String projectId;
   final PmChecklistItem? item;
   final VoidCallback onSaved;
@@ -218,10 +279,10 @@ class _ChecklistDialog extends StatefulWidget {
   });
 
   @override
-  State<_ChecklistDialog> createState() => _ChecklistDialogState();
+  ConsumerState<_ChecklistDialog> createState() => _ChecklistDialogState();
 }
 
-class _ChecklistDialogState extends State<_ChecklistDialog> {
+class _ChecklistDialogState extends ConsumerState<_ChecklistDialog> {
   final _formKey = GlobalKey<FormState>();
   final _itemNameCtrl = TextEditingController();
   final _reqQtyCtrl = TextEditingController(text: '1');
@@ -250,6 +311,16 @@ class _ChecklistDialogState extends State<_ChecklistDialog> {
     }
   }
 
+  @override
+  void dispose() {
+    _itemNameCtrl.dispose();
+    _reqQtyCtrl.dispose();
+    _dispatchQtyCtrl.dispose();
+    _installedQtyCtrl.dispose();
+    _remarkCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -272,7 +343,6 @@ class _ChecklistDialogState extends State<_ChecklistDialog> {
         'remark': _remarkCtrl.text.trim(),
       };
 
-      final ref = ProviderScope.containerOf(context);
       if (widget.item != null) {
         await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(widget.item!.id, data);
       } else {
@@ -291,6 +361,9 @@ class _ChecklistDialogState extends State<_ChecklistDialog> {
   @override
   Widget build(BuildContext context) {
     final pm = context.pm;
+    final inventoryAsync = ref.watch(inventoryProvider);
+    final inventoryItems = inventoryAsync.valueOrNull ?? [];
+
     return Dialog(
       backgroundColor: pm.card,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(pm.radiusLg)),
@@ -313,17 +386,122 @@ class _ChecklistDialogState extends State<_ChecklistDialog> {
                       IconButton(icon: const Icon(LucideIcons.x, size: 16), onPressed: () => Navigator.of(context).pop()),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _itemNameCtrl,
-                    validator: (v) => v?.trim().isEmpty == true ? 'Item name is required' : null,
-                    decoration: InputDecoration(
-                      labelText: 'Item Name / Description*',
-                      isDense: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(pm.radiusMd)),
-                    ),
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return RawAutocomplete<InventoryItem>(
+                        textEditingController: _itemNameCtrl,
+                        focusNode: FocusNode(),
+                        optionsBuilder: (TextEditingValue textVal) {
+                          if (textVal.text.isEmpty) {
+                            return inventoryItems.take(20);
+                          }
+                          final q = textVal.text.toLowerCase();
+                          return inventoryItems.where((it) {
+                            return it.itemName.toLowerCase().contains(q) ||
+                                (it.hsnSac != null && it.hsnSac!.toLowerCase().contains(q)) ||
+                                (it.uom != null && it.uom!.toLowerCase().contains(q));
+                          });
+                        },
+                        displayStringForOption: (InventoryItem it) => it.itemName,
+                        onSelected: (InventoryItem it) {
+                          _itemNameCtrl.text = it.itemName;
+                        },
+                        fieldViewBuilder: (ctx, textCtrl, focusNode, onSubmitted) {
+                          return TextFormField(
+                            controller: textCtrl,
+                            focusNode: focusNode,
+                            validator: (v) {
+                              final trimmed = v?.trim() ?? '';
+                              if (trimmed.isEmpty) return 'Item name is required';
+                              if (inventoryItems.isNotEmpty) {
+                                final matches = inventoryItems.any((it) => it.itemName.toLowerCase() == trimmed.toLowerCase());
+                                if (!matches) {
+                                  return 'Must be an existing inventory item';
+                                }
+                              }
+                              return null;
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Item Name / Description (Strictly Inventory)*',
+                              hintText: 'Search inventory item...',
+                              isDense: true,
+                              prefixIcon: const Icon(LucideIcons.search, size: 16),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(pm.radiusMd)),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (ctx, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 8,
+                              borderRadius: BorderRadius.circular(pm.radiusMd),
+                              color: pm.card,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxHeight: 220,
+                                  maxWidth: constraints.maxWidth,
+                                ),
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) => Divider(height: 1, color: pm.border),
+                                  itemBuilder: (ctx, index) {
+                                    final option = options.elementAt(index);
+                                    return InkWell(
+                                      onTap: () => onSelected(option),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    option.itemName,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: pm.foreground,
+                                                    ),
+                                                  ),
+                                                  if (option.hsnSac != null || option.uom != null)
+                                                    Text(
+                                                      [
+                                                        if (option.hsnSac != null) 'HSN: ${option.hsnSac}',
+                                                        if (option.uom != null) 'Unit: ${option.uom}',
+                                                      ].join(' • '),
+                                                      style: TextStyle(fontSize: 11, color: pm.mutedForeground),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (option.price > 0)
+                                              Text(
+                                                '₹${option.price.toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: pm.primary,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -358,7 +536,12 @@ class _ChecklistDialogState extends State<_ChecklistDialog> {
                         child: CheckboxListTile(
                           title: const Text('Our Scope', style: TextStyle(fontSize: 12)),
                           value: _ourScope,
-                          onChanged: (val) => setState(() => _ourScope = val ?? false),
+                          onChanged: (val) {
+                            setState(() {
+                              _ourScope = val ?? false;
+                              if (_ourScope) _customerScope = false;
+                            });
+                          },
                           controlAffinity: ListTileControlAffinity.leading,
                           contentPadding: EdgeInsets.zero,
                         ),
@@ -367,7 +550,12 @@ class _ChecklistDialogState extends State<_ChecklistDialog> {
                         child: CheckboxListTile(
                           title: const Text('Customer Scope', style: TextStyle(fontSize: 12)),
                           value: _customerScope,
-                          onChanged: (val) => setState(() => _customerScope = val ?? false),
+                          onChanged: (val) {
+                            setState(() {
+                              _customerScope = val ?? false;
+                              if (_customerScope) _ourScope = false;
+                            });
+                          },
                           controlAffinity: ListTileControlAffinity.leading,
                           contentPadding: EdgeInsets.zero,
                         ),

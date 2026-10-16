@@ -207,11 +207,19 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       _companyWebsiteCtrl.text = cs['company_website'] ?? cs['website'];
     }
 
-    _closingSentenceCtrl.text = 'This NOC is issued upon request for installation and operation of the ${doc.productName} System.';
-    _confirmationControllers = [
-      TextEditingController(text: '1. The installation of the ${doc.productName} is permitted at the above location.'),
-      TextEditingController(text: '3. Necessary precautions has been taken.'),
-    ];
+    _closingSentenceCtrl.text = doc.closingSentence ?? 'This NOC is issued upon request for installation and operation of the ${doc.productName} System.';
+    final docConfirmations = doc.confirmations;
+    if (docConfirmations.isNotEmpty) {
+      _confirmationControllers = docConfirmations.map((c) => TextEditingController(text: c)).toList();
+    } else {
+      final profile = _profiles.firstWhere(
+        (p) => p.productName.toLowerCase() == doc.productName.toLowerCase(),
+        orElse: () => _selectedProfile ?? QgNocProfile.defaultHeatPumpProfile(),
+      );
+      _confirmationControllers = profile.confirmationLines
+          .map((c) => TextEditingController(text: c.replaceAll('{Product}', doc.productName)))
+          .toList();
+    }
   }
 
   Future<void> _extractFromQuotation(String qId) async {
@@ -244,21 +252,16 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       _equipmentLines = extractedLines;
     }
 
-    if (product.toLowerCase().contains('heat pump')) {
-      _workTypeCtrl.text = 'Heat Pump Water Heater System Installation & Commissioning work';
-      _closingSentenceCtrl.text = 'This NOC is issued upon request for installation and operation of the heat pump system.';
-      _confirmationControllers = [
-        TextEditingController(text: '1. The installation of the heat pump system is permitted at the above location.'),
-        TextEditingController(text: '2. The system installed as per standard safety norms and guidelines.'),
-        TextEditingController(text: '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.'),
-      ];
-    } else {
-      _confirmationControllers = [
-        TextEditingController(text: '1. The installation of the $product system is permitted at the above location.'),
-        TextEditingController(text: '2. The system installed as per standard safety norms and guidelines.'),
-        TextEditingController(text: '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.'),
-      ];
-    }
+    final profile = _profiles.firstWhere(
+      (p) => p.productName.toLowerCase() == product.toLowerCase(),
+      orElse: () => _selectedProfile ?? QgNocProfile.defaultHeatPumpProfile(),
+    );
+    _workTypeCtrl.text = profile.workTypeText.replaceAll('{Product}', product);
+    _closingSentenceCtrl.text = (profile.closingSentence ?? 'This NOC is issued upon request for installation and operation of the {Product} System.')
+        .replaceAll('{Product}', product);
+    _confirmationControllers = profile.confirmationLines
+        .map((c) => TextEditingController(text: c.replaceAll('{Product}', product)))
+        .toList();
   }
 
   QgNocPayload _buildCurrentPayload() {
@@ -331,6 +334,8 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
           'phone': payload.companyPhone,
           'website': payload.companyWebsite,
         },
+        confirmations: payload.confirmations,
+        closingSentence: payload.closingSentence,
       );
 
       if (mounted) {
@@ -404,6 +409,8 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
           'phone': payload.companyPhone,
           'website': payload.companyWebsite,
         },
+        confirmations: payload.confirmations,
+        closingSentence: payload.closingSentence,
         overrideReason: 'Completed deal installation & commissioning verified for ${payload.productName}',
       );
 

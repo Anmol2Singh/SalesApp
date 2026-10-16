@@ -20,9 +20,14 @@ import '../../features/reports/models/activity_report_data.dart';
 import 'package:flutter/material.dart' show BuildContext;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/financial_year_helper.dart';
 
 class PdfService {
-  static Future<Map<String, dynamic>> resolveTemplateConfig(Map<String, dynamic>? initialConfig) async {
+  static Future<Map<String, dynamic>> resolveTemplateConfig(
+    Map<String, dynamic>? initialConfig, {
+    String? companyId,
+    Product? product,
+  }) async {
     final Map<String, dynamic> resolved = {
       'company_name': 'INSIYA SOLAR INDUSTRY',
       'company_address': 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
@@ -32,7 +37,61 @@ class PdfService {
       'footer_text': 'Thank you for your business.',
     };
 
-    // 1. Check local SharedPreferences cache
+    final effectiveCompanyId = companyId ??
+        product?.companyId ??
+        initialConfig?['company_id']?.toString() ??
+        (product != null &&
+                (product.name.toLowerCase().contains('boom') ||
+                    product.name.toLowerCase().contains('barrier'))
+            ? 'insiya-trading'
+            : null);
+
+    // 1. If a specific company is configured, fetch strictly from app_companies
+    if (effectiveCompanyId != null && effectiveCompanyId.isNotEmpty) {
+      try {
+        final compRes = await Supabase.instance.client
+            .from('app_companies')
+            .select()
+            .eq('id', effectiveCompanyId)
+            .maybeSingle();
+        if (compRes != null) {
+          if (compRes['name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = compRes['name'].toString().trim();
+          if (compRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = compRes['address'].toString().trim();
+          if (compRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = compRes['phone'].toString().trim();
+          if (compRes['email']?.toString().trim().isNotEmpty == true) resolved['company_email'] = compRes['email'].toString().trim();
+          if (compRes['website']?.toString().trim().isNotEmpty == true) resolved['company_website'] = compRes['website'].toString().trim();
+          if (compRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = compRes['gstin'].toString().trim();
+          if (compRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = compRes['logo_url'].toString().trim();
+          if (compRes['stamp_url']?.toString().trim().isNotEmpty == true) resolved['stamp_url'] = compRes['stamp_url'].toString().trim();
+          if (compRes['bank_name']?.toString().trim().isNotEmpty == true) resolved['bank_name'] = compRes['bank_name'].toString().trim();
+          if (compRes['bank_account_name']?.toString().trim().isNotEmpty == true) resolved['bank_account_name'] = compRes['bank_account_name'].toString().trim();
+          if (compRes['bank_account_no']?.toString().trim().isNotEmpty == true) resolved['bank_account_no'] = compRes['bank_account_no'].toString().trim();
+          if (compRes['bank_branch']?.toString().trim().isNotEmpty == true) resolved['bank_branch'] = compRes['bank_branch'].toString().trim();
+          if (compRes['bank_ifsc']?.toString().trim().isNotEmpty == true) resolved['bank_ifsc'] = compRes['bank_ifsc'].toString().trim();
+        }
+      } catch (_) {}
+    } else {
+      // Check default company from app_companies
+      try {
+        final defaultRes = await Supabase.instance.client
+            .from('app_companies')
+            .select()
+            .eq('is_default', true)
+            .limit(1)
+            .maybeSingle();
+        if (defaultRes != null) {
+          if (defaultRes['name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = defaultRes['name'].toString().trim();
+          if (defaultRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = defaultRes['address'].toString().trim();
+          if (defaultRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = defaultRes['phone'].toString().trim();
+          if (defaultRes['email']?.toString().trim().isNotEmpty == true) resolved['company_email'] = defaultRes['email'].toString().trim();
+          if (defaultRes['website']?.toString().trim().isNotEmpty == true) resolved['company_website'] = defaultRes['website'].toString().trim();
+          if (defaultRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = defaultRes['gstin'].toString().trim();
+          if (defaultRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = defaultRes['logo_url'].toString().trim();
+        }
+      } catch (_) {}
+    }
+
+    // 2. Check local SharedPreferences cache
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getString('company_name')?.isNotEmpty == true) resolved['company_name'] = prefs.getString('company_name')!;
@@ -43,7 +102,7 @@ class PdfService {
       if (prefs.getString('company_logo_url')?.isNotEmpty == true) resolved['logo_url'] = prefs.getString('company_logo_url')!;
     } catch (_) {}
 
-    // 2. Check company_settings table (saved by Company Details & Branding page)
+    // 3. Check company_settings table (legacy fallback)
     try {
       final cRes = await Supabase.instance.client
           .from('company_settings')
@@ -51,16 +110,16 @@ class PdfService {
           .limit(1)
           .maybeSingle();
       if (cRes != null) {
-        if (cRes['company_name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = cRes['company_name'].toString().trim();
-        if (cRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = cRes['address'].toString().trim();
-        if (cRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = cRes['phone'].toString().trim();
-        if (cRes['email']?.toString().trim().isNotEmpty == true) resolved['company_email'] = cRes['email'].toString().trim();
-        if (cRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = cRes['gstin'].toString().trim();
-        if (cRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = cRes['logo_url'].toString().trim();
+        if (cRes['company_name']?.toString().trim().isNotEmpty == true && resolved['company_name'] == null) resolved['company_name'] = cRes['company_name'].toString().trim();
+        if (cRes['address']?.toString().trim().isNotEmpty == true && resolved['company_address'] == null) resolved['company_address'] = cRes['address'].toString().trim();
+        if (cRes['phone']?.toString().trim().isNotEmpty == true && resolved['company_phone'] == null) resolved['company_phone'] = cRes['phone'].toString().trim();
+        if (cRes['email']?.toString().trim().isNotEmpty == true && resolved['company_email'] == null) resolved['company_email'] = cRes['email'].toString().trim();
+        if (cRes['gstin']?.toString().trim().isNotEmpty == true && resolved['company_gst'] == null) resolved['company_gst'] = cRes['gstin'].toString().trim();
+        if (cRes['logo_url']?.toString().trim().isNotEmpty == true && resolved['logo_url'] == null) resolved['logo_url'] = cRes['logo_url'].toString().trim();
       }
     } catch (_) {}
 
-    // 3. Check pdf_templates table
+    // 4. Check pdf_templates table
     try {
       final res = await Supabase.instance.client
           .from('pdf_templates')
@@ -161,7 +220,7 @@ class PdfService {
     String copyType = 'Original For Recipient',
     String docTitle = 'QUOTATION',
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
@@ -668,7 +727,7 @@ class PdfService {
     required Map<String, dynamic> templateConfig,
     String scopeFilter = 'all', // 'all', 'company', 'customer'
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
@@ -791,7 +850,7 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
@@ -910,7 +969,7 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
@@ -1405,28 +1464,30 @@ class PdfService {
 
   static String formatSalesOrderNumber(String raw, [DateTime? date]) {
     final clean = raw.trim();
-    final year = (date ?? DateTime.now()).year.toString();
-    if (clean.isEmpty) return 'IZY/SO/$year/00001';
-    if (clean.startsWith('IZY/SO/')) return clean;
+    final fy = FinancialYearHelper.getFinancialYearCode(date);
+    if (clean.isEmpty) return 'IZY/SO/$fy/00001';
+    if (clean.startsWith('IZY/SO/')) {
+      return FinancialYearHelper.formatDocumentNumber(clean, date);
+    }
 
     // Pattern: "00051/26-27" or "00051/2026" or "51/2026"
     if (clean.contains('/')) {
       final parts = clean.split('/');
       if (RegExp(r'^\d+$').hasMatch(parts[0])) {
         final seq = parts[0].padLeft(5, '0');
-        return 'IZY/SO/$year/$seq';
+        return 'IZY/SO/$fy/$seq';
       } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
         final seq = parts[1].padLeft(5, '0');
-        return 'IZY/SO/$year/$seq';
+        return 'IZY/SO/$fy/$seq';
       }
     }
 
     final digits = RegExp(r'\d+').firstMatch(clean)?.group(0);
     if (digits != null) {
-      return 'IZY/SO/$year/${digits.padLeft(5, '0')}';
+      return 'IZY/SO/$fy/${digits.padLeft(5, '0')}';
     }
 
-    return 'IZY/SO/$year/$clean';
+    return 'IZY/SO/$fy/$clean';
   }
 
   static Future<Uint8List> generateSalesOrderPdf({
@@ -1436,7 +1497,7 @@ class PdfService {
     required String variant,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig);
+    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();

@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/deal_quotation_item.dart';
+import '../templates/qg_template_registry.dart';
 
 /// Repository for reading deal quotations created in sales_pipelines.
 /// STRICTLY READ-ONLY against all core tables (quotations, sales_pipelines, customers, etc.).
@@ -11,7 +12,7 @@ class DealQuotationsRepository {
 
   DealQuotationsRepository(this._supabase);
 
-  static const List<String> defaultProductFilter = ['Heat Pump', 'Heatpump'];
+  static const List<String> defaultProductFilter = QgTemplateRegistry.defaultProductFilter;
 
   /// Fetches deal quotations for all deals, newest first.
   Future<List<DealQuotationItem>> getDealQuotations({

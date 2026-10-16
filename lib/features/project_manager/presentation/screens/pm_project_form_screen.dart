@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/models/customer.dart';
 import '../../../admin/providers/inventory_provider.dart';
 import '../theme/pm_tokens.dart';
+import '../../data/models/pm_company.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../providers/pm_providers.dart';
 import '../widgets/customer_search_picker.dart';
@@ -63,6 +64,18 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.editId == null && _firmNameCtrl.text.isEmpty) {
+        setState(() {
+          _firmNameCtrl.text = ref.read(pmActiveCompanyProvider).name;
+        });
+      }
+    });
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_isInit) {
@@ -91,6 +104,9 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
   }
 
   Future<void> _loadData() async {
+    final activeCompany = ref.read(pmActiveCompanyProvider);
+    final companies = ref.read(pmCompaniesListProvider);
+
     if (widget.editId != null) {
       setState(() => _isLoading = true);
       if (widget.isPurchase) {
@@ -101,7 +117,13 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           _siteNameCtrl.text = purchase.siteName;
           _mobileCtrl.text = purchase.mobileNumber ?? '';
           _addressCtrl.text = purchase.address ?? '';
-          _firmNameCtrl.text = purchase.firmName ?? '';
+          final pComp = companies.cast<PmCompany?>().firstWhere(
+            (c) => c?.id == purchase.companyId,
+            orElse: () => null,
+          );
+          _firmNameCtrl.text = (purchase.firmName != null && purchase.firmName!.trim().isNotEmpty)
+              ? purchase.firmName!
+              : (pComp?.name ?? activeCompany.name);
           _partyPrintNameCtrl.text = purchase.partyPrintName ?? '';
           _orderValueCtrl.text = purchase.quotationValue.toStringAsFixed(0);
           _customerSinceDate = purchase.createdAt;
@@ -123,17 +145,33 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           _orderValueCtrl.text = project.orderValue.toStringAsFixed(0);
           _extraWorkValueCtrl.text = project.extraWorkValue.toStringAsFixed(0);
           _workRemarkCtrl.text = project.workRemark ?? '';
-          _salesmanNameCtrl.text = project.salesmanName ?? '';
+
+          // Sales Man auto-pick
+          final smCandidate = (project.salesmanName != null && project.salesmanName!.trim().isNotEmpty)
+              ? project.salesmanName!.trim()
+              : (project.customer?.salesmanName ?? project.customer?.assignedToName ?? '');
+          _salesmanNameCtrl.text = smCandidate;
+
+          // Firm Name auto-picked from project's company or active company
+          final projComp = companies.cast<PmCompany?>().firstWhere(
+            (c) => c?.id == project.companyId,
+            orElse: () => null,
+          );
+          _firmNameCtrl.text = projComp?.name ?? project.firmName;
+
           _customerSinceDate = project.createdAt;
         }
       }
       setState(() => _isLoading = false);
     } else {
-      // Auto-assign next ID No
+      // Auto-assign next ID No and auto-pick active company name
       final nextId = widget.isPurchase
           ? await ref.read(pmPurchasesRepositoryProvider).getNextIdNo()
           : await ref.read(pmProjectsRepositoryProvider).getNextIdNo();
-      setState(() => _idNo = nextId);
+      setState(() {
+        _idNo = nextId;
+        _firmNameCtrl.text = activeCompany.name;
+      });
     }
   }
 
@@ -148,6 +186,12 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
 
     setState(() => _isLoading = true);
     final activeCompany = ref.read(pmActiveCompanyProvider);
+    final companies = ref.read(pmCompaniesListProvider);
+    final matchedCompany = companies.cast<PmCompany?>().firstWhere(
+      (c) => c?.name.trim().toLowerCase() == _firmNameCtrl.text.trim().toLowerCase(),
+      orElse: () => null,
+    );
+    final targetCompanyId = matchedCompany?.id ?? activeCompany.id;
 
     try {
       if (widget.isPurchase) {
@@ -160,7 +204,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           'firm_name': _firmNameCtrl.text.trim(),
           'party_print_name': _partyPrintNameCtrl.text.trim(),
           'quotation_value': double.tryParse(_orderValueCtrl.text) ?? 0.0,
-          'company_id': activeCompany.id,
+          'company_id': targetCompanyId,
           'created_at': _customerSinceDate.toIso8601String(),
         };
 
@@ -190,7 +234,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
           'extra_work_value': double.tryParse(_extraWorkValueCtrl.text) ?? 0.0,
           'work_remark': _workRemarkCtrl.text.trim(),
           'salesman_name': _salesmanNameCtrl.text.trim(),
-          'company_id': activeCompany.id,
+          'company_id': targetCompanyId,
           'created_at': _customerSinceDate.toIso8601String(),
         };
 
@@ -579,6 +623,15 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                                   if (_mobileCtrl.text.isEmpty && cust.phone != null) {
                                     _mobileCtrl.text = cust.phone!;
                                   }
+                                  if (_salesmanNameCtrl.text.trim().isEmpty) {
+                                    final sName = cust.salesmanName ?? cust.assignedToName ?? '';
+                                    if (sName.isNotEmpty) {
+                                      _salesmanNameCtrl.text = sName;
+                                    }
+                                  }
+                                  if (_firmNameCtrl.text.trim().isEmpty) {
+                                    _firmNameCtrl.text = ref.read(pmActiveCompanyProvider).name;
+                                  }
                                 });
                               },
                             ),
@@ -635,9 +688,40 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                               Row(
                                 children: [
                                   Expanded(child: _buildTextField('Mobile Number', _mobileCtrl)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: _buildTextField('Firm Name', _firmNameCtrl)),
+                                  if (!widget.isPurchase) ...[
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        'Sales Man',
+                                        _salesmanNameCtrl,
+                                        suffixIcon: IconButton(
+                                          icon: const Icon(LucideIcons.userCheck, size: 18, color: Color(0xFF005CE6)),
+                                          tooltip: 'Pick from sales team',
+                                          onPressed: _pickSalesStaff,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                'Firm Name',
+                                _firmNameCtrl,
+                                suffixIcon: PopupMenuButton<PmCompany>(
+                                  icon: const Icon(LucideIcons.building, size: 18, color: Color(0xFF005CE6)),
+                                  tooltip: 'Select Firm / Company',
+                                  onSelected: (comp) {
+                                    setState(() => _firmNameCtrl.text = comp.name);
+                                  },
+                                  itemBuilder: (ctx) {
+                                    final comps = ref.read(pmCompaniesListProvider);
+                                    return comps.map((c) => PopupMenuItem(
+                                      value: c,
+                                      child: Text(c.name, style: const TextStyle(fontSize: 13)),
+                                    )).toList();
+                                  },
+                                ),
                               ),
                               const SizedBox(height: 12),
                               _buildTextField('Address', _addressCtrl, maxLines: 2),
@@ -733,14 +817,6 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
                               if (!widget.isPurchase) ...[
                                 const SizedBox(height: 12),
                                 _buildTextField('Initial Work Remark', _workRemarkCtrl, maxLines: 2),
-                                const SizedBox(height: 12),
-                                _buildSearchablePickerField(
-                                  label: 'Salesman / Sales Head Name',
-                                  value: _salesmanNameCtrl.text,
-                                  hintText: 'Select Sales Executive or Sales Head...',
-                                  onTap: _pickSalesStaff,
-                                  onClear: _salesmanNameCtrl.text.isNotEmpty ? () => setState(() => _salesmanNameCtrl.clear()) : null,
-                                ),
                               ],
                             ],
                           ),
@@ -862,6 +938,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    Widget? suffixIcon,
   }) {
     final pm = context.pm;
     return Column(
@@ -880,6 +957,7 @@ class _PmProjectFormScreenState extends ConsumerState<PmProjectFormScreen> {
             isDense: true,
             filled: readOnly,
             fillColor: readOnly ? pm.secondary.withOpacity(0.5) : pm.card,
+            suffixIcon: suffixIcon,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(pm.radiusMd),
               borderSide: BorderSide(color: pm.border),

@@ -70,6 +70,8 @@ class ProductBaseSpecs {
       raw: json,
     );
   }
+
+  Map<String, dynamic> toJson() => Map<String, dynamic>.from(raw);
 }
 
 class ProductBrochure {
@@ -98,6 +100,7 @@ class Product {
   final String id;
   final String name;
   final String? category;
+  final String? companyId;
   final ProductBaseSpecs baseSpecs;
   final bool isActive;
   final List<String> imageUrls;
@@ -109,6 +112,7 @@ class Product {
     required this.id,
     required this.name,
     this.category,
+    this.companyId,
     required this.baseSpecs,
     required this.isActive,
     this.imageUrls = const [],
@@ -133,13 +137,15 @@ class Product {
           .toList();
     }
 
+    final baseSpecsMap = json['base_specs'] as Map<String, dynamic>? ?? {};
+    final resolvedCompanyId = json['company_id'] as String? ?? baseSpecsMap['company_id'] as String?;
+
     return Product(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       category: json['category'] as String?,
-      baseSpecs: ProductBaseSpecs.fromJson(
-        json['base_specs'] as Map<String, dynamic>? ?? {},
-      ),
+      companyId: resolvedCompanyId,
+      baseSpecs: ProductBaseSpecs.fromJson(baseSpecsMap),
       isActive: json['is_active'] as bool? ?? true,
       imageUrls: parsedImages,
       brochures: parsedBrochures,
@@ -155,8 +161,35 @@ class Product {
   Map<String, dynamic> toJson() => {
     'name': name,
     'category': category,
+    'company_id': companyId,
     'is_active': isActive,
     'image_urls': imageUrls,
     'brochure_urls': brochures.map((b) => b.toJson()).toList(),
   };
+
+  Product copyWith({
+    String? id,
+    String? name,
+    String? category,
+    String? companyId,
+    ProductBaseSpecs? baseSpecs,
+    bool? isActive,
+    List<String>? imageUrls,
+    List<ProductBrochure>? brochures,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      companyId: companyId ?? this.companyId,
+      baseSpecs: baseSpecs ?? this.baseSpecs,
+      isActive: isActive ?? this.isActive,
+      imageUrls: imageUrls ?? this.imageUrls,
+      brochures: brochures ?? this.brochures,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }

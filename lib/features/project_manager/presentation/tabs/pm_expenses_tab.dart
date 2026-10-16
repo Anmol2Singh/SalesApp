@@ -73,10 +73,20 @@ class PmExpensesTab extends ConsumerWidget {
                       const SizedBox(height: 10),
                       Text('No direct expenses recorded for this project yet.', style: TextStyle(color: pm.mutedForeground)),
                       const SizedBox(height: 12),
-                      PmButton(
-                        size: PmButtonSize.sm,
-                        onPressed: () => _showAddEditModal(context, ref),
-                        child: const Text('+ Record Expense'),
+                      InkWell(
+                        onTap: () => _showAddEditModal(context, ref),
+                        borderRadius: BorderRadius.circular(9999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF005CE6),
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: const Text(
+                            '+ Record Expense',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
                       ),
                     ],
                   ),
