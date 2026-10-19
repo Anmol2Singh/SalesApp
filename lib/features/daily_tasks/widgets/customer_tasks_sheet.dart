@@ -27,8 +27,9 @@ class CustomerTasksSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tasksAsync = ref.watch(customerTasksProvider(customer.id));
     final profile = ref.watch(currentProfileProvider);
-    final bool isAdmin = profile?.roles.contains(UserRole.admin) == true ||
-        profile?.roles.contains(UserRole.manager) == true;
+    final bool isManagerOnly = profile?.roles.contains(UserRole.manager) == true &&
+        profile?.roles.contains(UserRole.admin) != true;
+    final bool isAdmin = profile?.roles.contains(UserRole.admin) == true;
 
     final customerTitle = customer.customerName.trim().isNotEmpty
         ? customer.customerName
@@ -223,7 +224,7 @@ class CustomerTasksSheet extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final task = tasks[index];
                     final isCreator = profile?.id == task.userId;
-                    final canEdit = isAdmin || isCreator;
+                    final canEdit = !isManagerOnly && (isAdmin || isCreator);
 
                     return Container(
                       padding: const EdgeInsets.all(14),

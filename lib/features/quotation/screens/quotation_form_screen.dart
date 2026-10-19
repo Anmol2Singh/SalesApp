@@ -2345,11 +2345,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _existingQuotation?.status == QuotationStatus.pendingApproval;
     final profile = ref.watch(currentProfileProvider);
     final isSales = profile?.primaryRole == UserRole.sales;
+    final isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) && !(profile?.roles.contains(UserRole.admin) ?? false);
     final isAdminOrSalesHead = (profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false)) ||
-        (profile?.primaryRole == UserRole.salesHead || (profile?.roles.contains(UserRole.salesHead) ?? false)) ||
-        (profile?.primaryRole == UserRole.manager || (profile?.roles.contains(UserRole.manager) ?? false));
-    final canEditItemRateAndName = (widget.leadId == null) || isAdminOrSalesHead;
-    final enabled = _isEditing;
+        (profile?.primaryRole == UserRole.salesHead || (profile?.roles.contains(UserRole.salesHead) ?? false));
+    final canEditItemRateAndName = !isManagerOnly && ((widget.leadId == null) || isAdminOrSalesHead);
+    final enabled = _isEditing && !isManagerOnly;
     final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
 
     return Scaffold(
@@ -2365,7 +2365,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           onPressed: () => context.pop(),
         ),
         actions: [
-          if (isConfirmed && !enabled)
+          if (isConfirmed && !enabled && !isManagerOnly)
             TextButton.icon(
               onPressed: () => setState(() => _isEditing = true),
               icon: const Icon(Icons.edit, color: Colors.white, size: 16),

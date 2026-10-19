@@ -60,7 +60,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
     if (_customerScrollController.hasClients &&
         _customerScrollController.position.pixels >=
             _customerScrollController.position.maxScrollExtent - 200) {
-      ref.read(customersNotifierProvider.notifier).load();
+      ref.read(serviceCustomersNotifierProvider.notifier).load();
     }
   }
 
@@ -415,6 +415,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
           'address': updatedAddress,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', _selectedCustomer!.id);
+        ref.invalidate(serviceCustomersNotifierProvider);
         ref.invalidate(customersNotifierProvider);
       }
     } catch (_) {}
@@ -462,7 +463,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(customersNotifierProvider);
+    final customersAsync = ref.watch(serviceCustomersNotifierProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -624,7 +625,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
               ),
               Consumer(
                 builder: (context, ref, _) {
-                  final totalCount = ref.watch(customersNotifierProvider.notifier).totalCount;
+                  final totalCount = ref.watch(serviceCustomersNotifierProvider.notifier).totalCount;
                   final displayCount = totalCount > 0 ? totalCount : (customersAsync.valueOrNull?.length ?? 0);
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -646,7 +647,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
             controller: _searchController,
             onChanged: (v) {
               setState(() {});
-              ref.read(customersNotifierProvider.notifier).search(v);
+              ref.read(serviceCustomersNotifierProvider.notifier).search(v);
             },
             decoration: InputDecoration(
               hintText: 'Search by company name, person or phone...',
@@ -658,7 +659,7 @@ class _BookComplaintScreenState extends ConsumerState<BookComplaintScreen> {
                       onPressed: () {
                         _searchController.clear();
                         setState(() {});
-                        ref.read(customersNotifierProvider.notifier).search('');
+                        ref.read(serviceCustomersNotifierProvider.notifier).search('');
                       },
                     )
                   : null,

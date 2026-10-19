@@ -14,6 +14,8 @@ import '../tabs/pm_swh_checklist_tab.dart';
 import '../tabs/pm_work_remarks_tab.dart';
 import '../../../../core/providers/company_provider.dart';
 import '../../../../core/models/app_company.dart';
+import '../../../auth/providers/auth_provider.dart';
+import '../../../../core/models/user_role.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../data/models/pm_company.dart';
 
@@ -143,6 +145,9 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
 
             return LayoutBuilder(
               builder: (context, screenConstraints) {
+                final profile = ref.watch(currentProfileProvider);
+                final isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) &&
+                    !(profile?.roles.contains(UserRole.admin) ?? false);
                 final isMobile = screenConstraints.maxWidth < 650;
                 final isNarrow = screenConstraints.maxWidth < 750;
                 final isWide = screenConstraints.maxWidth > 850;
@@ -380,9 +385,11 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                     ),
                     // Customer Since Pill (Click to edit)
                     Tooltip(
-                      message: 'Click to edit Customer Since date',
+                      message: isManagerOnly ? 'Customer Since' : 'Click to edit Customer Since date',
                       child: InkWell(
-                        onTap: () async {
+                        onTap: isManagerOnly
+                            ? null
+                            : () async {
                           final initialDate = record.createdAt ?? DateTime.now();
                           final picked = await showDatePicker(
                             context: context,
@@ -521,8 +528,8 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                                     spacing: 8,
                                     runSpacing: 6,
                                     children: [
-                                      moveCopyBtn,
-                                      deleteBtn,
+                                      if (!isManagerOnly) moveCopyBtn,
+                                      if (!isManagerOnly) deleteBtn,
                                     ],
                                   ),
                                 ),
@@ -535,8 +542,10 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                             if (isNarrow) ...[
                               Row(
                                 children: [
-                                  Expanded(child: editDetailsBtn),
-                                  const SizedBox(width: 8),
+                                  if (!isManagerOnly) ...[
+                                    Expanded(child: editDetailsBtn),
+                                    const SizedBox(width: 8),
+                                  ],
                                   Expanded(child: newCallRemarkBtn),
                                 ],
                               ),
@@ -548,8 +557,10 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                                 children: [
                                   Expanded(child: metadataChipsWrap),
                                   const SizedBox(width: 12),
-                                  editDetailsBtn,
-                                  const SizedBox(width: 8),
+                                  if (!isManagerOnly) ...[
+                                    editDetailsBtn,
+                                    const SizedBox(width: 8),
+                                  ],
                                   newCallRemarkBtn,
                                 ],
                               ),

@@ -433,10 +433,12 @@ class _InstallationDetailsScreenState
     }
 
     final profile = ref.watch(currentProfileProvider);
-    final isAdminOrCoordinator = profile?.primaryRole == UserRole.admin ||
-        profile?.primaryRole == UserRole.manager ||
-        profile?.primaryRole == UserRole.serviceHead ||
-        profile?.roles.contains(UserRole.admin) == true;
+    final isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) &&
+        !(profile?.roles.contains(UserRole.admin) ?? false);
+    final isAdminOrCoordinator = !isManagerOnly &&
+        (profile?.primaryRole == UserRole.admin ||
+            profile?.primaryRole == UserRole.serviceHead ||
+            (profile?.roles.contains(UserRole.admin) == true));
     final isClosed =
         installation.status == 'closed' || installation.status == 'resolved';
 
@@ -910,7 +912,7 @@ class _InstallationDetailsScreenState
                               installation.sealNumberAfter!.trim().isNotEmpty)
                           ? 'Edit Seal #'
                           : 'Enter Seal # (After)',
-                      onAction: !isClosed
+                      onAction: (!isClosed && !isManagerOnly)
                           ? () => _editSealNumberAfter(installation)
                           : null,
                     ),
@@ -930,7 +932,7 @@ class _InstallationDetailsScreenState
                               installation.afterImageUrl!.isNotEmpty)
                           ? 'Upload More'
                           : 'Upload After Photo',
-                      onAction: !isClosed
+                      onAction: (!isClosed && !isManagerOnly)
                           ? () => _pickAndUploadPhoto(installation, true)
                           : null,
                     ),
@@ -941,7 +943,7 @@ class _InstallationDetailsScreenState
                       context: context,
                       title: 'Technician Signature',
                       signatureUrl: installation.technicianSignatureUrl,
-                      isClosed: isClosed,
+                      isClosed: isClosed || isManagerOnly,
                       onTakeSignature: () =>
                           _takeTechnicianSignature(installation),
                     ),
@@ -952,7 +954,7 @@ class _InstallationDetailsScreenState
                       context: context,
                       title: 'Customer Signature',
                       signatureUrl: installation.customerSignatureUrl,
-                      isClosed: isClosed,
+                      isClosed: isClosed || isManagerOnly,
                       onTakeSignature: () =>
                           _takeCustomerSignature(installation),
                     ),

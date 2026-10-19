@@ -818,10 +818,11 @@ class _DailyTasksScreenState extends ConsumerState<DailyTasksScreen> {
     dynamic profile,
     bool isWide,
   ) {
-    final bool isAdmin = profile?.roles.contains(UserRole.admin) == true ||
-        profile?.roles.contains(UserRole.manager) == true;
+    final bool isManagerOnly = profile?.roles.contains(UserRole.manager) == true &&
+        profile?.roles.contains(UserRole.admin) != true;
+    final bool isAdmin = profile?.roles.contains(UserRole.admin) == true;
     final bool isCreator = profile?.id == task.userId;
-    final bool canEditOrDelete = isAdmin || isCreator;
+    final bool canEditOrDelete = !isManagerOnly && (isAdmin || isCreator);
 
     Color roleColor = const Color(0xFF6366F1);
     if (task.userRole.contains('admin')) {

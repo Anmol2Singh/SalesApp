@@ -139,7 +139,11 @@ class QuotationSupabaseRepository {
 
   // ─── QUOTATIONS OVER SUPABASE ──────────────────────────────────────────────
 
-  Future<List<GeneratorQuotation>> getAllQuotations() async {
+  Future<List<GeneratorQuotation>> getAllQuotations({
+    String? currentUserId,
+    String? currentUserName,
+    bool canViewAll = true,
+  }) async {
     try {
       final response = await _supabase
           .from('quotations')
@@ -152,6 +156,28 @@ class QuotationSupabaseRepository {
         try {
           final rowMap = Map<String, dynamic>.from(row as Map);
           final specs = rowMap['product_specs'];
+
+          if (!canViewAll) {
+            final qCreatedBy = rowMap['created_by'] as String?;
+            final qSalesman = (rowMap['salesman'] as String?)?.trim();
+            final uId = currentUserId?.trim();
+            final uName = currentUserName?.trim().toLowerCase();
+
+            bool matches = false;
+            if (uId != null && uId.isNotEmpty && qCreatedBy == uId) {
+              matches = true;
+            }
+            if (!matches && uName != null && uName.isNotEmpty && qSalesman != null && qSalesman.toLowerCase() == uName) {
+              matches = true;
+            }
+            if (!matches && specs is Map && specs['generator_quotation'] != null) {
+              final gqSalesman = (specs['generator_quotation']['salesman'] as String?)?.trim().toLowerCase();
+              if (uName != null && uName.isNotEmpty && gqSalesman != null && gqSalesman == uName) {
+                matches = true;
+              }
+            }
+            if (!matches) continue;
+          }
 
           if (specs is Map && specs['generator_quotation'] != null) {
             final gqMap = Map<String, dynamic>.from(specs['generator_quotation'] as Map);

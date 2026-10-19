@@ -22,7 +22,27 @@ class AdminPanelScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
+    final isAdmin = profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false);
     final isBoq = profile?.primaryRole == UserRole.boq;
+
+    if (!isAdmin && !isBoq) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.go(AppRoutes.salesDashboard),
+          ),
+          title: const Text('Access Restricted'),
+        ),
+        body: const Center(
+          child: Text(
+            'Only administrators can access the Admin Panel.',
+            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
 
     if (isBoq) {
       return Scaffold(

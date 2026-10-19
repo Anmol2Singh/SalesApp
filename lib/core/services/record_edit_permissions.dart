@@ -18,11 +18,14 @@ class RecordEditPermissions {
   }) {
     if (currentUserId == null) return false;
 
-    // Admin or manager users can edit any record
-    final isAdmin = userRole == UserRole.admin ||
-        userRole == UserRole.manager ||
-        allRoles.contains(UserRole.admin) ||
-        allRoles.contains(UserRole.manager);
+    // Manager role has strictly read-only access in all modules (no edit or delete permission)
+    final isManagerOnly = (userRole == UserRole.manager || allRoles.contains(UserRole.manager)) &&
+        userRole != UserRole.admin &&
+        !allRoles.contains(UserRole.admin);
+    if (isManagerOnly) return false;
+
+    // Admin users can edit any record
+    final isAdmin = userRole == UserRole.admin || allRoles.contains(UserRole.admin);
     if (isAdmin) return true;
 
     // Creator can edit
@@ -50,10 +53,13 @@ class RecordEditPermissions {
   }) {
     if (currentUserId == null) return false;
 
-    final isAdmin = userRole == UserRole.admin ||
-        userRole == UserRole.manager ||
-        allRoles.contains(UserRole.admin) ||
-        allRoles.contains(UserRole.manager);
+    // Manager role has strictly read-only access in all modules (no edit or delete permission)
+    final isManagerOnly = (userRole == UserRole.manager || allRoles.contains(UserRole.manager)) &&
+        userRole != UserRole.admin &&
+        !allRoles.contains(UserRole.admin);
+    if (isManagerOnly) return false;
+
+    final isAdmin = userRole == UserRole.admin || allRoles.contains(UserRole.admin);
     if (isAdmin) return true;
 
     final isCreator = currentUserId == creatorId;

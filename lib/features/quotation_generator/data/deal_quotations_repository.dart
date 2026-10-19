@@ -15,10 +15,15 @@ class DealQuotationsRepository {
   static const List<String> defaultProductFilter = QgTemplateRegistry.defaultProductFilter;
 
   /// Fetches deal quotations for all deals, newest first.
+  /// If [canViewAll] is false, restricts results to quotations created by, assigned to,
+  /// or under the name of the salesperson.
   Future<List<DealQuotationItem>> getDealQuotations({
     List<String> productFilter = defaultProductFilter,
     String? searchQuery,
     String? statusFilter,
+    String? currentUserId,
+    String? currentUserName,
+    bool canViewAll = true,
   }) async {
     try {
       // Read-only query with standard embeds
@@ -88,6 +93,61 @@ class DealQuotationsRepository {
           final qId = rowMap['id'] as String? ?? '';
           final proposalRecord = currentProposalsByQuoteId[qId];
           final item = DealQuotationItem.fromSupabase(rowMap, proposalRecord: proposalRecord);
+
+          // If not elevated (standard salesperson), restrict to quotations under their name
+          // or for customers present for / assigned to them.
+          if (!canViewAll) {
+            final qCreatedBy = rowMap['created_by'] as String?;
+            final pCreatedBy = pipeline != null ? pipeline['created_by'] as String? : null;
+
+            final rawCust = pipeline != null ? pipeline['customers'] : null;
+            Map<String, dynamic>? custMap;
+            if (rawCust is Map) {
+              custMap = Map<String, dynamic>.from(rawCust);
+            } else if (rawCust is List && rawCust.isNotEmpty && rawCust.first is Map) {
+              custMap = Map<String, dynamic>.from(rawCust.first as Map);
+            }
+            final custCreatedBy = custMap != null ? custMap['created_by'] as String? : null;
+            final custAssignedTo = custMap != null ? custMap['assigned_to'] as String? : null;
+
+            final rawProf = pipeline != null ? pipeline['profiles'] : null;
+            Map<String, dynamic>? profMap;
+            if (rawProf is Map) {
+              profMap = Map<String, dynamic>.from(rawProf);
+            } else if (rawProf is List && rawProf.isNotEmpty && rawProf.first is Map) {
+              profMap = Map<String, dynamic>.from(rawProf.first as Map);
+            }
+            final profName = profMap != null ? (profMap['full_name'] as String?)?.trim() : null;
+            final qSalesman = (rowMap['salesman'] as String?)?.trim();
+
+            final uId = currentUserId?.trim();
+            final uName = currentUserName?.trim().toLowerCase();
+
+            bool matches = false;
+
+            if (uId != null && uId.isNotEmpty) {
+              if (qCreatedBy == uId ||
+                  pCreatedBy == uId ||
+                  custCreatedBy == uId ||
+                  custAssignedTo == uId) {
+                matches = true;
+              }
+            }
+
+            if (!matches && uName != null && uName.isNotEmpty) {
+              if (qSalesman != null && qSalesman.toLowerCase() == uName) {
+                matches = true;
+              } else if (profName != null && profName.toLowerCase() == uName) {
+                matches = true;
+              } else if (item.salesmanName.trim().toLowerCase() == uName) {
+                matches = true;
+              }
+            }
+
+            if (!matches) {
+              continue;
+            }
+          }
 
           // Apply search filter if provided
           if (searchQuery != null && searchQuery.trim().isNotEmpty) {

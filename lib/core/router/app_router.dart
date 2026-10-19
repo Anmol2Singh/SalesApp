@@ -220,8 +220,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           final bool isSalesHead = profile.roles.contains(UserRole.salesHead);
           final bool isAdminOrManager = isAdmin || isManager;
 
-          // Guard Admin screens: strictly admin or manager
-          if (location.startsWith('/admin') && !isAdminOrManager) {
+          // Guard Admin screens: strictly admin (Manager cannot access Admin Panel or /admin routes)
+          if (location.startsWith('/admin') && !isAdmin) {
             return _getRoleHome(profile.primaryRole);
           }
 
@@ -813,8 +813,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 String getRoleHome(UserRole role) {
   switch (role) {
     case UserRole.admin:
-    case UserRole.manager:
       return AppRoutes.adminDashboard;
+    case UserRole.manager:
     case UserRole.sales:
     case UserRole.salesHead:
       return AppRoutes.salesDashboard;

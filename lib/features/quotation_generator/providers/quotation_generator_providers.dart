@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../../core/providers/supabase_provider.dart';
+import '../../../core/models/user_role.dart';
+import '../../../core/providers/supabase_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/quotation_supabase_repository.dart';
 import '../data/deal_quotations_repository.dart';
 import '../data/qg_proposals_repository.dart';
@@ -37,7 +39,20 @@ final qgSettingsRepositoryProvider = Provider<QgSettingsRepository>((ref) {
 
 final dealQuotationsProvider = FutureProvider.autoDispose<List<DealQuotationItem>>((ref) async {
   final repo = ref.watch(dealQuotationsRepositoryProvider);
-  return repo.getDealQuotations();
+  final profile = ref.watch(currentProfileProvider);
+
+  final isElevated = (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.manager) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      profile?.primaryRole == UserRole.admin ||
+      profile?.primaryRole == UserRole.manager ||
+      profile?.primaryRole == UserRole.salesHead;
+
+  return repo.getDealQuotations(
+    currentUserId: profile?.id,
+    currentUserName: profile?.fullName,
+    canViewAll: isElevated,
+  );
 });
 
 // Backward compatibility alias
@@ -115,14 +130,29 @@ final quotationSettingsProvider =
 
 class QuotationsHistoryNotifier extends StateNotifier<AsyncValue<List<GeneratorQuotation>>> {
   final QuotationSupabaseRepository _repo;
+  final String? _currentUserId;
+  final String? _currentUserName;
+  final bool _canViewAll;
 
-  QuotationsHistoryNotifier(this._repo) : super(const AsyncValue.loading()) {
+  QuotationsHistoryNotifier(
+    this._repo, {
+    String? currentUserId,
+    String? currentUserName,
+    bool canViewAll = true,
+  })  : _currentUserId = currentUserId,
+        _currentUserName = currentUserName,
+        _canViewAll = canViewAll,
+        super(const AsyncValue.loading()) {
     loadQuotations();
   }
 
   Future<void> loadQuotations() async {
     try {
-      final list = await _repo.getAllQuotations();
+      final list = await _repo.getAllQuotations(
+        currentUserId: _currentUserId,
+        currentUserName: _currentUserName,
+        canViewAll: _canViewAll,
+      );
       state = AsyncValue.data(list);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -167,5 +197,19 @@ class QuotationsHistoryNotifier extends StateNotifier<AsyncValue<List<GeneratorQ
 final quotationsHistoryProvider =
     StateNotifierProvider<QuotationsHistoryNotifier, AsyncValue<List<GeneratorQuotation>>>((ref) {
   final repo = ref.watch(quotationRepositoryProvider);
-  return QuotationsHistoryNotifier(repo);
+  final profile = ref.watch(currentProfileProvider);
+
+  final isElevated = (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.manager) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      profile?.primaryRole == UserRole.admin ||
+      profile?.primaryRole == UserRole.manager ||
+      profile?.primaryRole == UserRole.salesHead;
+
+  return QuotationsHistoryNotifier(
+    repo,
+    currentUserId: profile?.id,
+    currentUserName: profile?.fullName,
+    canViewAll: isElevated,
+  );
 });

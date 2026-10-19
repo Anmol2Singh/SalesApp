@@ -172,8 +172,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   String _getRoleHome(UserRole role) {
     switch (role) {
       case UserRole.admin:
-      case UserRole.manager:
         return AppRoutes.adminDashboard;
+      case UserRole.manager:
       case UserRole.sales:
       case UserRole.salesHead:
         return AppRoutes.salesDashboard;

@@ -951,7 +951,10 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
       ),
     );
 
-    final isAdminOrCoordinator = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.serviceHead || profile?.primaryRole == UserRole.manager;
+    final isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) && !(profile?.roles.contains(UserRole.admin) ?? false);
+    final isAdminOrCoordinator = !isManagerOnly &&
+        ((profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false)) ||
+            (profile?.primaryRole == UserRole.serviceHead || (profile?.roles.contains(UserRole.serviceHead) ?? false)));
     final isTechnician = profile?.primaryRole == UserRole.technician;
     final isClosed = complaint.status == 'closed' || complaint.status == 'resolved';
     final hasCustomerSignature = complaint.customerSignatureUrl != null && complaint.customerSignatureUrl!.isNotEmpty;
@@ -982,13 +985,13 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
         backgroundColor: const Color(0xFF6D28D9),
         elevation: 0,
         actions: [
-          if (!isClosed)
+          if (!isClosed && !isManagerOnly)
             IconButton(
               icon: const Icon(Icons.edit_outlined, color: Colors.white),
               tooltip: 'Edit Complaint',
               onPressed: () => context.push('/complaints/edit/${complaint.id}'),
             ),
-          if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager)
+          if ((profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false)) && !isManagerOnly)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.white),
               tooltip: 'Delete Complaint (Admin Only)',

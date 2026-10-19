@@ -1263,9 +1263,14 @@ class _StepActionCard extends ConsumerWidget {
     if (roles.isEmpty) return false;
     if (pipeline.status == PipelineStatus.suspended && pipeline.quotation?.status != QuotationStatus.rejected) return false;
 
+    // Manager role has strictly read-only permission (cannot act on steps)
+    if (roles.contains(UserRole.manager) && !roles.contains(UserRole.admin)) {
+      return false;
+    }
+
     bool hasRole(UserRole r) => roles.contains(r);
     
-    if (hasRole(UserRole.admin) || hasRole(UserRole.manager) || hasRole(UserRole.salesHead)) return true;
+    if (hasRole(UserRole.admin) || hasRole(UserRole.salesHead)) return true;
 
     switch (step) {
       case PipelineStep.quotation:
@@ -2937,40 +2942,43 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
             ),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (hasDocs) {
-                      _viewNocPdf(docs.first);
-                    } else {
-                      _generateNocDirectly();
-                    }
-                  },
-                  icon: Icon(hasDocs ? Icons.picture_as_pdf : Icons.add_circle_outline, size: 16, color: Colors.white),
-                  label: Text(hasDocs ? 'View NOC' : 'Generate NOC'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF286B37),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
+          Builder(
+            builder: (context) {
+              final profile = ref.watch(currentProfileProvider);
+              final bool isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) && !(profile?.roles.contains(UserRole.admin) ?? false);
+
+              return Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: hasDocs
+                          ? () => _viewNocPdf(docs.first)
+                          : (isManagerOnly ? null : () => _generateNocDirectly()),
+                      icon: Icon(hasDocs ? Icons.picture_as_pdf : Icons.add_circle_outline, size: 16, color: Colors.white),
+                      label: Text(hasDocs ? 'View NOC' : (isManagerOnly ? 'NOC Not Issued' : 'Generate NOC')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF286B37),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              if (hasDocs) ...[
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _confirmDeleteNoc(docs.first),
-                  icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
-                  label: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFFECACA)),
-                    backgroundColor: const Color(0xFFFEF2F2),
-                    elevation: 0,
-                  ),
-                ),
-              ],
-            ],
+                  if (hasDocs && !isManagerOnly) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _confirmDeleteNoc(docs.first),
+                      icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                      label: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFFECACA)),
+                        backgroundColor: const Color(0xFFFEF2F2),
+                        elevation: 0,
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),

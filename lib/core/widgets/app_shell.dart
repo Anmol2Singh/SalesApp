@@ -299,6 +299,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     const Color logoIcon = Colors.white;
 
     final hasAdmin = roles.any((r) => r == UserRole.admin);
+    final isManager = roles.any((r) => r == UserRole.manager);
     final hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
     final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final hasSalesHead = roles.any((r) => r == UserRole.salesHead);
@@ -423,11 +424,11 @@ class _AppShellState extends ConsumerState<AppShell> {
               children: [
                 // 1. Dashboard
                 _buildNavItemTile(
-                  route: hasAdminOrManager
+                  route: hasAdmin
                       ? AppRoutes.adminDashboard
                       : (hasAccounts
                           ? AppRoutes.projectManager
-                          : (hasSales
+                          : (hasSales || isManager
                               ? AppRoutes.salesDashboard
                               : (isBoq
                                   ? AppRoutes.boqDashboard
@@ -1633,7 +1634,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       }
     }
 
-    final bool hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
+    final bool hasAdmin = roles.any((r) => r == UserRole.admin);
+    final bool isManager = roles.any((r) => r == UserRole.manager);
+    final bool hasAdminOrManager = hasAdmin || isManager;
     final bool hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final bool hasCrm = roles.any((r) => r == UserRole.crmStaff);
     final bool hasComplaints = roles.any((r) => r == UserRole.serviceHead);
@@ -1652,7 +1655,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       addItem(const _NavItem(route: AppRoutes.pmDailyTransactions, label: 'Day-Book', icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long)));
       addItem(const _NavItem(route: AppRoutes.pmFilter, label: 'Reports', icon: Icon(Icons.filter_list_outlined), selectedIcon: Icon(Icons.filter_list)));
       addItem(_NavItem(
-        route: hasAdminOrManager ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.projectManager : AppRoutes.salesDashboard),
+        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.projectManager : AppRoutes.salesDashboard),
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1688,13 +1691,27 @@ class _AppShellState extends ConsumerState<AppShell> {
       return uniqueItems.values.toList();
     }
 
-    // 2. Admin / Manager
-    if (hasAdminOrManager) {
+    // 2. Admin
+    if (hasAdmin) {
       addItem(const _NavItem(route: AppRoutes.adminDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
       addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
       addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
       addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
       addItem(const _NavItem(route: AppRoutes.userManagement, label: 'Admin', icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings)));
+      return uniqueItems.values.toList();
+    }
+
+    // 2.5 Manager (no Admin Panel settings button)
+    if (isManager) {
+      addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Dashboard', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
+      addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
+      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      if (hasComplaints) {
+        addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
+      } else {
+        addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+      }
       return uniqueItems.values.toList();
     }
 

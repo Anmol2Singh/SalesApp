@@ -583,15 +583,70 @@ final customersNotifierProvider =
     StateNotifierProvider<CustomersNotifier, AsyncValue<List<Customer>>>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
-  final canViewAll = (profile?.primaryRole.canViewAllCustomers ?? false) ||
-      (profile?.roles.contains(UserRole.admin) ?? false) ||
-      (profile?.roles.contains(UserRole.salesHead) ?? false);
+  final allRoles = profile?.roles ?? [];
+
+  // Elevated management roles always view all customers
+  final isElevated = (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.manager) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      profile?.primaryRole == UserRole.admin ||
+      profile?.primaryRole == UserRole.manager ||
+      profile?.primaryRole == UserRole.salesHead;
+
+  // Pure service/installation/technician staff
+  final isServiceOrTech = allRoles.contains(UserRole.serviceHead) ||
+      allRoles.contains(UserRole.installation) ||
+      allRoles.contains(UserRole.technician) ||
+      profile?.primaryRole == UserRole.serviceHead ||
+      profile?.primaryRole == UserRole.installation ||
+      profile?.primaryRole == UserRole.technician;
+
+  // Has sales executive role
+  final hasSalesRole = allRoles.contains(UserRole.sales) || profile?.primaryRole == UserRole.sales;
+
+  // In customer list: show all customers only if elevated, OR if technician/service/installation staff without sales role.
+  // If they have been allotted sales role along with, prevent showing all in customer list.
+  final canViewAll = isElevated || (isServiceOrTech && !hasSalesRole);
+
   return CustomersNotifier(
     supabase,
     profile?.id,
     canViewAll,
   );
 });
+
+// Dedicated provider for Complaints & Installations workflows:
+// Complaint / Installation staff & Technicians can ALWAYS view all customers here,
+// even if they also hold an allotted sales executive role.
+final serviceCustomersNotifierProvider =
+    StateNotifierProvider<CustomersNotifier, AsyncValue<List<Customer>>>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  final profile = ref.watch(currentProfileProvider);
+  final allRoles = profile?.roles ?? [];
+
+  final isElevated = (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.manager) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      profile?.primaryRole == UserRole.admin ||
+      profile?.primaryRole == UserRole.manager ||
+      profile?.primaryRole == UserRole.salesHead;
+
+  final isServiceOrTech = allRoles.contains(UserRole.serviceHead) ||
+      allRoles.contains(UserRole.installation) ||
+      allRoles.contains(UserRole.technician) ||
+      profile?.primaryRole == UserRole.serviceHead ||
+      profile?.primaryRole == UserRole.installation ||
+      profile?.primaryRole == UserRole.technician;
+
+  final canViewAll = isElevated || isServiceOrTech;
+
+  return CustomersNotifier(
+    supabase,
+    profile?.id,
+    canViewAll,
+  );
+});
+
 
 // Fuzzy customer search (for dedupe check before creating new)
 final customerSearchProvider =

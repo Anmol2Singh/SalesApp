@@ -525,7 +525,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
   Widget build(BuildContext context) {
     final techniciansAsync = ref.watch(availableTechniciansProvider);
     final profile = ref.watch(currentProfileProvider);
-    final isAdminOrManager = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager;
+    final isAdmin = (profile?.primaryRole == UserRole.admin || (profile?.roles.contains(UserRole.admin) ?? false));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -567,7 +567,7 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                 ),
               ],
             ),
-      floatingActionButton: isAdminOrManager
+      floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
               backgroundColor: const Color(0xFF6D28D9),
               icon: const Icon(Icons.person_add, color: Colors.white),
@@ -780,38 +780,39 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
                                         ],
                                       ),
                                     ),
-                                    PopupMenuButton<String>(
-                                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                                      onSelected: (val) {
-                                        if (val == 'edit') {
-                                          _showEditTechnicianDialog(tech);
-                                        } else if (val == 'delete') {
-                                          _deleteTechnician(tech);
-                                        }
-                                      },
-                                      itemBuilder: (ctx) => [
-                                        const PopupMenuItem(
-                                          value: 'edit',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.edit_outlined, size: 16),
-                                              SizedBox(width: 8),
-                                              Text('Edit Technician'),
-                                            ],
+                                    if (isAdmin)
+                                      PopupMenuButton<String>(
+                                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                                        onSelected: (val) {
+                                          if (val == 'edit') {
+                                            _showEditTechnicianDialog(tech);
+                                          } else if (val == 'delete') {
+                                            _deleteTechnician(tech);
+                                          }
+                                        },
+                                        itemBuilder: (ctx) => [
+                                          const PopupMenuItem(
+                                            value: 'edit',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.edit_outlined, size: 16),
+                                                SizedBox(width: 8),
+                                                Text('Edit Technician'),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                                              SizedBox(width: 8),
-                                              Text('Delete', style: TextStyle(color: Colors.red)),
-                                            ],
+                                          const PopupMenuItem(
+                                            value: 'delete',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                                SizedBox(width: 8),
+                                                Text('Delete', style: TextStyle(color: Colors.red)),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
                                   ],
                                 ),
                                 const SizedBox(height: 10),

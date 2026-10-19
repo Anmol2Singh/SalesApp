@@ -300,7 +300,7 @@ class _BookInstallationScreenState
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(customersNotifierProvider);
+    final customersAsync = ref.watch(serviceCustomersNotifierProvider);
     final techniciansAsync = ref.watch(availableTechniciansProvider);
 
     return Scaffold(
