@@ -9,6 +9,8 @@ import 'tank_line_item.dart';
 import 'heat_pump_line_item.dart';
 import 'tank_spec.dart';
 import 'generator_company_settings.dart';
+import 'all_in_one_model.dart';
+import 'pool_heat_pump_model.dart';
 import '../config/quote_type.dart';
 import '../services/qg_item_parser.dart';
 import '../services/price_calculator.dart';
@@ -672,9 +674,57 @@ class QgProposalDraft {
       ));
     }
 
+    final bool isAllInOne = specCategoryId == 'all_in_one' ||
+        items.any((it) => it.type == ParsedItemType.allInOne);
+    final bool isWallMounted = specCategoryId == 'wall_mounted' ||
+        items.any((it) => it.type == ParsedItemType.wallMounted);
+    final bool isPool = specCategoryId == 'pool' ||
+        items.any((it) => it.type == ParsedItemType.pool);
+
+    QuoteType resolvedQuoteType;
+    if (isAllInOne) {
+      resolvedQuoteType = QuoteType.allInOneFloor;
+    } else if (isWallMounted) {
+      resolvedQuoteType = QuoteType.allInOneWall;
+    } else if (isPool) {
+      resolvedQuoteType = QuoteType.swimmingPool;
+    } else if (hasTank || tankLinesList.isNotEmpty) {
+      resolvedQuoteType = QuoteType.hpWithTank;
+    } else {
+      resolvedQuoteType = QuoteType.hpOnly;
+    }
+
+    AllInOneModel? resolvedAioModel;
+    if (isAllInOne || isWallMounted) {
+      final aioItem = items.firstWhere(
+        (it) => it.type == ParsedItemType.allInOne || it.type == ParsedItemType.wallMounted,
+        orElse: () => items.isNotEmpty ? items.first : ParsedItemResult(rawDescription: 'All in one 200Ltr', type: ParsedItemType.allInOne, status: ItemResolveStatus.resolved, aioCapacityLitres: 200),
+      );
+      final cap = aioItem.aioCapacityLitres ?? 200;
+      resolvedAioModel = AllInOneModel(
+        id: 'IZ-${cap}A',
+        modelName: 'IZ-${cap}A',
+        mountType: isWallMounted ? 'wall' : 'floor',
+        tankVolumeLitres: cap,
+        description: aioItem.rawDescription.isNotEmpty ? aioItem.rawDescription : 'ALL IN ONE HEAT PUMP Make: IZYHEAT Model: IZ-${cap}A',
+        specs: {
+          'Product Dimension': cap <= 200 ? '570x1810mm' : '640x1920mm',
+          'Power Supply': '220V-240V/50Hz',
+          'Heating Rate / Water Yield': cap <= 200 ? '42 L/h' : '65 L/h',
+          'COP': '4.76',
+          'Compressor': 'PANASONIC',
+          'Refrigerant': 'R134a',
+          'Max Outlet Water Temp': '65°C',
+          'Ambient Temperature': '-7~45°C',
+          'Water Tank Material': 'Tank with enamel coating',
+          'Net Weight': cap <= 200 ? '93 KG' : '110 KG',
+        },
+      );
+    }
+
     return GeneratorQuotation(
       id: quotationId,
-      quoteType: (hasTank || tankLinesList.isNotEmpty) ? QuoteType.hpWithTank : QuoteType.hpOnly,
+      quoteType: resolvedQuoteType,
       status: isConfirmed ? 'confirmed' : 'draft',
       salutation: customerSalutation,
       customerName: customerName,
@@ -685,20 +735,24 @@ class QgProposalDraft {
       salesRef: salesmanName,
       salesMobile: salesmanPhone,
       model: heatPumpModel,
+      allInOneModel: resolvedAioModel,
+      poolModel: isPool ? PoolHeatPumpModel.defaultModel() : null,
       heatPumpQty: hpQtyVal,
       heatPumpNumericPrice: hpRateVal,
       heatPumpAmountType: PriceRowType.amount,
       heatPumpLines: hpLineItems,
-      tankLines: tankLinesList,
-      tankSpec: TankSpec(
-        capacityLitres: hasTank ? tankCapacityLitres : 0,
-        isPressurized: hasTank ? isTankPressurized : false,
-        innerAndOuterTank: hasTank ? tankMaterial : 'GI',
-      ),
+      tankLines: (isAllInOne || isWallMounted) ? const [] : tankLinesList,
+      tankSpec: (isAllInOne || isWallMounted)
+          ? const TankSpec(capacityLitres: 0, isPressurized: false)
+          : TankSpec(
+              capacityLitres: hasTank ? tankCapacityLitres : 0,
+              isPressurized: hasTank ? isTankPressurized : false,
+              innerAndOuterTank: hasTank ? tankMaterial : 'GI',
+            ),
       extraPriceRows: mappedExtraRows,
-      tankCapacityLitres: hasTank ? tankCapacityLitres : 0,
-      tankQty: hasTank ? tankQty : 0,
-      tankRate: hasTank ? tankRate.round() : 0,
+      tankCapacityLitres: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankCapacityLitres : 0),
+      tankQty: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankQty : 0),
+      tankRate: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankRate.round() : 0),
       priceRows: mappedPriceRows,
       subtotal: subtotal.round(),
       gstPercent: cgstRate + sgstRate,

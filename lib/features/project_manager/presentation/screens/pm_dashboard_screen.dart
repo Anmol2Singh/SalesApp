@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -38,9 +39,17 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
         ? ref.watch(pmPurchasesListProvider)
         : ref.watch(pmProjectsListProvider);
 
-    return Scaffold(
-      backgroundColor: pm.background,
-      body: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: pm.background,
+        body: SafeArea(
         child: Column(
           children: [
             // Header Bar
@@ -133,32 +142,32 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                                   value: records.length.toString(),
                                   description: isPurchase ? 'Total vendors managed' : 'Total projects managed',
                                   icon: const Icon(LucideIcons.briefcase),
-                                  iconBgColor: const Color(0xFFE0F2FE),
-                                  iconColor: const Color(0xFF0284C7),
+                                  iconBgColor: const Color(0xFFEFF6FF),
+                                  iconColor: const Color(0xFF2563EB),
                                 ),
                                 PmStatCard(
                                   title: isPurchase ? 'Quotation Value' : 'Total Order Value',
                                   value: '₹${_currencyFormat.format(totalOrder)}',
                                   description: 'Combined contract values',
                                   icon: const Icon(LucideIcons.indianRupee),
-                                  iconBgColor: const Color(0xFFE0F7FA),
-                                  iconColor: const Color(0xFF0284C7),
+                                  iconBgColor: const Color(0xFFECFDF5),
+                                  iconColor: const Color(0xFF059669),
                                 ),
                                 PmStatCard(
                                   title: isPurchase ? 'Payment Paid' : 'Payment Received',
                                   value: '₹${_currencyFormat.format(totalPaid)}',
-                                  description: 'Total funds collected',
+                                  description: isPurchase ? 'Total payments made' : 'Total funds collected',
                                   icon: const Icon(LucideIcons.wallet),
-                                  iconBgColor: const Color(0xFFDCFCE7),
-                                  iconColor: const Color(0xFF16A34A),
+                                  iconBgColor: const Color(0xFFF5F3FF),
+                                  iconColor: const Color(0xFF7C3AED),
                                 ),
                                 PmStatCard(
                                   title: 'Outstanding Balance',
                                   value: '₹${_currencyFormat.format(totalBalance)}',
-                                  description: 'Remaining to be collected',
+                                  description: isPurchase ? 'Pending payment balance' : 'Remaining to be collected',
                                   icon: const Icon(LucideIcons.trendingDown),
-                                  iconBgColor: const Color(0xFFDCFCE7),
-                                  iconColor: const Color(0xFF16A34A),
+                                  iconBgColor: const Color(0xFFFFF1F2),
+                                  iconColor: const Color(0xFFE11D48),
                                 ),
                               ];
 
@@ -586,6 +595,7 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

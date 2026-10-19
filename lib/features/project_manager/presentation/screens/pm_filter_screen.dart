@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -57,6 +58,13 @@ class _PmFilterScreenState extends ConsumerState<PmFilterScreen> {
         backgroundColor: pm.card,
         foregroundColor: pm.foreground,
         elevation: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
         title: const Text('Filter Records', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft, size: 18),

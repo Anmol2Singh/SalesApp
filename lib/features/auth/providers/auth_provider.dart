@@ -324,7 +324,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     required String password,
   }) async {
     state = const AsyncValue.loading();
-    final cleanEmail = email.trim();
+    final cleanEmail = email.trim().toLowerCase();
 
     try {
       final response = await _supabase.auth.signInWithPassword(
@@ -357,6 +357,53 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
 
       state = const AsyncValue.data(null);
     } catch (e) {
+      // Staff / Manager account fallback: if profile exists in profiles table and is active,
+      // sync/link with GoTrue and retry sign in.
+      try {
+        final profileCheck = await _supabase
+            .from('profiles')
+            .select()
+            .ilike('email', cleanEmail)
+            .maybeSingle();
+
+        if (profileCheck != null && (profileCheck['is_active'] as bool? ?? true)) {
+          final tempClient = SupabaseClient(
+            AppConfig.supabaseUrl,
+            AppConfig.supabaseAnonKey,
+            authOptions: const FlutterAuthClientOptions(
+              authFlowType: AuthFlowType.implicit,
+            ),
+          );
+          try {
+            await tempClient.auth.signUp(
+              email: cleanEmail,
+              password: password.trim(),
+              data: {
+                'full_name': profileCheck['full_name'],
+                'role': profileCheck['role'] ?? 'sales',
+              },
+            );
+          } catch (_) {}
+
+          final retryResponse = await _supabase.auth.signInWithPassword(
+            email: cleanEmail,
+            password: password.trim(),
+          );
+
+          if (retryResponse.user != null) {
+            final authUser = retryResponse.user!;
+            if (profileCheck['id'] != authUser.id) {
+              try {
+                await _supabase.from('profiles').update({'id': authUser.id}).eq('id', profileCheck['id']);
+              } catch (_) {}
+            }
+            final profile = Profile.fromJson(profileCheck);
+            await _saveProfileSession(profile);
+            state = const AsyncValue.data(null);
+            return;
+          }
+        }
+      } catch (_) {}
       // Technician auto-sync fallback: if user exists in technicians table with matching password,
       // create/sync their Auth account on the fly and retry sign in.
       try {

@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:salesapp/features/amc/providers/amc_provider.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
@@ -461,53 +463,60 @@ class HeroProductCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      // Extend Year Button
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            context.push(
-                              '/amc_avail?productId=${product.productId}&mode=extend',
-                            );
-                          },
-                          icon: const Icon(Icons.update_rounded, size: 14),
-                          label: const Text(
-                            'Extend Year',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      if (!ref.watch(amcOptEnabledProvider)) {
+                        return const SizedBox.shrink();
+                      }
+                      return Row(
+                        children: [
+                          // Extend Year Button
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                context.push(
+                                  '/amc_avail?productId=${product.productId}&mode=extend',
+                                );
+                              },
+                              icon: const Icon(Icons.update_rounded, size: 14),
+                              label: const Text(
+                                'Extend Year',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF047857),
+                                side: const BorderSide(color: Color(0xFF10B981), width: 1.2),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
                           ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF047857),
-                            side: const BorderSide(color: Color(0xFF10B981), width: 1.2),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          const SizedBox(width: 8),
+                          // Upgrade Plan Button
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                context.push(
+                                  '/amc_avail?productId=${product.productId}&mode=upgrade',
+                                );
+                              },
+                              icon: const Icon(Icons.upgrade_rounded, size: 15),
+                              label: const Text(
+                                'Upgrade Plan',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Upgrade Plan Button
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            context.push(
-                              '/amc_avail?productId=${product.productId}&mode=upgrade',
-                            );
-                          },
-                          icon: const Icon(Icons.upgrade_rounded, size: 15),
-                          label: const Text(
-                            'Upgrade Plan',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF059669),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

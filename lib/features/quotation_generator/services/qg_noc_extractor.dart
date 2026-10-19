@@ -280,15 +280,27 @@ class QgNocExtractor {
     NocDateSource dateSource = NocDateSource.generationDate,
     String salutation = 'M/s',
   }) {
-    // 1. Product Name
-    final prodName = (deal['products'] is Map
-            ? deal['products']['name']
-            : (deal['product_name'] ?? profile.productName))
-        .toString()
-        .trim();
+    // 1. Product Name - take from quotation line items first for deals
+    String prodName = '';
+    final lineItemsRaw = quotation?['line_items'];
+    if (lineItemsRaw is List && lineItemsRaw.isNotEmpty) {
+      final first = lineItemsRaw.first;
+      if (first is Map) {
+        final desc = (first['description'] ?? first['item_name'] ?? first['name'])?.toString().trim() ?? '';
+        if (desc.isNotEmpty) {
+          prodName = desc;
+        }
+      }
+    }
+    if (prodName.isEmpty) {
+      prodName = (deal['products'] is Map
+              ? deal['products']['name']
+              : (deal['product_name'] ?? profile.productName))
+          .toString()
+          .trim();
+    }
 
     // 2. Equipment lines
-    final lineItemsRaw = quotation?['line_items'];
     List<Map<String, dynamic>> items = [];
     if (lineItemsRaw is List) {
       items = lineItemsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();

@@ -267,16 +267,21 @@ class _BoomBarrierProposalBuilderScreenState
         foregroundColor: Colors.white,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  draft.quotationNumber,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                Flexible(
+                  child: Text(
+                    draft.quotationNumber,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                   decoration: BoxDecoration(
                     color: isConfirmed ? Colors.green.shade700 : Colors.amber.shade800,
                     borderRadius: BorderRadius.circular(4),
@@ -284,7 +289,7 @@ class _BoomBarrierProposalBuilderScreenState
                   child: Text(
                     isConfirmed ? 'CONFIRMED' : 'DRAFT',
                     style: const TextStyle(
-                      fontSize: 9,
+                      fontSize: 8.5,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -553,19 +558,28 @@ class _BoomBarrierProposalBuilderScreenState
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.settings_outlined, color: Color(0xFF1E3A5F)),
-                    SizedBox(width: 8),
-                    Text(
-                      'Boom Barrier Proposal Builder',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.settings_outlined, color: Color(0xFF1E3A5F)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Boom Barrier Proposal Builder',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add New Model', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                  icon: const Icon(Icons.add, size: 15),
+                  label: const Text('Add Model', style: TextStyle(fontSize: 12)),
                   onPressed: () => _showAddNewModelDialog(draft),
                 ),
               ],
@@ -1274,44 +1288,121 @@ class _BoomBarrierProposalBuilderScreenState
             const SizedBox(height: 8),
           ],
 
-          // Numbers row: Qty, Rate, Discount, Price or Extra
+          // Numbers / Status Section
           Row(
             children: [
               // Extra Checkbox
-              Checkbox(
-                value: item.isExtra,
-                onChanged: (val) {
+              InkWell(
+                onTap: () {
                   setState(() {
                     draft.items[index] = item.copyWith(
-                      isExtra: val ?? false,
+                      isExtra: !item.isExtra,
                       isIncluded: false,
                     );
                     _recalculateTotals();
                   });
                 },
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: Checkbox(
+                          value: item.isExtra,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          onChanged: (val) {
+                            setState(() {
+                              draft.items[index] = item.copyWith(
+                                isExtra: val ?? false,
+                                isIncluded: false,
+                              );
+                              _recalculateTotals();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text('Extra', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
               ),
-              const Text('Extra', style: TextStyle(fontSize: 12)),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
 
               // Included Checkbox
-              Checkbox(
-                value: item.isIncluded,
-                onChanged: (val) {
+              InkWell(
+                onTap: () {
                   setState(() {
                     draft.items[index] = item.copyWith(
-                      isIncluded: val ?? false,
+                      isIncluded: !item.isIncluded,
                       isExtra: false,
                     );
                     _recalculateTotals();
                   });
                 },
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: Checkbox(
+                          value: item.isIncluded,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          onChanged: (val) {
+                            setState(() {
+                              draft.items[index] = item.copyWith(
+                                isIncluded: val ?? false,
+                                isExtra: false,
+                              );
+                              _recalculateTotals();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text('Included', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
               ),
-              const Text('Included', style: TextStyle(fontSize: 12)),
               const Spacer(),
 
-              if (!item.isExtra && !item.isIncluded) ...[
-                SizedBox(
-                  width: 60,
+              if (item.isExtra || item.isIncluded)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: item.isExtra ? Colors.orange.shade50 : Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: item.isExtra ? Colors.orange.shade300 : Colors.teal.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    item.isExtra ? 'Status: Extra' : 'Status: Included',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: item.isExtra ? Colors.orange.shade800 : Colors.teal.shade800,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          if (!item.isExtra && !item.isIncluded) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
                   child: TextFormField(
                     initialValue: item.qty.toString(),
                     keyboardType: TextInputType.number,
@@ -1319,6 +1410,7 @@ class _BoomBarrierProposalBuilderScreenState
                       labelText: 'Qty',
                       border: OutlineInputBorder(),
                       isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     ),
                     onChanged: (val) {
                       final q = int.tryParse(val) ?? 1;
@@ -1329,8 +1421,8 @@ class _BoomBarrierProposalBuilderScreenState
                   ),
                 ),
                 const SizedBox(width: 8),
-                SizedBox(
-                  width: 90,
+                Expanded(
+                  flex: 4,
                   child: TextFormField(
                     initialValue: item.rate.toStringAsFixed(0),
                     keyboardType: TextInputType.number,
@@ -1338,6 +1430,7 @@ class _BoomBarrierProposalBuilderScreenState
                       labelText: 'Rate (₹)',
                       border: OutlineInputBorder(),
                       isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     ),
                     onChanged: (val) {
                       final r = double.tryParse(val) ?? 0.0;
@@ -1347,23 +1440,22 @@ class _BoomBarrierProposalBuilderScreenState
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Total: ₹${item.price.toStringAsFixed(0)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ] else ...[
-                Text(
-                  item.isExtra ? 'Status: Extra' : 'Status: Included',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: item.isExtra ? Colors.orange.shade800 : Colors.teal,
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: Text(
+                    '₹${item.price.toStringAsFixed(0)}',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
                   ),
                 ),
               ],
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );

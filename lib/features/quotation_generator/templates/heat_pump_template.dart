@@ -24,7 +24,14 @@ class HeatPumpTemplate implements QgProductTemplate {
   @override
   bool matchesProduct(String productName) {
     final lower = productName.toLowerCase();
-    return lower.contains('heat pump') || lower.contains('heatpump');
+    return lower.contains('heat pump') ||
+        lower.contains('heatpump') ||
+        lower.contains('all in one') ||
+        lower.contains('all-in-one') ||
+        lower.contains('aio') ||
+        lower.contains('swimming pool') ||
+        lower.contains('pool heat') ||
+        lower.contains('izyheat');
   }
 
   @override

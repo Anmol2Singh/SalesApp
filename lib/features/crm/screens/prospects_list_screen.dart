@@ -247,20 +247,27 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                 Text(prospect.company!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                               ],
                               const SizedBox(height: 4),
-                              Row(
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 4,
+                                runSpacing: 2,
                                 children: [
-                                  Icon(Icons.person_outline, size: 12, color: Colors.grey.shade600),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Added by: ${prospect.createdByName ?? "Staff"}',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade800,
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.person_outline, size: 12, color: Colors.grey.shade600),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Added by: ${prospect.createdByName ?? "Staff"}',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey.shade800,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 5),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                     decoration: BoxDecoration(

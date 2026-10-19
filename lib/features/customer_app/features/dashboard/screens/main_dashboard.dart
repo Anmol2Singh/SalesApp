@@ -348,6 +348,7 @@ class MainDashboard extends ConsumerWidget {
                   // 2x2 Stats Grid
                   _buildCustomerStatsGrid(
                     context,
+                    ref,
                     activeSystemsCount,
                     activeAmcCount,
                     complaintsCount,
@@ -746,6 +747,7 @@ class MainDashboard extends ConsumerWidget {
 
   Widget _buildCustomerStatsGrid(
     BuildContext context,
+    WidgetRef ref,
     int activeSystemsCount,
     int activeAmcCount,
     int complaintsCount,
@@ -776,7 +778,7 @@ class MainDashboard extends ConsumerWidget {
               value: '$activeAmcCount',
               icon: Icons.verified_user_outlined,
               color: const Color(0xFF10B981),
-              onTap: () => context.push('/amc_avail'),
+              onTap: ref.watch(amcOptEnabledProvider) ? () => context.push('/amc_avail') : () {},
             ),
             _CustomerStatCard(
               title: 'Service\nComplaints',

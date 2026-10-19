@@ -58,8 +58,13 @@ class PdfBoomBarrierBuilder {
     // 2. Load Assets
     final coverBytes = assetOverrides?['cover'] ??
         await _loadImageBytes(draft.coverImagePath ?? profile.defaultCoverPath);
+    final resolvedLogoPath = (draft.logoPath != null && !draft.logoPath!.endsWith('logo.png'))
+        ? draft.logoPath!
+        : (profile.logoPath.isNotEmpty && !profile.logoPath.endsWith('logo.png')
+            ? profile.logoPath
+            : 'assets/images/boom_barrier/sefdor_logo.png');
     final logoBytes = assetOverrides?['logo'] ??
-        await _loadImageBytes(draft.logoPath ?? profile.logoPath);
+        await _loadImageBytes(resolvedLogoPath);
     final stampBytes = assetOverrides?['stamp'] ??
         await _loadImageBytes(draft.stampPath ?? profile.stampPath ?? 'assets/images/company_stamp.png');
 

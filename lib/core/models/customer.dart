@@ -227,6 +227,8 @@ enum PipelineStep {
         return PipelineStep.factoryOrder;
       case 'purchase_order':
       case 'purchaseOrder':
+      case 'material_requisition':
+      case 'materialRequisition':
         return PipelineStep.purchaseOrder;
       case 'completed':
         return PipelineStep.completed;

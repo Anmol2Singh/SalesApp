@@ -649,6 +649,16 @@ class _PipelineDetailContent extends ConsumerWidget {
   }
 }
 
+String _getDealProductName(SalesPipeline pipeline) {
+  if (pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+    final desc = pipeline.quotation!.lineItems.first.description.trim();
+    if (desc.isNotEmpty) {
+      return desc.replaceAll(' - ', ' • ');
+    }
+  }
+  return pipeline.product?.name ?? 'Standard System';
+}
+
 class _HeaderCard extends StatelessWidget {
   final SalesPipeline pipeline;
 
@@ -683,7 +693,7 @@ class _HeaderCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  pipeline.product?.name ?? 'Unknown Product',
+                  _getDealProductName(pipeline),
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 18,
@@ -1773,7 +1783,20 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
       if (res != null) qData = res;
     }
 
-    String productName = pipeline.product?.name ?? '';
+    String productName = '';
+    final rawLines = (qData?['line_items'] as List?) ?? [];
+    if (rawLines.isNotEmpty) {
+      final first = rawLines.first;
+      if (first is Map) {
+        productName = (first['description'] ?? first['item_name'] ?? first['name'])?.toString().trim() ?? '';
+      }
+    }
+    if (productName.isEmpty && pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+      productName = pipeline.quotation!.lineItems.first.description.trim();
+    }
+    if (productName.isEmpty) {
+      productName = pipeline.product?.name ?? '';
+    }
     if (productName.isEmpty && pipeline.productId.isNotEmpty) {
       final pRes = await supabase
           .from('products')
@@ -1822,7 +1845,7 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
   } catch (_) {
     return {
       'quotationId': pipeline.quotation?.id,
-      'productName': pipeline.product?.name ?? 'Standard System',
+      'productName': _getDealProductName(pipeline),
       'customerName': pipeline.customer?.companyName ??
           pipeline.customer?.customerName ??
           'Customer',
@@ -1850,7 +1873,7 @@ class _ApprovalAlertBanner extends ConsumerWidget {
       future: _fetchLiveQuotationInfo(ref, pipeline),
       initialData: {
         'quotationId': pipeline.quotation?.id,
-        'productName': pipeline.product?.name ?? 'Standard System',
+        'productName': _getDealProductName(pipeline),
         'customerName': pipeline.customer?.companyName ??
             pipeline.customer?.customerName ??
             'Customer',
@@ -2221,7 +2244,7 @@ void _showReviewAndApproveModal(
         future: _fetchLiveQuotationInfo(ref, pipeline),
         initialData: {
           'quotationId': pipeline.quotation?.id,
-          'productName': pipeline.product?.name ?? 'Standard System',
+          'productName': _getDealProductName(pipeline),
           'customerName': pipeline.customer?.companyName ??
               pipeline.customer?.customerName ??
               'Customer',
@@ -2749,8 +2772,20 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
 
       final itemsTreatedAsProducts = await QgNocExtractor.fetchItemsTreatedAsProducts(supabase);
 
-      // 5. Product name derivation
-      String productName = pipeline.product?.name ?? '';
+      // 5. Product name derivation (take from quotation only from deals)
+      String productName = '';
+      if (rawLines.isNotEmpty) {
+        final firstDesc = (rawLines.first['description'] ?? rawLines.first['item_name'] ?? rawLines.first['name'])?.toString().trim() ?? '';
+        if (firstDesc.isNotEmpty) {
+          productName = firstDesc;
+        }
+      }
+      if (productName.isEmpty && pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+        productName = pipeline.quotation!.lineItems.first.description.trim();
+      }
+      if (productName.isEmpty) {
+        productName = pipeline.product?.name ?? '';
+      }
       if (productName.isEmpty && pipeline.productId.isNotEmpty) {
         final pRes = await supabase.from('products').select('name').eq('id', pipeline.productId).maybeSingle();
         if (pRes != null && pRes['name'] != null) {
@@ -2876,6 +2911,19 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
     }
   }
 
+  String _getNocProductName(QgNocDocument doc, SalesPipeline pipeline) {
+    if (pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+      final qDesc = pipeline.quotation!.lineItems.first.description.trim();
+      if (qDesc.isNotEmpty) return qDesc;
+    }
+    if (doc.productName.isNotEmpty &&
+        doc.productName.toLowerCase() != 'heat pump' &&
+        doc.productName.toLowerCase() != 'standard system') {
+      return doc.productName;
+    }
+    return doc.productName.isNotEmpty ? doc.productName : (pipeline.product?.name ?? 'Heat Pump');
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(widget.pipeline)) {
@@ -2885,6 +2933,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
 
     final docs = _nocDocs ?? [];
     final hasDocs = docs.isNotEmpty;
+    final profile = ref.watch(currentProfileProvider);
+    final bool isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) && !(profile?.roles.contains(UserRole.admin) ?? false);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -2911,7 +2961,7 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
                   ),
                 ),
               ),
-              if (hasDocs)
+              if (hasDocs) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -2927,12 +2977,32 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
                     ),
                   ),
                 ),
+                if (!isManagerOnly) ...[
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Delete NOC Certificate',
+                    child: InkWell(
+                      onTap: () => _confirmDeleteNoc(docs.first),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFECACA), width: 0.8),
+                        ),
+                        child: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ],
           ),
           const SizedBox(height: 10),
           Text(
             hasDocs
-                ? 'Satisfactory installation & commissioning certificate issued for ${docs.first.productName}. Strictly 1 NOC per deal.'
+                ? 'Satisfactory installation & commissioning certificate issued for ${_getNocProductName(docs.first, widget.pipeline)}. Strictly 1 NOC per deal.'
                 : 'Generate official No Objection Certificate (NOC) for customer sign-off and commissioning handover.',
             style: const TextStyle(
               fontFamily: 'Inter',
@@ -2942,43 +3012,22 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
             ),
           ),
           const SizedBox(height: 14),
-          Builder(
-            builder: (context) {
-              final profile = ref.watch(currentProfileProvider);
-              final bool isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) && !(profile?.roles.contains(UserRole.admin) ?? false);
-
-              return Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: hasDocs
-                          ? () => _viewNocPdf(docs.first)
-                          : (isManagerOnly ? null : () => _generateNocDirectly()),
-                      icon: Icon(hasDocs ? Icons.picture_as_pdf : Icons.add_circle_outline, size: 16, color: Colors.white),
-                      label: Text(hasDocs ? 'View NOC' : (isManagerOnly ? 'NOC Not Issued' : 'Generate NOC')),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF286B37),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                  if (hasDocs && !isManagerOnly) ...[
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _confirmDeleteNoc(docs.first),
-                      icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
-                      label: const Text('Delete', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFFECACA)),
-                        backgroundColor: const Color(0xFFFEF2F2),
-                        elevation: 0,
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: hasDocs
+                  ? () => _viewNocPdf(docs.first)
+                  : (isManagerOnly ? null : () => _generateNocDirectly()),
+              icon: Icon(hasDocs ? Icons.picture_as_pdf : Icons.add_circle_outline, size: 16, color: Colors.white),
+              label: Text(hasDocs ? 'View NOC' : (isManagerOnly ? 'NOC Not Issued' : 'Generate NOC')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF286B37),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
           ),
         ],
       ),

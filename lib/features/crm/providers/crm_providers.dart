@@ -175,6 +175,24 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     await load();
   }
 
+  Future<void> unassignProspect({required String prospectId}) async {
+    final updateData = <String, dynamic>{
+      'assigned_to': null,
+      'reassignment_requested': false,
+      'reassignment_reason': null,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    try {
+      await _supabase.from('crm_prospects').update(updateData).eq('id', prospectId);
+    } catch (_) {
+      await _supabase.from('crm_prospects').update({
+        'assigned_to': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', prospectId);
+    }
+    await load();
+  }
+
   Future<void> requestTransfer({
     required String prospectId,
     String? reason,
@@ -694,6 +712,24 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       );
     } catch (_) {}
 
+    await load();
+  }
+
+  Future<void> unassignLead({required String leadId}) async {
+    final updateData = <String, dynamic>{
+      'assigned_to': null,
+      'reassignment_requested': false,
+      'reassignment_reason': null,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    try {
+      await _supabase.from('crm_leads').update(updateData).eq('id', leadId);
+    } catch (_) {
+      await _supabase.from('crm_leads').update({
+        'assigned_to': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', leadId);
+    }
     await load();
   }
 

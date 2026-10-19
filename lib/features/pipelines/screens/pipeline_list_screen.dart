@@ -85,6 +85,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(dealsStreamProvider);
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
     final profile = ref.watch(currentProfileProvider);
     final canViewAll = profile?.primaryRole == UserRole.admin ||
@@ -120,11 +121,15 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
       if (isCompleted) return true;
 
       final stepIndex = p.currentStep.stepIndex;
-      if (hasBoqRole && stepIndex >= PipelineStep.boq.stepIndex) return true;
-      if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex)
+      if (hasBoqRole && stepIndex >= PipelineStep.boq.stepIndex) {
         return true;
-      if (hasMaterialRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex)
+      }
+      if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex) {
         return true;
+      }
+      if (hasMaterialRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex) {
+        return true;
+      }
 
       return false;
     }
@@ -141,7 +146,9 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               context.pop();
             } else {
               final profile = ref.read(currentProfileProvider);
-              context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+              context.go(profile != null
+                  ? getRoleHome(profile.primaryRole)
+                  : AppRoutes.login);
             }
           },
         ),
@@ -392,9 +399,14 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                               const SizedBox(width: 6),
                               _buildQuickChip('Quotation', 'quotation'),
                               const SizedBox(width: 6),
+                              _buildQuickChip('Sales Order', 'sales_order'),
+                              const SizedBox(width: 6),
                               _buildQuickChip('BOQ', 'boq'),
                               const SizedBox(width: 6),
                               _buildQuickChip('Factory Order', 'factory_order'),
+                              const SizedBox(width: 6),
+                              _buildQuickChip(
+                                  'Material Requisition', 'material_requisition'),
                             ],
                           ),
                         ),
@@ -452,11 +464,19 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                     }
                   } else if (_quickFilter == 'quotation') {
                     if (p.currentStep != PipelineStep.quotation) return false;
+                  } else if (_quickFilter == 'sales_order') {
+                    if (p.currentStep != PipelineStep.salesOrder) return false;
                   } else if (_quickFilter == 'boq') {
                     if (p.currentStep != PipelineStep.boq) return false;
                   } else if (_quickFilter == 'factory_order') {
-                    if (p.currentStep != PipelineStep.factoryOrder)
+                    if (p.currentStep != PipelineStep.factoryOrder) {
                       return false;
+                    }
+                  } else if (_quickFilter == 'material_requisition' ||
+                      _quickFilter == 'purchase_order') {
+                    if (p.currentStep != PipelineStep.purchaseOrder) {
+                      return false;
+                    }
                   }
 
                   // Search query filter
@@ -672,6 +692,8 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           _quickFilter = value;
           if (value == 'needs_approval') {
             _selectedTabIndex = 0;
+          } else if (value != 'all' && _selectedTabIndex == 0) {
+            _selectedTabIndex = 1;
           }
         });
       },
@@ -879,6 +901,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 children: [
                   '',
                   'quotation',
+                  'sales_order',
                   'boq',
                   'factory_order',
                   'purchase_order',

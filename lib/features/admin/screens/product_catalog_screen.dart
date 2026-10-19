@@ -157,69 +157,76 @@ class ProductCatalogScreen extends ConsumerWidget {
                                   color: AppColors.textPrimary,
                                 ),
                               ),
-                              Text(
-                                product.category ?? 'Uncategorized',
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary,
-                                ),
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (product.category != null && product.category!.isNotEmpty)
+                                    Text(
+                                      product.category!,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: product.isActive
+                                          ? AppColors.successLight
+                                          : AppColors.errorLight,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      product.isActive ? 'Active' : 'Inactive',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: product.isActive
+                                            ? AppColors.success
+                                            : AppColors.error,
+                                      ),
+                                    ),
+                                  ),
+                                  Consumer(builder: (context, ref, _) {
+                                    final company = ref.watch(companyForProductProvider(product.id));
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigo.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.apartment,
+                                              size: 11, color: Colors.indigo.shade700),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            company.name,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.indigo.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: product.isActive
-                                ? AppColors.successLight
-                                : AppColors.errorLight,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            product.isActive ? 'Active' : 'Inactive',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: product.isActive
-                                  ? AppColors.success
-                                  : AppColors.error,
-                            ),
-                          ),
-                        ),
-                        Consumer(builder: (context, ref, _) {
-                          final company = ref.watch(companyForProductProvider(product.id));
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.indigo.shade50,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.apartment,
-                                      size: 11, color: Colors.indigo.shade700),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    company.name,
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.indigo.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
                         if (isAdmin) ...[
                           const SizedBox(width: 4),
                           PopupMenuButton<String>(

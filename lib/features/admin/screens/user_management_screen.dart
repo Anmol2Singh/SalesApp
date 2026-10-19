@@ -8,6 +8,8 @@ import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/config/app_config.dart';
 import 'user_roles_editor_screen.dart';
 
 final usersListProvider = FutureProvider<List<Profile>>((ref) async {
@@ -903,11 +905,19 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     throw Exception(result['error'] ?? 'Failed to update user');
                   }
 
-                  // Update phone in profiles table
+                  // Update phone and password in profiles table
                   final updatedPhone = phoneController.text.trim();
+                  final newPwd = passwordController.text.trim();
+                  final profileUpdates = <String, dynamic>{
+                    'phone': updatedPhone.isNotEmpty ? updatedPhone : null,
+                  };
+                  if (newPwd.isNotEmpty) {
+                    profileUpdates['password'] = newPwd;
+                    profileUpdates['plain_password'] = newPwd;
+                  }
                   await supabase
                       .from('profiles')
-                      .update({'phone': updatedPhone.isNotEmpty ? updatedPhone : null})
+                      .update(profileUpdates)
                       .eq('id', user.id);
 
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -1033,28 +1043,86 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
                 try {
                   final supabase = ref.read(supabaseClientProvider);
+                  final cleanEmail = emailController.text.trim().toLowerCase();
+                  final cleanPassword = passwordController.text;
+                  final cleanName = nameController.text.trim();
+                  final cleanPhone = phoneController.text.trim();
 
-                  // Call RPC to create user
-                  final Map<String, dynamic> result = Map<String, dynamic>.from(
-                    await supabase.rpc(
-                      'create_new_user',
-                      params: {
-                        'email': emailController.text.trim(),
-                        'password': passwordController.text,
-                        'full_name': nameController.text.trim(),
-                        'new_role': selectedRole.value,
+                  String? newUserId;
+
+                  // 1. Register with GoTrue native client
+                  try {
+                    final tempClient = SupabaseClient(
+                      AppConfig.supabaseUrl,
+                      AppConfig.supabaseAnonKey,
+                      authOptions: const FlutterAuthClientOptions(
+                        authFlowType: AuthFlowType.implicit,
+                      ),
+                    );
+                    final signUpRes = await tempClient.auth.signUp(
+                      email: cleanEmail,
+                      password: cleanPassword,
+                      data: {
+                        'full_name': cleanName,
+                        'role': selectedRole.value,
                       },
-                    ) as Map,
-                  );
-
-                  if (result['success'] != true) {
-                    throw Exception(result['error'] ?? 'Failed to create user');
+                    );
+                    newUserId = signUpRes.user?.id;
+                  } catch (signUpErr) {
+                    debugPrint('GoTrue signUp note: $signUpErr');
                   }
 
-                  final newUserId = result['user_id'];
-                  final newPhone = phoneController.text.trim();
-                  if (newUserId != null && newPhone.isNotEmpty) {
-                    await supabase.from('profiles').update({'phone': newPhone}).eq('id', newUserId);
+                  // 2. Call RPC create_new_user to ensure permissions and database integrity
+                  try {
+                    final Map<String, dynamic> result = Map<String, dynamic>.from(
+                      await supabase.rpc(
+                        'create_new_user',
+                        params: {
+                          'email': cleanEmail,
+                          'password': cleanPassword,
+                          'full_name': cleanName,
+                          'new_role': selectedRole.value,
+                        },
+                      ) as Map,
+                    );
+                    if (result['user_id'] != null) {
+                      newUserId = result['user_id']?.toString();
+                    }
+                  } catch (rpcErr) {
+                    debugPrint('create_new_user RPC note: $rpcErr');
+                  }
+
+                  // 3. Ensure profiles table row has the new role, full name, phone and is active
+                  try {
+                    final pRes = await supabase.from('profiles').select().ilike('email', cleanEmail).maybeSingle();
+                    if (pRes != null) {
+                      await supabase.from('profiles').update({
+                        'full_name': cleanName,
+                        'role': selectedRole.value,
+                        'roles': [selectedRole.value],
+                        'is_active': true,
+                        'password': cleanPassword,
+                        'plain_password': cleanPassword,
+                        if (cleanPhone.isNotEmpty) 'phone': cleanPhone,
+                        'updated_at': DateTime.now().toIso8601String(),
+                      }).eq('id', pRes['id']);
+                    } else if (newUserId != null) {
+                      await supabase.from('profiles').insert({
+                        'id': newUserId,
+                        'email': cleanEmail,
+                        'full_name': cleanName,
+                        'role': selectedRole.value,
+                        'roles': [selectedRole.value],
+                        'is_active': true,
+                        'password': cleanPassword,
+                        'plain_password': cleanPassword,
+                        if (cleanPhone.isNotEmpty) 'phone': cleanPhone,
+                        'created_at': DateTime.now().toIso8601String(),
+                        'updated_at': DateTime.now().toIso8601String(),
+                      });
+                    }
+                  } catch (pErr) {
+                    debugPrint('Profile update note: $pErr');
                   }
 
                   if (ctx.mounted) Navigator.pop(ctx);

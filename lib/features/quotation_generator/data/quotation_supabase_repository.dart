@@ -12,6 +12,8 @@ import '../models/generator_quotation.dart';
 import '../models/heat_pump_model.dart';
 import '../models/tank_spec.dart';
 import '../services/quote_number_service.dart';
+import '../models/deal_quotation_item.dart';
+import '../models/qg_proposal_draft.dart';
 import 'catalog_repository.dart';
 
 class QuotationSupabaseRepository {
@@ -263,48 +265,79 @@ class QuotationSupabaseRepository {
       final cAddr = row['billing_address'] as String? ?? '';
       final subtotal = (row['subtotal'] as num?)?.toDouble() ?? 0.0;
       final grandTotal = (row['grand_total'] as num?)?.toDouble() ?? subtotal;
-      final gstAmount = (row['cgst_amount'] as num? ?? 0.0) + (row['sgst_amount'] as num? ?? 0.0);
+      final cgstAmt = (row['cgst_amount'] as num?)?.toDouble() ?? 0.0;
+      final sgstAmt = (row['sgst_amount'] as num?)?.toDouble() ?? 0.0;
+      final igstAmt = (row['igst_amount'] as num?)?.toDouble() ?? 0.0;
+      final cgstRate = (row['cgst_rate'] as num?)?.toDouble() ?? 9.0;
+      final sgstRate = (row['sgst_rate'] as num?)?.toDouble() ?? 9.0;
       final createdAt = row['created_at'] != null ? DateTime.parse(row['created_at']) : DateTime.now();
       final updatedAt = row['updated_at'] != null ? DateTime.parse(row['updated_at']) : createdAt;
       final rawStatus = row['status'] as String?;
       final status = (rawStatus != null && rawStatus.trim().isNotEmpty)
           ? rawStatus.trim()
           : 'Draft';
+      final orderDate = row['order_date'] != null ? (DateTime.tryParse(row['order_date']) ?? createdAt) : createdAt;
 
-      return GeneratorQuotation(
+      // Extract line items
+      List<Map<String, dynamic>> rawLineItems = [];
+      if (row['line_items'] is List) {
+        rawLineItems = (row['line_items'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+
+      // Supplementary terms
+      List<Map<String, dynamic>> suppTerms = [];
+      if (row['supplementary_terms'] is List) {
+        suppTerms = (row['supplementary_terms'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+
+      // Payment terms
+      List<Map<String, dynamic>> payTerms = [];
+      if (row['payment_terms'] is List) {
+        payTerms = (row['payment_terms'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+
+      final prodName = row['product_name'] as String? ?? row['product_id'] as String? ?? '';
+
+      final dealItem = DealQuotationItem(
         id: id,
-        quoteType: QuoteType.hpWithTank,
+        quotationNumber: qNum,
         status: status,
-        customerName: cName,
-        customerAddress: cAddr,
-        customerMobile: cPhone,
-        date: createdAt,
-        quoteRefNo: qNum,
-        salesRef: 'Insiya Sales',
-        salesMobile: '+91 9292922992',
-        model: const HeatPumpModel(
-          id: 'IZ-4C',
-          modelName: 'IZ-4C',
-          displayCapacityKw: 4.0,
-          ratedHeatingCapacity: '3.6kw',
-          descriptionLine: 'Air Source Heat pump 3.6kw',
-          makeModelLine: 'Make: IZYHEAT Heat Pump Model: IZ-4C 3.6kw',
-          powerInputText: 'Power Input 0.86kw, output 3.6kw, 220V - 1Phase, 50Hz With Auto Defrost.',
-        ),
-        tankRate: subtotal.toInt(),
-        tankSpec: const TankSpec(),
-        extraPriceRows: const [],
-        subtotal: subtotal.toInt(),
-        gstAmount: gstAmount.toInt(),
-        grandTotal: grandTotal.toInt(),
-        termsAndConditions: const [
-          'Proper 1 / 3 Phase power should be arranged where you install the heat pump.',
-          'Electrical/civil/plumbing work materials – Customer Scope.',
-          'Safe storage place need to be provided by you to keep our material & tools.',
-        ],
+        revision: (row['revision'] as num?)?.toInt() ?? 1,
+        orderDate: orderDate,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        customerName: cName,
+        customerPhone: cPhone,
+        customerAddress: cAddr,
+        customerGst: row['customer_gstin'] as String?,
+        salesmanName: row['salesman'] as String? ?? 'Insiya Sales',
+        salesmanPhone: '+91 9292922992',
+        subtotal: subtotal,
+        supplementarySubtotal: (row['supplementary_subtotal'] as num?)?.toDouble() ?? 0.0,
+        cgstAmount: cgstAmt,
+        sgstAmount: sgstAmt,
+        igstAmount: igstAmt,
+        grandTotal: grandTotal,
+        cgstRate: cgstRate,
+        sgstRate: sgstRate,
+        igstRate: igstAmt > 0 ? (cgstRate + sgstRate) : 0.0,
+        lineItems: rawLineItems,
+        supplementaryTerms: suppTerms,
+        paymentTerms: payTerms,
+        termsText: row['terms_text'] as String?,
+        pipelineId: row['pipeline_id'] as String?,
+        productId: row['product_id'] as String?,
+        productName: prodName.isNotEmpty ? prodName : 'Heat Pump',
       );
+
+      final draft = QgProposalDraft.fromDealQuotation(dealItem);
+      return draft.toGeneratorQuotation();
     } catch (e) {
       debugPrint('_mapStandardRowToGeneratorQuotation error: $e');
       return null;

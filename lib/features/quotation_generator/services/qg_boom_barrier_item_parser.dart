@@ -35,18 +35,28 @@ class QgBoomBarrierItemParser {
     bool hasLpr = false;
 
     // Detect model from deal line items or product name
-    for (final line in rawLines) {
-      final desc = (line['description'] ?? line['item_name'] ?? '').toString();
-      final upper = desc.toUpperCase();
+    final allDescriptions = [
+      deal.productName,
+      if (deal.termsText != null) deal.termsText!,
+      ...rawLines.map((l) => (l['description'] ?? l['item_name'] ?? '').toString()),
+    ];
 
-      if (upper.contains('IZ-2026') || upper.contains('IZ2026') || upper.contains('2026')) {
-        detectedModel = 'IZ-2026';
-      } else if (upper.contains('IZ-2004') || upper.contains('IZ2004') || upper.contains('2004')) {
-        detectedModel = 'IZ-2004';
-      } else if (upper.contains('IZ-2001') || upper.contains('IZ2001') || upper.contains('2001')) {
-        detectedModel = 'IZ-2001';
-      }
+    final has2026 = allDescriptions.any((d) => d.toUpperCase().contains('2026'));
+    final has2004 = allDescriptions.any((d) => d.toUpperCase().contains('2004'));
+    final has2001 = allDescriptions.any((d) => d.toUpperCase().contains('2001'));
 
+    if (has2026 && has2001) {
+      detectedModel = 'IZ-2001, IZ-2026';
+    } else if (has2026) {
+      detectedModel = 'IZ-2026';
+    } else if (has2004) {
+      detectedModel = 'IZ-2004';
+    } else if (has2001) {
+      detectedModel = 'IZ-2001';
+    }
+
+    for (final d in allDescriptions) {
+      final upper = d.toUpperCase();
       if (upper.contains('NPRS') || upper.contains('LPR') || upper.contains('NUMBER PLATE') || upper.contains('ANPR')) {
         hasLpr = true;
       }
@@ -76,10 +86,18 @@ class QgBoomBarrierItemParser {
 
       if (_isBarrierLine(upper)) {
         foundBarrier = true;
+        String lineModel = detectedModel;
+        if (upper.contains('2026') && !upper.contains('2001')) {
+          lineModel = 'IZ-2026';
+        } else if (upper.contains('2004')) {
+          lineModel = 'IZ-2004';
+        } else if (upper.contains('2001') && !upper.contains('2026')) {
+          lineModel = 'IZ-2001';
+        }
         parsedItems.add(BoomBarrierLineItem(
           srNo: srCounter++,
-          description: 'Sefdor Boom Barriers Basic Model- $detectedModel',
-          modelNo: detectedModel,
+          description: desc.isNotEmpty ? desc : 'Sefdor Boom Barriers Basic Model- $lineModel',
+          modelNo: lineModel,
           inclusions: defaultBarrierInclusions,
           qty: qty,
           rate: rate,

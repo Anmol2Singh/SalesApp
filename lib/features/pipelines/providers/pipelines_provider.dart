@@ -1,5 +1,7 @@
 // lib/features/pipelines/providers/pipelines_provider.dart
 
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/app_config.dart';
@@ -23,10 +25,67 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   bool _isLoading = false;
   String _stepFilter = '';
   String _statusFilter = '';
+  RealtimeChannel? _realtimeChannel;
+  Timer? _pollingTimer;
 
   PipelinesNotifier(this._supabase, this._userId, this._isAdmin)
       : super(const AsyncValue.loading()) {
     load();
+    _initRealtime();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) load(refresh: true);
+    });
+  }
+
+  void _initRealtime() {
+    try {
+      _realtimeChannel = _supabase
+          .channel('public:sales_pipelines_realtime')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'sales_pipelines',
+            callback: (_) => refresh(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'boqs',
+            callback: (_) => refresh(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'factory_orders',
+            callback: (_) => refresh(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'purchase_orders',
+            callback: (_) => refresh(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'sales_orders',
+            callback: (_) => refresh(),
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('Realtime channel subscription error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    if (_realtimeChannel != null) {
+      try {
+        _supabase.removeChannel(_realtimeChannel!);
+      } catch (_) {}
+    }
+    super.dispose();
   }
 
   Future<void> load({bool refresh = false}) async {
@@ -191,6 +250,85 @@ final dealsStreamProvider = StreamProvider.autoDispose<List<Map<String, dynamic>
 final singleDealStreamProvider =
     StreamProvider.autoDispose.family<Map<String, dynamic>?, String>((ref, pipelineId) {
   final supabase = ref.watch(supabaseClientProvider);
+
+  final channel = supabase.channel('realtime_deal_steps_$pipelineId');
+  try {
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'sales_pipelines',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: pipelineId,
+          ),
+          callback: (_) {
+            ref.invalidate(pipelineDetailProvider(pipelineId));
+            ref.invalidate(workflowStepsProvider(pipelineId));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'boqs',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'pipeline_id',
+            value: pipelineId,
+          ),
+          callback: (_) {
+            ref.invalidate(pipelineDetailProvider(pipelineId));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'factory_orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'pipeline_id',
+            value: pipelineId,
+          ),
+          callback: (_) {
+            ref.invalidate(pipelineDetailProvider(pipelineId));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'purchase_orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'pipeline_id',
+            value: pipelineId,
+          ),
+          callback: (_) {
+            ref.invalidate(pipelineDetailProvider(pipelineId));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'sales_orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'pipeline_id',
+            value: pipelineId,
+          ),
+          callback: (_) {
+            ref.invalidate(pipelineDetailProvider(pipelineId));
+          },
+        )
+        .subscribe();
+  } catch (_) {}
+
+  ref.onDispose(() {
+    try {
+      supabase.removeChannel(channel);
+    } catch (_) {}
+  });
+
   return supabase
       .from('sales_pipelines')
       .stream(primaryKey: ['id'])

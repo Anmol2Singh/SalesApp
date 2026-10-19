@@ -314,6 +314,27 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     await refresh();
   }
 
+  Future<void> unassignCustomer({
+    required String customerId,
+  }) async {
+    try {
+      await _supabase.from('customers').update({
+        'assigned_to': null,
+        'assigned_to_name': null,
+        'reassignment_requested': false,
+        'reassignment_reason': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', customerId);
+    } catch (_) {
+      await _supabase.from('customers').update({
+        'assigned_to': null,
+        'assigned_to_name': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', customerId);
+    }
+    await refresh();
+  }
+
   Future<void> requestCustomerTransfer({
     required String customerId,
     required String customerName,

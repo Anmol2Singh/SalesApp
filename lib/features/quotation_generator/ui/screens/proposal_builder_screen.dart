@@ -12,6 +12,7 @@ import '../../models/deal_quotation_item.dart';
 import '../../models/qg_product_profile.dart';
 import '../../templates/qg_product_template.dart';
 import '../../templates/qg_template_registry.dart';
+import '../../templates/boom_barrier_template.dart';
 
 /// Top-level dispatcher for Quotation Generator proposal builders.
 /// Resolves the deal's product type via QgTemplateRegistry and routes to the
@@ -100,8 +101,21 @@ class _ProposalBuilderScreenState extends ConsumerState<ProposalBuilderScreen> {
 
       // 4. Resolve company configured for this product/deal and override profile
       try {
-        final assignedCompany = ref.read(companyForProductProvider(dealItem.productId));
+        final prodKey = (dealItem.productId != null && dealItem.productId!.isNotEmpty)
+            ? dealItem.productId!
+            : dealItem.productName;
+        final assignedCompany = ref.read(companyForProductProvider(prodKey));
         profile = profile.withAppCompany(assignedCompany);
+        if (template.key == 'boom_barrier_quotation' ||
+            template is BoomBarrierTemplate ||
+            dealItem.productName.toLowerCase().contains('barrier') ||
+            dealItem.productName.toLowerCase().contains('boom')) {
+          profile = profile.copyWith(
+            logoPath: (assignedCompany.logoUrl != null && !assignedCompany.logoUrl!.contains('logo.png'))
+                ? assignedCompany.logoUrl
+                : 'assets/images/boom_barrier/sefdor_logo.png',
+          );
+        }
       } catch (_) {}
 
       if (mounted) {

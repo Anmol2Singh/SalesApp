@@ -66,7 +66,7 @@ class Profile {
       roles: parsedRoles,
       isActive: json['is_active'] as bool? ?? true,
       pushToken: json['push_token'] as String?,
-      plainPassword: json['plain_password'] as String?,
+      plainPassword: (json['plain_password'] ?? json['password']) as String?,
       themePreference: json['theme_preference'] as String? ?? 'light',
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now())
@@ -85,7 +85,10 @@ class Profile {
     'roles': roles.map((r) => r.name).toList(),
     'is_active': isActive,
     'push_token': pushToken,
-    if (plainPassword != null) 'plain_password': plainPassword,
+    if (plainPassword != null) ...{
+      'plain_password': plainPassword,
+      'password': plainPassword,
+    },
     'theme_preference': themePreference,
   };
 

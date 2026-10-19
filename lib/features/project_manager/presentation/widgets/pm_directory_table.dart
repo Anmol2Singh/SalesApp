@@ -632,88 +632,263 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: sorted.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (ctx, i) {
         final rec = sorted[i];
-        final bal = rec.balance as double;
+        final orderVal = (rec.orderValue as num).toDouble();
+        final paidVal = (rec.paymentReceived as num).toDouble();
+        final bal = (rec.balance as num).toDouble();
+        final percentCollected = orderVal > 0 ? (paidVal / orderVal).clamp(0.0, 1.0) : 0.0;
+        final percentInt = (percentCollected * 100).round();
 
-        return PmCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Text('#${rec.idNo}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: pm.mutedForeground)),
-                      const SizedBox(width: 8),
-                      PmBadge(label: rec.orderType, variant: PmBadgeVariant.secondary),
+        final hasPhone = rec.mobileNumber != null && rec.mobileNumber!.toString().trim().isNotEmpty;
+        final hasAddress = rec.address != null && rec.address!.toString().trim().isNotEmpty;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                context.push('/pm/projects/${rec.id}${widget.isPurchase ? "?mode=purchase" : ""}');
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top Bar: #ID + Product Badge + Arrow
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
+                              ),
+                              child: Text(
+                                '#${rec.idNo}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(9999),
+                                border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
+                              ),
+                              child: Text(
+                                rec.orderType.toString().isNotEmpty ? rec.orderType.toString() : 'Project',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              LucideIcons.arrowUpRight,
+                              size: 16,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Site / Project Name
+                    Text(
+                      rec.siteName,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+
+                    if (rec.partyPrintName != null &&
+                        rec.partyPrintName!.toString().trim().isNotEmpty &&
+                        rec.partyPrintName != rec.siteName) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        rec.partyPrintName!,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
                     ],
-                  ),
-                  IconButton(
-                    icon: Icon(LucideIcons.externalLink, size: 18, color: pm.primary),
-                    onPressed: () {
-                      context.push('/pm/projects/${rec.id}${widget.isPurchase ? "?mode=purchase" : ""}');
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                rec.siteName,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: pm.foreground),
-              ),
-              if (rec.mobileNumber != null && rec.mobileNumber!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(LucideIcons.phone, size: 12, color: pm.primary),
-                    const SizedBox(width: 6),
-                    Text(rec.mobileNumber!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: pm.primary)),
-                  ],
-                ),
-              ],
-              if (rec.address != null && rec.address!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(LucideIcons.mapPin, size: 12, color: pm.mutedForeground),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        rec.address!,
-                        style: TextStyle(fontSize: 11, color: pm.mutedForeground),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+
+                    if (hasPhone || hasAddress) const SizedBox(height: 8),
+
+                    // Contact & Location Rows
+                    if (hasPhone)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(LucideIcons.phone, size: 13, color: Color(0xFF2563EB)),
+                            const SizedBox(width: 6),
+                            Text(
+                              rec.mobileNumber!,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    if (hasAddress)
+                      Row(
+                        children: [
+                          const Icon(LucideIcons.mapPin, size: 13, color: Color(0xFF94A3B8)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              rec.address!,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    const SizedBox(height: 12),
+
+                    // Progress Bar for Payment Collection
+                    if (orderVal > 0) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Collection Progress',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            '$percentInt% collected',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: percentInt >= 100
+                                  ? const Color(0xFF16A34A)
+                                  : const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: percentCollected,
+                          minHeight: 5,
+                          backgroundColor: const Color(0xFFE2E8F0),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            percentInt >= 100 ? const Color(0xFF16A34A) : const Color(0xFF2563EB),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Financial Stats Box (3 Columns)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _MobileStatCol(
+                              title: widget.isPurchase ? 'QUOTATION' : 'ORDER VALUE',
+                              value: '₹${_currencyFormat.format(orderVal)}',
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+                          Expanded(
+                            child: _MobileStatCol(
+                              title: widget.isPurchase ? 'PAID' : 'RECEIVED',
+                              value: '₹${_currencyFormat.format(paidVal)}',
+                              color: const Color(0xFF16A34A),
+                            ),
+                          ),
+                          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+                          Expanded(
+                            child: _MobileStatCol(
+                              title: 'BALANCE',
+                              value: '₹${_currencyFormat.format(bal)}',
+                              color: bal > 0
+                                  ? const Color(0xFFEA580C)
+                                  : (bal < 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A)),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 12),
-              // Stats Grid
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: pm.secondary.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(pm.radiusMd),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _MobileStatCol(title: 'Order', value: '₹${_currencyFormat.format(rec.orderValue)}'),
-                    _MobileStatCol(title: 'Recd', value: '₹${_currencyFormat.format(rec.paymentReceived)}', color: pm.success),
-                    _MobileStatCol(
-                      title: 'Balance',
-                      value: '₹${_currencyFormat.format(bal)}',
-                      color: bal > 0 ? pm.success : (bal < 0 ? pm.destructive : null),
-                    ),
-                  ],
-                ),
               ),
-            ],
+            ),
           ),
         );
       },
@@ -765,10 +940,33 @@ class _MobileStatCol extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF64748B),
+            letterSpacing: 0.4,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 3),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: color ?? const Color(0xFF0F172A),
+            ),
+          ),
+        ),
       ],
     );
   }

@@ -232,6 +232,26 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
     _addressCtrl.text = res['site_address']?.toString() ?? res['customer_address']?.toString() ?? '';
 
     final product = res['product_name']?.toString() ?? 'Heat Pump';
+    final productId = res['product_id']?.toString();
+    try {
+      final comp = await QgNocRepository.fetchCompanyDetailsFromTemplate(supabase, productId: productId, productName: product);
+      if (comp['company_name'] != null && comp['company_name'].toString().trim().isNotEmpty) {
+        _companyNameCtrl.text = comp['company_name'].toString().trim();
+      }
+      if (comp['company_address'] != null || comp['address'] != null) {
+        _companyAddressCtrl.text = (comp['company_address'] ?? comp['address']).toString().trim();
+      }
+      if (comp['company_email'] != null || comp['email'] != null) {
+        _companyEmailCtrl.text = (comp['company_email'] ?? comp['email']).toString().trim();
+      }
+      if (comp['company_phone'] != null || comp['phone'] != null) {
+        _companyPhoneCtrl.text = (comp['company_phone'] ?? comp['phone']).toString().trim();
+      }
+      if (comp['company_website'] != null || comp['website'] != null) {
+        _companyWebsiteCtrl.text = (comp['company_website'] ?? comp['website']).toString().trim();
+      }
+    } catch (_) {}
+
     _productNameCtrl.text = product;
     _equipmentLabelCtrl.text = product;
     _workTypeCtrl.text = '$product Installation work';

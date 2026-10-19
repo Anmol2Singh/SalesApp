@@ -223,9 +223,19 @@ class _AppShellState extends ConsumerState<AppShell> {
           SystemNavigator.pop();
         }
       },
-      child: Scaffold(
-        extendBody: true,
-        body: LayoutBuilder(
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: widget.currentRoute.startsWith('/pm')
+            ? const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+                systemNavigationBarColor: Colors.white,
+                systemNavigationBarIconBrightness: Brightness.dark,
+              )
+            : SystemUiOverlayStyle.light,
+        child: Scaffold(
+          extendBody: true,
+          body: LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 800;
             final isQuotationRoute = widget.currentRoute.startsWith('/heat-pump-quotations') ||
@@ -284,6 +294,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     profile.primaryRole == UserRole.purchase)
             ? _buildNavBar(context, profile.roles, unreadCount, false)
             : null,
+        ),
       ),
     );
   }

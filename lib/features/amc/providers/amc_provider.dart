@@ -177,17 +177,39 @@ final amcExpiringSoonCountProvider = FutureProvider<int>((ref) async {
 // Admin toggle: whether "Opt for AMC" button is visible in customer login
 class AmcOptEnabledNotifier extends StateNotifier<bool> {
   static const String _key = 'amc_opt_enabled';
+  final SupabaseClient? _supabase;
 
-  AmcOptEnabledNotifier() : super(true) {
+  AmcOptEnabledNotifier([this._supabase]) : super(true) {
     _load();
   }
 
   Future<void> _load() async {
+    // 1. Initial cached value
     try {
       final prefs = await SharedPreferences.getInstance();
       final val = prefs.getBool(_key);
       if (val != null) {
         state = val;
+      }
+    } catch (_) {}
+
+    // 2. Fetch authoritative setting from Supabase
+    try {
+      final client = _supabase ?? Supabase.instance.client;
+      final res = await client
+          .from('pdf_templates')
+          .select('id, template_config')
+          .eq('document_type', 'amc_contract')
+          .maybeSingle();
+
+      if (res != null && res['template_config'] is Map) {
+        final cfg = res['template_config'] as Map;
+        if (cfg.containsKey('amc_opt_enabled')) {
+          final dbVal = cfg['amc_opt_enabled'] == true;
+          state = dbVal;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(_key, dbVal);
+        }
       }
     } catch (_) {}
   }
@@ -198,6 +220,34 @@ class AmcOptEnabledNotifier extends StateNotifier<bool> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_key, enabled);
     } catch (_) {}
+
+    try {
+      final client = _supabase ?? Supabase.instance.client;
+      final res = await client
+          .from('pdf_templates')
+          .select('id, template_config')
+          .eq('document_type', 'amc_contract')
+          .maybeSingle();
+
+      Map<String, dynamic> cfg = {};
+      if (res != null && res['template_config'] is Map) {
+        cfg = Map<String, dynamic>.from(res['template_config'] as Map);
+      }
+      cfg['amc_opt_enabled'] = enabled;
+
+      if (res != null) {
+        await client.from('pdf_templates').update({
+          'template_config': cfg,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', res['id']);
+      } else {
+        await client.from('pdf_templates').insert({
+          'document_type': 'amc_contract',
+          'template_name': 'AMC Contract Template',
+          'template_config': cfg,
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> toggle() async {
@@ -207,5 +257,6 @@ class AmcOptEnabledNotifier extends StateNotifier<bool> {
 
 final amcOptEnabledProvider =
     StateNotifierProvider<AmcOptEnabledNotifier, bool>((ref) {
-  return AmcOptEnabledNotifier();
+  final supabase = ref.watch(supabaseClientProvider);
+  return AmcOptEnabledNotifier(supabase);
 });

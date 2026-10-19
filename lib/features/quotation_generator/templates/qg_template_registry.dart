@@ -39,6 +39,12 @@ class QgTemplateRegistry {
   static const List<String> defaultProductFilter = [
     'Heat Pump',
     'Heatpump',
+    'All in one',
+    'All-in-one',
+    'All in One',
+    'AIO',
+    'Swimming Pool',
+    'Pool Heat Pump',
     'Boom Barrier',
     'Boom barrier',
     'boom barrier',

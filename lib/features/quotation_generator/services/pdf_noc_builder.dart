@@ -22,12 +22,28 @@ class PdfNocBuilder {
   }) async {
     final pdf = pw.Document();
 
+    final isExact = payload.wordingMode == NocWordingMode.templateExact;
+    final isHeatPump = payload.productName.toLowerCase().contains('heat pump');
+    final isBoomBarrier = payload.productName.toLowerCase().contains('boom') ||
+        payload.productName.toLowerCase().contains('barrier');
+    final dateStr = DateFormat('dd/MM/yyyy').format(payload.date);
+
     // 1. Resolve Logo Bytes
     Uint8List? finalLogo = logoBytes;
     if (finalLogo == null && payload.logoUrl != null && payload.logoUrl!.isNotEmpty) {
-      finalLogo = await _loadImageBytes(payload.logoUrl!);
+      if (isBoomBarrier && payload.logoUrl!.endsWith('logo.png')) {
+        finalLogo = await _loadImageBytes('assets/images/boom_barrier/sefdor_logo.png');
+      } else {
+        finalLogo = await _loadImageBytes(payload.logoUrl!);
+      }
     }
-    finalLogo ??= await _loadImageBytes('assets/images/izyheat_logo.png');
+    if (finalLogo == null) {
+      if (isBoomBarrier) {
+        finalLogo = await _loadImageBytes('assets/images/boom_barrier/sefdor_logo.png');
+      } else {
+        finalLogo = await _loadImageBytes('assets/images/izyheat_logo.png');
+      }
+    }
 
     // 2. Resolve Stamp Bytes
     Uint8List? finalStamp = stampBytes;
@@ -50,26 +66,22 @@ class PdfNocBuilder {
       base: regularFont,
       bold: boldFont,
     );
-
-    final isExact = payload.wordingMode == NocWordingMode.templateExact;
-    final isHeatPump = payload.productName.toLowerCase().contains('heat pump');
-    final dateStr = DateFormat('dd/MM/yyyy').format(payload.date);
     
     final effectiveCompanyName = payload.companyName.isNotEmpty
         ? payload.companyName
-        : (isHeatPump ? 'INSIYA SOLAR INDUSTRY' : 'INSIYA TRADING CORPORATION');
+        : (isBoomBarrier ? 'INSIYA TRADING CORPORATION' : 'INSIYA SOLAR INDUSTRY');
     final effectiveCompanyAddress = payload.companyAddress.isNotEmpty
         ? payload.companyAddress
         : 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
     final effectiveCompanyEmail = payload.companyEmail.isNotEmpty
         ? payload.companyEmail
-        : 'insiyasolarindustry@gmail.com';
+        : (isBoomBarrier ? 'insiyaindia@gmail.com    info@insiyacorp.com' : 'insiyasolarindustry@gmail.com');
     final effectiveCompanyPhone = payload.companyPhone.isNotEmpty
         ? payload.companyPhone
-        : '+91 9292922992';
+        : (isBoomBarrier ? '+91 7588874019 & +91 9292922992' : '+91 9292922992');
     final effectiveCompanyWebsite = payload.companyWebsite.isNotEmpty
         ? payload.companyWebsite
-        : 'www.izyheat.com';
+        : (isBoomBarrier ? 'www.insiyacorp.com' : 'www.izyheat.com');
 
     pdf.addPage(
       pw.Page(

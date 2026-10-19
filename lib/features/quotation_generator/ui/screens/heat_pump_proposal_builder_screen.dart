@@ -17,6 +17,8 @@ import '../../services/qg_catalog_service.dart';
 import '../widgets/item_resolve_dialog.dart';
 import '../../services/price_calculator.dart';
 import '../../models/generator_company_settings.dart';
+import '../../providers/quotation_generator_providers.dart';
+import '../../../../core/providers/company_provider.dart';
 import 'quotation_preview_screen.dart';
 
 class HeatPumpProposalBuilderScreen extends ConsumerStatefulWidget {
@@ -82,7 +84,15 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       }
 
       final pName = dealItem.productName.toLowerCase();
-      if (!pName.contains('heat pump') && !pName.contains('heatpump')) {
+      final isEligible = pName.contains('heat pump') ||
+          pName.contains('heatpump') ||
+          pName.contains('all in one') ||
+          pName.contains('all-in-one') ||
+          pName.contains('aio') ||
+          pName.contains('pool') ||
+          pName.contains('iz-') ||
+          pName.contains('izyheat');
+      if (!isEligible) {
         setState(() {
           _isLoading = false;
           _errorMessage =
@@ -244,10 +254,12 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Text(
               'Proposal Builder • ${draft.quotationNumber}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
               draft.customerName,
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -740,82 +752,110 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
     final rate = (item['rate'] as num?)?.toDouble() ?? 0.0;
     final qty = (item['qty'] as num?)?.toInt() ?? (isIncluded ? 0 : 1);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 3,
-            child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            name,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: AppColors.textPrimary,
+            ),
           ),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'Included', label: Text('Included', style: TextStyle(fontSize: 11))),
-              ButtonSegment(value: 'Extra', label: Text('Extra', style: TextStyle(fontSize: 11))),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              SizedBox(
+                height: 38,
+                child: SegmentedButton<String>(
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  segments: const [
+                    ButtonSegment(value: 'Included', label: Text('Included', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(value: 'Extra', label: Text('Extra', style: TextStyle(fontSize: 11))),
+                  ],
+                  selected: {isIncluded ? 'Included' : 'Extra'},
+                  onSelectionChanged: (set) {
+                    setState(() {
+                      final chosen = set.first;
+                      draft.supplementaryItems[index]['type'] = chosen;
+                      if (chosen == 'Included') {
+                        draft.supplementaryItems[index]['rate'] = 0.0;
+                        if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
+                          draft.supplementaryItems[index]['qty'] = 1;
+                        }
+                      } else {
+                        if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
+                          draft.supplementaryItems[index]['qty'] = 1;
+                        }
+                      }
+                      _recalculateSupplementarySubtotal(draft);
+                    });
+                    _triggerAutoSave();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Qty field
+              SizedBox(
+                width: 60,
+                height: 38,
+                child: TextFormField(
+                  key: ValueKey('supp_qty_${index}_$isIncluded'),
+                  initialValue: qty > 0 ? qty.toString() : '1',
+                  enabled: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Qty',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (val) {
+                    final newQty = int.tryParse(val) ?? 1;
+                    draft.supplementaryItems[index]['qty'] = newQty;
+                    _recalculateSupplementarySubtotal(draft);
+                    _triggerAutoSave();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Rate field (Disabled when Included)
+              Expanded(
+                child: SizedBox(
+                  height: 38,
+                  child: TextFormField(
+                    key: ValueKey('supp_rate_${index}_$isIncluded'),
+                    initialValue: isIncluded ? '' : (rate > 0 ? rate.toStringAsFixed(0) : ''),
+                    enabled: !isIncluded,
+                    decoration: InputDecoration(
+                      labelText: isIncluded ? 'Rate (Incl.)' : 'Rate (₹)',
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) {
+                      final newRate = double.tryParse(val) ?? 0.0;
+                      draft.supplementaryItems[index]['rate'] = newRate;
+                      _recalculateSupplementarySubtotal(draft);
+                      _triggerAutoSave();
+                    },
+                  ),
+                ),
+              ),
             ],
-            selected: {isIncluded ? 'Included' : 'Extra'},
-            onSelectionChanged: (set) {
-              setState(() {
-                final chosen = set.first;
-                draft.supplementaryItems[index]['type'] = chosen;
-                if (chosen == 'Included') {
-                  draft.supplementaryItems[index]['rate'] = 0.0;
-                  if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
-                    draft.supplementaryItems[index]['qty'] = 1;
-                  }
-                } else {
-                  if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
-                    draft.supplementaryItems[index]['qty'] = 1;
-                  }
-                }
-                _recalculateSupplementarySubtotal(draft);
-              });
-              _triggerAutoSave();
-            },
-          ),
-          const SizedBox(width: 8),
-          // Qty field
-          SizedBox(
-            width: 65,
-            child: TextFormField(
-              key: ValueKey('supp_qty_${index}_$isIncluded'),
-              initialValue: qty > 0 ? qty.toString() : '1',
-              enabled: true,
-              decoration: const InputDecoration(
-                labelText: 'Qty',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (val) {
-                final newQty = int.tryParse(val) ?? 1;
-                draft.supplementaryItems[index]['qty'] = newQty;
-                _recalculateSupplementarySubtotal(draft);
-                _triggerAutoSave();
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Rate field (Disabled when Included)
-          SizedBox(
-            width: 95,
-            child: TextFormField(
-              key: ValueKey('supp_rate_${index}_$isIncluded'),
-              initialValue: isIncluded ? '' : (rate > 0 ? rate.toStringAsFixed(0) : ''),
-              enabled: !isIncluded,
-              decoration: const InputDecoration(
-                labelText: 'Rate',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (val) {
-                final newRate = double.tryParse(val) ?? 0.0;
-                draft.supplementaryItems[index]['rate'] = newRate;
-                _recalculateSupplementarySubtotal(draft);
-                _triggerAutoSave();
-              },
-            ),
           ),
         ],
       ),
@@ -1194,12 +1234,14 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                 icon: const Icon(Icons.picture_as_pdf),
                 label: Text(isConfirmed ? 'Preview PDF' : 'Preview (Draft)'),
                 onPressed: () {
+                  final company = ref.read(companyForProductProvider('heat_pump'));
+                  final companySettings = GeneratorCompanySettings.fromAppCompany(company);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (ctx) => QuotationPreviewScreen(
                         quotation: draft.toGeneratorQuotation(),
-                        settings: const GeneratorCompanySettings(),
+                        settings: companySettings,
                       ),
                     ),
                   );

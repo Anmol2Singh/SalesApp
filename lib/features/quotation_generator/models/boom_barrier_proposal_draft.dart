@@ -125,7 +125,26 @@ class BoomBarrierProposalDraft {
   /// Returns standard default specifications for a given model.
   static List<Map<String, dynamic>> defaultSpecsForModel(String modelNo) {
     final upper = modelNo.toUpperCase().trim();
-    if (upper.contains('2026')) {
+    final has2026 = upper.contains('2026');
+    final has2004 = upper.contains('2004');
+    final has2001 = upper.contains('2001');
+
+    if (has2026 && has2001) {
+      return [
+        {'label': 'Model No', 'value': 'IZ-2001 & IZ-2026', 'visible': true},
+        {'label': 'Power Supply', 'value': 'IZ-2001: 24V/10 AMP | IZ-2026: 24V DC / 220V AC', 'visible': true},
+        {'label': 'Motor Power', 'value': 'IZ-2001: 90W | IZ-2026: 140W Brushless DC', 'visible': true},
+        {'label': 'Boom Length', 'value': 'IZ-2001: 6M | IZ-2026: 4.5M - 6M', 'visible': true},
+        {'label': 'Opening Time', 'value': 'IZ-2001: 3s - 6s | IZ-2026: 1.5s - 3s (Adjustable)', 'visible': true},
+        {'label': 'RPM / Duty Cycle', 'value': 'IZ-2001: 1500 RPM | IZ-2026: 100% Continuous Duty', 'visible': true},
+        {'label': 'Remote Distance', 'value': '30M (Transmitter)', 'visible': true},
+        {'label': 'Working Temp', 'value': '-25°C to +70°C', 'visible': true},
+        {'label': 'Housing Dimensions', 'value': 'IZ-2001: 100*34*26 cm | IZ-2026: 350*280*1020 mm', 'visible': true},
+        {'label': 'Weight', 'value': 'IZ-2001: 35KG | IZ-2026: 45KG', 'visible': true},
+        {'label': 'Protection Class', 'value': 'IP54 / IP55', 'visible': true},
+      ];
+    }
+    if (has2026) {
       return [
         {'label': 'Power Supply', 'value': '24V DC / 220V AC', 'visible': true},
         {'label': 'Motor Power', 'value': '140W Brushless DC', 'visible': true},
@@ -138,7 +157,8 @@ class BoomBarrierProposalDraft {
         {'label': 'Weight', 'value': '45KG', 'visible': true},
         {'label': 'Protection Class', 'value': 'IP54', 'visible': true},
       ];
-    } else if (upper.contains('2004')) {
+    }
+    if (has2004) {
       return [
         {'label': 'Power Supply', 'value': '220V AC ± 10%', 'visible': true},
         {'label': 'Motor Power', 'value': '120W AC', 'visible': true},

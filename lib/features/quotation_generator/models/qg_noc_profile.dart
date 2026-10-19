@@ -146,8 +146,39 @@ class QgNocProfile {
     );
   }
 
+  /// Default Boom Barrier profile with Insiya Trading Corporation and Sefdor branding
+  factory QgNocProfile.defaultBoomBarrierProfile() {
+    return const QgNocProfile(
+      id: 'boom_barrier',
+      productName: 'Boom Barrier',
+      equipmentLabel: 'BOOM BARRIER',
+      workTypeText: 'Boom Barrier System Installation & Commissioning work',
+      wiringDefault: 'Done',
+      testingDefault: 'Done',
+      remarkDefault: 'All Installation & Commissioning work Completed as per work order',
+      companyNameOverride: 'INSIYA TRADING CORPORATION',
+      companyAddressOverride: 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
+      companyEmailOverride: 'insiyaindia@gmail.com    info@insiyacorp.com',
+      companyMobileOverride: '+91 7588874019 & +91 9292922992',
+      companyWebOverride: 'www.insiyacorp.com',
+      logoUrlOverride: 'assets/images/boom_barrier/sefdor_logo.png',
+      stampPathOverride: 'assets/images/company_stamp.png',
+      confirmationLines: [
+        '1. The installation of the boom barrier system is permitted at the above location.',
+        '2. The system is installed as per standard safety norms and guidelines.',
+        '3. Necessary precautions have been taken regarding power cabling and loop detectors.',
+      ],
+      closingSentence: 'This NOC is issued upon request for installation and operation of the Boom Barrier system.',
+    );
+  }
+
   /// Default fallback profile when no specific product match exists
   factory QgNocProfile.defaultProfile({String productName = 'System'}) {
+    final isBarrier = productName.toLowerCase().contains('boom') || productName.toLowerCase().contains('barrier');
+    if (isBarrier) {
+      return QgNocProfile.defaultBoomBarrierProfile();
+    }
+
     return QgNocProfile(
       id: 'default',
       productName: productName,

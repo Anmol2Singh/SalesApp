@@ -263,11 +263,15 @@ class _MultiCompanyManagementCard extends ConsumerStatefulWidget {
 }
 
 class _MultiCompanyManagementCardState
-    extends ConsumerState<_MultiCompanyManagementCard> {
+    extends ConsumerState<_MultiCompanyManagementCard>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   bool _isUploadingLogo = false;
   bool _isUploadingStamp = false;
   bool _isSaving = false;
-  bool _isExpanded = true;
+  bool _isExpanded = false;
   String? _selectedCompanyId;
 
   final _nameCtrl = TextEditingController();
@@ -574,6 +578,7 @@ class _MultiCompanyManagementCardState
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final companiesAsync = ref.watch(appCompaniesProvider);
 
     return companiesAsync.when(
@@ -761,54 +766,62 @@ class _MultiCompanyManagementCardState
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                activeCompany.name,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (activeCompany.isDefault)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                        color: Colors.green.shade300),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    activeCompany.name,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.check_circle,
-                                          size: 12,
-                                          color: Colors.green.shade700),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'DEFAULT COMPANY',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.green.shade700,
+                                ),
+                                const SizedBox(width: 8),
+                                if (activeCompany.isDefault)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                          color: Colors.green.shade300),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.check_circle,
+                                            size: 12,
+                                            color: Colors.green.shade700),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'DEFAULT',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.green.shade700,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                           if (!activeCompany.isDefault)
                             TextButton.icon(
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.amber.shade800,
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                    horizontal: 6, vertical: 4),
+                                visualDensity: VisualDensity.compact,
                               ),
                               onPressed: () async {
                                 final messenger = ScaffoldMessenger.of(context);
@@ -848,11 +861,18 @@ class _MultiCompanyManagementCardState
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: Colors.grey.shade200),
                               ),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  const Text('Company Logo',
+                                      style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
                                   Container(
-                                    width: 60,
-                                    height: 60,
+                                    width: 54,
+                                    height: 54,
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(8),
@@ -876,49 +896,38 @@ class _MultiCompanyManagementCardState
                                             color: AppColors.textSecondary,
                                             size: 24),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Company Logo',
-                                            style: TextStyle(
-                                                fontFamily: 'Inter',
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 4),
-                                        ElevatedButton.icon(
-                                          onPressed: _isUploadingLogo
-                                              ? null
-                                              : () => _pickAndUploadImage(
-                                                  isLogo: true),
-                                          icon: _isUploadingLogo
-                                              ? const SizedBox(
-                                                  width: 12,
-                                                  height: 12,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          color: Colors.white))
-                                              : const Icon(Icons.upload,
-                                                  size: 14),
-                                          label: Text(
-                                              _isUploadingLogo
-                                                  ? 'Uploading...'
-                                                  : 'Upload',
-                                              style: const TextStyle(
-                                                  fontSize: 11)),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppColors.primary,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                          ),
-                                        ),
-                                      ],
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: _isUploadingLogo
+                                          ? null
+                                          : () => _pickAndUploadImage(
+                                              isLogo: true),
+                                      icon: _isUploadingLogo
+                                          ? const SizedBox(
+                                              width: 12,
+                                              height: 12,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white))
+                                          : const Icon(Icons.upload,
+                                              size: 14),
+                                      label: Text(
+                                          _isUploadingLogo
+                                              ? 'Uploading...'
+                                              : 'Upload',
+                                          style: const TextStyle(
+                                              fontSize: 11)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 6),
+                                        visualDensity:
+                                            VisualDensity.compact,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -935,11 +944,18 @@ class _MultiCompanyManagementCardState
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: Colors.grey.shade200),
                               ),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  const Text('Stamp / Sign',
+                                      style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 8),
                                   Container(
-                                    width: 60,
-                                    height: 60,
+                                    width: 54,
+                                    height: 54,
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(8),
@@ -964,49 +980,38 @@ class _MultiCompanyManagementCardState
                                             color: AppColors.textSecondary,
                                             size: 24),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Stamp / Sign',
-                                            style: TextStyle(
-                                                fontFamily: 'Inter',
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 4),
-                                        ElevatedButton.icon(
-                                          onPressed: _isUploadingStamp
-                                              ? null
-                                              : () => _pickAndUploadImage(
-                                                  isLogo: false),
-                                          icon: _isUploadingStamp
-                                              ? const SizedBox(
-                                                  width: 12,
-                                                  height: 12,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          color: Colors.white))
-                                              : const Icon(Icons.upload,
-                                                  size: 14),
-                                          label: Text(
-                                              _isUploadingStamp
-                                                  ? 'Uploading...'
-                                                  : 'Upload',
-                                              style: const TextStyle(
-                                                  fontSize: 11)),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppColors.primary,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                          ),
-                                        ),
-                                      ],
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: _isUploadingStamp
+                                          ? null
+                                          : () => _pickAndUploadImage(
+                                              isLogo: false),
+                                      icon: _isUploadingStamp
+                                          ? const SizedBox(
+                                              width: 12,
+                                              height: 12,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white))
+                                          : const Icon(Icons.upload,
+                                              size: 14),
+                                      label: Text(
+                                          _isUploadingStamp
+                                              ? 'Uploading...'
+                                              : 'Upload',
+                                          style: const TextStyle(
+                                              fontSize: 11)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 6),
+                                        visualDensity:
+                                            VisualDensity.compact,
+                                      ),
                                     ),
                                   ),
                                 ],

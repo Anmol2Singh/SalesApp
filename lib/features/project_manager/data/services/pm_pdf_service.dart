@@ -2,13 +2,142 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pm_project.dart';
 import '../models/pm_purchase.dart';
 import '../models/pm_ledger_entry.dart';
 
+class PmPdfColumnDef {
+  final String key;
+  final String label;
+  final String? purchaseLabel;
+  final bool defaultEnabled;
+
+  const PmPdfColumnDef({
+    required this.key,
+    required this.label,
+    this.purchaseLabel,
+    this.defaultEnabled = true,
+  });
+}
+
 class PmPdfService {
   static final _currencyFormat = NumberFormat('#,##,##0', 'en_IN');
   static final _dateFormat = DateFormat('dd-MM-yyyy');
+
+  static const String pdfColumnsPrefsKey = 'pm_pdf_export_columns';
+
+  // Left column definitions matching UI screenshot
+  static const List<PmPdfColumnDef> leftPdfColumns = [
+    PmPdfColumnDef(key: 's_no', label: 'S No.'),
+    PmPdfColumnDef(key: 'mobile', label: 'Mobile No.'),
+    PmPdfColumnDef(key: 'type', label: 'Type'),
+    PmPdfColumnDef(key: 'party_print', label: 'Party Print'),
+    PmPdfColumnDef(key: 'city', label: 'City'),
+    PmPdfColumnDef(key: 'extra_wrk', label: 'Extra Wrk'),
+    PmPdfColumnDef(key: 'balance', label: 'Balance'),
+  ];
+
+  // Right column definitions matching UI screenshot
+  static const List<PmPdfColumnDef> rightPdfColumns = [
+    PmPdfColumnDef(key: 'customer_name', label: 'Customer Name', purchaseLabel: 'Vendor Name'),
+    PmPdfColumnDef(key: 'id', label: 'ID'),
+    PmPdfColumnDef(key: 'firm_name', label: 'Firm Name'),
+    PmPdfColumnDef(key: 'sales_man', label: 'Sales Man'),
+    PmPdfColumnDef(key: 'order_val', label: 'Order Val', purchaseLabel: 'Quotation'),
+    PmPdfColumnDef(key: 'received', label: 'Received', purchaseLabel: 'Paid'),
+    PmPdfColumnDef(key: 'reminder_date', label: 'Reminder Date', defaultEnabled: false),
+  ];
+
+  // All columns in logical export order
+  static const List<PmPdfColumnDef> allPdfColumns = [
+    PmPdfColumnDef(key: 's_no', label: 'S No.'),
+    PmPdfColumnDef(key: 'id', label: 'ID'),
+    PmPdfColumnDef(key: 'customer_name', label: 'Customer Name', purchaseLabel: 'Vendor Name'),
+    PmPdfColumnDef(key: 'party_print', label: 'Party Print'),
+    PmPdfColumnDef(key: 'type', label: 'Type'),
+    PmPdfColumnDef(key: 'firm_name', label: 'Firm Name'),
+    PmPdfColumnDef(key: 'mobile', label: 'Mobile No.'),
+    PmPdfColumnDef(key: 'city', label: 'City'),
+    PmPdfColumnDef(key: 'sales_man', label: 'Sales Man'),
+    PmPdfColumnDef(key: 'order_val', label: 'Order Val', purchaseLabel: 'Quotation'),
+    PmPdfColumnDef(key: 'extra_wrk', label: 'Extra Wrk'),
+    PmPdfColumnDef(key: 'received', label: 'Received', purchaseLabel: 'Paid'),
+    PmPdfColumnDef(key: 'balance', label: 'Balance'),
+    PmPdfColumnDef(key: 'reminder_date', label: 'Reminder Date', defaultEnabled: false),
+  ];
+
+  static Future<Map<String, bool>> loadPdfExportColumns() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(pdfColumnsPrefsKey);
+      if (saved != null) {
+        final map = <String, bool>{};
+        for (final col in allPdfColumns) {
+          map[col.key] = saved.contains(col.key);
+        }
+        return map;
+      }
+    } catch (_) {}
+    final defaultMap = <String, bool>{};
+    for (final col in allPdfColumns) {
+      defaultMap[col.key] = col.defaultEnabled;
+    }
+    return defaultMap;
+  }
+
+  static Future<void> savePdfExportColumns(Map<String, bool> columns) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final active = columns.entries.where((e) => e.value).map((e) => e.key).toList();
+      await prefs.setStringList(pdfColumnsPrefsKey, active);
+    } catch (_) {}
+  }
+
+  static String _getCellValue(dynamic rec, String key, int index, bool isPurchase, String companyName) {
+    switch (key) {
+      case 's_no':
+        return (index + 1).toString();
+      case 'id':
+        return rec.idNo?.toString() ?? '-';
+      case 'customer_name':
+        return rec.siteName?.toString() ?? '-';
+      case 'party_print':
+        final pp = rec.partyPrintName?.toString().trim();
+        return (pp != null && pp.isNotEmpty) ? pp : '-';
+      case 'type':
+        return rec.orderType?.toString() ?? '-';
+      case 'firm_name':
+        final fn = rec.firmName?.toString().trim();
+        return (fn != null && fn.isNotEmpty) ? fn : companyName;
+      case 'mobile':
+        final mob = rec.mobileNumber?.toString().trim();
+        return (mob != null && mob.isNotEmpty) ? mob : '-';
+      case 'city':
+        final addr = rec.address?.toString().trim();
+        return (addr != null && addr.isNotEmpty) ? addr : '-';
+      case 'sales_man':
+        final sm = rec.salesMan?.toString().trim();
+        return (sm != null && sm.isNotEmpty) ? sm : '-';
+      case 'order_val':
+        final val = isPurchase && rec is PmPurchase ? rec.quotationValue : (rec is PmProject ? rec.orderValue : 0.0);
+        return _currencyFormat.format(val);
+      case 'extra_wrk':
+        if (isPurchase) return '-';
+        final val = rec is PmProject ? rec.extraWorkValue : 0.0;
+        return _currencyFormat.format(val);
+      case 'received':
+        final val = isPurchase && rec is PmPurchase ? rec.paymentPaid : (rec is PmProject ? rec.paymentReceived : 0.0);
+        return _currencyFormat.format(val);
+      case 'balance':
+        return _currencyFormat.format(rec.balance ?? 0.0);
+      case 'reminder_date':
+        final dt = rec.reminderDate;
+        return dt != null ? _dateFormat.format(dt) : '-';
+      default:
+        return '-';
+    }
+  }
 
   /// Generate Directory PDF for projects or vendors
   static Future<Uint8List> generateDirectoryPdf({
@@ -19,39 +148,23 @@ class PmPdfService {
   }) async {
     final pdf = pw.Document();
 
-    final headers = isPurchase
-        ? ['ID', 'Type', 'Vendor Name', 'Party Print Name', 'Mobile', 'Address', 'Quotation', 'Paid', 'Balance']
-        : ['ID', 'Type', 'Site Name', 'Party Print Name', 'Mobile', 'Address', 'Order Value', 'Extra Work', 'Recd', 'Balance'];
+    final activeCols = visibleColumns ?? await loadPdfExportColumns();
+    final enabledCols = allPdfColumns.where((c) => activeCols[c.key] ?? c.defaultEnabled).toList();
+    final effectiveCols = enabledCols.isNotEmpty
+        ? enabledCols
+        : allPdfColumns.where((c) => ['id', 'customer_name', 'type', 'balance'].contains(c.key)).toList();
 
-    final dataRows = records.map((rec) {
-      if (isPurchase && rec is PmPurchase) {
-        return [
-          rec.idNo.toString(),
-          rec.orderType,
-          rec.siteName,
-          rec.partyPrintName ?? '-',
-          rec.mobileNumber ?? '-',
-          rec.address ?? '-',
-          _currencyFormat.format(rec.quotationValue),
-          _currencyFormat.format(rec.paymentPaid),
-          _currencyFormat.format(rec.balance),
-        ];
-      } else if (rec is PmProject) {
-        return [
-          rec.idNo.toString(),
-          rec.orderType,
-          rec.siteName,
-          rec.partyPrintName ?? '-',
-          rec.mobileNumber ?? '-',
-          rec.address ?? '-',
-          _currencyFormat.format(rec.orderValue),
-          _currencyFormat.format(rec.extraWorkValue),
-          _currencyFormat.format(rec.paymentReceived),
-          _currencyFormat.format(rec.balance),
-        ];
+    final headers = effectiveCols.map((c) => (isPurchase && c.purchaseLabel != null) ? c.purchaseLabel! : c.label).toList();
+
+    final dataRows = <List<String>>[];
+    for (int i = 0; i < records.length; i++) {
+      final rec = records[i];
+      final row = <String>[];
+      for (final col in effectiveCols) {
+        row.add(_getCellValue(rec, col.key, i, isPurchase, companyName));
       }
-      return <String>[];
-    }).where((r) => r.isNotEmpty).toList();
+      dataRows.add(row);
+    }
 
     pdf.addPage(
       pw.MultiPage(

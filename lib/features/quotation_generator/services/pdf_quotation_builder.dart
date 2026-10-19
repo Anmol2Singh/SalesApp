@@ -42,16 +42,22 @@ class PdfQuotationBuilder {
     int nextFooterPage = 1;
     final offerLetterPage = nextFooterPage++; // 1
     final priceSchedulePage = nextFooterPage++; // 2
-    final int? tankSpecPage = (quotation.quoteType == QuoteType.hpWithTank && hasTank) ? nextFooterPage++ : null; // 3 or null
+    final int? tankSpecPage =
+        (quotation.quoteType == QuoteType.hpWithTank && hasTank)
+            ? nextFooterPage++
+            : null; // 3 or null
     final termsPage = nextFooterPage++; // 4 if hasTank, else 3
     final acceptPage = nextFooterPage++; // 5 if hasTank, else 4
-    final int? showcasePage = quotation.includeProductImagePage ? nextFooterPage++ : null; // 6 if hasTank, else 5
+    final int? showcasePage = quotation.includeProductImagePage
+        ? nextFooterPage++
+        : null; // 6 if hasTank, else 5
 
     // 1. Load Fonts
     pw.Font fontRegular;
     pw.Font fontBold;
     try {
-      final regData = await rootBundle.load('assets/fonts/NotoSans-Regular.ttf');
+      final regData =
+          await rootBundle.load('assets/fonts/NotoSans-Regular.ttf');
       final boldData = await rootBundle.load('assets/fonts/NotoSans-Bold.ttf');
       fontRegular = pw.Font.ttf(regData);
       fontBold = pw.Font.ttf(boldData);
@@ -64,14 +70,20 @@ class PdfQuotationBuilder {
 
     // 2. Load Core Images
     final izyheatLogo = await _loadImageBytes('assets/images/izyheat_logo.png');
-    final coverImage = await _loadImageBytes(quotation.coverImagePath ?? settings.defaultCoverImagePath ?? 'assets/images/cover_proposal.png');
+    final coverImage = await _loadImageBytes(quotation.coverImagePath ??
+        settings.defaultCoverImagePath ??
+        'assets/images/cover_proposal.png');
     final bannerImage = quotation.includeBanner
-        ? await _loadImageBytes(quotation.bannerImagePath ?? settings.defaultBannerImagePath ?? 'assets/images/insiya_banner.png')
+        ? await _loadImageBytes(quotation.bannerImagePath ??
+            settings.defaultBannerImagePath ??
+            'assets/images/insiya_banner.png')
         : null;
-    final stampImage = await _loadImageBytes(settings.stampImagePath ?? 'assets/images/company_stamp.png');
+    final stampImage = await _loadImageBytes(
+        settings.stampImagePath ?? 'assets/images/company_stamp.png');
     final fbIcon = await _loadImageBytes('assets/images/facebook_icon.png');
     final igIcon = await _loadImageBytes('assets/images/instagram_icon.png');
-    final product38c = await _loadImageBytes('assets/images/product_iz_38c.png');
+    final product38c =
+        await _loadImageBytes('assets/images/product_iz_38c.png');
 
     // Product Images for the final page
     final List<Uint8List> productImages = [];
@@ -81,7 +93,9 @@ class PdfQuotationBuilder {
           final b = await _loadImageBytes(p);
           if (b != null) productImages.add(b);
         }
-      } else if (product38c != null && (quotation.model.modelName.contains('38') || quotation.quoteType == QuoteType.hpWithTank)) {
+      } else if (product38c != null &&
+          (quotation.model.modelName.contains('38') ||
+              quotation.quoteType == QuoteType.hpWithTank)) {
         productImages.add(product38c);
       } else {
         final b = await _loadImageBytes(quotation.model.defaultImagePath);
@@ -132,21 +146,33 @@ class PdfQuotationBuilder {
                         pw.SizedBox(height: 2),
                         pw.Text(
                           'ADDRESS: - ${settings.shortAddress}',
-                          style: pw.TextStyle(fontSize: 7.5, color: greyText, fontStyle: pw.FontStyle.italic),
+                          style: pw.TextStyle(
+                              fontSize: 7.5,
+                              color: greyText,
+                              fontStyle: pw.FontStyle.italic),
                         ),
                         pw.Text(
                           'EMAIL ID: - ${settings.companyEmail}',
-                          style: pw.TextStyle(fontSize: 7.5, color: greyText, fontStyle: pw.FontStyle.italic),
+                          style: pw.TextStyle(
+                              fontSize: 7.5,
+                              color: greyText,
+                              fontStyle: pw.FontStyle.italic),
                         ),
                         pw.Text(
                           'CONTACT: ${settings.companyPhone}',
-                          style: pw.TextStyle(fontSize: 7.5, color: greyText, fontStyle: pw.FontStyle.italic),
+                          style: pw.TextStyle(
+                              fontSize: 7.5,
+                              color: greyText,
+                              fontStyle: pw.FontStyle.italic),
                         ),
                         pw.Row(
                           children: [
                             pw.Text(
                               'WEBSITE: - ',
-                              style: pw.TextStyle(fontSize: 7.5, color: greyText, fontStyle: pw.FontStyle.italic),
+                              style: pw.TextStyle(
+                                  fontSize: 7.5,
+                                  color: greyText,
+                                  fontStyle: pw.FontStyle.italic),
                             ),
                             pw.Text(
                               settings.companyWebsite,
@@ -167,7 +193,8 @@ class PdfQuotationBuilder {
                   pw.Container(
                     width: 115,
                     height: 42,
-                    child: pw.Image(pw.MemoryImage(izyheatLogo), fit: pw.BoxFit.contain),
+                    child: pw.Image(pw.MemoryImage(izyheatLogo),
+                        fit: pw.BoxFit.contain),
                   ),
               ],
             ),
@@ -243,12 +270,16 @@ class PdfQuotationBuilder {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text(
-                  quotation.quoteRefNo.isNotEmpty ? quotation.quoteRefNo : '«Quotation_Number»',
-                  style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.black),
+                  quotation.quoteRefNo.isNotEmpty
+                      ? quotation.quoteRefNo
+                      : '«Quotation_Number»',
+                  style:
+                      const pw.TextStyle(fontSize: 7.5, color: PdfColors.black),
                 ),
                 pw.Text(
                   'DATE-  $dateStr',
-                  style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.black),
+                  style:
+                      const pw.TextStyle(fontSize: 7.5, color: PdfColors.black),
                 ),
               ],
             ),
@@ -294,13 +325,15 @@ class PdfQuotationBuilder {
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.zero,
         build: (context) {
-          final custSalutation = quotation.salutation.isNotEmpty ? '${quotation.salutation} ' : '';
+          final custSalutation =
+              quotation.salutation.isNotEmpty ? '${quotation.salutation} ' : '';
           return withWatermark(
             pw.Stack(
               children: [
                 if (coverImage != null)
                   pw.Positioned.fill(
-                    child: pw.Image(pw.MemoryImage(coverImage), fit: pw.BoxFit.cover),
+                    child: pw.Image(pw.MemoryImage(coverImage),
+                        fit: pw.BoxFit.cover),
                   )
                 else
                   pw.Positioned.fill(
@@ -317,7 +350,7 @@ class PdfQuotationBuilder {
                       pw.Text(
                         'Proposal',
                         style: pw.TextStyle(
-                          color: darkGold,
+                          color: PdfColors.white,
                           fontSize: 26,
                           fontWeight: pw.FontWeight.bold,
                         ),
@@ -326,7 +359,7 @@ class PdfQuotationBuilder {
                       pw.Text(
                         'TO,',
                         style: pw.TextStyle(
-                          color: darkGold,
+                          color: PdfColors.white,
                           fontSize: 20,
                           fontWeight: pw.FontWeight.bold,
                         ),
@@ -335,7 +368,7 @@ class PdfQuotationBuilder {
                       pw.Text(
                         '$custSalutation${quotation.customerName}',
                         style: pw.TextStyle(
-                          color: darkGold,
+                          color: PdfColors.white,
                           fontSize: 20,
                           fontWeight: pw.FontWeight.bold,
                         ),
@@ -345,7 +378,7 @@ class PdfQuotationBuilder {
                       pw.Text(
                         'Add-${quotation.customerAddress}',
                         style: pw.TextStyle(
-                          color: darkGold,
+                          color: PdfColors.white,
                           fontSize: 14,
                           fontWeight: pw.FontWeight.bold,
                         ),
@@ -370,7 +403,9 @@ class PdfQuotationBuilder {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.fromLTRB(36, 24, 36, 20),
         build: (context) {
-          final custSalutation = quotation.salutation.isNotEmpty ? '${quotation.salutation.toUpperCase()} ' : '';
+          final custSalutation = quotation.salutation.isNotEmpty
+              ? '${quotation.salutation.toUpperCase()} '
+              : '';
           final customerNameUpper = quotation.customerName.toUpperCase();
 
           return withWatermark(
@@ -404,10 +439,13 @@ class PdfQuotationBuilder {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('TO,', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text('TO,',
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
                           pw.Text(
                             '$custSalutation$customerNameUpper',
-                            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                            style: pw.TextStyle(
+                                fontSize: 9, fontWeight: pw.FontWeight.bold),
                           ),
                           pw.Text(
                             'Add- ${quotation.customerAddress}',
@@ -431,22 +469,28 @@ class PdfQuotationBuilder {
                           pw.Row(
                             mainAxisAlignment: pw.MainAxisAlignment.end,
                             children: [
-                              pw.Text('Quote Ref No   : ', style: const pw.TextStyle(fontSize: 8.5)),
-                              pw.Text(quotation.quoteRefNo, style: const pw.TextStyle(fontSize: 8.5)),
+                              pw.Text('Quote Ref No   : ',
+                                  style: const pw.TextStyle(fontSize: 8.5)),
+                              pw.Text(quotation.quoteRefNo,
+                                  style: const pw.TextStyle(fontSize: 8.5)),
                             ],
                           ),
                           pw.Row(
                             mainAxisAlignment: pw.MainAxisAlignment.end,
                             children: [
-                              pw.Text('Sales/Ref      : ', style: const pw.TextStyle(fontSize: 8.5)),
-                              pw.Text(quotation.salesRef, style: const pw.TextStyle(fontSize: 8.5)),
+                              pw.Text('Sales/Ref      : ',
+                                  style: const pw.TextStyle(fontSize: 8.5)),
+                              pw.Text(quotation.salesRef,
+                                  style: const pw.TextStyle(fontSize: 8.5)),
                             ],
                           ),
                           pw.Row(
                             mainAxisAlignment: pw.MainAxisAlignment.end,
                             children: [
-                              pw.Text('Mob. No        : ', style: const pw.TextStyle(fontSize: 8.5)),
-                              pw.Text(quotation.salesMobile, style: const pw.TextStyle(fontSize: 8.5)),
+                              pw.Text('Mob. No        : ',
+                                  style: const pw.TextStyle(fontSize: 8.5)),
+                              pw.Text(quotation.salesMobile,
+                                  style: const pw.TextStyle(fontSize: 8.5)),
                             ],
                           ),
                         ],
@@ -461,11 +505,13 @@ class PdfQuotationBuilder {
                 pw.RichText(
                   text: pw.TextSpan(
                     text: 'Subject: ',
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold),
                     children: [
                       pw.TextSpan(
                         text: quotation.subjectLine,
-                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                        style: pw.TextStyle(
+                            fontSize: 9, fontWeight: pw.FontWeight.bold),
                       ),
                     ],
                   ),
@@ -512,9 +558,11 @@ class PdfQuotationBuilder {
                     roman = roman.replaceFirst('Annexure ', 'Annexure – ');
                   }
                   String desc;
-                  if (e.romanNumeral == 'Annexure I' || e.romanNumeral.endsWith(' I')) {
+                  if (e.romanNumeral == 'Annexure I' ||
+                      e.romanNumeral.endsWith(' I')) {
                     desc = 'PRICE AND EXCLUSIONS ( OFFER 1 )';
-                  } else if (e.title.contains('Technical') || e.title.contains('Specifications')) {
+                  } else if (e.title.contains('Technical') ||
+                      e.title.contains('Specifications')) {
                     if (quotation.quoteType == QuoteType.hpWithTank) {
                       desc = hasTank
                           ? 'Technical Specifications. ( Heat Pump & Tank)'
@@ -524,9 +572,11 @@ class PdfQuotationBuilder {
                     } else if (quotation.quoteType == QuoteType.tankOnly) {
                       desc = 'Technical Specifications (Storage Tank)';
                     } else if (quotation.quoteType == QuoteType.swimmingPool) {
-                      desc = 'Technical Specifications (Swimming Pool Heat Pump)';
+                      desc =
+                          'Technical Specifications (Swimming Pool Heat Pump)';
                     } else {
-                      desc = 'Technical Specifications. (${quotation.model.modelName})';
+                      desc =
+                          'Technical Specifications. (${quotation.model.modelName})';
                     }
                   } else {
                     desc = 'Commercial terms and conditions & Warranty.';
@@ -535,7 +585,8 @@ class PdfQuotationBuilder {
                     padding: const pw.EdgeInsets.only(left: 16, bottom: 3),
                     child: pw.Text(
                       '$roman: $desc',
-                      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold),
                     ),
                   );
                 }),
@@ -569,11 +620,13 @@ class PdfQuotationBuilder {
                     ),
                   ],
                 ),
-                pw.Text('Email: ${settings.companyEmail}', style: const pw.TextStyle(fontSize: 8.5)),
+                pw.Text('Email: ${settings.companyEmail}',
+                    style: const pw.TextStyle(fontSize: 8.5)),
                 pw.SizedBox(height: 6),
                 pw.Row(
                   children: [
-                    pw.Text('Follow us on:   ', style: const pw.TextStyle(fontSize: 8.5)),
+                    pw.Text('Follow us on:   ',
+                        style: const pw.TextStyle(fontSize: 8.5)),
                     if (fbIcon != null)
                       pw.Container(
                         width: 14,
@@ -608,7 +661,8 @@ class PdfQuotationBuilder {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.fromLTRB(36, 24, 36, 20),
         build: (context) {
-          if (quotation.quoteType == QuoteType.hpWithTank || quotation.quoteType == QuoteType.hpOnly) {
+          if (quotation.quoteType == QuoteType.hpWithTank ||
+              quotation.quoteType == QuoteType.hpOnly) {
             return withWatermark(
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -616,15 +670,21 @@ class PdfQuotationBuilder {
                   buildHeader(showSubHeader: true),
                   pw.Text(
                     'Annexure – I: Price and exclusions Offer 1',
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+                    style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        decoration: pw.TextDecoration.underline),
                   ),
                   pw.SizedBox(height: 3),
                   pw.Container(
                     decoration: pw.BoxDecoration(
                       border: pw.Border.all(color: PdfColors.black, width: 0.6),
                     ),
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                    child: pw.Text('OFFER', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1.5),
+                    child: pw.Text('OFFER',
+                        style: pw.TextStyle(
+                            fontSize: 8, fontWeight: pw.FontWeight.bold)),
                   ),
                   pw.SizedBox(height: 4),
 
@@ -636,7 +696,8 @@ class PdfQuotationBuilder {
                   // Annexure II HP Technical Specifications immediately beneath
                   pw.Text(
                     'Annexure – II',
-                    style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                        fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                   ),
                   pw.SizedBox(height: 1.5),
                   _buildHpSpecTable(quotation, settings),
@@ -655,7 +716,10 @@ class PdfQuotationBuilder {
                   buildHeader(showSubHeader: true),
                   pw.Text(
                     'Annexure – I: Price and exclusions Offer 1',
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+                    style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        decoration: pw.TextDecoration.underline),
                   ),
                   pw.SizedBox(height: 6),
                   _buildGenericPriceTable(quotation, config),
@@ -681,7 +745,11 @@ class PdfQuotationBuilder {
           build: (context) {
             final tanks = quotation.effectiveTanks;
             final isMultiTank = tanks.length > 1;
-            final titleMat = tanks.isNotEmpty ? tanks.first.innerTankMaterial : (quotation.tankSpec.innerTankMaterial.isNotEmpty ? quotation.tankSpec.innerTankMaterial : 'GI');
+            final titleMat = tanks.isNotEmpty
+                ? tanks.first.innerTankMaterial
+                : (quotation.tankSpec.innerTankMaterial.isNotEmpty
+                    ? quotation.tankSpec.innerTankMaterial
+                    : 'GI');
 
             return withWatermark(
               pw.Column(
@@ -691,7 +759,10 @@ class PdfQuotationBuilder {
                   pw.SizedBox(height: 2),
                   pw.Text(
                     'TECHNICAL SPECIFICATION FOR : ${isMultiTank ? 'HOT WATER STORAGE TANK.' : '$titleMat HOT WATER STORAGE TANK.'}',
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+                    style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        decoration: pw.TextDecoration.underline),
                   ),
                   pw.SizedBox(height: 6),
 
@@ -706,7 +777,8 @@ class PdfQuotationBuilder {
                       child: pw.Container(
                         height: 185,
                         width: double.infinity,
-                        child: pw.Image(pw.MemoryImage(bannerImage), fit: pw.BoxFit.contain),
+                        child: pw.Image(pw.MemoryImage(bannerImage),
+                            fit: pw.BoxFit.contain),
                       ),
                     ),
 
@@ -718,7 +790,9 @@ class PdfQuotationBuilder {
           },
         ),
       );
-    } else if (config.hasTechnicalSpecs && quotation.quoteType != QuoteType.hpWithTank && quotation.quoteType != QuoteType.hpOnly) {
+    } else if (config.hasTechnicalSpecs &&
+        quotation.quoteType != QuoteType.hpWithTank &&
+        quotation.quoteType != QuoteType.hpOnly) {
       // Other types with technical specs (tankOnly, pool, allInOne)
       pdf.addPage(
         pw.Page(
@@ -736,30 +810,33 @@ class PdfQuotationBuilder {
                   ] else if (config.specMode == SpecMode.swimmingPool) ...[
                     pw.Text(
                       'TECHNICAL SPECIFICATION FOR : SWIMMING POOL HEAT PUMP – ${quotation.poolModel?.modelName ?? "IZ-35SP"}',
-                      style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                          fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                     ),
                     pw.SizedBox(height: 4),
-                    _buildPoolSpecTable(quotation.poolModel ?? PoolHeatPumpModel.defaultModel()),
+                    _buildPoolSpecTable(quotation.poolModel ??
+                        PoolHeatPumpModel.defaultModel()),
                   ] else if (config.specMode == SpecMode.allInOne) ...[
                     pw.Text(
                       'TECHNICAL SPECIFICATION FOR : ALL IN ONE HEAT PUMP – ${quotation.allInOneModel?.modelName ?? "IZ-200A"}',
-                      style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                          fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                     ),
                     pw.SizedBox(height: 4),
-                    _buildAllInOneSpecTable(quotation.allInOneModel ?? AllInOneModel.defaultFloorModel()),
+                    _buildAllInOneSpecTable(quotation.allInOneModel ??
+                        AllInOneModel.defaultFloorModel()),
                   ],
-
                   if (bannerImage != null) ...[
                     pw.SizedBox(height: 12),
                     pw.Center(
                       child: pw.Container(
                         height: 180,
                         width: double.infinity,
-                        child: pw.Image(pw.MemoryImage(bannerImage), fit: pw.BoxFit.contain),
+                        child: pw.Image(pw.MemoryImage(bannerImage),
+                            fit: pw.BoxFit.contain),
                       ),
                     ),
                   ],
-
                   pw.Spacer(),
                   buildFooter(priceSchedulePage + 1),
                 ],
@@ -792,16 +869,21 @@ class PdfQuotationBuilder {
           );
 
           String warrantyText;
-          if (quotation.quoteType == QuoteType.allInOneFloor || quotation.quoteType == QuoteType.allInOneWall) {
-            warrantyText = '${quotation.warrantyHpYears} YEAR FOR HEAT PUMP AND 5 YEARS OF COMPRESSOR.';
+          if (quotation.quoteType == QuoteType.allInOneFloor ||
+              quotation.quoteType == QuoteType.allInOneWall) {
+            warrantyText =
+                '${quotation.warrantyHpYears} YEAR FOR HEAT PUMP AND 5 YEARS OF COMPRESSOR.';
           } else if (quotation.quoteType == QuoteType.partsOnly) {
             warrantyText = '1 YEAR FOR REPLACED PARTS.';
           } else if (quotation.quoteType == QuoteType.tankOnly) {
             warrantyText = '${quotation.warrantyTankYears} YEARS FOR TANK.';
-          } else if (quotation.quoteType == QuoteType.hpOnly || quotation.quoteType == QuoteType.swimmingPool || !hasTank) {
+          } else if (quotation.quoteType == QuoteType.hpOnly ||
+              quotation.quoteType == QuoteType.swimmingPool ||
+              !hasTank) {
             warrantyText = '${quotation.warrantyHpYears} YEAR FOR HEAT PUMP.';
           } else {
-            warrantyText = '${quotation.warrantyHpYears} YEAR FOR HEAT PUMP, ${quotation.warrantyTankYears} YEARS FOR TANK .';
+            warrantyText =
+                '${quotation.warrantyHpYears} YEAR FOR HEAT PUMP, ${quotation.warrantyTankYears} YEARS FOR TANK .';
           }
 
           final termsList = quotation.termsAndConditions.isNotEmpty
@@ -821,27 +903,38 @@ class PdfQuotationBuilder {
                 pw.SizedBox(height: 6),
                 pw.Text(
                   termsTitle,
-                  style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+                  style: pw.TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: pw.FontWeight.bold,
+                      decoration: pw.TextDecoration.underline),
                 ),
                 pw.SizedBox(height: 12),
 
                 // Payment Terms
-                pw.Text('Payment Terms :', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Payment Terms :',
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 4),
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(left: 6),
-                  child: pw.Text(paymentSentence, style: const pw.TextStyle(fontSize: 8.5, lineSpacing: 1.35)),
+                  child: pw.Text(paymentSentence,
+                      style:
+                          const pw.TextStyle(fontSize: 8.5, lineSpacing: 1.35)),
                 ),
 
                 pw.SizedBox(height: 12),
 
                 // Warranty
-                pw.Text('WARRANTY:- $warrantyText', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text('WARRANTY:- $warrantyText',
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
 
                 pw.SizedBox(height: 12),
 
                 // Other Terms & Conditions
-                pw.Text('Other Terms & Conditions:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Other Terms & Conditions:',
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 5),
                 ...termsList.asMap().entries.map((entry) {
                   final idx = entry.key + 1;
@@ -851,8 +944,12 @@ class PdfQuotationBuilder {
                     child: pw.Row(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('$idx.  ', style: const pw.TextStyle(fontSize: 8.5)),
-                        pw.Expanded(child: pw.Text(text, style: const pw.TextStyle(fontSize: 8.5, lineSpacing: 1.25))),
+                        pw.Text('$idx.  ',
+                            style: const pw.TextStyle(fontSize: 8.5)),
+                        pw.Expanded(
+                            child: pw.Text(text,
+                                style: const pw.TextStyle(
+                                    fontSize: 8.5, lineSpacing: 1.25))),
                       ],
                     ),
                   );
@@ -861,7 +958,9 @@ class PdfQuotationBuilder {
                 pw.SizedBox(height: 12),
 
                 // Validity Of Offer
-                pw.Text('Validity Of Offer :', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Validity Of Offer :',
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 4),
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(left: 6),
@@ -876,7 +975,10 @@ class PdfQuotationBuilder {
                 // Bank Details
                 pw.Text(
                   'OUR BANK ACCOUNT DETAILS:',
-                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+                  style: pw.TextStyle(
+                      fontSize: 9,
+                      fontWeight: pw.FontWeight.bold,
+                      decoration: pw.TextDecoration.underline),
                 ),
                 pw.SizedBox(height: 5),
                 pw.Padding(
@@ -907,9 +1009,12 @@ class PdfQuotationBuilder {
                 ),
 
                 pw.SizedBox(height: 12),
-                pw.Text('Thanks & Regard', style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('Thanks & Regard',
+                    style: const pw.TextStyle(fontSize: 9)),
                 pw.Text('For', style: const pw.TextStyle(fontSize: 9)),
-                pw.Text(settings.companyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text(settings.companyName,
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 6),
 
                 if (stampImage != null)
@@ -937,10 +1042,12 @@ class PdfQuotationBuilder {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.fromLTRB(36, 24, 36, 20),
         build: (context) {
-          final totalFormatted = PriceCalculator.formatIndianCurrency(quotation.netPayable);
+          final totalFormatted =
+              PriceCalculator.formatIndianCurrency(quotation.netPayable);
 
           // Payment sentence with standard space 'satisfactory installation and commissioning'
-          final acceptancePaymentSentence = QgPaymentSentenceBuilder.buildFromSplits(
+          final acceptancePaymentSentence =
+              QgPaymentSentenceBuilder.buildFromSplits(
             advance: quotation.paymentSplitAdvance,
             delivery: quotation.paymentSplitDelivery,
             commissioning: quotation.paymentSplitCommissioning,
@@ -956,33 +1063,43 @@ class PdfQuotationBuilder {
                 pw.Center(
                   child: pw.Text(
                     'QUOTATION ACCEPTANCE LETTER',
-                    style: pw.TextStyle(fontSize: 12.5, fontWeight: pw.FontWeight.bold, letterSpacing: 0.8),
+                    style: pw.TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: pw.FontWeight.bold,
+                        letterSpacing: 0.8),
                   ),
                 ),
                 pw.SizedBox(height: 20),
                 pw.Row(
                   children: [
-                    pw.Text('Customer Name: ', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('Customer Name: ',
+                        style: const pw.TextStyle(fontSize: 9)),
                     pw.Text(quotation.customerName,
-                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        style: pw.TextStyle(
+                            fontSize: 9, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   children: [
-                    pw.Text('Customer Address: ', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('Customer Address: ',
+                        style: const pw.TextStyle(fontSize: 9)),
                     pw.Text(quotation.customerAddress,
-                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        style: pw.TextStyle(
+                            fontSize: 9, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
                 pw.SizedBox(height: 14),
-                pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('Date: $dateStr',
+                    style: const pw.TextStyle(fontSize: 9)),
                 pw.SizedBox(height: 14),
                 pw.Text('Subject: ${quotation.acceptanceSubjectLine}',
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 3),
                 pw.Text('Model No ${quotation.model.modelName}',
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 14),
                 pw.Text('Dear Sir,', style: const pw.TextStyle(fontSize: 9)),
                 pw.SizedBox(height: 6),
@@ -996,14 +1113,18 @@ class PdfQuotationBuilder {
                   style: const pw.TextStyle(fontSize: 9, lineSpacing: 1.35),
                 ),
                 pw.SizedBox(height: 16),
-                pw.Text('Looking forward to doing business with you.', style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('Looking forward to doing business with you.',
+                    style: const pw.TextStyle(fontSize: 9)),
                 pw.SizedBox(height: 28),
-                pw.Text('Yours sincerely,', style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('Yours sincerely,',
+                    style: const pw.TextStyle(fontSize: 9)),
                 pw.SizedBox(height: 3),
-                pw.Text(quotation.customerName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text(quotation.customerName,
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 2),
-                pw.Text('Mob. No:- ${quotation.customerMobile}', style: const pw.TextStyle(fontSize: 9)),
-
+                pw.Text('Mob. No:- ${quotation.customerMobile}',
+                    style: const pw.TextStyle(fontSize: 9)),
                 pw.Spacer(),
                 buildFooter(acceptPage),
               ],
@@ -1023,9 +1144,8 @@ class PdfQuotationBuilder {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.fromLTRB(36, 24, 36, 20),
           build: (context) {
-            final mainImg = productImages.isNotEmpty
-                ? productImages.first
-                : product38c;
+            final mainImg =
+                productImages.isNotEmpty ? productImages.first : product38c;
 
             return withWatermark(
               pw.Column(
@@ -1036,7 +1156,8 @@ class PdfQuotationBuilder {
                   pw.Center(
                     child: pw.Text(
                       'Product Image',
-                      style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                          fontSize: 16, fontWeight: pw.FontWeight.bold),
                     ),
                   ),
                   pw.SizedBox(height: 16),
@@ -1045,7 +1166,8 @@ class PdfQuotationBuilder {
                       child: pw.Container(
                         height: 440,
                         width: double.infinity,
-                        child: pw.Image(pw.MemoryImage(mainImg), fit: pw.BoxFit.contain),
+                        child: pw.Image(pw.MemoryImage(mainImg),
+                            fit: pw.BoxFit.contain),
                       ),
                     ),
                   pw.Spacer(),
@@ -1084,7 +1206,11 @@ class PdfQuotationBuilder {
       ),
     );
 
-    pw.TableRow buildExtraRow(String sr, String desc, {String qty = '', String rateStr = '', String amtStr = ''}) {
+    pw.TableRow buildExtraRow(String sr, String desc,
+        {String qty = '',
+        String rateStr = '',
+        String amtStr = '',
+        bool isExtra = false}) {
       return pw.TableRow(
         children: [
           _tc(sr, center: true),
@@ -1094,7 +1220,8 @@ class PdfQuotationBuilder {
           _tc(qty, center: true),
           _tc('', center: true),
           _tc(rateStr, center: true),
-          _tc(amtStr.isEmpty ? 'Included' : amtStr, center: true),
+          _tc(amtStr.isNotEmpty ? amtStr : (isExtra ? 'Extra' : 'Included'),
+              center: true),
         ],
       );
     }
@@ -1122,34 +1249,52 @@ class PdfQuotationBuilder {
         String amtStr = '';
 
         if (isHp) {
-          final kwVal = r.hpKw ?? (r.metadata?['kw'] as num?)?.toDouble() ?? q.model.displayCapacityKw;
-          final kwFormatted = (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
-          final modelName = r.metadata?['hpModel']?.toString() ?? q.model.modelName;
+          final kwVal = r.hpKw ??
+              (r.metadata?['kw'] as num?)?.toDouble() ??
+              q.model.displayCapacityKw;
+          final kwFormatted =
+              (kwVal == kwVal.toInt()) ? '${kwVal.toInt()}' : '$kwVal';
+          final modelName =
+              r.metadata?['hpModel']?.toString() ?? q.model.modelName;
           final powerSupply = q.model.powerSupply;
           final powerInput = q.model.specs['Rated Input Power'] ?? '8.75kw';
 
           descWidget = pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+            padding:
+                const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Air Source Heat pump ${kwFormatted}kw', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Make: IZYHEAT Heat Pump Model: $modelName ${kwFormatted}kw', style: const pw.TextStyle(fontSize: 7.5)),
-                pw.Text('Power Input $powerInput, output ${kwFormatted}kw, $powerSupply, 50Hz With Auto Defrost.', style: const pw.TextStyle(fontSize: 7.5)),
+                pw.Text('Air Source Heat pump ${kwFormatted}kw',
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                pw.Text(
+                    'Make: IZYHEAT Heat Pump Model: $modelName ${kwFormatted}kw',
+                    style: const pw.TextStyle(fontSize: 7.5)),
+                pw.Text(
+                    'Power Input $powerInput, output ${kwFormatted}kw, $powerSupply, 50Hz With Auto Defrost.',
+                    style: const pw.TextStyle(fontSize: 7.5)),
               ],
             ),
           );
           kwStr = kwVal.toStringAsFixed(2);
         } else if (isTank) {
-          final tankCap = r.systemLph ?? (r.metadata?['capacityLitres'] as num?)?.toInt() ?? q.tankCapacityLitres;
+          final tankCap = r.systemLph ??
+              (r.metadata?['capacityLitres'] as num?)?.toInt() ??
+              q.tankCapacityLitres;
           final mat = r.metadata?['tankMaterial']?.toString() ??
-              (q.tankSpec.innerTankMaterial.isNotEmpty ? q.tankSpec.innerTankMaterial : 'GI');
-          final isPress = r.metadata?['isPressurized'] as bool? ?? q.isTankPressurized;
+              (q.tankSpec.innerTankMaterial.isNotEmpty
+                  ? q.tankSpec.innerTankMaterial
+                  : 'GI');
+          final isPress =
+              r.metadata?['isPressurized'] as bool? ?? q.isTankPressurized;
           final pressStr = isPress ? 'Pressurized' : 'Non-Pressurized';
-          final shellThick = (mat == 'Enamel') ? '2mm' : (mat == 'MS' ? '5mm' : '3mm');
+          final shellThick =
+              (mat == 'Enamel') ? '2mm' : (mat == 'MS' ? '5mm' : '3mm');
 
           descWidget = pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+            padding:
+                const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
             child: pw.Text(
               '$tankCap  LTR Capacity, $mat $pressStr Tank, $shellThick Shell, and $shellThick Dish, , Thickness,19mm IC CLAD insulation.',
               style: const pw.TextStyle(fontSize: 7.5),
@@ -1158,8 +1303,10 @@ class PdfQuotationBuilder {
           lphStr = '$tankCap';
         } else {
           descWidget = pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
-            child: pw.Text(r.description, style: const pw.TextStyle(fontSize: 7.5)),
+            padding:
+                const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+            child: pw.Text(r.description,
+                style: const pw.TextStyle(fontSize: 7.5)),
           );
           qtyStr = r.qty > 0 ? '${r.qty}' : '';
         }
@@ -1167,13 +1314,15 @@ class PdfQuotationBuilder {
         if (r.rate > 0) {
           rateStr = PriceCalculator.formatIndianCurrency(r.rate);
         } else if (r.amount > 0 && r.qty > 0) {
-          rateStr = PriceCalculator.formatIndianCurrency((r.amount / r.qty).round());
+          rateStr =
+              PriceCalculator.formatIndianCurrency((r.amount / r.qty).round());
         }
 
         if (r.amount > 0) {
           amtStr = PriceCalculator.formatIndianCurrency(r.amount);
         } else if (r.rate > 0) {
-          amtStr = PriceCalculator.formatIndianCurrency(r.rate * (r.qty > 0 ? r.qty : 1));
+          amtStr = PriceCalculator.formatIndianCurrency(
+              r.rate * (r.qty > 0 ? r.qty : 1));
         }
 
         tableRows.add(
@@ -1198,28 +1347,41 @@ class PdfQuotationBuilder {
       final hasTank = q.hasTank;
       final tankCap = q.tankCapacityLitres > 0 ? q.tankCapacityLitres : 3000;
       final tankQty = q.tankQty > 0 ? q.tankQty : 2;
-      final innerMat = q.tankSpec.innerTankMaterial.isNotEmpty ? q.tankSpec.innerTankMaterial : 'GI';
+      final innerMat = q.tankSpec.innerTankMaterial.isNotEmpty
+          ? q.tankSpec.innerTankMaterial
+          : 'GI';
       final pressStr = q.isTankPressurized ? 'Pressurized' : 'Non-Pressurized';
 
-      int hpRate = q.heatPumpNumericPrice > 0 ? q.heatPumpNumericPrice : (hasTank ? 0 : q.subtotal);
+      int hpRate = q.heatPumpNumericPrice > 0
+          ? q.heatPumpNumericPrice
+          : (hasTank ? 0 : q.subtotal);
       final hpQty = q.heatPumpQty > 0 ? q.heatPumpQty : 1;
       final hpAmount = hpRate * hpQty;
 
-      String hpRateStr = hpRate > 0 ? PriceCalculator.formatIndianCurrency(hpRate) : '';
-      String hpAmountStr = hpAmount > 0 ? PriceCalculator.formatIndianCurrency(hpAmount) : '';
+      String hpRateStr =
+          hpRate > 0 ? PriceCalculator.formatIndianCurrency(hpRate) : '';
+      String hpAmountStr =
+          hpAmount > 0 ? PriceCalculator.formatIndianCurrency(hpAmount) : '';
 
       tableRows.add(
         pw.TableRow(
           children: [
             _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+              padding:
+                  const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Air Source Heat pump ${hpKwInt}kw', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Make: IZYHEAT Heat Pump Model: ${q.model.modelName} ${hpKwInt}kw', style: const pw.TextStyle(fontSize: 7.5)),
-                  pw.Text('Power Input $hpRatedPower, output ${hpKwInt}kw, ${q.model.powerSupply}, 50Hz With Auto Defrost.', style: const pw.TextStyle(fontSize: 7.5)),
+                  pw.Text('Air Source Heat pump ${hpKwInt}kw',
+                      style: pw.TextStyle(
+                          fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(
+                      'Make: IZYHEAT Heat Pump Model: ${q.model.modelName} ${hpKwInt}kw',
+                      style: const pw.TextStyle(fontSize: 7.5)),
+                  pw.Text(
+                      'Power Input $hpRatedPower, output ${hpKwInt}kw, ${q.model.powerSupply}, 50Hz With Auto Defrost.',
+                      style: const pw.TextStyle(fontSize: 7.5)),
                 ],
               ),
             ),
@@ -1239,7 +1401,8 @@ class PdfQuotationBuilder {
             children: [
               _tc((rowIdx++).toString().padLeft(2, '0'), center: true),
               pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+                padding:
+                    const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
                 child: pw.Text(
                   '$tankCap  LTR Capacity, $innerMat $pressStr Tank, 3mm Shell, and 3mm Dish, , Thickness,19mm IC CLAD insulation.',
                   style: const pw.TextStyle(fontSize: 7.5),
@@ -1249,8 +1412,10 @@ class PdfQuotationBuilder {
               _tc('', center: true),
               _tc('$tankQty', center: true),
               _tc('', center: true),
-              _tc(PriceCalculator.formatIndianCurrency(q.tankRate), center: true),
-              _tc(PriceCalculator.formatIndianCurrency(q.tankRate * tankQty), center: true),
+              _tc(PriceCalculator.formatIndianCurrency(q.tankRate),
+                  center: true),
+              _tc(PriceCalculator.formatIndianCurrency(q.tankRate * tankQty),
+                  center: true),
             ],
           ),
         );
@@ -1262,19 +1427,33 @@ class PdfQuotationBuilder {
     if (q.extraPriceRows.isNotEmpty) {
       for (final it in q.extraPriceRows) {
         String desc = it.description.trim();
-        desc = desc.replaceAll(RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '').trim();
-        final isCharged = (it.amountType == PriceRowType.extra || it.amountType == PriceRowType.amount) && it.numericAmount > 0;
-        final amt = isCharged ? PriceCalculator.formatIndianCurrency(it.numericAmount) : '';
+        final hadExtraInDesc = desc.toLowerCase().contains('extra');
+        desc = desc
+            .replaceAll(
+                RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '')
+            .trim();
+        final isExtraSelection = it.amountType == PriceRowType.extra ||
+            hadExtraInDesc ||
+            (it.amountType == PriceRowType.customText &&
+                it.customText.toLowerCase().contains('extra'));
+        final isCharged = (it.amountType == PriceRowType.extra ||
+                it.amountType == PriceRowType.amount) &&
+            it.numericAmount > 0;
+        final amt = isCharged
+            ? PriceCalculator.formatIndianCurrency(it.numericAmount)
+            : '';
         if (isCharged) {
           supplementaryTotal += it.numericAmount;
         }
         final qtyVal = int.tryParse(it.qty) ?? 0;
-        final qtyStr = qtyVal > 0 ? '$qtyVal' : (it.qty.isNotEmpty ? it.qty : '1');
+        final qtyStr =
+            qtyVal > 0 ? '$qtyVal' : (it.qty.isNotEmpty ? it.qty : '1');
         final rateStr = it.systemRate.isNotEmpty
             ? it.systemRate
             : (isCharged
                 ? (qtyVal > 0
-                    ? PriceCalculator.formatIndianCurrency((it.numericAmount / qtyVal).round())
+                    ? PriceCalculator.formatIndianCurrency(
+                        (it.numericAmount / qtyVal).round())
                     : amt)
                 : '');
         tableRows.add(buildExtraRow(
@@ -1283,31 +1462,45 @@ class PdfQuotationBuilder {
           qty: qtyStr,
           rateStr: rateStr,
           amtStr: amt,
+          isExtra: isExtraSelection,
         ));
       }
     } else {
       // Check priceRows for supplementary items (skip HP and Tank)
       for (final r in q.priceRows) {
         final d = r.description.toLowerCase();
-        if (d.contains('heat pump') || d.contains('air source') || d.contains('iz-')) continue;
+        if (d.contains('heat pump') ||
+            d.contains('air source') ||
+            d.contains('iz-')) continue;
         if (d.contains('tank') || d.contains('storage')) continue;
         if (r.description == '-' || r.description.trim().isEmpty) continue;
 
         String desc = r.description.trim();
-        desc = desc.replaceAll(RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '').trim();
-        final isCharged = (r.status == PriceRowStatus.extra || r.status == PriceRowStatus.priced) && r.amount > 0;
-        final amt = isCharged ? PriceCalculator.formatIndianCurrency(r.amount) : '';
+        final hadExtraInDesc = desc.toLowerCase().contains('extra');
+        desc = desc
+            .replaceAll(
+                RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '')
+            .trim();
+        final isExtraSelection =
+            r.status == PriceRowStatus.extra || hadExtraInDesc;
+        final isCharged = (r.status == PriceRowStatus.extra ||
+                r.status == PriceRowStatus.priced) &&
+            r.amount > 0;
+        final amt =
+            isCharged ? PriceCalculator.formatIndianCurrency(r.amount) : '';
         if (isCharged) {
           supplementaryTotal += r.amount;
         }
         final qtyStr = r.qty > 0 ? '${r.qty}' : '1';
-        final rateStr = r.rate > 0 ? PriceCalculator.formatIndianCurrency(r.rate) : '';
+        final rateStr =
+            r.rate > 0 ? PriceCalculator.formatIndianCurrency(r.rate) : '';
         tableRows.add(buildExtraRow(
           (rowIdx++).toString().padLeft(2, '0'),
           desc,
           qty: qtyStr,
           rateStr: rateStr,
           amtStr: amt,
+          isExtra: isExtraSelection,
         ));
       }
     }
@@ -1354,13 +1547,20 @@ class PdfQuotationBuilder {
               children: [
                 pw.Container(
                   alignment: pw.Alignment.centerRight,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 8),
-                  child: pw.Text('Sub Total', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  padding: const pw.EdgeInsets.symmetric(
+                      vertical: 2.5, horizontal: 8),
+                  child: pw.Text('Sub Total',
+                      style: pw.TextStyle(
+                          fontSize: 8, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.Container(
                   alignment: pw.Alignment.center,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 4),
-                  child: pw.Text(PriceCalculator.formatIndianCurrency(q.subtotal), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  padding: const pw.EdgeInsets.symmetric(
+                      vertical: 2.5, horizontal: 4),
+                  child: pw.Text(
+                      PriceCalculator.formatIndianCurrency(q.subtotal),
+                      style: pw.TextStyle(
+                          fontSize: 8, fontWeight: pw.FontWeight.bold)),
                 ),
               ],
             ),
@@ -1369,13 +1569,21 @@ class PdfQuotationBuilder {
                 children: [
                   pw.Container(
                     alignment: pw.Alignment.centerRight,
-                    padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 8),
-                    child: pw.Text('Supplementary Charges', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                    padding: const pw.EdgeInsets.symmetric(
+                        vertical: 2.5, horizontal: 8),
+                    child: pw.Text('Supplementary Charges',
+                        style: pw.TextStyle(
+                            fontSize: 8, fontWeight: pw.FontWeight.bold)),
                   ),
                   pw.Container(
                     alignment: pw.Alignment.center,
-                    padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 4),
-                    child: pw.Text(PriceCalculator.formatIndianCurrency(supplementaryTotal), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                    padding: const pw.EdgeInsets.symmetric(
+                        vertical: 2.5, horizontal: 4),
+                    child: pw.Text(
+                        PriceCalculator.formatIndianCurrency(
+                            supplementaryTotal),
+                        style: pw.TextStyle(
+                            fontSize: 8, fontWeight: pw.FontWeight.bold)),
                   ),
                 ],
               ),
@@ -1383,13 +1591,20 @@ class PdfQuotationBuilder {
               children: [
                 pw.Container(
                   alignment: pw.Alignment.centerRight,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 8),
-                  child: pw.Text('GST 18%', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  padding: const pw.EdgeInsets.symmetric(
+                      vertical: 2.5, horizontal: 8),
+                  child: pw.Text('GST 18%',
+                      style: pw.TextStyle(
+                          fontSize: 8, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.Container(
                   alignment: pw.Alignment.center,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 4),
-                  child: pw.Text(PriceCalculator.formatIndianCurrency(q.gstAmount), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  padding: const pw.EdgeInsets.symmetric(
+                      vertical: 2.5, horizontal: 4),
+                  child: pw.Text(
+                      PriceCalculator.formatIndianCurrency(q.gstAmount),
+                      style: pw.TextStyle(
+                          fontSize: 8, fontWeight: pw.FontWeight.bold)),
                 ),
               ],
             ),
@@ -1397,13 +1612,24 @@ class PdfQuotationBuilder {
               children: [
                 pw.Container(
                   alignment: pw.Alignment.centerRight,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 8),
-                  child: pw.Text('TOTAL', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline)),
+                  padding: const pw.EdgeInsets.symmetric(
+                      vertical: 2.5, horizontal: 8),
+                  child: pw.Text('TOTAL',
+                      style: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          decoration: pw.TextDecoration.underline)),
                 ),
                 pw.Container(
                   alignment: pw.Alignment.center,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 4),
-                  child: pw.Text(PriceCalculator.formatIndianCurrency(q.grandTotal), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline)),
+                  padding: const pw.EdgeInsets.symmetric(
+                      vertical: 2.5, horizontal: 4),
+                  child: pw.Text(
+                      PriceCalculator.formatIndianCurrency(q.grandTotal),
+                      style: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          decoration: pw.TextDecoration.underline)),
                 ),
               ],
             ),
@@ -1426,10 +1652,12 @@ class PdfQuotationBuilder {
     }
 
     return pw.Column(
-      children: tanks.map((t) => pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 8),
-        child: _buildSingleTankTableExact(t),
-      )).toList(),
+      children: tanks
+          .map((t) => pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 8),
+                child: _buildSingleTankTableExact(t),
+              ))
+          .toList(),
     );
   }
 
@@ -1441,19 +1669,36 @@ class PdfQuotationBuilder {
     const double specW = 523.28 - col0W - col1W - col2W; // 236.28 pt
 
     final pressStr = tank.isPressurized ? 'Pressurized' : 'Non-Pressurized';
-    final mat = tank.innerTankMaterial.isNotEmpty ? tank.innerTankMaterial : 'GI';
-    final rawThick = tank.innerTankThickness.isNotEmpty ? tank.innerTankThickness : '3mm';
-    final thick = RegExp(r'\d+\s*mm', caseSensitive: false).firstMatch(rawThick)?.group(0) ?? '3mm';
+    final mat =
+        tank.innerTankMaterial.isNotEmpty ? tank.innerTankMaterial : 'GI';
+    final rawThick =
+        tank.innerTankThickness.isNotEmpty ? tank.innerTankThickness : '3mm';
+    final thick = RegExp(r'\d+\s*mm', caseSensitive: false)
+            .firstMatch(rawThick)
+            ?.group(0) ??
+        '3mm';
     final cap = tank.capacityLitres;
 
-    final insMat = tank.insulationMaterial.isNotEmpty && tank.insulationMaterial.toLowerCase() != '19mm ic clad insulation'
-        ? (tank.insulationMaterial.toLowerCase().contains('puff') || tank.insulationMaterial.toLowerCase().contains('puf') ? 'PUF' : tank.insulationMaterial)
+    final insMat = tank.insulationMaterial.isNotEmpty &&
+            tank.insulationMaterial.toLowerCase() != '19mm ic clad insulation'
+        ? (tank.insulationMaterial.toLowerCase().contains('puff') ||
+                tank.insulationMaterial.toLowerCase().contains('puf')
+            ? 'PUF'
+            : tank.insulationMaterial)
         : 'PUF';
 
     final all10Rows = [
       ('01', 'Capacity and Thickness', '$cap ltr, $thick Shell, $thick Dish.'),
-      ('02', 'Operating pressure', tank.isPressurized ? 'Up to 5 Bar' : 'Atmospheric'),
-      ('03', 'Testing Pressure', tank.isPressurized ? '7 bar pressure' : 'Atmospheric'),
+      (
+        '02',
+        'Operating pressure',
+        tank.isPressurized ? 'Up to 5 Bar' : 'Atmospheric'
+      ),
+      (
+        '03',
+        'Testing Pressure',
+        tank.isPressurized ? '7 bar pressure' : 'Atmospheric'
+      ),
       ('04', 'Hot Water Inlet/ outlet', '2 Inch,'),
       ('05', 'Heat Pump Circulation', '1 Inch,'),
       ('06', 'Outer Tank Insulation', insMat),
@@ -1490,7 +1735,8 @@ class PdfQuotationBuilder {
                   ),
                   child: pw.Text(
                     'SL\nNO',
-                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.center,
                   ),
                 ),
@@ -1505,7 +1751,8 @@ class PdfQuotationBuilder {
                   ),
                   child: pw.Text(
                     'DESCRIPTION',
-                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.center,
                   ),
                 ),
@@ -1515,7 +1762,8 @@ class PdfQuotationBuilder {
                   alignment: pw.Alignment.center,
                   child: pw.Text(
                     'SPECIFICATION',
-                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.center,
                   ),
                 ),
@@ -1537,11 +1785,17 @@ class PdfQuotationBuilder {
                     alignment: pw.Alignment.center,
                     decoration: pw.BoxDecoration(
                       border: pw.Border(
-                        right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                        bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        right: const pw.BorderSide(
+                            color: PdfColors.black, width: 0.6),
+                        bottom: isLast
+                            ? pw.BorderSide.none
+                            : const pw.BorderSide(
+                                color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(e.value.$1, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
+                    child: pw.Text(e.value.$1,
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.center),
                   );
                 }).toList(),
               ),
@@ -1562,17 +1816,29 @@ class PdfQuotationBuilder {
                   children: [
                     pw.Text(
                       '$cap Ltr',
-                      style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                          fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                       textAlign: pw.TextAlign.center,
                     ),
                     pw.SizedBox(height: 1.5),
-                    pw.Text('HOT WATER', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('HOT WATER',
+                        style: pw.TextStyle(
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center),
                     pw.SizedBox(height: 1.5),
-                    pw.Text('STORAGE $mat', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('STORAGE $mat',
+                        style: pw.TextStyle(
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center),
                     pw.SizedBox(height: 1.5),
-                    pw.Text(pressStr, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center),
+                    pw.Text(pressStr,
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.center),
                     pw.SizedBox(height: 1.5),
-                    pw.Text('TANK', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('TANK',
+                        style: pw.TextStyle(
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center),
                   ],
                 ),
               ),
@@ -1585,14 +1851,20 @@ class PdfQuotationBuilder {
                     width: col2W,
                     height: rowH,
                     alignment: pw.Alignment.centerLeft,
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 2.5),
                     decoration: pw.BoxDecoration(
                       border: pw.Border(
-                        right: const pw.BorderSide(color: PdfColors.black, width: 0.6),
-                        bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        right: const pw.BorderSide(
+                            color: PdfColors.black, width: 0.6),
+                        bottom: isLast
+                            ? pw.BorderSide.none
+                            : const pw.BorderSide(
+                                color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(e.value.$2, style: const pw.TextStyle(fontSize: 7.5)),
+                    child: pw.Text(e.value.$2,
+                        style: const pw.TextStyle(fontSize: 7.5)),
                   );
                 }).toList(),
               ),
@@ -1605,13 +1877,18 @@ class PdfQuotationBuilder {
                     width: specW,
                     height: rowH,
                     alignment: pw.Alignment.centerLeft,
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 2.5),
                     decoration: pw.BoxDecoration(
                       border: pw.Border(
-                        bottom: isLast ? pw.BorderSide.none : const pw.BorderSide(color: PdfColors.black, width: 0.6),
+                        bottom: isLast
+                            ? pw.BorderSide.none
+                            : const pw.BorderSide(
+                                color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(e.value.$3, style: const pw.TextStyle(fontSize: 7.5)),
+                    child: pw.Text(e.value.$3,
+                        style: const pw.TextStyle(fontSize: 7.5)),
                   );
                 }).toList(),
               ),
@@ -1624,7 +1901,8 @@ class PdfQuotationBuilder {
 
   // ─── GENERIC PRICE TABLE (for non-hpWithTank quote types) ──────────────────
 
-  static pw.Widget _buildGenericPriceTable(GeneratorQuotation quotation, QuoteTemplateConfig config) {
+  static pw.Widget _buildGenericPriceTable(
+      GeneratorQuotation quotation, QuoteTemplateConfig config) {
     final hasDiscountCol = config.priceColumnKeys.contains('discount');
     final rows = quotation.priceRows;
 
@@ -1680,7 +1958,9 @@ class PdfQuotationBuilder {
             ...rows.asMap().entries.map((entry) {
               final idx = entry.key;
               final r = entry.value;
-              final srText = r.serialNo.isNotEmpty ? r.serialNo : ((idx + 1) < 10 ? '0${idx + 1}' : '${idx + 1}');
+              final srText = r.serialNo.isNotEmpty
+                  ? r.serialNo
+                  : ((idx + 1) < 10 ? '0${idx + 1}' : '${idx + 1}');
 
               String rateStr;
               String totalStr;
@@ -1698,13 +1978,17 @@ class PdfQuotationBuilder {
                 rateStr = r.customStatusText ?? 'Custom';
                 totalStr = r.customStatusText ?? 'Custom';
               } else {
-                rateStr = PriceCalculator.formatIndianCurrency(r.rate, includeSymbol: false);
-                totalStr = PriceCalculator.formatIndianCurrency(r.amount, includeSymbol: false);
+                rateStr = PriceCalculator.formatIndianCurrency(r.rate,
+                    includeSymbol: false);
+                totalStr = PriceCalculator.formatIndianCurrency(r.amount,
+                    includeSymbol: false);
               }
 
               if (hasDiscountCol) {
-                final discStr = r.discountAmount != null && r.discountAmount! > 0
-                    ? PriceCalculator.formatIndianCurrency(r.discountAmount!, includeSymbol: false)
+                final discStr = r.discountAmount != null &&
+                        r.discountAmount! > 0
+                    ? PriceCalculator.formatIndianCurrency(r.discountAmount!,
+                        includeSymbol: false)
                     : '-';
                 return pw.TableRow(
                   children: [
@@ -1766,7 +2050,8 @@ class PdfQuotationBuilder {
 
   // ─── SPEC HELPERS ─────────────────────────────────────────────────────────
 
-  static pw.Widget _buildHpSpecTable(GeneratorQuotation q, GeneratorCompanySettings settings) {
+  static pw.Widget _buildHpSpecTable(
+      GeneratorQuotation q, GeneratorCompanySettings settings) {
     final hpList = q.effectiveHeatPumps;
     final isMulti = hpList.length > 1;
 
@@ -1813,25 +2098,78 @@ class PdfQuotationBuilder {
     );
   }
 
-  static List<pw.TableRow> _buildMultiHpSpecRows(GeneratorQuotation q, List<HeatPumpLineItem> hpList) {
+  static List<pw.TableRow> _buildMultiHpSpecRows(
+      GeneratorQuotation q, List<HeatPumpLineItem> hpList) {
     final tankCap = q.tankCapacityLitres > 0
         ? '${q.tankCapacityLitres}'
-        : (q.effectiveTanks.isNotEmpty ? '${q.effectiveTanks.first.capacityLitres}' : '500');
+        : (q.effectiveTanks.isNotEmpty
+            ? '${q.effectiveTanks.first.capacityLitres}'
+            : '500');
 
     final rowsData = [
-      ['01', 'Size (W x D x H) mm', (HeatPumpLineItem h) => h.specs['Size (W x D x H)'] ?? '1410x748x1000'],
-      ['02', 'Rated Heating Capacity', (HeatPumpLineItem h) => h.toModel().ratedHeatingCapacity],
+      [
+        '01',
+        'Size (W x D x H) mm',
+        (HeatPumpLineItem h) => h.specs['Size (W x D x H)'] ?? '1410x748x1000'
+      ],
+      [
+        '02',
+        'Rated Heating Capacity',
+        (HeatPumpLineItem h) => h.toModel().ratedHeatingCapacity
+      ],
       ['03', 'Power Supply', (HeatPumpLineItem h) => h.toModel().powerSupply],
-      ['04', 'Rated Input Power', (HeatPumpLineItem h) => h.specs['Rated Input Power'] ?? (h.kw > 0 ? '${(h.kw * 0.23).toStringAsFixed(2)}kw' : '8.75kw')],
-      ['05', 'Rated COP', (HeatPumpLineItem h) => h.specs['Rated COP'] ?? '4.34'],
-      ['06', 'Rated Water Yield', (HeatPumpLineItem h) => h.specs['Rated Water Yield'] ?? (h.kw > 0 ? '${(h.kw * 21.5).round()} L/h' : '817 L/h')],
-      ['07', 'Max Outlet Water Temperature', (HeatPumpLineItem h) => h.specs['Max Outlet Water Temperature'] ?? '60°C'],
-      ['08', 'Water Flow Noise', (HeatPumpLineItem h) => h.specs['Water Flow Noise'] ?? '<=59dB(A)'],
-      ['09', 'Condenser', (HeatPumpLineItem h) => h.specs['Condenser'] ?? 'Shell and tube heat exchanger'],
-      ['10', 'Refrigerant', (HeatPumpLineItem h) => h.specs['Refrigerant'] ?? 'R134A/410A'],
-      ['11', 'Operating ambient Temp', (HeatPumpLineItem h) => h.specs['Operating ambient Temp'] ?? '-15~43°C'],
+      [
+        '04',
+        'Rated Input Power',
+        (HeatPumpLineItem h) =>
+            h.specs['Rated Input Power'] ??
+            (h.kw > 0 ? '${(h.kw * 0.23).toStringAsFixed(2)}kw' : '8.75kw')
+      ],
+      [
+        '05',
+        'Rated COP',
+        (HeatPumpLineItem h) => h.specs['Rated COP'] ?? '4.34'
+      ],
+      [
+        '06',
+        'Rated Water Yield',
+        (HeatPumpLineItem h) =>
+            h.specs['Rated Water Yield'] ??
+            (h.kw > 0 ? '${(h.kw * 21.5).round()} L/h' : '817 L/h')
+      ],
+      [
+        '07',
+        'Max Outlet Water Temperature',
+        (HeatPumpLineItem h) =>
+            h.specs['Max Outlet Water Temperature'] ?? '60°C'
+      ],
+      [
+        '08',
+        'Water Flow Noise',
+        (HeatPumpLineItem h) => h.specs['Water Flow Noise'] ?? '<=59dB(A)'
+      ],
+      [
+        '09',
+        'Condenser',
+        (HeatPumpLineItem h) =>
+            h.specs['Condenser'] ?? 'Shell and tube heat exchanger'
+      ],
+      [
+        '10',
+        'Refrigerant',
+        (HeatPumpLineItem h) => h.specs['Refrigerant'] ?? 'R134A/410A'
+      ],
+      [
+        '11',
+        'Operating ambient Temp',
+        (HeatPumpLineItem h) => h.specs['Operating ambient Temp'] ?? '-15~43°C'
+      ],
       ['12', 'Capacity In litre', (HeatPumpLineItem h) => tankCap],
-      ['13', 'Compressor', (HeatPumpLineItem h) => h.specs['Compressor'] ?? 'Double'],
+      [
+        '13',
+        'Compressor',
+        (HeatPumpLineItem h) => h.specs['Compressor'] ?? 'Double'
+      ],
     ];
 
     return rowsData.map((row) {
@@ -1849,7 +2187,6 @@ class PdfQuotationBuilder {
     }).toList();
   }
 
-
   static pw.Widget _buildPoolSpecTable(PoolHeatPumpModel m) {
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
@@ -1863,16 +2200,53 @@ class PdfQuotationBuilder {
           decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
           children: [_th('SL'), _th('DESCRIPTION'), _th('SPECIFICATION')],
         ),
-        pw.TableRow(children: [_tc('01', center: true), _tc('Model'), _tc(m.modelName)]),
-        pw.TableRow(children: [_tc('02', center: true), _tc('Heating Capacity'), _tc(m.heatingCapacity)]),
-        pw.TableRow(children: [_tc('03', center: true), _tc('Power Input'), _tc(m.powerInput)]),
-        pw.TableRow(children: [_tc('04', center: true), _tc('Power Supply'), _tc(m.powerSupply)]),
-        pw.TableRow(children: [_tc('05', center: true), _tc('Max Power Input / Current'), _tc('${m.maxPowerInput} / ${m.maxCurrent}')]),
-        pw.TableRow(children: [_tc('06', center: true), _tc('Water Flow Rate'), _tc(m.waterFlowRate)]),
-        pw.TableRow(children: [_tc('07', center: true), _tc('Noise'), _tc(m.noise)]),
-        pw.TableRow(children: [_tc('08', center: true), _tc('Heat Exchanger'), _tc(m.heatExchanger)]),
-        pw.TableRow(children: [_tc('09', center: true), _tc('Refrigerant'), _tc(m.refrigerant)]),
-        pw.TableRow(children: [_tc('10', center: true), _tc('Ambient Working Temp'), _tc(m.workingTempRange)]),
+        pw.TableRow(children: [
+          _tc('01', center: true),
+          _tc('Model'),
+          _tc(m.modelName)
+        ]),
+        pw.TableRow(children: [
+          _tc('02', center: true),
+          _tc('Heating Capacity'),
+          _tc(m.heatingCapacity)
+        ]),
+        pw.TableRow(children: [
+          _tc('03', center: true),
+          _tc('Power Input'),
+          _tc(m.powerInput)
+        ]),
+        pw.TableRow(children: [
+          _tc('04', center: true),
+          _tc('Power Supply'),
+          _tc(m.powerSupply)
+        ]),
+        pw.TableRow(children: [
+          _tc('05', center: true),
+          _tc('Max Power Input / Current'),
+          _tc('${m.maxPowerInput} / ${m.maxCurrent}')
+        ]),
+        pw.TableRow(children: [
+          _tc('06', center: true),
+          _tc('Water Flow Rate'),
+          _tc(m.waterFlowRate)
+        ]),
+        pw.TableRow(
+            children: [_tc('07', center: true), _tc('Noise'), _tc(m.noise)]),
+        pw.TableRow(children: [
+          _tc('08', center: true),
+          _tc('Heat Exchanger'),
+          _tc(m.heatExchanger)
+        ]),
+        pw.TableRow(children: [
+          _tc('09', center: true),
+          _tc('Refrigerant'),
+          _tc(m.refrigerant)
+        ]),
+        pw.TableRow(children: [
+          _tc('10', center: true),
+          _tc('Ambient Working Temp'),
+          _tc(m.workingTempRange)
+        ]),
       ],
     );
   }
@@ -1890,17 +2264,61 @@ class PdfQuotationBuilder {
           decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
           children: [_th('SL'), _th('DESCRIPTION'), _th('SPECIFICATION')],
         ),
-        pw.TableRow(children: [_tc('01', center: true), _tc('Product Dimension'), _tc(m.productDimension)]),
-        pw.TableRow(children: [_tc('02', center: true), _tc('Tank Volume'), _tc('${m.tankVolumeLtr} Ltr')]),
-        pw.TableRow(children: [_tc('03', center: true), _tc('Power Supply'), _tc(m.powerSupply)]),
-        pw.TableRow(children: [_tc('04', center: true), _tc('Heating Rate / Water Yield'), _tc(m.waterYield)]),
-        pw.TableRow(children: [_tc('05', center: true), _tc('COP'), _tc(m.cop.toString())]),
-        pw.TableRow(children: [_tc('06', center: true), _tc('Compressor'), _tc(m.compressor)]),
-        pw.TableRow(children: [_tc('07', center: true), _tc('Refrigerant'), _tc(m.refrigerant)]),
-        pw.TableRow(children: [_tc('08', center: true), _tc('Max Outlet Water Temp'), _tc(m.maxOutletWaterTemp)]),
-        pw.TableRow(children: [_tc('09', center: true), _tc('Ambient Temperature'), _tc(m.ambientTemperature)]),
-        pw.TableRow(children: [_tc('10', center: true), _tc('Water Tank Material'), _tc(m.waterTankMaterial)]),
-        pw.TableRow(children: [_tc('11', center: true), _tc('Net Weight'), _tc(m.netWeight)]),
+        pw.TableRow(children: [
+          _tc('01', center: true),
+          _tc('Product Dimension'),
+          _tc(m.productDimension)
+        ]),
+        pw.TableRow(children: [
+          _tc('02', center: true),
+          _tc('Tank Volume'),
+          _tc('${m.tankVolumeLtr} Ltr')
+        ]),
+        pw.TableRow(children: [
+          _tc('03', center: true),
+          _tc('Power Supply'),
+          _tc(m.powerSupply)
+        ]),
+        pw.TableRow(children: [
+          _tc('04', center: true),
+          _tc('Heating Rate / Water Yield'),
+          _tc(m.waterYield)
+        ]),
+        pw.TableRow(children: [
+          _tc('05', center: true),
+          _tc('COP'),
+          _tc(m.cop.toString())
+        ]),
+        pw.TableRow(children: [
+          _tc('06', center: true),
+          _tc('Compressor'),
+          _tc(m.compressor)
+        ]),
+        pw.TableRow(children: [
+          _tc('07', center: true),
+          _tc('Refrigerant'),
+          _tc(m.refrigerant)
+        ]),
+        pw.TableRow(children: [
+          _tc('08', center: true),
+          _tc('Max Outlet Water Temp'),
+          _tc(m.maxOutletWaterTemp)
+        ]),
+        pw.TableRow(children: [
+          _tc('09', center: true),
+          _tc('Ambient Temperature'),
+          _tc(m.ambientTemperature)
+        ]),
+        pw.TableRow(children: [
+          _tc('10', center: true),
+          _tc('Water Tank Material'),
+          _tc(m.waterTankMaterial)
+        ]),
+        pw.TableRow(children: [
+          _tc('11', center: true),
+          _tc('Net Weight'),
+          _tc(m.netWeight)
+        ]),
       ],
     );
   }
@@ -1920,7 +2338,8 @@ class PdfQuotationBuilder {
     );
   }
 
-  static pw.Widget _tc(String text, {bool center = false, bool isBold = false}) {
+  static pw.Widget _tc(String text,
+      {bool center = false, bool isBold = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 3.5),
       child: pw.Text(
@@ -1952,7 +2371,9 @@ class PdfQuotationBuilder {
             style: pw.TextStyle(
               fontSize: 8,
               fontWeight: pw.FontWeight.bold,
-              decoration: isUnderlined ? pw.TextDecoration.underline : pw.TextDecoration.none,
+              decoration: isUnderlined
+                  ? pw.TextDecoration.underline
+                  : pw.TextDecoration.none,
             ),
           ),
         ),
@@ -1976,7 +2397,8 @@ class PdfQuotationBuilder {
       children: [
         pw.Text(label, style: const pw.TextStyle(fontSize: 8)),
         pw.Text(':-', style: const pw.TextStyle(fontSize: 8)),
-        pw.Text(value, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+        pw.Text(value,
+            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
       ],
     );
   }

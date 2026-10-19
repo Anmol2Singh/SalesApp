@@ -4,6 +4,7 @@ import 'heat_pump_model.dart';
 import 'sales_person.dart';
 import 'pool_heat_pump_model.dart';
 import 'all_in_one_model.dart';
+import '../../../core/models/app_company.dart';
 
 class GeneratorCompanySettings {
   final String companyName;
@@ -257,6 +258,27 @@ class GeneratorCompanySettings {
       salesPersons: (json['salesPersons'] as List<dynamic>?)
           ?.map((e) => SalesPerson.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList() ?? SalesPerson.defaultList(),
+    );
+  }
+
+  factory GeneratorCompanySettings.fromAppCompany(
+    AppCompany company, {
+    GeneratorCompanySettings? base,
+  }) {
+    final b = base ?? const GeneratorCompanySettings();
+    return b.copyWith(
+      companyName: company.name.isNotEmpty ? company.name : b.companyName,
+      companyAddress: company.address.isNotEmpty ? company.address : b.companyAddress,
+      shortAddress: company.address.isNotEmpty ? company.address : b.shortAddress,
+      companyEmail: company.email.isNotEmpty ? company.email : b.companyEmail,
+      companyPhone: company.phone.isNotEmpty ? company.phone : b.companyPhone,
+      companyWebsite: company.website.isNotEmpty ? company.website : b.companyWebsite,
+      bankAccountName: company.bankAccountName.isNotEmpty ? company.bankAccountName : b.bankAccountName,
+      bankName: company.bankName.isNotEmpty ? company.bankName : b.bankName,
+      bankAccountNumber: company.bankAccountNo.isNotEmpty ? company.bankAccountNo : b.bankAccountNumber,
+      bankBranch: company.bankBranch.isNotEmpty ? company.bankBranch : b.bankBranch,
+      bankIfsc: company.bankIfsc.isNotEmpty ? company.bankIfsc : b.bankIfsc,
+      stampImagePath: company.stampUrl != null && company.stampUrl!.isNotEmpty ? company.stampUrl : b.stampImagePath,
     );
   }
 }

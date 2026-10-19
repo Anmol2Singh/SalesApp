@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/models/user_role.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../models/deal_quotation_item.dart';
 import '../../providers/quotation_generator_providers.dart';
@@ -95,6 +96,9 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final profile = ref.watch(currentProfileProvider);
+    final isAdmin = profile?.roles.contains(UserRole.admin) ?? false;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -124,25 +128,33 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
           backgroundColor: AppColors.navBarColor,
           foregroundColor: Colors.white,
           elevation: 0,
-          bottom: TabBar(
-            controller: _tabController,
-            indicatorColor: AppColors.accent,
-            indicatorWeight: 3,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            tabs: const [
-              Tab(icon: Icon(Icons.folder_shared_outlined), text: 'Deal Quotations Queue'),
-              Tab(icon: Icon(Icons.settings_outlined), text: 'Module Settings'),
-            ],
-          ),
+          bottom: isAdmin
+              ? TabBar(
+                  controller: _tabController,
+                  indicatorColor: AppColors.accent,
+                  indicatorWeight: 3,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  tabs: const [
+                    Tab(
+                        icon: Icon(Icons.folder_shared_outlined),
+                        text: 'Deal Quotations Queue'),
+                    Tab(
+                        icon: Icon(Icons.settings_outlined),
+                        text: 'Module Settings'),
+                  ],
+                )
+              : null,
         ),
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildDealQuotationsQueueTab(),
-            const QuotationSettingsScreen(),
-          ],
-        ),
+        body: isAdmin
+            ? TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildDealQuotationsQueueTab(),
+                  const QuotationSettingsScreen(),
+                ],
+              )
+            : _buildDealQuotationsQueueTab(),
       ),
     );
   }

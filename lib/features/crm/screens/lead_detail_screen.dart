@@ -20,6 +20,19 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/services/record_edit_permissions.dart';
+import '../../quotation_generator/ui/screens/quotation_preview_screen.dart';
+import '../../quotation_generator/providers/quotation_generator_providers.dart';
+import '../../quotation_generator/models/generator_company_settings.dart';
+import '../../../core/providers/company_provider.dart';
+import '../../quotation_generator/models/deal_quotation_item.dart';
+import '../../quotation_generator/models/boom_barrier_proposal_draft.dart';
+import '../../quotation_generator/models/qg_product_profile.dart';
+import '../../quotation_generator/services/qg_boom_barrier_drafts_service.dart';
+import '../../quotation_generator/templates/qg_template_registry.dart';
+import '../../quotation_generator/templates/boom_barrier_template.dart';
+import '../../quotation_generator/ui/screens/boom_barrier_preview_screen.dart';
+import '../../quotation_generator/models/qg_proposal_draft.dart';
+import '../../quotation_generator/services/qg_drafts_service.dart';
 
 class LeadDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -640,7 +653,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                                 ),
                               ),
                               if (!isConverted) ...[
-                                if (isAdmin)
+                                if (isAdmin) ...[
                                   InkWell(
                                     onTap: () => _showAssignLeadSheet(context, ref, lead),
                                     borderRadius: BorderRadius.circular(4),
@@ -655,7 +668,26 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                                         style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
                                       ),
                                     ),
-                                  )
+                                  ),
+                                  if (lead.assignedTo != null) ...[
+                                    const SizedBox(width: 6),
+                                    InkWell(
+                                      onTap: () => _confirmRemoveLeadAssignment(context, ref, lead),
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.error.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'Remove',
+                                          style: TextStyle(fontSize: 11, color: AppColors.error, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ]
                                 else if (isSalesRole && !lead.reassignmentRequested)
                                   InkWell(
                                     onTap: () => _showRequestReassignDialog(context, ref, lead),
@@ -1062,6 +1094,35 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
               }
             },
             child: const Text('Submit Request', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmRemoveLeadAssignment(BuildContext context, WidgetRef ref, Lead lead) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Assignment'),
+        content: Text('Are you sure you want to remove the salesperson assignment for "${lead.prospectName ?? "this lead"}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(leadsProvider.notifier).unassignLead(leadId: lead.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Assignment removed successfully.'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -2607,6 +2668,43 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
                 ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text('Confirm Assignment', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+          if (widget.lead.assignedTo != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.person_remove_outlined, size: 16, color: AppColors.error),
+              label: const Text('Remove Assignment (Unassign)', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.error),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      setState(() => _isLoading = true);
+                      try {
+                        await ref.read(leadsProvider.notifier).unassignLead(leadId: widget.lead.id);
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Lead assignment removed.'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error removing assignment: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => _isLoading = false);
+                      }
+                    },
+            ),
+          ],
         ],
       ),
     );
@@ -2664,6 +2762,403 @@ class _LeadQuotationsSectionState
   }
 
   Future<void> _viewPdf(Quotation quot) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top header with icon and close button
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.picture_as_pdf_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'View Quotation PDF',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Select format to generate & preview',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => Navigator.pop(ctx),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: isDark ? Colors.white54 : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // Card 1: Single Page Quotation
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => Navigator.pop(ctx, 'single'),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.description_outlined,
+                            color: Color(0xFF0284C7),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Single-Page Quotation',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Standard 1-page commercial offer & BOQ summary',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 14,
+                          color: isDark ? Colors.white38 : Colors.grey.shade400,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Card 2: Multi-Page Quotation (Highlighted)
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => Navigator.pop(ctx, 'multi'),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E3A8A).withValues(alpha: isDark ? 0.25 : 0.05),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.6),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.auto_stories_outlined,
+                            color: Color(0xFF2563EB),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    'Multi-Page Proposal',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'FULL SPECS',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF10B981),
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Complete proposal with technical specs & terms',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 14,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Cancel Button
+                SizedBox(
+                  height: 38,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: isDark ? Colors.white60 : Colors.grey.shade700,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
+    if (choice == 'multi') {
+      try {
+        // Detect product from Lead product name, quotation line items, and product ID
+        final leadProd = widget.lead.productName.trim();
+        final lineDescs = quot.lineItems.map((e) => e.description).join(' ');
+        final combinedProduct = '$leadProd $lineDescs ${quot.productId}'.toLowerCase();
+
+        final template = QgTemplateRegistry.findTemplateForProduct(leadProd.isNotEmpty ? leadProd : lineDescs);
+        final isBoomBarrier = template is BoomBarrierTemplate ||
+            combinedProduct.contains('boom barrier') ||
+            combinedProduct.contains('barrier');
+
+        if (isBoomBarrier) {
+          final prodKey = (quot.productId != null && quot.productId!.isNotEmpty) ? quot.productId : 'Boom Barrier';
+          final company = ref.read(companyForProductProvider(prodKey));
+          final profile = QgProductProfile.defaultBoomBarrier().withAppCompany(company).copyWith(
+            logoPath: (company.logoUrl != null && !company.logoUrl!.contains('logo.png'))
+                ? company.logoUrl
+                : 'assets/images/boom_barrier/sefdor_logo.png',
+          );
+
+          BoomBarrierProposalDraft? bbDraft = await QgBoomBarrierDraftsService.loadDraft(quot.id);
+          if (bbDraft == null) {
+            final dealItem = DealQuotationItem(
+              id: quot.id,
+              quotationNumber: quot.quotationNumber,
+              status: quot.status.displayName,
+              revision: quot.revision,
+              orderDate: quot.orderDate ?? quot.createdAt,
+              createdAt: quot.createdAt,
+              updatedAt: quot.updatedAt,
+              customerName: quot.customerName ?? widget.lead.prospectName ?? 'Valued Customer',
+              customerPhone: quot.customerPhone ?? widget.lead.contactPhone ?? '',
+              customerAddress: quot.billingAddress ?? '',
+              customerGst: quot.customerGstin,
+              salesmanName: quot.salesman ?? widget.lead.assignedByName ?? widget.lead.createdByName ?? 'Insiya Sales',
+              salesmanPhone: '',
+              subtotal: quot.subtotal,
+              supplementarySubtotal: quot.supplementarySubtotal,
+              cgstAmount: quot.cgstAmount,
+              sgstAmount: quot.sgstAmount,
+              igstAmount: quot.igstAmount,
+              grandTotal: quot.grandTotal,
+              cgstRate: quot.cgstRate,
+              sgstRate: quot.sgstRate,
+              igstRate: 0.0,
+              lineItems: quot.lineItems.map((e) => e.toJson()).toList(),
+              supplementaryTerms: quot.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
+              paymentTerms: quot.paymentTerms ?? const [],
+              termsText: quot.termsText,
+              pipelineId: quot.pipelineId,
+              productId: quot.productId,
+              productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Boom Barrier',
+            );
+            bbDraft = BoomBarrierProposalDraft.fromDealQuotation(dealItem, profile);
+          }
+
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (ctx) => BoomBarrierPreviewScreen(
+                  draft: bbDraft!,
+                  profile: profile,
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        // ─── HEAT PUMP / ALL-IN-ONE / MULTI-PAGE PROPOSAL ───
+        final company = ref.read(companyForProductProvider(quot.productId));
+        final settings = GeneratorCompanySettings.fromAppCompany(company);
+
+        final dealItem = DealQuotationItem(
+          id: quot.id,
+          quotationNumber: quot.quotationNumber,
+          status: quot.status.displayName,
+          revision: quot.revision,
+          orderDate: quot.orderDate ?? quot.createdAt,
+          createdAt: quot.createdAt,
+          updatedAt: quot.updatedAt,
+          customerName: quot.customerName ?? widget.lead.prospectName ?? 'Valued Customer',
+          customerPhone: quot.customerPhone ?? widget.lead.contactPhone ?? '',
+          customerAddress: quot.billingAddress ?? '',
+          customerGst: quot.customerGstin,
+          salesmanName: quot.salesman ?? widget.lead.assignedByName ?? widget.lead.createdByName ?? 'Insiya Sales',
+          salesmanPhone: '',
+          subtotal: quot.subtotal,
+          supplementarySubtotal: quot.supplementarySubtotal,
+          cgstAmount: quot.cgstAmount,
+          sgstAmount: quot.sgstAmount,
+          igstAmount: quot.igstAmount,
+          grandTotal: quot.grandTotal,
+          cgstRate: quot.cgstRate,
+          sgstRate: quot.sgstRate,
+          igstRate: quot.igstAmount > 0 ? (quot.cgstRate + quot.sgstRate) : 0.0,
+          lineItems: quot.lineItems.map((e) => e.toJson()).toList(),
+          supplementaryTerms: quot.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
+          paymentTerms: quot.paymentTerms ?? const [],
+          termsText: quot.termsText,
+          pipelineId: quot.pipelineId,
+          productId: quot.productId,
+          productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Heat Pump',
+        );
+
+        QgProposalDraft? draft = await QgDraftsService.loadDraft(quot.id);
+        draft ??= QgProposalDraft.fromDealQuotation(dealItem);
+        final genQuot = draft.toGeneratorQuotation(settings: settings);
+
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (ctx) => QuotationPreviewScreen(
+                quotation: genQuot,
+                settings: settings,
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error opening multi-page quotation: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
     try {
       final supabase = ref.read(supabaseClientProvider);
       final lead = widget.lead;
@@ -2798,45 +3293,94 @@ class _LeadQuotationsSectionState
 
   Future<void> _rejectQuotation(Quotation quot) async {
     final reasonCtrl = TextEditingController();
+    String? validationError;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reject Quotation'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Specify reason for rejecting quotation ${quot.quotationNumber.isNotEmpty ? quot.quotationNumber : quot.id}:'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                hintText: 'Enter rejection notes...',
-                border: OutlineInputBorder(),
-              ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Reject Quotation'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Specify reason for rejecting quotation ${quot.quotationNumber.isNotEmpty ? quot.quotationNumber : quot.id}:'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonCtrl,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    hintText: 'Enter rejection notes...',
+                    border: const OutlineInputBorder(),
+                    errorText: validationError,
+                  ),
+                  onChanged: (_) {
+                    if (validationError != null) {
+                      setDialogState(() => validationError = null);
+                    }
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reject', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                onPressed: () {
+                  final reason = reasonCtrl.text.trim();
+                  if (reason.isEmpty) {
+                    setDialogState(() {
+                      validationError = 'Rejection reason cannot be empty';
+                    });
+                    return;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('Reject', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (confirmed != true) return;
 
+    final reason = reasonCtrl.text.trim();
+    if (reason.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rejection reason cannot be empty.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       final supabase = ref.read(supabaseClientProvider);
-      await supabase.from('quotations').update({
+      final existingRemarks = quot.remarks ?? '';
+      final updatedRemarks = existingRemarks.isNotEmpty
+          ? '$existingRemarks\n[Rejected]: $reason'
+          : '[Rejected]: $reason';
+
+      final updateData = <String, dynamic>{
         'status': 'rejected',
-        'rejection_reason': reasonCtrl.text.trim(),
+        'remarks': updatedRemarks,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', quot.id);
+      };
+
+      try {
+        await supabase.from('quotations').update({
+          ...updateData,
+          'rejection_reason': reason,
+        }).eq('id', quot.id);
+      } catch (_) {
+        // Fallback for missing rejection_reason column in schema cache
+        await supabase.from('quotations').update(updateData).eq('id', quot.id);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3147,8 +3691,10 @@ class _LeadQuotationsSectionState
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           if (canApprove && quot.status == QuotationStatus.pendingApproval) ...[
                             ElevatedButton.icon(
@@ -3162,7 +3708,6 @@ class _LeadQuotationsSectionState
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
                             ),
-                            const SizedBox(width: 8),
                             OutlinedButton.icon(
                               onPressed: () => _rejectQuotation(quot),
                               icon: const Icon(Icons.cancel_outlined, size: 14, color: AppColors.error),
@@ -3174,7 +3719,6 @@ class _LeadQuotationsSectionState
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
                             ),
-                            const SizedBox(width: 8),
                           ],
                           if (isSalesExecutive && quot.status != QuotationStatus.confirmed)
                             OutlinedButton.icon(
@@ -3207,7 +3751,6 @@ class _LeadQuotationsSectionState
                               ),
                             ),
                           if (widget.canCreateQuotation && !isLeadClosed) ...[
-                            const SizedBox(width: 8),
                             ElevatedButton.icon(
                               onPressed: () => _openCreateQuotation(initialQuotation: quot),
                               icon: const Icon(Icons.history_edu, size: 14, color: Colors.white),

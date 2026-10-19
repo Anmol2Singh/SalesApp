@@ -82,13 +82,13 @@ class PmTokens extends ThemeExtension<PmTokens> {
   /// Factory for Light Theme (matches the live web app screenshot)
   factory PmTokens.light() {
     return const PmTokens(
-      background: Color(0xFFF0FDF9), // Ice-mint soft backdrop
+      background: Color(0xFFF8FAFC), // Slate-50 clean enterprise backdrop matching rest of app
       foreground: Color(0xFF0F172A), // Slate-900 primary text
       card: Color(0xFFFFFFFF), // Pure white cards
       cardForeground: Color(0xFF0F172A),
       popover: Color(0xFFFFFFFF),
       popoverForeground: Color(0xFF0F172A),
-      primary: Color(0xFF005CE6), // Corporate royal blue
+      primary: Color(0xFF2563EB), // Enterprise royal blue matching app branding
       primaryForeground: Color(0xFFFFFFFF),
       secondary: Color(0xFFF1F5F9), // Slate-100 pill background
       secondaryForeground: Color(0xFF0F172A),

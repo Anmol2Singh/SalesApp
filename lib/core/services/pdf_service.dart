@@ -47,6 +47,7 @@ class PdfService {
             : null);
 
     // 1. If a specific company is configured, fetch strictly from app_companies
+    bool hasResolvedCompany = false;
     if (effectiveCompanyId != null && effectiveCompanyId.isNotEmpty) {
       try {
         final compRes = await Supabase.instance.client
@@ -55,6 +56,7 @@ class PdfService {
             .eq('id', effectiveCompanyId)
             .maybeSingle();
         if (compRes != null) {
+          hasResolvedCompany = true;
           if (compRes['name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = compRes['name'].toString().trim();
           if (compRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = compRes['address'].toString().trim();
           if (compRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = compRes['phone'].toString().trim();
@@ -80,6 +82,7 @@ class PdfService {
             .limit(1)
             .maybeSingle();
         if (defaultRes != null) {
+          hasResolvedCompany = true;
           if (defaultRes['name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = defaultRes['name'].toString().trim();
           if (defaultRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = defaultRes['address'].toString().trim();
           if (defaultRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = defaultRes['phone'].toString().trim();
@@ -87,20 +90,44 @@ class PdfService {
           if (defaultRes['website']?.toString().trim().isNotEmpty == true) resolved['company_website'] = defaultRes['website'].toString().trim();
           if (defaultRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = defaultRes['gstin'].toString().trim();
           if (defaultRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = defaultRes['logo_url'].toString().trim();
+          if (defaultRes['stamp_url']?.toString().trim().isNotEmpty == true) resolved['stamp_url'] = defaultRes['stamp_url'].toString().trim();
+          if (defaultRes['bank_name']?.toString().trim().isNotEmpty == true) resolved['bank_name'] = defaultRes['bank_name'].toString().trim();
+          if (defaultRes['bank_account_name']?.toString().trim().isNotEmpty == true) resolved['bank_account_name'] = defaultRes['bank_account_name'].toString().trim();
+          if (defaultRes['bank_account_no']?.toString().trim().isNotEmpty == true) resolved['bank_account_no'] = defaultRes['bank_account_no'].toString().trim();
+          if (defaultRes['bank_branch']?.toString().trim().isNotEmpty == true) resolved['bank_branch'] = defaultRes['bank_branch'].toString().trim();
+          if (defaultRes['bank_ifsc']?.toString().trim().isNotEmpty == true) resolved['bank_ifsc'] = defaultRes['bank_ifsc'].toString().trim();
         }
       } catch (_) {}
     }
 
-    // 2. Check local SharedPreferences cache
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getString('company_name')?.isNotEmpty == true) resolved['company_name'] = prefs.getString('company_name')!;
-      if (prefs.getString('company_address')?.isNotEmpty == true) resolved['company_address'] = prefs.getString('company_address')!;
-      if (prefs.getString('company_phone')?.isNotEmpty == true) resolved['company_phone'] = prefs.getString('company_phone')!;
-      if (prefs.getString('company_email')?.isNotEmpty == true) resolved['company_email'] = prefs.getString('company_email')!;
-      if (prefs.getString('company_gst')?.isNotEmpty == true) resolved['company_gst'] = prefs.getString('company_gst')!;
-      if (prefs.getString('company_logo_url')?.isNotEmpty == true) resolved['logo_url'] = prefs.getString('company_logo_url')!;
-    } catch (_) {}
+    const companyBrandKeys = {
+      'company_name',
+      'company_address',
+      'company_phone',
+      'company_email',
+      'company_website',
+      'company_gst',
+      'logo_url',
+      'stamp_url',
+      'bank_name',
+      'bank_account_name',
+      'bank_account_no',
+      'bank_branch',
+      'bank_ifsc',
+    };
+
+    // 2. Check local SharedPreferences cache (only as fallback if not resolved)
+    if (!hasResolvedCompany) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.getString('company_name')?.isNotEmpty == true) resolved['company_name'] = prefs.getString('company_name')!;
+        if (prefs.getString('company_address')?.isNotEmpty == true) resolved['company_address'] = prefs.getString('company_address')!;
+        if (prefs.getString('company_phone')?.isNotEmpty == true) resolved['company_phone'] = prefs.getString('company_phone')!;
+        if (prefs.getString('company_email')?.isNotEmpty == true) resolved['company_email'] = prefs.getString('company_email')!;
+        if (prefs.getString('company_gst')?.isNotEmpty == true) resolved['company_gst'] = prefs.getString('company_gst')!;
+        if (prefs.getString('company_logo_url')?.isNotEmpty == true) resolved['logo_url'] = prefs.getString('company_logo_url')!;
+      } catch (_) {}
+    }
 
     // 3. Check company_settings table (legacy fallback)
     try {
@@ -119,7 +146,7 @@ class PdfService {
       }
     } catch (_) {}
 
-    // 4. Check pdf_templates table
+    // 4. Check pdf_templates table (template options, terms, formatting)
     try {
       final res = await Supabase.instance.client
           .from('pdf_templates')
@@ -130,7 +157,10 @@ class PdfService {
         final dbCfg = Map<String, dynamic>.from(res['template_config'] as Map);
         dbCfg.forEach((key, value) {
           if (value != null && value.toString().trim().isNotEmpty) {
-            resolved[key] = value;
+            // Never let legacy template config overwrite company branding if resolved
+            if (!hasResolvedCompany || !companyBrandKeys.contains(key)) {
+              resolved[key] = value;
+            }
           }
         });
       }
@@ -2632,13 +2662,79 @@ class PdfService {
                   _buildTableRow('Customer Name', card.customerName ?? 'Valued Customer'),
                   _buildTableRow('Contact Number', card.customerPhone ?? 'N/A'),
                   _buildTableRow('Email Address', card.customerEmail ?? 'N/A'),
-                  _buildTableRow('Warranty Period', '${card.warrantyYears} Year(s) Standard Warranty'),
-                  _buildTableRow('Start Date', card.startDate != null ? DateFormat('dd MMM yyyy').format(card.startDate!) : 'N/A'),
-                  _buildTableRow('Expiry / End Date', card.endDate != null ? DateFormat('dd MMM yyyy').format(card.endDate!) : 'N/A'),
                   _buildTableRow('Activation Status', card.isActivated ? 'ACTIVATED & VERIFIED' : 'PENDING ACTIVATION'),
                 ],
               ),
-              pw.SizedBox(height: 24),
+              pw.SizedBox(height: 14),
+
+              // Covered Products & Individual Warranties Table
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'COVERED PRODUCTS & EQUIPMENT WARRANTIES',
+                  style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('Product / Equipment Name', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('Warranty Period', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('Start Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text('Expiry Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                      ),
+                    ],
+                  ),
+                  ...card.productWarranties.map((p) {
+                    final startStr = p.startDate != null
+                        ? DateFormat('dd MMM yyyy').format(p.startDate!)
+                        : (card.startDate != null ? DateFormat('dd MMM yyyy').format(card.startDate!) : 'N/A');
+                    final endStr = p.endDate != null
+                        ? DateFormat('dd MMM yyyy').format(p.endDate!)
+                        : (card.endDate != null ? DateFormat('dd MMM yyyy').format(card.endDate!) : 'N/A');
+                    final periodStr = p.warrantyYears > 0
+                        ? '${p.warrantyYears} Year(s) (${p.warrantyMonths} Mos)'
+                        : '${p.warrantyMonths} Month(s)';
+
+                    return pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text(p.productName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text(periodStr, style: const pw.TextStyle(fontSize: 8)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text(startStr, style: const pw.TextStyle(fontSize: 8)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text(endStr, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.blue800)),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ],
+              ),
+              pw.SizedBox(height: 16),
 
               // QR Code and Terms
               pw.Row(

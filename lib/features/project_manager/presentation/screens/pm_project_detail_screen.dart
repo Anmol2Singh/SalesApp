@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -97,9 +98,17 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
         ? ref.watch(pmPurchaseDetailProvider(widget.id))
         : ref.watch(pmProjectDetailProvider(widget.id));
 
-    return Scaffold(
-      backgroundColor: pm.background,
-      body: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: pm.background,
+        body: SafeArea(
         child: detailAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => Center(
@@ -726,6 +735,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
           },
         ),
       ),
+    ),
     );
   }
 }

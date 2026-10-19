@@ -797,7 +797,7 @@ class _InfoCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  if (canAssign)
+                  if (canAssign) ...[
                     InkWell(
                       onTap: () => _showAssignCustomerSheet(context, ref, customer),
                       borderRadius: BorderRadius.circular(4),
@@ -825,6 +825,26 @@ class _InfoCard extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    if (customer.assignedTo != null || customer.assignedToName != null) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => _confirmRemoveCustomerAssignment(context, ref, customer),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: const Text(
+                            'Remove',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                   if (!canAssign && (customer.assignedTo == profile?.id || customer.createdBy == profile?.id))
                     InkWell(
                       onTap: () => _showRequestReassignCustomerDialog(context, ref, customer),
@@ -2878,6 +2898,36 @@ class _EditCustomerSheetState extends ConsumerState<_EditCustomerSheet> {
   }
 }
 
+void _confirmRemoveCustomerAssignment(BuildContext context, WidgetRef ref, Customer customer) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Remove Assignment'),
+      content: Text('Are you sure you want to remove the salesperson assignment for "${customer.companyName}"?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+          onPressed: () async {
+            Navigator.pop(ctx);
+            await ref.read(customersNotifierProvider.notifier).unassignCustomer(customerId: customer.id);
+            ref.invalidate(customerDetailProvider(customer.id));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Assignment removed successfully.'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            }
+          },
+          child: const Text('Remove', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
 void _showAssignCustomerSheet(BuildContext context, WidgetRef ref, Customer customer) {
   showModalBottomSheet(
     context: context,
@@ -3317,6 +3367,47 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
                     ),
             ),
           ),
+          if (widget.customer.assignedTo != null || widget.customer.assignedToName != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.person_remove_outlined, size: 16, color: AppColors.error),
+                label: const Text('Remove Assignment (Unassign)', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        setState(() => _isLoading = true);
+                        try {
+                          await ref.read(customersNotifierProvider.notifier).unassignCustomer(customerId: widget.customer.id);
+                          ref.invalidate(customerDetailProvider(widget.customer.id));
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Customer assignment removed.'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error removing assignment: $e'), backgroundColor: AppColors.error),
+                            );
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isLoading = false);
+                        }
+                      },
+              ),
+            ),
+          ],
         ],
       ),
     );

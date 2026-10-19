@@ -211,6 +211,26 @@ class DealQuotationItem {
       }
     }
 
+    String pName = product != null ? (product['name'] as String? ?? '') : '';
+    if (pName.isEmpty) {
+      pName = (row['product_name'] as String?)?.trim() ?? '';
+    }
+    if (pName.isEmpty) {
+      for (final l in lines) {
+        final d = (l['description'] ?? l['item_name'] ?? '').toString().toLowerCase();
+        if (d.contains('boom barrier') || d.contains('barrier')) {
+          pName = 'Boom Barrier';
+          break;
+        } else if (d.contains('heat pump') || d.contains('heatpump') || d.contains('water heater')) {
+          pName = 'Heat Pump';
+          break;
+        }
+      }
+    }
+    if (pName.isEmpty) {
+      pName = 'Heat Pump';
+    }
+
     return DealQuotationItem(
       id: row['id'] as String? ?? '',
       quotationNumber: FinancialYearHelper.formatDocumentNumber(row['quotation_number'] as String? ?? '', orderD),
@@ -239,8 +259,8 @@ class DealQuotationItem {
       paymentTerms: pay,
       termsText: row['terms_text'] as String?,
       pipelineId: pipeline != null ? pipeline['id'] as String? : (row['pipeline_id'] as String?),
-      productId: product != null ? product['id'] as String? : null,
-      productName: product != null ? (product['name'] as String? ?? 'Heat Pump') : 'Heat Pump',
+      productId: product != null ? product['id'] as String? : (row['product_id'] as String?),
+      productName: pName,
       hasFinalizedProposal: proposalRecord != null,
       finalizedPdfPath: proposalRecord?['pdf_path'] as String?,
       finalizedRefNo: proposalRecord?['ref_no'] as String?,

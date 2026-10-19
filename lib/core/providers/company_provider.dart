@@ -63,29 +63,54 @@ final defaultCompanyProvider = Provider<AppCompany>((ref) {
   );
 });
 
-final companyForProductProvider = Provider.family<AppCompany, String?>((ref, productId) {
+final companyForProductProvider = Provider.family<AppCompany, String?>((ref, productIdOrName) {
   final defaultComp = ref.watch(defaultCompanyProvider);
-  if (productId == null || productId.isEmpty) return defaultComp;
-
-  final productsAsync = ref.watch(productsProvider);
-  final products = productsAsync.valueOrNull ?? [];
-  final product = products.firstWhereOrNull((p) => p.id == productId);
-
-  if (product == null) return defaultComp;
-
   final companiesAsync = ref.watch(appCompaniesProvider);
   final companies = companiesAsync.valueOrNull ?? AppCompany.defaultCompanies;
 
-  if (product.companyId != null && product.companyId!.isNotEmpty) {
-    final matched = companies.firstWhereOrNull((c) => c.id == product.companyId);
-    if (matched != null) return matched;
+  if (productIdOrName == null || productIdOrName.isEmpty) return defaultComp;
+
+  final q = productIdOrName.trim().toLowerCase();
+  final isBoomBarrier = q.contains('boom') || q.contains('barrier');
+
+  // If query itself refers to Boom Barrier, resolve immediately to Trading / Sefdor company
+  if (isBoomBarrier) {
+    final trading = companies.firstWhereOrNull((c) =>
+        c.id == 'insiya-trading' ||
+        c.name.toLowerCase().contains('trading') ||
+        c.name.toLowerCase().contains('sefdor'));
+    return (trading ?? AppCompany.defaultInsiyaTrading).copyWith(
+      logoUrl: (trading?.logoUrl != null && !trading!.logoUrl!.contains('logo.png'))
+          ? trading.logoUrl
+          : 'assets/images/boom_barrier/sefdor_logo.png',
+    );
   }
 
-  // Heuristic fallback: if product is Boom Barrier, use Insiya Trading Corporation
-  final pName = product.name.toLowerCase();
-  if (pName.contains('boom') || pName.contains('barrier')) {
-    final trading = companies.firstWhereOrNull((c) => c.id == 'insiya-trading');
-    if (trading != null) return trading;
+  final productsAsync = ref.watch(productsProvider);
+  final products = productsAsync.valueOrNull ?? [];
+  final product = products.firstWhereOrNull((p) =>
+      p.id == productIdOrName ||
+      p.name.toLowerCase() == q ||
+      p.name.toLowerCase().contains(q));
+
+  if (product != null) {
+    if (product.companyId != null && product.companyId!.isNotEmpty) {
+      final matched = companies.firstWhereOrNull((c) => c.id == product.companyId);
+      if (matched != null) return matched;
+    }
+
+    final pName = product.name.toLowerCase();
+    if (pName.contains('boom') || pName.contains('barrier')) {
+      final trading = companies.firstWhereOrNull((c) =>
+          c.id == 'insiya-trading' ||
+          c.name.toLowerCase().contains('trading') ||
+          c.name.toLowerCase().contains('sefdor'));
+      return (trading ?? AppCompany.defaultInsiyaTrading).copyWith(
+        logoUrl: (trading?.logoUrl != null && !trading!.logoUrl!.contains('logo.png'))
+            ? trading.logoUrl
+            : 'assets/images/boom_barrier/sefdor_logo.png',
+      );
+    }
   }
 
   return defaultComp;

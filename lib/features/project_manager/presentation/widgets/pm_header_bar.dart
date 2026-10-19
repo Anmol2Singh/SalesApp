@@ -5,7 +5,10 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../providers/pm_mode_provider.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../data/models/pm_company.dart';
+import '../../../../core/models/user_role.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/providers/sidebar_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 import 'pm_app_settings_dialog.dart';
 
 class PmHeaderBar extends ConsumerStatefulWidget {
@@ -50,6 +53,18 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
     super.dispose();
   }
 
+  String _getTargetRoleDashboard() {
+    final profile = ref.read(currentProfileProvider);
+    if (profile == null) return AppRoutes.adminDashboard;
+    if (profile.roles.contains(UserRole.admin)) return AppRoutes.adminDashboard;
+    if (profile.roles.contains(UserRole.manager) ||
+        profile.roles.contains(UserRole.salesHead) ||
+        profile.roles.contains(UserRole.sales)) {
+      return AppRoutes.salesDashboard;
+    }
+    return getRoleHome(profile.primaryRole);
+  }
+
   @override
   Widget build(BuildContext context) {
     final mode = ref.watch(pmRecordModeProvider);
@@ -69,13 +84,48 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isUltraWide = constraints.maxWidth >= 1250;
           final isMedium = constraints.maxWidth >= 720 && constraints.maxWidth < 1250;
 
-          // 0. Collapse/Expand Left Navigation Bar Button
+          // 0a. Back Button for Mobile / Non-Wide Screens
+          final backButton = Tooltip(
+            message: 'Back to Dashboard',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  final targetRoute = _getTargetRoleDashboard();
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(targetRoute);
+                  }
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  height: 38,
+                  width: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      LucideIcons.arrowLeft,
+                      size: 18,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          // 0b. Collapse/Expand Left Navigation Bar Button (Desktop/Tablet)
           final isSidebarCollapsed = ref.watch(sidebarCollapsedProvider);
           final collapseButton = Tooltip(
             message: isSidebarCollapsed ? 'Expand Navigation' : 'Collapse Navigation (Icons Only)',
@@ -86,8 +136,8 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                 borderRadius: BorderRadius.circular(10),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  height: 40,
-                  width: 40,
+                  height: 38,
+                  width: 38,
                   decoration: BoxDecoration(
                     color: isSidebarCollapsed ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
@@ -99,7 +149,7 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                     child: Icon(
                       isSidebarCollapsed ? LucideIcons.panelLeftOpen : LucideIcons.panelLeftClose,
                       size: 17,
-                      color: isSidebarCollapsed ? const Color(0xFF005CE6) : const Color(0xFF64748B),
+                      color: isSidebarCollapsed ? const Color(0xFF2563EB) : const Color(0xFF64748B),
                     ),
                   ),
                 ),
@@ -113,18 +163,18 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
             children: [
               // Modern squircle enterprise logo
               Container(
-                width: 40,
-                height: 40,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF005CE6), Color(0xFF003899)],
+                    colors: [Color(0xFF2563EB), Color(0xFF003899)],
                   ),
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF005CE6).withValues(alpha: 0.25),
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.25),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -133,7 +183,7 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                 child: const Center(
                   child: Icon(
                     LucideIcons.building2,
-                    size: 19,
+                    size: 18,
                     color: Colors.white,
                   ),
                 ),
@@ -185,7 +235,7 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                                 child: Icon(
                                   LucideIcons.building2,
                                   size: 14,
-                                  color: isSelected ? const Color(0xFF005CE6) : const Color(0xFF64748B),
+                                  color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
                                 ),
                               ),
                             ),
@@ -196,19 +246,19 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                  color: isSelected ? const Color(0xFF005CE6) : const Color(0xFF0F172A),
+                                  color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF0F172A),
                                 ),
                               ),
                             ),
                             if (isSelected)
-                              const Icon(LucideIcons.check, size: 16, color: Color(0xFF005CE6)),
+                              const Icon(LucideIcons.check, size: 16, color: Color(0xFF2563EB)),
                           ],
                         ),
                       );
                     }),
                   ],
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -220,7 +270,7 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                               child: Text(
                                 activeCompany.name,
                                 style: const TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 14.5,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF0F172A),
                                   letterSpacing: -0.2,
@@ -231,35 +281,43 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                             const SizedBox(width: 4),
                             const Icon(
                               LucideIcons.chevronDown,
-                              size: 14,
+                              size: 13,
                               color: Color(0xFF64748B),
                             ),
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF10B981),
-                                shape: BoxShape.circle,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFA7F3D0), width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF10B981),
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 5),
-                            const Text(
-                              'TRADING & SUPPLY PROJECT MANAGER',
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF64748B),
-                                letterSpacing: 0.5,
+                              const SizedBox(width: 4),
+                              const Text(
+                                'PROJECT MANAGER',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF047857),
+                                  letterSpacing: 0.5,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -271,12 +329,13 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
 
           // 2. Pill Mode Switcher (SALES vs PURCHASE)
           final modeSwitcher = Container(
+            height: 36,
             decoration: BoxDecoration(
               color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(9999),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            padding: const EdgeInsets.all(3.5),
+            padding: const EdgeInsets.all(3),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -290,16 +349,16 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                   borderRadius: BorderRadius.circular(9999),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4.5),
                     decoration: BoxDecoration(
-                      color: !isPurchase ? const Color(0xFF005CE6) : Colors.transparent,
+                      color: !isPurchase ? const Color(0xFF2563EB) : Colors.transparent,
                       borderRadius: BorderRadius.circular(9999),
                       boxShadow: !isPurchase
                           ? [
                               BoxShadow(
-                                color: const Color(0xFF005CE6).withValues(alpha: 0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1.5),
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
                               ),
                             ]
                           : null,
@@ -309,16 +368,16 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                       children: [
                         Icon(
                           LucideIcons.trendingUp,
-                          size: 13,
+                          size: 12.5,
                           color: !isPurchase ? Colors.white : const Color(0xFF64748B),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           'SALES',
                           style: TextStyle(
-                            fontSize: 11.5,
+                            fontSize: 11,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.4,
                             color: !isPurchase ? Colors.white : const Color(0xFF64748B),
                           ),
                         ),
@@ -336,16 +395,16 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                   borderRadius: BorderRadius.circular(9999),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4.5),
                     decoration: BoxDecoration(
-                      color: isPurchase ? const Color(0xFF005CE6) : Colors.transparent,
+                      color: isPurchase ? const Color(0xFF2563EB) : Colors.transparent,
                       borderRadius: BorderRadius.circular(9999),
                       boxShadow: isPurchase
                           ? [
                               BoxShadow(
-                                color: const Color(0xFF005CE6).withValues(alpha: 0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1.5),
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
                               ),
                             ]
                           : null,
@@ -355,16 +414,16 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                       children: [
                         Icon(
                           LucideIcons.briefcase,
-                          size: 13,
+                          size: 12.5,
                           color: isPurchase ? Colors.white : const Color(0xFF64748B),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           'PURCHASE',
                           style: TextStyle(
-                            fontSize: 11.5,
+                            fontSize: 11,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.4,
                             color: isPurchase ? Colors.white : const Color(0xFF64748B),
                           ),
                         ),
@@ -378,19 +437,19 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
 
           // 3. Clean, modern, single-layer pill search bar
           final searchBar = Container(
-            height: 50,
+            height: 42,
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(21),
               border: Border.all(
                 color: const Color(0xFFE2E8F0),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
@@ -399,7 +458,7 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
               textAlignVertical: TextAlignVertical.center,
               onChanged: widget.onSearchChanged,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF1E293B),
               ),
@@ -412,29 +471,29 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                 disabledBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 prefixIcon: const Padding(
-                  padding: EdgeInsets.only(left: 16, right: 12),
+                  padding: EdgeInsets.only(left: 14, right: 10),
                   child: Icon(
                     Icons.search_rounded,
                     color: Color(0xFF64748B),
-                    size: 22,
+                    size: 20,
                   ),
                 ),
                 prefixIconConstraints: const BoxConstraints(
-                  minWidth: 50,
-                  minHeight: 50,
+                  minWidth: 44,
+                  minHeight: 42,
                 ),
                 suffixIcon: _controller.text.isNotEmpty
                     ? Padding(
-                        padding: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.only(right: 6),
                         child: IconButton(
                           icon: const Icon(
                             Icons.close_rounded,
                             color: Color(0xFF64748B),
-                            size: 20,
+                            size: 18,
                           ),
-                          splashRadius: 18,
+                          splashRadius: 16,
                           onPressed: () {
                             _controller.clear();
                             widget.onSearchChanged('');
@@ -443,12 +502,12 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                       )
                     : null,
                 suffixIconConstraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 50,
+                  minWidth: 36,
+                  minHeight: 42,
                 ),
                 hintText: 'Search ${activeCompany.name} (name, phone, site)...',
                 hintStyle: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w400,
                   color: Color(0xFF94A3B8),
                 ),
@@ -456,19 +515,19 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
             ),
           );
 
-          // 4. Daily Transaction Entry Button (Material 3 Tonal Button)
+          // 4. Daily Transaction Entry Button
           Widget buildDailyTxButton({bool isMobile = false}) => Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () => context.push('/pm/daily-transactions'),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(9999),
               child: Container(
-                height: 40,
-                padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16),
+                height: 36,
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 11 : 16),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(9999),
                   border: Border.all(color: const Color(0xFFBFDBFE)),
                 ),
                 child: Row(
@@ -477,21 +536,19 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                   children: [
                     const Icon(
                       LucideIcons.receiptText,
-                      size: 15,
-                      color: Color(0xFF005CE6),
+                      size: 14,
+                      color: Color(0xFF2563EB),
                     ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        isMobile ? 'Daily Entry' : 'Daily Transaction Entry',
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF005CE6),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 5),
+                    Text(
+                      isMobile ? 'Daily Entry' : 'Daily Transaction Entry',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF2563EB),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -499,28 +556,28 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
             ),
           );
 
-          // 5. Add Customer / Vendor Button (Material 3 Primary Elevated Action)
+          // 5. Add Customer / Vendor Button
           Widget buildAddCustomerButton({bool isMobile = false}) => Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () => context.push('/pm/projects/new${isPurchase ? "?mode=purchase" : ""}'),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(9999),
               child: Container(
-                height: 40,
-                padding: EdgeInsets.symmetric(horizontal: isMobile ? 14 : 18),
+                height: 36,
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF005CE6), Color(0xFF0049B8)],
+                    colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(9999),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF005CE6).withValues(alpha: 0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                      blurRadius: 5,
+                      offset: const Offset(0, 1.5),
                     ),
                   ],
                 ),
@@ -530,21 +587,19 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                   children: [
                     const Icon(
                       LucideIcons.plus,
-                      size: 15,
+                      size: 14,
                       color: Colors.white,
                     ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        isPurchase ? 'Add Vendor' : 'Add Customer',
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 5),
+                    Text(
+                      isPurchase ? 'Add Vendor' : 'Add Customer',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -564,8 +619,8 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
                 ),
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  height: 40,
-                  width: 40,
+                  height: 38,
+                  width: 38,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
@@ -634,29 +689,31 @@ class _PmHeaderBarState extends ConsumerState<PmHeaderBar> {
             );
           }
 
-          // 3. Mobile Screens (< 720px): Adaptive stacked layout with touch-friendly targets
+          // 3. Mobile Screens (< 720px): Clean enterprise 3-row header
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Row 1: Back + Company Title & Selector + Settings
               Row(
                 children: [
-                  collapseButton,
+                  backButton,
                   const SizedBox(width: 10),
                   Expanded(child: companyBlock),
+                  const SizedBox(width: 8),
                   settingsButton,
                 ],
               ),
               const SizedBox(height: 10),
-              Center(child: modeSwitcher),
-              const SizedBox(height: 10),
+              // Row 2: Search Bar
               searchBar,
               const SizedBox(height: 10),
+              // Row 3: Command Control Strip (Mode Switcher + Action Button)
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(child: buildDailyTxButton(isMobile: true)),
-                  const SizedBox(width: 8),
-                  Expanded(child: buildAddCustomerButton(isMobile: true)),
+                  modeSwitcher,
+                  buildAddCustomerButton(isMobile: true),
                 ],
               ),
             ],

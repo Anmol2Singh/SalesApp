@@ -516,7 +516,7 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                                   ),
                                 ),
                               ),
-                              if (isAdmin)
+                              if (isAdmin) ...[
                                 InkWell(
                                   onTap: () => _showTransferModal(context, ref, prospect),
                                   borderRadius: BorderRadius.circular(4),
@@ -536,6 +536,29 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
                                     ),
                                   ),
                                 ),
+                                if (prospect.assignedTo != null) ...[
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () => _confirmRemoveProspectAssignment(context, ref, prospect),
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.error.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Remove',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.error,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ],
                           ),
                         ),
@@ -771,6 +794,35 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _confirmRemoveProspectAssignment(BuildContext context, WidgetRef ref, Prospect prospect) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Assignment'),
+        content: Text('Are you sure you want to remove the salesperson assignment for "${prospect.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(prospectsProvider.notifier).unassignProspect(prospectId: prospect.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Assignment removed successfully.'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1623,6 +1675,43 @@ class _AssignProspectDetailSheetState extends ConsumerState<_AssignProspectDetai
                 ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text('Confirm Transfer', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+          if (widget.prospect.assignedTo != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.person_remove_outlined, size: 16, color: AppColors.error),
+              label: const Text('Remove Assignment (Unassign)', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.error),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      setState(() => _isLoading = true);
+                      try {
+                        await ref.read(prospectsProvider.notifier).unassignProspect(prospectId: widget.prospect.id);
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Prospect assignment removed.'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error removing assignment: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => _isLoading = false);
+                      }
+                    },
+            ),
+          ],
         ],
       ),
     );

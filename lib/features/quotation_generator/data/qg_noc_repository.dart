@@ -59,6 +59,9 @@ class QgNocRepository {
     if (productName.toLowerCase().contains('heat pump')) {
       return QgNocProfile.defaultHeatPumpProfile();
     }
+    if (productName.toLowerCase().contains('boom') || productName.toLowerCase().contains('barrier')) {
+      return QgNocProfile.defaultBoomBarrierProfile();
+    }
     return QgNocProfile.defaultProfile(productName: productName);
   }
 
@@ -346,6 +349,19 @@ class QgNocRepository {
             'company_website': compRes['website'],
             'logo_url': compRes['logo_url'],
             'stamp_url': compRes['stamp_url'],
+          };
+        }
+      } else {
+        final defRes = await supabase.from('app_companies').select().eq('is_default', true).limit(1).maybeSingle();
+        if (defRes != null) {
+          return {
+            'company_name': defRes['name'],
+            'company_address': defRes['address'],
+            'company_phone': defRes['phone'],
+            'company_email': defRes['email'],
+            'company_website': defRes['website'],
+            'logo_url': defRes['logo_url'],
+            'stamp_url': defRes['stamp_url'],
           };
         }
       }

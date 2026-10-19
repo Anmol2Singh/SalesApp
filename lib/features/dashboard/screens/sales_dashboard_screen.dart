@@ -359,7 +359,10 @@ class SalesDashboardScreen extends ConsumerWidget {
                       ),
                     );
 
-                    if (roles.contains(UserRole.admin)) {
+                    final canAccessQuotation = roles.any((r) => r.canCreateQuotation) ||
+                        (profile?.primaryRole.canCreateQuotation ?? false) ||
+                        isHeadOrAdmin;
+                    if (canAccessQuotation) {
                       actions.add(
                         _QuickActionBtn(
                           icon: Icons.request_quote_outlined,

@@ -321,7 +321,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           if (product.category != null && product.category!.isNotEmpty)
                             Container(
@@ -340,7 +343,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 ),
                               ),
                             ),
-                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
@@ -357,7 +359,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
                           Builder(builder: (context) {
                             final assignedCompany = ref.watch(companyForProductProvider(product.id));
                             return Container(

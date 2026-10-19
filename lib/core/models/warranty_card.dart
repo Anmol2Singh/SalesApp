@@ -1,5 +1,41 @@
 // lib/core/models/warranty_card.dart
 
+import 'dart:convert';
+
+class ProductWarrantyItem {
+  final String productName;
+  final int warrantyYears;
+  final int warrantyMonths;
+  final DateTime? startDate;
+  final DateTime? endDate;
+
+  ProductWarrantyItem({
+    required this.productName,
+    required this.warrantyYears,
+    this.warrantyMonths = 12,
+    this.startDate,
+    this.endDate,
+  });
+
+  factory ProductWarrantyItem.fromJson(Map<String, dynamic> json) {
+    return ProductWarrantyItem(
+      productName: json['name'] as String? ?? json['product_name'] as String? ?? 'Product',
+      warrantyYears: (json['warranty_years'] as num?)?.toInt() ?? 1,
+      warrantyMonths: (json['warranty_months'] as num?)?.toInt() ?? 12,
+      startDate: json['start_date'] != null ? DateTime.tryParse(json['start_date'] as String) : null,
+      endDate: json['end_date'] != null ? DateTime.tryParse(json['end_date'] as String) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'name': productName,
+    'warranty_years': warrantyYears,
+    'warranty_months': warrantyMonths,
+    'start_date': startDate?.toIso8601String(),
+    'end_date': endDate?.toIso8601String(),
+  };
+}
+
 class WarrantyCard {
   final String id;
   final String pipelineId;
@@ -36,6 +72,30 @@ class WarrantyCard {
     this.activatedAt,
     required this.createdAt,
   });
+
+  List<ProductWarrantyItem> get productWarranties {
+    if (amcDetails != null && (amcDetails!.trim().startsWith('{') || amcDetails!.trim().startsWith('['))) {
+      try {
+        final decoded = jsonDecode(amcDetails!);
+        if (decoded is List) {
+          return decoded.map((e) => ProductWarrantyItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+        } else if (decoded is Map && decoded['products'] is List) {
+          return (decoded['products'] as List)
+              .map((e) => ProductWarrantyItem.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList();
+        }
+      } catch (_) {}
+    }
+    return [
+      ProductWarrantyItem(
+        productName: 'Equipment / System',
+        warrantyYears: warrantyYears,
+        warrantyMonths: warrantyYears * 12,
+        startDate: startDate,
+        endDate: endDate,
+      ),
+    ];
+  }
 
   factory WarrantyCard.fromJson(Map<String, dynamic> json) {
     return WarrantyCard(

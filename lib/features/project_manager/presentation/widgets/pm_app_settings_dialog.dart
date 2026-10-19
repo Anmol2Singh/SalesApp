@@ -2,13 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:printing/printing.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../providers/pm_providers.dart';
-import '../../../auth/providers/auth_provider.dart';
+import 'pm_pdf_columns_config_dialog.dart';
 
 class PmAppSettingsDialog extends ConsumerStatefulWidget {
   const PmAppSettingsDialog({super.key});
@@ -314,107 +313,7 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Section 2: Account Settings Card (Screenshot 1)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Account Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        'Manage your credentials or system users',
-                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    InkWell(
-                                      onTap: () {
-                                        Navigator.of(context).pop();
-                                        context.push('/admin');
-                                      },
-                                      borderRadius: BorderRadius.circular(9999),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEFF6FF),
-                                          borderRadius: BorderRadius.circular(9999),
-                                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                                        ),
-                                        child: const Text('Users', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF005CE6))),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    InkWell(
-                                      onTap: () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Password change available in Admin portal')),
-                                        );
-                                      },
-                                      borderRadius: BorderRadius.circular(9999),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(9999),
-                                          border: Border.all(color: const Color(0xFFCBD5E1)),
-                                        ),
-                                        child: const Text('Change', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            InkWell(
-                              onTap: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('Confirm Logout'),
-                                    content: const Text('Are you sure you want to log out of IZYHEAT?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-                                      ElevatedButton(
-                                        onPressed: () => Navigator.of(ctx).pop(true),
-                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-                                        child: const Text('Logout', style: TextStyle(color: Colors.white)),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  ref.read(authControllerProvider.notifier).signOut();
-                                  if (context.mounted) Navigator.of(context).pop();
-                                }
-                              },
-                              child: const Text('Logout', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFEF4444))),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Section 3: PDF Export Columns
+                      // Section 2: PDF Export Columns
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -443,19 +342,20 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                             const SizedBox(width: 8),
                             InkWell(
                               onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('All directory columns are active for PDF')),
+                                showDialog(
+                                  context: context,
+                                  builder: (ctx) => const PmPdfColumnsConfigDialog(),
                                 );
                               },
                               borderRadius: BorderRadius.circular(9999),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(9999),
                                   border: Border.all(color: const Color(0xFFCBD5E1)),
                                 ),
-                                child: const Text('Configure', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                child: const Text('Configure', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                               ),
                             ),
                           ],
