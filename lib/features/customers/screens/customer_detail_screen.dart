@@ -19,6 +19,10 @@ import '../../../core/widgets/breadcrumbs.dart';
 import '../../../core/services/record_edit_permissions.dart';
 import '../../daily_tasks/widgets/customer_tasks_sheet.dart';
 import '../../project_manager/providers/pm_providers.dart';
+import '../../sales_order/widgets/delivery_challan_modal.dart';
+import '../services/customer_documents_service.dart';
+import 'customer_documents_screen.dart';
+import '../../../core/models/customer_document.dart';
 
 class CustomerDetailScreen extends ConsumerWidget {
   final String customerId;
@@ -150,13 +154,19 @@ class CustomerDetailScreen extends ConsumerWidget {
               top <= kToolbarHeight + MediaQuery.of(context).padding.top + 10;
 
           return FlexibleSpaceBar(
-            centerTitle: true,
-            titlePadding: const EdgeInsets.fromLTRB(56, 0, 56, 14),
+            centerTitle: false,
+            titlePadding: EdgeInsets.only(
+              left: 56,
+              right: canEdit ? 185 : 95,
+              bottom: 14,
+            ),
             title: AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
               opacity: isCollapsed ? 1.0 : 0.0,
               child: Text(
                 customer.companyName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontFamily: 'Inter',
                   color: Colors.white,
@@ -284,6 +294,7 @@ class CustomerDetailScreen extends ConsumerWidget {
     Customer customer,
     UserRole? role,
   ) {
+    final profile = ref.watch(currentProfileProvider);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -398,6 +409,12 @@ class CustomerDetailScreen extends ConsumerWidget {
                 );
               }
 
+              final dealsWithSalesOrder = pipelines
+                  .where((p) =>
+                      (p.hasSalesOrder == true) ||
+                      (p.currentStep.index >= PipelineStep.salesOrder.index))
+                  .toList();
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -413,10 +430,18 @@ class CustomerDetailScreen extends ConsumerWidget {
                   ...pipelines.map(
                     (p) => _PipelineItem(
                       pipeline: p,
+                      customer: customer,
                       onTap: () => context.push(
                           AppRoutes.pipelineDetail.replaceAll(':id', p.id)),
                     ),
                   ),
+                  if (dealsWithSalesOrder.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _DeliveryChallanSection(
+                      customer: customer,
+                      deals: dealsWithSalesOrder,
+                    ),
+                  ],
                 ],
               );
             },
@@ -425,6 +450,14 @@ class CustomerDetailScreen extends ConsumerWidget {
           _CustomerProjectsSection(customerId: customer.id),
           const SizedBox(height: 24),
           _AmcSection(customerId: customer.id),
+          if (role == UserRole.admin ||
+              role == UserRole.salesHead ||
+              role == UserRole.manager ||
+              (profile?.roles.contains(UserRole.admin) ?? false) ||
+              (profile?.roles.contains(UserRole.salesHead) ?? false)) ...[
+            const SizedBox(height: 24),
+            _SupportingDocumentsCard(customer: customer),
+          ],
           const SizedBox(height: 100), // FAB space
         ],
       ),
@@ -1211,12 +1244,20 @@ class _InfoRow extends StatelessWidget {
 
 class _PipelineItem extends StatelessWidget {
   final SalesPipelineSummary pipeline;
+  final Customer customer;
   final VoidCallback onTap;
 
-  const _PipelineItem({required this.pipeline, required this.onTap});
+  const _PipelineItem({
+    required this.pipeline,
+    required this.customer,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final canChallan = (pipeline.hasSalesOrder == true) ||
+        (pipeline.currentStep.index >= PipelineStep.salesOrder.index);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1268,18 +1309,356 @@ class _PipelineItem extends StatelessWidget {
               productId: pipeline.productId,
               currentStep: pipeline.currentStep,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Started ${DateFormat('dd MMM yyyy').format(pipeline.createdAt)}',
-              style: const TextStyle(
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Started ${DateFormat('dd MMM yyyy').format(pipeline.createdAt)}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (canChallan)
+                  InkWell(
+                    onTap: () {
+                      DeliveryChallanModal.show(
+                        context,
+                        pipelineId: pipeline.id,
+                        customer: customer,
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.local_shipping_outlined,
+                            size: 13,
+                            color: AppColors.primary,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'DELIVERY CHALLAN',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryChallanSection extends StatelessWidget {
+  final Customer customer;
+  final List<SalesPipelineSummary> deals;
+
+  const _DeliveryChallanSection({
+    required this.customer,
+    required this.deals,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (deals.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.local_shipping_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'DELIVERY CHALLAN',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                Text(
+                  deals.length == 1
+                      ? 'Deal: ${deals.first.productName}'
+                      : '${deals.length} deals with completed sales order',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    color: AppColors.textSecondary.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: () {
+              if (deals.length == 1) {
+                DeliveryChallanModal.show(
+                  context,
+                  pipelineId: deals.first.id,
+                  customer: customer,
+                );
+              } else {
+                _showPickDealDialog(context);
+              }
+            },
+            icon: const Icon(Icons.print_outlined, size: 14),
+            label: const Text(
+              'Generate Challan',
+              style: TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 11,
-                color: AppColors.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPickDealDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select Deal for Delivery Challan',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...deals.map(
+              (d) => ListTile(
+                leading: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
+                title: Text(d.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('Status: ${d.currentStep.displayName}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  DeliveryChallanModal.show(
+                    context,
+                    pipelineId: d.id,
+                    customer: customer,
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SupportingDocumentsCard extends ConsumerWidget {
+  final Customer customer;
+
+  const _SupportingDocumentsCard({required this.customer});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final supabase = ref.watch(supabaseClientProvider);
+
+    return FutureBuilder<List<CustomerDocument>>(
+      future: CustomerDocumentsService.fetchDocuments(
+        supabase: supabase,
+        customerId: customer.id,
+      ),
+      builder: (context, snapshot) {
+        final count = snapshot.data?.length ?? 0;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Supporting Documents',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CustomerDocumentsScreen(
+                      customerId: customer.id,
+                      customerName: customer.companyName,
+                    ),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.folder_shared_outlined,
+                          color: AppColors.primary,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'Customer Documents',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (count > 0) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '$count',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            count > 0
+                                ? '$count file${count == 1 ? "" : "s"} uploaded • Click to view, download or share'
+                                : 'Upload agreements, ID proofs, site photos & PDFs',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -258,6 +258,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         color: AppColors.primary,
         onRefresh: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
         child: CustomScrollView(
+          key: const PageStorageKey('pipeline_custom_scroll_view'),
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [

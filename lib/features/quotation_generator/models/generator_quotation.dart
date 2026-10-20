@@ -9,6 +9,7 @@ import 'tank_line_item.dart';
 import 'heat_pump_line_item.dart';
 import 'all_in_one_model.dart';
 import 'pool_heat_pump_model.dart';
+import '../services/qg_payment_sentence_builder.dart';
 
 class GeneratorQuotation {
   final String id;
@@ -80,6 +81,7 @@ class GeneratorQuotation {
   final int paymentSplitAdvance;
   final int paymentSplitDelivery;
   final int paymentSplitCommissioning;
+  final List<Map<String, dynamic>> paymentTerms;
 
   // Warranties & Validity
   final int warrantyHpYears;
@@ -147,6 +149,7 @@ class GeneratorQuotation {
     this.paymentSplitAdvance = 70,
     this.paymentSplitDelivery = 20,
     this.paymentSplitCommissioning = 10,
+    this.paymentTerms = const [],
     this.warrantyHpYears = 2,
     this.warrantyTankYears = 5,
     this.validityDays = 7,
@@ -167,6 +170,9 @@ class GeneratorQuotation {
                 (buybackTotal ?? (hasBuyback ? (buybackRate * buybackQty) : 0)));
 
   String get paymentTermsText {
+    if (paymentTerms.isNotEmpty) {
+      return QgPaymentSentenceBuilder.buildSentence(paymentTerms: paymentTerms);
+    }
     if (paymentSplitAdvance == 100 && paymentSplitDelivery == 0 && paymentSplitCommissioning == 0) {
       return '100% advance along with Purchase Order.';
     }
@@ -374,6 +380,7 @@ class GeneratorQuotation {
     int? paymentSplitAdvance,
     int? paymentSplitDelivery,
     int? paymentSplitCommissioning,
+    List<Map<String, dynamic>>? paymentTerms,
     int? warrantyHpYears,
     int? warrantyTankYears,
     int? validityDays,
@@ -436,6 +443,7 @@ class GeneratorQuotation {
       paymentSplitAdvance: paymentSplitAdvance ?? this.paymentSplitAdvance,
       paymentSplitDelivery: paymentSplitDelivery ?? this.paymentSplitDelivery,
       paymentSplitCommissioning: paymentSplitCommissioning ?? this.paymentSplitCommissioning,
+      paymentTerms: paymentTerms ?? this.paymentTerms,
       warrantyHpYears: warrantyHpYears ?? this.warrantyHpYears,
       warrantyTankYears: warrantyTankYears ?? this.warrantyTankYears,
       validityDays: validityDays ?? this.validityDays,
@@ -529,6 +537,8 @@ class GeneratorQuotation {
       'paymentSplitDelivery': paymentSplitDelivery,
       'payment_split_commissioning': paymentSplitCommissioning,
       'paymentSplitCommissioning': paymentSplitCommissioning,
+      'payment_terms': paymentTerms,
+      'paymentTerms': paymentTerms,
       'warranty_hp_years': warrantyHpYears,
       'warrantyHpYears': warrantyHpYears,
       'warranty_tank_years': warrantyTankYears,
@@ -737,6 +747,10 @@ class GeneratorQuotation {
       paymentSplitAdvance: (json['payment_split_advance'] as num?)?.toInt() ?? 70,
       paymentSplitDelivery: (json['payment_split_delivery'] as num?)?.toInt() ?? 20,
       paymentSplitCommissioning: (json['payment_split_commissioning'] as num?)?.toInt() ?? 10,
+      paymentTerms: (json['payment_terms'] as List<dynamic>? ?? json['paymentTerms'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          const [],
       warrantyHpYears: (json['warranty_hp_years'] as num?)?.toInt() ?? 2,
       warrantyTankYears: (json['warranty_tank_years'] as num?)?.toInt() ?? 5,
       validityDays: (json['validity_days'] as num?)?.toInt() ?? 7,

@@ -1875,6 +1875,315 @@ class PdfService {
     return pdf.save();
   }
 
+  // ─── DELIVERY CHALLAN PDF ────────────────────────────────────────────────────
+
+  static String formatDeliveryChallanNumber(String raw, [DateTime? date]) {
+    final clean = raw.trim();
+    final fy = FinancialYearHelper.getFinancialYearCode(date);
+    if (clean.isEmpty) return 'IZY/DC/$fy/00001';
+    if (clean.startsWith('IZY/DC/')) {
+      return FinancialYearHelper.formatDocumentNumber(clean, date);
+    }
+    if (clean.startsWith('IZY/SO/')) {
+      return clean.replaceFirst('IZY/SO/', 'IZY/DC/');
+    }
+
+    if (clean.contains('/')) {
+      final parts = clean.split('/');
+      if (RegExp(r'^\d+$').hasMatch(parts[0])) {
+        final seq = parts[0].padLeft(5, '0');
+        return 'IZY/DC/$fy/$seq';
+      } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
+        final seq = parts[1].padLeft(5, '0');
+        return 'IZY/DC/$fy/$seq';
+      }
+    }
+
+    final digits = RegExp(r'\d+').firstMatch(clean)?.group(0);
+    if (digits != null) {
+      return 'IZY/DC/$fy/${digits.padLeft(5, '0')}';
+    }
+
+    return 'IZY/DC/$fy/$clean';
+  }
+
+  static Future<Uint8List> generateDeliveryChallanPdf({
+    required SalesOrder salesOrder,
+    required Customer customer,
+    required Product product,
+    required Map<String, dynamic> templateConfig,
+    String? quotationNumber,
+    DateTime? challanDate,
+    List<SalesOrderLineItem>? customLineItems,
+  }) async {
+    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    final logoUrl = resolvedConfig['logo_url'] as String?;
+    final logoImage = await _fetchLogo(logoUrl);
+    final generatedByName = await resolveCurrentUserName();
+
+    final pdf = pw.Document();
+
+    final companyName = resolvedConfig['company_name'] as String? ??
+        'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
+        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra 411014';
+    final companyPhone =
+        resolvedConfig['company_phone'] as String? ?? '+91 92929 22992';
+    final companyEmail = resolvedConfig['company_email'] as String? ??
+        'insiyasolarindustry@gmail.com';
+    final companyGst =
+        resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
+
+    final cleanCompanyName = _cleanText(companyName);
+    final effectiveChallanDate = challanDate ?? salesOrder.orderDate;
+    final formattedDcNum = formatDeliveryChallanNumber(salesOrder.salesOrderNumber, effectiveChallanDate);
+
+    final effectiveSalesOrder = customLineItems != null && customLineItems.isNotEmpty
+        ? SalesOrder(
+            id: salesOrder.id,
+            pipelineId: salesOrder.pipelineId,
+            salesOrderNumber: salesOrder.salesOrderNumber,
+            orderDate: salesOrder.orderDate,
+            shippingCompany: salesOrder.shippingCompany,
+            vehicleNumber: salesOrder.vehicleNumber,
+            distance: salesOrder.distance,
+            grLrNo: salesOrder.grLrNo,
+            destination: salesOrder.destination,
+            placeOfSupply: salesOrder.placeOfSupply,
+            paymentTerms: salesOrder.paymentTerms,
+            billingAddress: salesOrder.billingAddress,
+            shippingAddress: salesOrder.shippingAddress,
+            expectedDispatchDate: salesOrder.expectedDispatchDate,
+            ewayBillNo: salesOrder.ewayBillNo,
+            ewayBillDate: salesOrder.ewayBillDate,
+            billType: salesOrder.billType,
+            salesman: salesOrder.salesman,
+            partyContactPerson: salesOrder.partyContactPerson,
+            lineItems: customLineItems,
+            subtotal: salesOrder.subtotal,
+            cgstRate: salesOrder.cgstRate,
+            sgstRate: salesOrder.sgstRate,
+            cgstAmount: salesOrder.cgstAmount,
+            sgstAmount: salesOrder.sgstAmount,
+            igstAmount: salesOrder.igstAmount,
+            grandTotal: salesOrder.grandTotal,
+            remarks: salesOrder.remarks,
+            status: salesOrder.status,
+            createdAt: salesOrder.createdAt,
+            updatedAt: salesOrder.updatedAt,
+          )
+        : salesOrder;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(30),
+        header: (context) => _buildHeader(
+          companyName: companyName,
+          companyAddress: companyAddress,
+          companyPhone: companyPhone,
+          companyEmail: companyEmail,
+          companyGst: 'GSTIN : $companyGst',
+          docTitle: 'DELIVERY CHALLAN',
+          docNumber: formattedDcNum,
+          docDate: effectiveChallanDate,
+          status: 'Confirmed',
+          logoImage: logoImage,
+        ),
+        footer: (context) => _buildFooter(
+          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+          context.pageNumber,
+          context.pagesCount,
+          generatedBy: generatedByName,
+        ),
+        build: (context) => [
+          // Shipping metadata card: Delivery Challan No., Challan Date, Ref No. (Quotation), Vehicle No, etc.
+          // Removed Expected Dispatch and Payment Terms as requested.
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(1),
+              1: const pw.FlexColumnWidth(1),
+            },
+            children: [
+              pw.TableRow(
+                children: [
+                  _metaCellRow('Delivery Challan No.', formattedDcNum),
+                  _metaCellRow('Challan Date',
+                      DateFormat('dd/MM/yyyy').format(effectiveChallanDate)),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  _metaCellRow('Ref No.', quotationNumber ?? '-'),
+                  _metaCellRow('Vehicle No', effectiveSalesOrder.vehicleNumber),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  _metaCellRow('Shipping Company', effectiveSalesOrder.shippingCompany),
+                  _metaCellRow('Distance', effectiveSalesOrder.distance),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  _metaCellRow('Eway Bill No & Date',
+                      '${effectiveSalesOrder.ewayBillNo ?? ''}${effectiveSalesOrder.ewayBillDate != null && effectiveSalesOrder.ewayBillDate!.isNotEmpty ? " | Dated ${effectiveSalesOrder.ewayBillDate!}" : ""}'),
+                  _metaCellRow('GR/LR No.', effectiveSalesOrder.grLrNo),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  _metaCellRow('Bill Type', effectiveSalesOrder.billType ?? 'Credit'),
+                  _metaCellRow('Destination', effectiveSalesOrder.destination),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  _metaCellRow('Place of Supply', effectiveSalesOrder.placeOfSupply),
+                  _metaCellRow('', ''),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+
+          // Bill To and Shipped To Addresses
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(1),
+              1: const pw.FlexColumnWidth(1),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text('Customer Name & Billing Address',
+                        style: pw.TextStyle(
+                            fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text('Shipping Address',
+                        style: pw.TextStyle(
+                            fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  // Billing Address Cell
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(_cleanText(customer.companyName),
+                            style: pw.TextStyle(
+                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                            _cleanText(effectiveSalesOrder.billingAddress ??
+                                customer.address),
+                            style: const pw.TextStyle(fontSize: 8)),
+                        if (customer.gstNumber != null &&
+                            customer.gstNumber!.isNotEmpty)
+                          pw.Text(
+                              'GSTIN : ${_cleanText(customer.gstNumber)}  State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
+                              style: pw.TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: pw.FontWeight.bold)),
+                        if (customer.phone != null &&
+                            customer.phone!.isNotEmpty)
+                          pw.Text('Phone : ${_cleanText(customer.phone)}',
+                              style: const pw.TextStyle(fontSize: 8)),
+                        if (effectiveSalesOrder.partyContactPerson != null &&
+                            effectiveSalesOrder.partyContactPerson!.isNotEmpty)
+                          pw.Text(
+                              'Party Contact Person : ${_cleanText(effectiveSalesOrder.partyContactPerson)}',
+                              style: const pw.TextStyle(fontSize: 8)),
+                      ],
+                    ),
+                  ),
+                  // Shipping Address Cell
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(_cleanText(customer.companyName),
+                            style: pw.TextStyle(
+                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                            _cleanText(effectiveSalesOrder.shippingAddress ??
+                                effectiveSalesOrder.billingAddress ??
+                                customer.address),
+                            style: const pw.TextStyle(fontSize: 8)),
+                        pw.SizedBox(height: 4),
+                        if (effectiveSalesOrder.salesman != null &&
+                            effectiveSalesOrder.salesman!.isNotEmpty)
+                          pw.Text(
+                              'Salesman : ${_cleanText(effectiveSalesOrder.salesman)}',
+                              style: const pw.TextStyle(fontSize: 8)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+
+          // Line items table - exact same as technical (BOQ) with remarks
+          _buildSalesOrderItemsTable(effectiveSalesOrder, 'challan'),
+          pw.SizedBox(height: 25),
+
+          // Declaration
+          pw.Text(
+            'Declaration:\nWe declare that this invoice shows the actual price of the goods / services described and that all particulars are true and correct.',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+          ),
+          pw.SizedBox(height: 30),
+
+          // Sign-off
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Container(
+                      width: 100, height: 1, color: PdfColors.grey500),
+                  pw.SizedBox(height: 4),
+                  pw.Text("Receiver's Signature",
+                      style: const pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('For ${cleanCompanyName.toUpperCase()}',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 25),
+                  pw.Container(
+                      width: 120, height: 1, color: PdfColors.grey500),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Authorised Signatory',
+                      style: const pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return pdf.save();
+  }
+
   static pw.Widget _metaCellRow(String label, String? value) {
     if (label.isEmpty) return pw.Container();
     return pw.Padding(
@@ -1931,8 +2240,8 @@ class PdfService {
             'Disc %',
             'Amount (INR)'
           ]
-        : variant == 'technical'
-            ? ['S No', 'Description', 'HSN / SAC', 'Qty', 'UOM']
+        : (variant == 'technical' || variant == 'challan')
+            ? ['S No', 'Description', 'Qty', 'UOM']
             : ['S No', 'Description', 'Qty', 'UOM'];
 
     final widths = variant == 'commercial'
@@ -1947,13 +2256,12 @@ class PdfService {
             7: const pw.FixedColumnWidth(35),
             8: const pw.FixedColumnWidth(60),
           }
-        : variant == 'technical'
+        : (variant == 'technical' || variant == 'challan')
             ? {
                 0: const pw.FixedColumnWidth(30),
                 1: const pw.FlexColumnWidth(3),
-                2: const pw.FixedColumnWidth(80),
-                3: const pw.FixedColumnWidth(50),
-                4: const pw.FixedColumnWidth(50),
+                2: const pw.FixedColumnWidth(60),
+                3: const pw.FixedColumnWidth(60),
               }
             : {
                 0: const pw.FixedColumnWidth(30),
@@ -2020,13 +2328,14 @@ class PdfService {
                   '${item.discPercent.toStringAsFixed(2)}%',
                   _currencyFormat.format(lineAmountIncludingTax),
                 ]
-              : variant == 'technical'
+              : (variant == 'technical' || variant == 'challan')
                   ? [
                       (idx + 1).toString(),
                       item.description,
-                      item.hsnSac ?? '',
-                      item.qty.toInt().toString(),
-                      item.uom,
+                      item.qty == item.qty.roundToDouble()
+                          ? '${item.qty.toInt()}.00'
+                          : item.qty.toStringAsFixed(2),
+                      item.uom.toUpperCase(),
                     ]
                   : [
                       (idx + 1).toString(),
@@ -2042,12 +2351,43 @@ class PdfService {
               final colIdx = cellEntry.key;
               final val = cellEntry.value;
 
-              final alignRight = variant == 'commercial' &&
-                  (colIdx == 3 ||
+              final alignRight = variant == 'commercial'
+                  ? (colIdx == 3 ||
                       colIdx == 4 ||
                       colIdx == 6 ||
                       colIdx == 7 ||
-                      colIdx == 8);
+                      colIdx == 8)
+                  : (colIdx == 2);
+
+              if ((variant == 'technical' || variant == 'challan') && colIdx == 1) {
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        _cleanText(val),
+                        style: pw.TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      if (item.remark != null && item.remark!.trim().isNotEmpty) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          _cleanText(item.remark!),
+                          style: pw.TextStyle(
+                            fontSize: 7.5,
+                            fontStyle: pw.FontStyle.italic,
+                            color: PdfColors.grey700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }
+
               return pw.Padding(
                 padding: const pw.EdgeInsets.all(4),
                 child: pw.Text(
@@ -2099,7 +2439,7 @@ class PdfService {
               ),
             ],
           )
-        else if (variant == 'technical')
+        else if (variant == 'technical' || variant == 'challan')
           pw.TableRow(
             decoration: const pw.BoxDecoration(color: PdfColors.white),
             children: [
@@ -2112,10 +2452,11 @@ class PdfService {
               pw.Padding(
                   padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
-              pw.Padding(
                 padding: const pw.EdgeInsets.all(5),
-                child: pw.Text(_currencyFormat.format(totalQty),
+                child: pw.Text(
+                    totalQty == totalQty.roundToDouble()
+                        ? '${totalQty.toInt()}.00'
+                        : _currencyFormat.format(totalQty),
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.right),

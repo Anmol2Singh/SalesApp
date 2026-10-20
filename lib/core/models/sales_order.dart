@@ -10,6 +10,7 @@ class SalesOrderLineItem {
   final double rate;
   final double discPercent;
   final double amount;
+  final String? remark;
 
   const SalesOrderLineItem({
     required this.description,
@@ -21,6 +22,7 @@ class SalesOrderLineItem {
     required this.rate,
     required this.discPercent,
     required this.amount,
+    this.remark,
   });
 
   factory SalesOrderLineItem.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class SalesOrderLineItem {
       rate: (json['rate'] as num? ?? 0).toDouble(),
       discPercent: (json['disc_percent'] as num? ?? 0).toDouble(),
       amount: (json['amount'] as num? ?? 0).toDouble(),
+      remark: json['remark'] as String? ?? json['remarks'] as String?,
     );
   }
 
@@ -47,6 +50,7 @@ class SalesOrderLineItem {
     'rate': rate,
     'disc_percent': discPercent,
     'amount': amount,
+    'remark': remark,
   };
 
   SalesOrderLineItem copyWith({
@@ -58,6 +62,7 @@ class SalesOrderLineItem {
     String? uom,
     double? rate,
     double? discPercent,
+    String? remark,
   }) {
     final newQty = qty ?? this.qty;
     final newRate = rate ?? this.rate;
@@ -73,6 +78,7 @@ class SalesOrderLineItem {
       rate: newRate,
       discPercent: newDisc,
       amount: totalAmount,
+      remark: remark ?? this.remark,
     );
   }
 }

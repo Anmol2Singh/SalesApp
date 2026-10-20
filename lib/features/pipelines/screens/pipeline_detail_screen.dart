@@ -20,6 +20,7 @@ import '../../../core/widgets/breadcrumbs.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/models/amc_contract.dart';
 import '../../quotation/providers/quotation_provider.dart';
+import '../../sales_order/widgets/delivery_challan_modal.dart';
 import '../../quotation_generator/config/qg_noc_flags.dart';
 import '../../quotation_generator/data/qg_noc_repository.dart';
 import '../../quotation_generator/models/qg_noc_document.dart';
@@ -552,11 +553,24 @@ class _PipelineDetailContent extends ConsumerWidget {
                                   TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
                                 if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
                                   TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
+                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
+                                  TextButton(onPressed: () => Navigator.pop(ctx, 'challan'), child: const Text('Delivery Challan')),
                               ];
                             }(),
                           ),
                         );
                         if (variant == null) return;
+                        if (variant == 'challan') {
+                          if (!context.mounted) return;
+                          if (pipeline.customer != null) {
+                            DeliveryChallanModal.show(
+                              context,
+                              pipelineId: pipeline.id,
+                              customer: pipeline.customer!,
+                            );
+                          }
+                          return;
+                        }
                       }
 
                       if (!context.mounted) return;
@@ -1089,11 +1103,24 @@ class _StepActionCard extends ConsumerWidget {
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
                                   if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
+                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
+                                    TextButton(onPressed: () => Navigator.pop(ctx, 'challan'), child: const Text('Delivery Challan')),
                                 ];
                               }(),
                             ),
                           );
                           if (variant == null) return;
+                          if (variant == 'challan') {
+                            if (!context.mounted) return;
+                            if (pipeline.customer != null) {
+                              DeliveryChallanModal.show(
+                                context,
+                                pipelineId: pipeline.id,
+                                customer: pipeline.customer!,
+                              );
+                            }
+                            return;
+                          }
                         } else if (step == PipelineStep.boq) {
                           variant = await showDialog<String>(
                             context: context,

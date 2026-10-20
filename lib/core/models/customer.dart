@@ -175,6 +175,9 @@ class SalesPipelineSummary {
   final PipelineStatus status;
   final DateTime createdAt;
   final String createdBy;
+  final bool? _hasSalesOrder;
+
+  bool get hasSalesOrder => _hasSalesOrder ?? false;
 
   const SalesPipelineSummary({
     required this.id,
@@ -184,9 +187,23 @@ class SalesPipelineSummary {
     required this.status,
     required this.createdAt,
     required this.createdBy,
-  });
+    bool? hasSalesOrder = false,
+  }) : _hasSalesOrder = hasSalesOrder;
 
   factory SalesPipelineSummary.fromJson(Map<String, dynamic> json) {
+    bool soExists = false;
+    if (json['sales_orders'] != null) {
+      if (json['sales_orders'] is List) {
+        soExists = (json['sales_orders'] as List).isNotEmpty;
+      } else if (json['sales_orders'] is Map) {
+        soExists = true;
+      }
+    }
+    final step = PipelineStep.fromString(json['current_step'] as String? ?? 'quotation');
+    if (!soExists && step != PipelineStep.quotation) {
+      soExists = true;
+    }
+
     return SalesPipelineSummary(
       id: json['id'] as String? ?? '',
       productId: json['product_id'] as String? ?? '',
@@ -195,12 +212,13 @@ class SalesPipelineSummary {
           : (json['products'] is List && (json['products'] as List).isNotEmpty)
               ? (json['products'] as List).first['name'] as String? ?? 'Unknown Product'
               : 'Unknown Product',
-      currentStep: PipelineStep.fromString(json['current_step'] as String? ?? 'quotation'),
+      currentStep: step,
       status: PipelineStatus.fromString(json['status'] as String? ?? 'in_progress'),
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now())
           : DateTime.now(),
       createdBy: json['created_by'] as String? ?? '',
+      hasSalesOrder: soExists,
     );
   }
 }

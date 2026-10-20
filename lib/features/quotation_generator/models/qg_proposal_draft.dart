@@ -14,6 +14,7 @@ import 'pool_heat_pump_model.dart';
 import '../config/quote_type.dart';
 import '../services/qg_item_parser.dart';
 import '../services/price_calculator.dart';
+import '../services/qg_payment_sentence_builder.dart';
 
 /// Represents the in-memory and locally persisted draft of a Heat Pump Proposal.
 /// Encapsulates all salesperson edits, item resolutions, specifications,
@@ -253,17 +254,11 @@ class QgProposalDraft {
     // 7. Payment terms text
     String pTermsText = q.termsText ?? '';
     if (pTermsText.isEmpty && q.paymentTerms.isNotEmpty) {
-      final parts = q.paymentTerms
-          .map((pt) {
-            final p = pt['percent'];
-            final pStr = (p is num) ? '${p.round()}%' : (p != null ? '${p.toString().split('.').first}%' : '');
-            return '$pStr ${pt['term'] ?? ''}'.trim();
-          })
-          .join(', ');
-      pTermsText = 'Payment Terms: $parts';
+      pTermsText = QgPaymentSentenceBuilder.buildSentence(
+        paymentTerms: q.paymentTerms,
+        isAnnexureQuirk: true,
+      );
     }
-    // Ensure no decimal percentages e.g. 50.0% -> 50%
-    pTermsText = pTermsText.replaceAllMapped(RegExp(r'(\d+)\.\d+%'), (m) => '${m[1]}%');
 
     // 8. Date format
     final d = q.orderDate;
@@ -722,6 +717,23 @@ class QgProposalDraft {
       );
     }
 
+    int advSplit = 70;
+    int delSplit = 20;
+    int commSplit = 10;
+    if (paymentTerms.isNotEmpty) {
+      for (final pt in paymentTerms) {
+        final t = (pt['term'] ?? '').toString().toLowerCase();
+        final p = (pt['percent'] as num?)?.toInt() ?? (pt['percentage'] as num?)?.toInt() ?? 0;
+        if (t.contains('advance') || t.contains('po')) {
+          advSplit = p;
+        } else if (t.contains('delivery') || t.contains('dispatch')) {
+          delSplit = p;
+        } else if (t.contains('install') || t.contains('commission') || t.contains('completion')) {
+          commSplit = p;
+        }
+      }
+    }
+
     return GeneratorQuotation(
       id: quotationId,
       quoteType: resolvedQuoteType,
@@ -760,6 +772,10 @@ class QgProposalDraft {
       grossTotal: (subtotal + cgstAmount + sgstAmount).round(),
       grandTotal: grandTotal.round(),
       netPayable: grandTotal.round(),
+      paymentSplitAdvance: advSplit,
+      paymentSplitDelivery: delSplit,
+      paymentSplitCommissioning: commSplit,
+      paymentTerms: paymentTerms,
       warrantyHpYears: warrantyHpYears,
       warrantyTankYears: hasTank ? warrantyTankYears : 0,
       validityDays: validityDays,

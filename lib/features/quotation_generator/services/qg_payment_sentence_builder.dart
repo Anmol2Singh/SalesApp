@@ -21,7 +21,9 @@ class QgPaymentSentenceBuilder {
     final stages = <_PaymentStage>[];
     for (final pt in paymentTerms) {
       final term = pt['term']?.toString().trim() ?? '';
-      final percent = (pt['percent'] as num?)?.toInt() ?? 0;
+      final percent = (pt['percent'] as num?)?.toInt() ??
+          (pt['percentage'] as num?)?.toInt() ??
+          0;
       if (percent <= 0) continue;
 
       final phrase = _resolvePhrase(term, isAnnexureQuirk: isAnnexureQuirk);
@@ -91,7 +93,9 @@ class QgPaymentSentenceBuilder {
       return 'PO';
     } else if (lower.contains('delivery') || lower.contains('dispatch') || lower.contains('proforma')) {
       return 'delivery';
-    } else if (lower.contains('install') || lower.contains('commission') || lower.contains('completion')) {
+    } else if (lower.contains('completion')) {
+      return 'completion';
+    } else if (lower.contains('install') || lower.contains('commission')) {
       return installPhrase;
     }
 

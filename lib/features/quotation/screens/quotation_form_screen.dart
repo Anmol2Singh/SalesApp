@@ -90,6 +90,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     {'term': 'Installation', 'percent': 5.0, 'amount': 0.0},
     {'term': 'Completion', 'percent': 5.0, 'amount': 0.0},
   ];
+  final List<TextEditingController> _paymentTermNameControllers = [];
+  final List<TextEditingController> _paymentPercentControllers = [];
+  final List<TextEditingController> _paymentAmountControllers = [];
 
   static final List<Map<String, dynamic>> _defaultPaymentTemplates = [
     {
@@ -187,6 +190,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           'amount': (_grandTotal * (pct / 100.0)).roundToDouble(),
         });
       }
+      _syncPaymentTermControllers();
     });
   }
 
@@ -894,6 +898,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   @override
   void initState() {
     super.initState();
+    _syncPaymentTermControllers();
     _loadData();
   }
 
@@ -916,6 +921,15 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     _stateCodeController.dispose();
     _salesmanController.dispose();
     for (final c in _specControllers.values) {
+      c.dispose();
+    }
+    for (final c in _paymentTermNameControllers) {
+      c.dispose();
+    }
+    for (final c in _paymentPercentControllers) {
+      c.dispose();
+    }
+    for (final c in _paymentAmountControllers) {
       c.dispose();
     }
     super.dispose();
@@ -977,6 +991,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       _paymentTerms
           .addAll(q.paymentTerms!.map((e) => Map<String, dynamic>.from(e)));
       _syncPaymentTermAmounts();
+      _syncPaymentTermControllers();
     }
 
     if (q.supplementaryTerms != null) {
@@ -3034,7 +3049,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   ],
                 ),
               ),
-            const SizedBox(height: 40),
+            SizedBox(height: 120 + MediaQuery.of(context).padding.bottom),
           ],
         ),
       ),
@@ -3043,10 +3058,90 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
 
   void _syncPaymentTermAmounts() {
     final gt = _grandTotal;
-    for (final term in _paymentTerms) {
+    for (int i = 0; i < _paymentTerms.length; i++) {
+      final term = _paymentTerms[i];
       final p = (term['percent'] as num?)?.toDouble() ?? 0.0;
-      term['amount'] = (gt * (p / 100.0)).roundToDouble();
+      final calcAmt = (gt * (p / 100.0)).roundToDouble();
+      term['amount'] = calcAmt;
+      if (i < _paymentAmountControllers.length) {
+        final aText = calcAmt > 0 ? calcAmt.round().toString() : '0';
+        if (_paymentAmountControllers[i].text != aText) {
+          _paymentAmountControllers[i].text = aText;
+        }
+      }
     }
+  }
+
+  void _syncPaymentTermControllers() {
+    while (_paymentTermNameControllers.length < _paymentTerms.length) {
+      final idx = _paymentTermNameControllers.length;
+      final item = _paymentTerms[idx];
+      final t = item['term']?.toString() ?? '';
+      final p = (item['percent'] as num?)?.toDouble() ?? 0.0;
+      final a = (item['amount'] as num?)?.toDouble() ??
+          (_grandTotal * (p / 100.0)).roundToDouble();
+      _paymentTermNameControllers.add(TextEditingController(text: t));
+      _paymentPercentControllers.add(TextEditingController(
+          text: p.toStringAsFixed(p == p.roundToDouble() ? 0 : 1)));
+      _paymentAmountControllers.add(TextEditingController(
+          text: a > 0 ? a.round().toString() : '0'));
+    }
+    while (_paymentTermNameControllers.length > _paymentTerms.length) {
+      _paymentTermNameControllers.removeLast().dispose();
+      _paymentPercentControllers.removeLast().dispose();
+      _paymentAmountControllers.removeLast().dispose();
+    }
+    for (int i = 0; i < _paymentTerms.length; i++) {
+      final item = _paymentTerms[i];
+      final t = item['term']?.toString() ?? '';
+      final p = (item['percent'] as num?)?.toDouble() ?? 0.0;
+      final a = (item['amount'] as num?)?.toDouble() ??
+          (_grandTotal * (p / 100.0)).roundToDouble();
+      if (_paymentTermNameControllers[i].text != t) {
+        _paymentTermNameControllers[i].text = t;
+      }
+      final pText = p.toStringAsFixed(p == p.roundToDouble() ? 0 : 1);
+      if (_paymentPercentControllers[i].text != pText) {
+        _paymentPercentControllers[i].text = pText;
+      }
+      final aText = a > 0 ? a.round().toString() : '0';
+      if (_paymentAmountControllers[i].text != aText) {
+        _paymentAmountControllers[i].text = aText;
+      }
+    }
+  }
+
+  void _onPaymentPercentChanged(int idx, String val) {
+    if (idx >= _paymentTerms.length) return;
+    final parsed = double.tryParse(val) ?? 0.0;
+    _paymentTerms[idx]['percent'] = parsed;
+    final calcAmt = (_grandTotal * (parsed / 100.0)).roundToDouble();
+    _paymentTerms[idx]['amount'] = calcAmt;
+    if (idx < _paymentAmountControllers.length) {
+      final aText = calcAmt > 0 ? calcAmt.round().toString() : '0';
+      if (_paymentAmountControllers[idx].text != aText) {
+        _paymentAmountControllers[idx].text = aText;
+      }
+    }
+    setState(() {});
+  }
+
+  void _onPaymentAmountChanged(int idx, String val) {
+    if (idx >= _paymentTerms.length) return;
+    final clean = val.replaceAll(',', '').trim();
+    final parsedAmt = double.tryParse(clean) ?? 0.0;
+    _paymentTerms[idx]['amount'] = parsedAmt;
+    final calcPct = _grandTotal > 0 ? (parsedAmt / _grandTotal * 100.0) : 0.0;
+    final roundedPct = double.parse(calcPct.toStringAsFixed(2));
+    _paymentTerms[idx]['percent'] = roundedPct;
+    if (idx < _paymentPercentControllers.length) {
+      final pText = roundedPct.toStringAsFixed(
+          roundedPct == roundedPct.roundToDouble() ? 0 : 1);
+      if (_paymentPercentControllers[idx].text != pText) {
+        _paymentPercentControllers[idx].text = pText;
+      }
+    }
+    setState(() {});
   }
 
   Widget _buildPaymentTermsCard(bool enabled, {required bool isAdmin}) {
@@ -3445,7 +3540,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           flex: 5,
                           child: enabled
                               ? TextFormField(
-                                  initialValue: termName,
+                                  controller: _paymentTermNameControllers.length > idx
+                                      ? _paymentTermNameControllers[idx]
+                                      : null,
                                   decoration: InputDecoration(
                                     isDense: true,
                                     hintText: idx < defaultStageNames.length
@@ -3490,8 +3587,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           flex: 3,
                           child: enabled
                               ? TextFormField(
-                                  initialValue: pct.toStringAsFixed(
-                                      pct == pct.roundToDouble() ? 0 : 1),
+                                  controller: _paymentPercentControllers.length > idx
+                                      ? _paymentPercentControllers[idx]
+                                      : null,
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
                                           decimal: true),
@@ -3521,31 +3619,8 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                       fontFamily: 'Inter',
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold),
-                                  onChanged: (val) {
-                                    final parsed = double.tryParse(val);
-                                    if (parsed != null) {
-                                      final otherTotal = _paymentTerms
-                                          .asMap()
-                                          .entries
-                                          .where((e) => e.key != idx)
-                                          .fold<double>(
-                                              0.0,
-                                              (s, e) =>
-                                                  s +
-                                                  ((e.value['percent'] as num?)
-                                                          ?.toDouble() ??
-                                                      0.0));
-                                      final capped =
-                                          (parsed + otherTotal > 100.0)
-                                              ? (100.0 - otherTotal)
-                                              : parsed;
-                                      setState(() {
-                                        item['percent'] =
-                                            capped < 0 ? 0.0 : capped;
-                                        _syncPaymentTermAmounts();
-                                      });
-                                    }
-                                  },
+                                  onChanged: (val) =>
+                                      _onPaymentPercentChanged(idx, val),
                                 )
                               : Text(
                                   '${pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1)}%',
@@ -3559,16 +3634,55 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           flex: 4,
-                          child: Text(
-                            '₹${InventoryAutocomplete.formatIndianPrice(amt)}',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                            ),
-                          ),
+                          child: enabled
+                              ? TextFormField(
+                                  controller: _paymentAmountControllers.length > idx
+                                      ? _paymentAmountControllers[idx]
+                                      : null,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  textAlign: TextAlign.right,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    prefixText: '₹',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                  onChanged: (val) =>
+                                      _onPaymentAmountChanged(idx, val),
+                                )
+                              : Text(
+                                  '₹${InventoryAutocomplete.formatIndianPrice(amt)}',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
                         ),
                         if (enabled) ...[
                           IconButton(
@@ -3581,6 +3695,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                     setState(() {
                                       _paymentTerms.removeAt(idx);
                                       _syncPaymentTermAmounts();
+                                      _syncPaymentTermControllers();
                                     });
                                   },
                           ),
@@ -3593,7 +3708,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 }),
 
                 // Add Stage Button
-                if (enabled && totalPercent < 100.0) ...[
+                if (enabled && totalPercent < 99.99) ...[
                   const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -3618,9 +3733,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                           _paymentTerms.add({
                             'term': nextName,
                             'percent': remaining,
-                            'amount': 0.0,
+                            'amount': (_grandTotal * (remaining / 100.0)).roundToDouble(),
                           });
-                          _syncPaymentTermAmounts();
+                          _syncPaymentTermControllers();
                         });
                       },
                       icon: const Icon(Icons.add_circle_outline, size: 18),
@@ -4365,28 +4480,7 @@ class _SupplementaryItemRow extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                flex: 1,
-                child: DropdownButtonFormField<String>(
-                  value: typeCtrl.text.isEmpty ? 'Extra' : typeCtrl.text,
-                  decoration: const InputDecoration(
-                    labelText: 'Type',
-                    isDense: true,
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'Extra', child: Text('Extra')),
-                    DropdownMenuItem(value: 'Included', child: Text('Included')),
-                  ],
-                  onChanged: enabled ? (val) {
-                    if (val != null) {
-                      typeCtrl.text = val;
-                      onChanged();
-                    }
-                  } : null,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
+                flex: 5,
                 child: SearchableDropdown<String>(
                   label: 'Supplementary Term',
                   hint: 'Search term...',
@@ -4398,6 +4492,8 @@ class _SupplementaryItemRow extends ConsumerWidget {
                     labelText: 'Supplementary Term',
                     hintText: 'Search term...',
                     isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
                   onChanged: (val) {
                     if (val != null) {
@@ -4413,6 +4509,32 @@ class _SupplementaryItemRow extends ConsumerWidget {
                       onChanged();
                     }
                   },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String>(
+                  value: typeCtrl.text.isEmpty ? 'Extra' : typeCtrl.text,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Type',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Extra', child: Text('Extra')),
+                    DropdownMenuItem(value: 'Included', child: Text('Included')),
+                  ],
+                  onChanged: enabled
+                      ? (val) {
+                          if (val != null) {
+                            typeCtrl.text = val;
+                            onChanged();
+                          }
+                        }
+                      : null,
                 ),
               ),
             ],

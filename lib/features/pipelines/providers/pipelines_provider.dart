@@ -32,8 +32,8 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
       : super(const AsyncValue.loading()) {
     load();
     _initRealtime();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) load(refresh: true);
+    _pollingTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (mounted) load(refresh: true, isSilent: true);
     });
   }
 
@@ -45,31 +45,31 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'sales_pipelines',
-            callback: (_) => refresh(),
+            callback: (_) => load(refresh: true, isSilent: true),
           )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'boqs',
-            callback: (_) => refresh(),
+            callback: (_) => load(refresh: true, isSilent: true),
           )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'factory_orders',
-            callback: (_) => refresh(),
+            callback: (_) => load(refresh: true, isSilent: true),
           )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'purchase_orders',
-            callback: (_) => refresh(),
+            callback: (_) => load(refresh: true, isSilent: true),
           )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'sales_orders',
-            callback: (_) => refresh(),
+            callback: (_) => load(refresh: true, isSilent: true),
           )
           .subscribe();
     } catch (e) {
@@ -88,12 +88,14 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
     super.dispose();
   }
 
-  Future<void> load({bool refresh = false}) async {
+  Future<void> load({bool refresh = false, bool isSilent = false}) async {
     if (_isLoading && !refresh) return;
     if (refresh) {
       _page = 0;
       _hasMore = true;
-      state = const AsyncValue.loading();
+      if (!isSilent && !state.hasValue) {
+        state = const AsyncValue.loading();
+      }
     }
     if (!_hasMore && !refresh) return;
 
@@ -180,7 +182,7 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
     }
   }
 
-  Future<void> refresh() => load(refresh: true);
+  Future<void> refresh() => load(refresh: true, isSilent: true);
 
   void setFilters({String step = '', String status = ''}) {
     _stepFilter = step;
@@ -240,8 +242,8 @@ final dealsStreamProvider = StreamProvider.autoDispose<List<Map<String, dynamic>
       .from('sales_pipelines')
       .stream(primaryKey: ['id'])
       .map((data) {
-        // Invalidate active pipeline lists when changes occur
-        ref.read(pipelinesNotifierProvider.notifier).refresh();
+        // Invalidate active pipeline lists silently when changes occur
+        ref.read(pipelinesNotifierProvider.notifier).load(refresh: true, isSilent: true);
         return data;
       });
 });

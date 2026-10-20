@@ -861,12 +861,17 @@ class PdfQuotationBuilder {
               : 'Annexure – III: Commercial terms and conditions & Warranty.';
 
           // Payment sentence with quirk 'satisfactoryinstallation and commissioning'
-          final paymentSentence = QgPaymentSentenceBuilder.buildFromSplits(
-            advance: quotation.paymentSplitAdvance,
-            delivery: quotation.paymentSplitDelivery,
-            commissioning: quotation.paymentSplitCommissioning,
-            isAnnexureQuirk: true,
-          );
+          final paymentSentence = quotation.paymentTerms.isNotEmpty
+              ? QgPaymentSentenceBuilder.buildSentence(
+                  paymentTerms: quotation.paymentTerms,
+                  isAnnexureQuirk: true,
+                )
+              : QgPaymentSentenceBuilder.buildFromSplits(
+                  advance: quotation.paymentSplitAdvance,
+                  delivery: quotation.paymentSplitDelivery,
+                  commissioning: quotation.paymentSplitCommissioning,
+                  isAnnexureQuirk: true,
+                );
 
           String warrantyText;
           if (quotation.quoteType == QuoteType.allInOneFloor ||
@@ -1046,13 +1051,17 @@ class PdfQuotationBuilder {
               PriceCalculator.formatIndianCurrency(quotation.netPayable);
 
           // Payment sentence with standard space 'satisfactory installation and commissioning'
-          final acceptancePaymentSentence =
-              QgPaymentSentenceBuilder.buildFromSplits(
-            advance: quotation.paymentSplitAdvance,
-            delivery: quotation.paymentSplitDelivery,
-            commissioning: quotation.paymentSplitCommissioning,
-            isAnnexureQuirk: false,
-          );
+          final acceptancePaymentSentence = quotation.paymentTerms.isNotEmpty
+              ? QgPaymentSentenceBuilder.buildSentence(
+                  paymentTerms: quotation.paymentTerms,
+                  isAnnexureQuirk: false,
+                )
+              : QgPaymentSentenceBuilder.buildFromSplits(
+                  advance: quotation.paymentSplitAdvance,
+                  delivery: quotation.paymentSplitDelivery,
+                  commissioning: quotation.paymentSplitCommissioning,
+                  isAnnexureQuirk: false,
+                );
 
           return withWatermark(
             pw.Column(
@@ -2009,6 +2018,66 @@ class PdfQuotationBuilder {
                     _tc('${r.qty}', center: true),
                     _tc(rateStr, center: true),
                     _tc(totalStr, center: true),
+                  ],
+                );
+              }
+            }),
+            ...quotation.extraPriceRows.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final it = entry.value;
+              final rowNum = rows.length + idx + 1;
+              final srText = rowNum < 10 ? '0$rowNum' : '$rowNum';
+
+              String desc = it.description.trim();
+              final hadExtraInDesc = desc.toLowerCase().contains('extra');
+              desc = desc
+                  .replaceAll(
+                      RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '')
+                  .trim();
+              final isExtraSelection = it.amountType == PriceRowType.extra ||
+                  hadExtraInDesc ||
+                  (it.amountType == PriceRowType.customText &&
+                      it.customText.toLowerCase().contains('extra'));
+              final isCharged = (it.amountType == PriceRowType.extra ||
+                      it.amountType == PriceRowType.amount) &&
+                  it.numericAmount > 0;
+              final amt = isCharged
+                  ? PriceCalculator.formatIndianCurrency(it.numericAmount,
+                      includeSymbol: false)
+                  : (isExtraSelection ? 'Extra' : 'Included');
+              final qtyVal = int.tryParse(it.qty) ?? 0;
+              final qtyStr =
+                  qtyVal > 0 ? '$qtyVal' : (it.qty.isNotEmpty ? it.qty : '1');
+              final rateStr = it.systemRate.isNotEmpty
+                  ? it.systemRate
+                  : (isCharged
+                      ? (qtyVal > 0
+                          ? PriceCalculator.formatIndianCurrency(
+                              (it.numericAmount / qtyVal).round(),
+                              includeSymbol: false)
+                          : amt)
+                      : (isExtraSelection ? 'Extra' : 'Included'));
+
+              if (hasDiscountCol) {
+                return pw.TableRow(
+                  children: [
+                    _tc(srText, center: true),
+                    _tc(desc),
+                    _tc(qtyStr, center: true),
+                    _tc(rateStr, center: true),
+                    _tc('-', center: true),
+                    _tc(amt, center: true),
+                  ],
+                );
+              } else {
+                return pw.TableRow(
+                  children: [
+                    _tc(srText, center: true),
+                    _tc(desc),
+                    _tc('NOS', center: true),
+                    _tc(qtyStr, center: true),
+                    _tc(rateStr, center: true),
+                    _tc(amt, center: true),
                   ],
                 );
               }
