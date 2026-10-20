@@ -398,7 +398,11 @@ class _MultiCompanyManagementCardState
         child: Stack(
           alignment: Alignment.topRight,
           children: [
-            InteractiveViewer(child: Image.network(url)),
+            InteractiveViewer(
+              child: url.startsWith('assets/')
+                  ? Image.asset(url)
+                  : Image.network(url, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 64)),
+            ),
             IconButton(
               icon: const Icon(Icons.close, color: Colors.white, size: 28),
               onPressed: () => Navigator.pop(ctx),
@@ -887,8 +891,11 @@ class _MultiCompanyManagementCardState
                                             child: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              child: Image.network(_logoUrl!,
-                                                  fit: BoxFit.contain),
+                                              child: _logoUrl!.startsWith('assets/')
+                                                  ? Image.asset(_logoUrl!, fit: BoxFit.contain)
+                                                  : Image.network(_logoUrl!,
+                                                      fit: BoxFit.contain,
+                                                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 28, color: Colors.grey)),
                                             ),
                                           )
                                         : const Icon(
@@ -971,8 +978,11 @@ class _MultiCompanyManagementCardState
                                             child: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              child: Image.network(_stampUrl!,
-                                                  fit: BoxFit.contain),
+                                              child: _stampUrl!.startsWith('assets/')
+                                                  ? Image.asset(_stampUrl!, fit: BoxFit.contain)
+                                                  : Image.network(_stampUrl!,
+                                                      fit: BoxFit.contain,
+                                                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 28, color: Colors.grey)),
                                             ),
                                           )
                                         : const Icon(

@@ -12,6 +12,7 @@ import '../../complaints/screens/technicians_tab_screen.dart';
 import 'product_catalog_screen.dart';
 import 'pdf_template_screen.dart';
 import 'manage_boq_items_screen.dart';
+import 'noc_certificate_settings_screen.dart';
 import 'company_helpline_screen.dart';
 import 'amc_management_screen.dart';
 
@@ -77,8 +78,8 @@ class AdminPanelScreen extends ConsumerWidget {
     }
 
     return DefaultTabController(
-      length: 7,
-      initialIndex: initialIndex.clamp(0, 6),
+      length: 8,
+      initialIndex: initialIndex.clamp(0, 7),
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
@@ -116,6 +117,7 @@ class AdminPanelScreen extends ConsumerWidget {
                   Tab(text: 'Product Catalog', icon: Icon(Icons.inventory_2_outlined)),
                   Tab(text: 'PDF Templates', icon: Icon(Icons.picture_as_pdf_outlined)),
                   Tab(text: 'Manage BOQ Items', icon: Icon(Icons.format_list_bulleted_outlined)),
+                  Tab(text: 'NOC Certificates', icon: Icon(Icons.verified_outlined)),
                   Tab(text: 'Company Helpline', icon: Icon(Icons.support_agent_outlined)),
                   Tab(text: 'AMC Management', icon: Icon(Icons.verified_user_outlined)),
                 ],
@@ -130,6 +132,7 @@ class AdminPanelScreen extends ConsumerWidget {
             ProductCatalogScreen(isEmbedded: true),
             PdfTemplateScreen(isEmbedded: true),
             ManageBoqItemsScreen(isEmbedded: true),
+            NocCertificateSettingsScreen(isEmbedded: true),
             CompanyHelplineScreen(isEmbedded: true),
             AmcManagementScreen(isEmbedded: true),
           ],

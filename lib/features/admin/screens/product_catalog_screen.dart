@@ -507,6 +507,7 @@ class ProductCatalogScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: selectedCompanyId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Default Company (Quotations & Deals)',
                       prefixIcon: Icon(Icons.apartment),
@@ -517,6 +518,7 @@ class ProductCatalogScreen extends ConsumerWidget {
                         child: Text(
                           c.isDefault ? '${c.name} (Default)' : c.name,
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       );
                     }).toList(),
@@ -621,6 +623,7 @@ class ProductCatalogScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: selectedCompanyId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Default Company (Quotations & Deals)',
                       prefixIcon: Icon(Icons.apartment),
@@ -631,6 +634,7 @@ class ProductCatalogScreen extends ConsumerWidget {
                         child: Text(
                           c.isDefault ? '${c.name} (Default)' : c.name,
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       );
                     }).toList(),

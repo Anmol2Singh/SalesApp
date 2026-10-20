@@ -22,12 +22,31 @@ class QgNocRepository {
           .select()
           .order('product_name');
 
-      return res.map((e) => QgNocProfile.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+      if (res.isNotEmpty) {
+        final dbProfiles = res.map((e) => QgNocProfile.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+        final names = dbProfiles.map((p) => p.productName.toLowerCase().trim()).toSet();
+        final result = List<QgNocProfile>.from(dbProfiles);
+
+        final defaults = [
+          QgNocProfile.defaultHeatPumpProfile(),
+          QgNocProfile.defaultProfile(),
+          QgNocProfile.defaultBoomBarrierProfile(),
+        ];
+
+        for (final def in defaults) {
+          if (!names.contains(def.productName.toLowerCase().trim())) {
+            result.add(def);
+          }
+        }
+        return result;
+      }
     } catch (e) {
       debugPrint('QgNocRepository.getProfiles error: $e');
     }
     return [
+      QgNocProfile.defaultHeatPumpProfile(),
       QgNocProfile.defaultProfile(),
+      QgNocProfile.defaultBoomBarrierProfile(),
     ];
   }
 
@@ -65,12 +84,30 @@ class QgNocRepository {
     return QgNocProfile.defaultProfile(productName: productName);
   }
 
-  Future<void> updateProfileConfirmations(String profileId, List<String> confirmations) async {
+  Future<void> updateProfileConfirmations(String profileId, List<String> confirmations, {String? productName}) async {
     try {
-      await _supabase
+      final res = await _supabase
           .from('qg_noc_profiles')
           .update({'confirmation_lines': confirmations})
-          .eq('id', profileId);
+          .eq('id', profileId)
+          .select();
+
+      if (res.isEmpty && productName != null && productName.isNotEmpty) {
+        final resByName = await _supabase
+            .from('qg_noc_profiles')
+            .update({'confirmation_lines': confirmations})
+            .ilike('product_name', productName)
+            .select();
+
+        if (resByName.isEmpty) {
+          await _supabase.from('qg_noc_profiles').insert({
+            'product_name': productName,
+            'equipment_label': productName,
+            'work_type_text': '$productName Installation work',
+            'confirmation_lines': confirmations,
+          });
+        }
+      }
     } catch (e) {
       debugPrint('QgNocRepository.updateProfileConfirmations error: $e');
       rethrow;
@@ -222,8 +259,8 @@ class QgNocRepository {
 
   static Future<List<QgNocProfile>> fetchProfiles() => instance.getProfiles();
 
-  static Future<void> saveProfileConfirmations(String profileId, List<String> confirmations) =>
-      instance.updateProfileConfirmations(profileId, confirmations);
+  static Future<void> saveProfileConfirmations(String profileId, List<String> confirmations, {String? productName}) =>
+      instance.updateProfileConfirmations(profileId, confirmations, productName: productName);
 
   static Future<List<QgNocDocument>> listNocs({
     String? dealId,

@@ -6,11 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../config/quotation_generator_flags.dart';
-import '../config/quote_type.dart';
 import '../models/generator_company_settings.dart';
 import '../models/generator_quotation.dart';
-import '../models/heat_pump_model.dart';
-import '../models/tank_spec.dart';
 import '../services/quote_number_service.dart';
 import '../models/deal_quotation_item.dart';
 import '../models/qg_proposal_draft.dart';
@@ -27,6 +24,27 @@ class QuotationSupabaseRepository {
   // ─── SETTINGS & CATALOG OVER SUPABASE ──────────────────────────────────────
 
   Future<GeneratorCompanySettings> getSettings() async {
+    // 1. Try reading from qg_settings in Supabase
+    try {
+      final qgRes = await _supabase
+          .from('qg_settings')
+          .select('value')
+          .eq('key', 'generator_company_settings')
+          .maybeSingle();
+
+      if (qgRes != null && qgRes['value'] is Map) {
+        final settingsMap = Map<String, dynamic>.from(qgRes['value'] as Map);
+        final settings = GeneratorCompanySettings.fromJson(settingsMap);
+        if (settings.models.isNotEmpty) {
+          _cachedSettings = settings;
+          return settings;
+        }
+      }
+    } catch (e) {
+      debugPrint('QuotationSupabaseRepository.getSettings qg_settings error: $e');
+    }
+
+    // 2. Fallback to pdf_templates
     try {
       final res = await _supabase
           .from('pdf_templates')
@@ -61,9 +79,12 @@ class QuotationSupabaseRepository {
               allInOneModels: bundledAio,
             );
             _cachedSettings = filled;
+            // Seed to qg_settings
+            await saveSettings(filled);
             return filled;
           }
           _cachedSettings = settings;
+          await saveSettings(settings);
           return settings;
         }
       }
@@ -73,7 +94,7 @@ class QuotationSupabaseRepository {
 
     if (_cachedSettings != null) return _cachedSettings!;
 
-    // Seed default settings from bundled JSON and persist to Supabase
+    // Seed default settings from bundled JSON and persist to Supabase qg_settings
     final bundledHp = await CatalogRepository.loadBundledModels();
     final bundledPool = await CatalogRepository.loadBundledPoolModels();
     final bundledAio = await CatalogRepository.loadBundledAllInOneModels();
@@ -87,7 +108,7 @@ class QuotationSupabaseRepository {
     try {
       await saveSettings(initial);
     } catch (e) {
-      debugPrint('Could not initial-seed Supabase pdf_templates: $e');
+      debugPrint('Could not initial-seed Supabase qg_settings: $e');
     }
 
     return initial;
@@ -95,7 +116,16 @@ class QuotationSupabaseRepository {
 
   Future<void> saveSettings(GeneratorCompanySettings settings) async {
     _cachedSettings = settings;
-    debugPrint('[CONTAINMENT GUARD] saveSettings: Writes to legacy "pdf_templates" table are retired.');
+    try {
+      await _supabase.from('qg_settings').upsert({
+        'key': 'generator_company_settings',
+        'value': settings.toJson(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      debugPrint('✓ GeneratorCompanySettings saved to Supabase qg_settings');
+    } catch (e) {
+      debugPrint('QuotationSupabaseRepository.saveSettings error: $e');
+    }
   }
 
   Future<int> getAndIncrementNextRunningNumber() async {

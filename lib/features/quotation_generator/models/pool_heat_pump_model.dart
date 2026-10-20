@@ -5,6 +5,7 @@ class PoolHeatPumpModel {
   final String modelName;
   final double capacityKw;
   final String description;
+  final String defaultImagePath;
   final Map<String, String> specs;
 
   const PoolHeatPumpModel({
@@ -12,6 +13,7 @@ class PoolHeatPumpModel {
     required this.modelName,
     required this.capacityKw,
     required this.description,
+    this.defaultImagePath = '',
     required this.specs,
   });
 
@@ -31,6 +33,7 @@ class PoolHeatPumpModel {
         'modelName': modelName,
         'capacityKw': capacityKw,
         'description': description,
+        'defaultImagePath': defaultImagePath,
         'specs': specs,
       };
 
@@ -39,17 +42,37 @@ class PoolHeatPumpModel {
         modelName: json['modelName'] as String? ?? 'IZ-35SP',
         capacityKw: (json['capacityKw'] as num?)?.toDouble() ?? 35.0,
         description: json['description'] as String? ?? '',
+        defaultImagePath: json['defaultImagePath'] as String? ?? '',
         specs: (json['specs'] as Map<String, dynamic>?)?.map(
               (k, v) => MapEntry(k, v.toString()),
             ) ??
             {},
       );
 
+  PoolHeatPumpModel copyWith({
+    String? id,
+    String? modelName,
+    double? capacityKw,
+    String? description,
+    String? defaultImagePath,
+    Map<String, String>? specs,
+  }) {
+    return PoolHeatPumpModel(
+      id: id ?? this.id,
+      modelName: modelName ?? this.modelName,
+      capacityKw: capacityKw ?? this.capacityKw,
+      description: description ?? this.description,
+      defaultImagePath: defaultImagePath ?? this.defaultImagePath,
+      specs: specs ?? this.specs,
+    );
+  }
+
   static PoolHeatPumpModel defaultModel() => const PoolHeatPumpModel(
         id: 'IZ-35SP',
         modelName: 'IZ-35SP',
         capacityKw: 35.0,
         description: 'Air Source Heat Pump 35KW for Swimming Pool. Make: IZYHEAT Heat Pump Model: IZ-35SP',
+        defaultImagePath: '',
         specs: {
           'Capacity in kW': '35KW',
           'Product Dimensions': '1084x399x737mm',

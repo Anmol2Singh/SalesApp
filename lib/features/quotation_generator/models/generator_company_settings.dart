@@ -35,6 +35,11 @@ class GeneratorCompanySettings {
   final String? stampImagePath;
   final String? defaultCoverImagePath;
   final String? defaultBannerImagePath;
+  // Type images for the last page of multi-page quotation
+  final String? domesticHpImagePath;
+  final String? allInOneImagePath;
+  final String? allInOneWallImagePath;
+  final String? swimmingPoolImagePath;
 
   // Terms and conditions
   final List<String> defaultTerms;
@@ -73,6 +78,10 @@ class GeneratorCompanySettings {
     this.stampImagePath,
     this.defaultCoverImagePath,
     this.defaultBannerImagePath,
+    this.domesticHpImagePath,
+    this.allInOneImagePath,
+    this.allInOneWallImagePath,
+    this.swimmingPoolImagePath,
     this.defaultTerms = const [
       'Proper 1 / 3 Phase power should be arranged where you install the heat pump.',
       'Electrical/civil/plumbing work materials – Customer Scope.',
@@ -111,6 +120,10 @@ class GeneratorCompanySettings {
     String? stampImagePath,
     String? defaultCoverImagePath,
     String? defaultBannerImagePath,
+    String? domesticHpImagePath,
+    String? allInOneImagePath,
+    String? allInOneWallImagePath,
+    String? swimmingPoolImagePath,
     List<String>? defaultTerms,
     Map<String, List<String>>? termsByType,
     Map<String, int>? warrantyHpByType,
@@ -143,6 +156,10 @@ class GeneratorCompanySettings {
       stampImagePath: stampImagePath ?? this.stampImagePath,
       defaultCoverImagePath: defaultCoverImagePath ?? this.defaultCoverImagePath,
       defaultBannerImagePath: defaultBannerImagePath ?? this.defaultBannerImagePath,
+      domesticHpImagePath: domesticHpImagePath ?? this.domesticHpImagePath,
+      allInOneImagePath: allInOneImagePath ?? this.allInOneImagePath,
+      allInOneWallImagePath: allInOneWallImagePath ?? this.allInOneWallImagePath,
+      swimmingPoolImagePath: swimmingPoolImagePath ?? this.swimmingPoolImagePath,
       defaultTerms: defaultTerms ?? this.defaultTerms,
       termsByType: termsByType ?? this.termsByType,
       warrantyHpByType: warrantyHpByType ?? this.warrantyHpByType,
@@ -177,6 +194,10 @@ class GeneratorCompanySettings {
     'stampImagePath': stampImagePath,
     'defaultCoverImagePath': defaultCoverImagePath,
     'defaultBannerImagePath': defaultBannerImagePath,
+    'domesticHpImagePath': domesticHpImagePath,
+    'allInOneImagePath': allInOneImagePath,
+    'allInOneWallImagePath': allInOneWallImagePath,
+    'swimmingPoolImagePath': swimmingPoolImagePath,
     'defaultTerms': defaultTerms,
     'termsByType': termsByType,
     'warrantyHpByType': warrantyHpByType,
@@ -237,6 +258,10 @@ class GeneratorCompanySettings {
       stampImagePath: json['stampImagePath'] as String?,
       defaultCoverImagePath: json['defaultCoverImagePath'] as String?,
       defaultBannerImagePath: json['defaultBannerImagePath'] as String?,
+      domesticHpImagePath: json['domesticHpImagePath'] as String?,
+      allInOneImagePath: json['allInOneImagePath'] as String?,
+      allInOneWallImagePath: json['allInOneWallImagePath'] as String?,
+      swimmingPoolImagePath: json['swimmingPoolImagePath'] as String?,
       defaultTerms: (json['defaultTerms'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [
         'Proper 1 / 3 Phase power should be arranged where you install the heat pump.',
         'Electrical/civil/plumbing work materials – Customer Scope.',

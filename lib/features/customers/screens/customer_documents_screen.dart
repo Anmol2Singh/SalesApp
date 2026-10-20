@@ -272,7 +272,8 @@ class _CustomerDocumentsScreenState
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider);
-    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+    final userRoles = profile?.roles ??
+        (profile != null ? [profile.primaryRole] : <UserRole>[]);
     final isAdmin = userRoles.contains(UserRole.admin);
     final isSalesHead = userRoles.contains(UserRole.salesHead);
     final isManager = userRoles.contains(UserRole.manager);
@@ -348,7 +349,8 @@ class _CustomerDocumentsScreenState
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.08),
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.08),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -564,7 +566,7 @@ class _CustomerDocumentsScreenState
             onPressed: () => _showAddDocumentSheet(context),
             icon: const Icon(Icons.add, size: 20),
             label: const Text(
-              '+ Add Document',
+              'Add Document',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 14,
@@ -633,7 +635,8 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
           _fileType = type;
           if (_titleController.text.trim().isEmpty) {
             final dotIdx = name.lastIndexOf('.');
-            _titleController.text = dotIdx > 0 ? name.substring(0, dotIdx) : name;
+            _titleController.text =
+                dotIdx > 0 ? name.substring(0, dotIdx) : name;
           }
         });
       }
@@ -784,8 +787,10 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
               decoration: InputDecoration(
                 labelText: 'Document Title *',
                 hintText: 'e.g. Site Agreement, Electricity Bill, Aadhaar',
-                prefixIcon: const Icon(Icons.title_outlined, color: AppColors.primary),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                prefixIcon:
+                    const Icon(Icons.title_outlined, color: AppColors.primary),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
             const SizedBox(height: 16),
@@ -846,9 +851,7 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
                 child: Row(
                   children: [
                     Icon(
-                      _fileType == 'pdf'
-                          ? Icons.picture_as_pdf
-                          : Icons.image,
+                      _fileType == 'pdf' ? Icons.picture_as_pdf : Icons.image,
                       color: _fileType == 'pdf' ? Colors.red : Colors.blue,
                       size: 24,
                     ),

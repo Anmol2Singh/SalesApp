@@ -6,6 +6,7 @@ class AllInOneModel {
   final String mountType; // 'floor' or 'wall'
   final int tankVolumeLitres;
   final String description;
+  final String defaultImagePath;
   final Map<String, String> specs;
 
   const AllInOneModel({
@@ -14,6 +15,7 @@ class AllInOneModel {
     required this.mountType,
     required this.tankVolumeLitres,
     required this.description,
+    this.defaultImagePath = '',
     required this.specs,
   });
 
@@ -37,6 +39,7 @@ class AllInOneModel {
         'mountType': mountType,
         'tankVolumeLitres': tankVolumeLitres,
         'description': description,
+        'defaultImagePath': defaultImagePath,
         'specs': specs,
       };
 
@@ -46,11 +49,32 @@ class AllInOneModel {
         mountType: json['mountType'] as String? ?? 'floor',
         tankVolumeLitres: (json['tankVolumeLitres'] as num?)?.toInt() ?? 200,
         description: json['description'] as String? ?? '',
+        defaultImagePath: json['defaultImagePath'] as String? ?? '',
         specs: (json['specs'] as Map<String, dynamic>?)?.map(
               (k, v) => MapEntry(k, v.toString()),
             ) ??
             {},
       );
+
+  AllInOneModel copyWith({
+    String? id,
+    String? modelName,
+    String? mountType,
+    int? tankVolumeLitres,
+    String? description,
+    String? defaultImagePath,
+    Map<String, String>? specs,
+  }) {
+    return AllInOneModel(
+      id: id ?? this.id,
+      modelName: modelName ?? this.modelName,
+      mountType: mountType ?? this.mountType,
+      tankVolumeLitres: tankVolumeLitres ?? this.tankVolumeLitres,
+      description: description ?? this.description,
+      defaultImagePath: defaultImagePath ?? this.defaultImagePath,
+      specs: specs ?? this.specs,
+    );
+  }
 
   static AllInOneModel defaultFloor() => const AllInOneModel(
         id: 'IZ-200A',
@@ -58,6 +82,7 @@ class AllInOneModel {
         mountType: 'floor',
         tankVolumeLitres: 200,
         description: 'ALL IN ONE HEAT PUMP (TOP Blow) Make: IZYHEAT Heat Pump Model: IZ-200A',
+        defaultImagePath: '',
         specs: {
           'Product Dimension': '570x1810mm',
           'Tank Volume': '200 Ltr',
@@ -79,6 +104,7 @@ class AllInOneModel {
         mountType: 'wall',
         tankVolumeLitres: 100,
         description: 'ALL IN ONE WALL MOUNTED HEAT PUMP (TOP Blow) Make: IZYHEAT Heat Pump Model: IZ-100V',
+        defaultImagePath: '',
         specs: {
           'Product Dimension': '470x1282mm',
           'Tank Volume': '100 Ltr',

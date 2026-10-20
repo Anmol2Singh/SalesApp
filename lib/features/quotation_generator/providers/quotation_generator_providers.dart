@@ -15,6 +15,8 @@ import '../models/deal_quotation_item.dart';
 import '../models/generator_company_settings.dart';
 import '../models/generator_quotation.dart';
 import '../models/heat_pump_model.dart';
+import '../models/all_in_one_model.dart';
+import '../models/pool_heat_pump_model.dart';
 import '../services/quote_number_service.dart';
 
 final quotationRepositoryProvider = Provider<QuotationSupabaseRepository>((ref) {
@@ -101,6 +103,107 @@ class SettingsNotifier extends StateNotifier<AsyncValue<GeneratorCompanySettings
     await updateSettings(updatedSettings);
   }
 
+  Future<void> saveAllInOneModel(AllInOneModel model) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    final updatedModels = List<AllInOneModel>.from(current.allInOneModels);
+    final idx = updatedModels.indexWhere((m) => m.id == model.id);
+    if (idx >= 0) {
+      updatedModels[idx] = model;
+    } else {
+      updatedModels.add(model);
+    }
+    final updatedSettings = current.copyWith(allInOneModels: updatedModels);
+    await updateSettings(updatedSettings);
+  }
+
+  Future<void> deleteAllInOneModel(String id) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    final updatedModels = current.allInOneModels.where((m) => m.id != id).toList();
+    final updatedSettings = current.copyWith(allInOneModels: updatedModels);
+    await updateSettings(updatedSettings);
+  }
+
+  Future<void> savePoolModel(PoolHeatPumpModel model) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    final updatedModels = List<PoolHeatPumpModel>.from(current.poolModels);
+    final idx = updatedModels.indexWhere((m) => m.id == model.id);
+    if (idx >= 0) {
+      updatedModels[idx] = model;
+    } else {
+      updatedModels.add(model);
+    }
+    final updatedSettings = current.copyWith(poolModels: updatedModels);
+    await updateSettings(updatedSettings);
+  }
+
+  Future<void> deletePoolModel(String id) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    final updatedModels = current.poolModels.where((m) => m.id != id).toList();
+    final updatedSettings = current.copyWith(poolModels: updatedModels);
+    await updateSettings(updatedSettings);
+  }
+
+  Future<int> applyDomesticImageToRange({
+    required String imagePath,
+    required double minKw,
+    required double maxKw,
+  }) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    int count = 0;
+    final updatedModels = current.models.map((m) {
+      if (m.displayCapacityKw >= minKw && m.displayCapacityKw <= maxKw) {
+        count++;
+        return m.copyWith(defaultImagePath: imagePath);
+      }
+      return m;
+    }).toList();
+    final updatedSettings = current.copyWith(models: updatedModels);
+    await updateSettings(updatedSettings);
+    return count;
+  }
+
+  Future<int> applyAioImageToRange({
+    required String imagePath,
+    required int minLtr,
+    required int maxLtr,
+    required bool isWallMounted,
+  }) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    int count = 0;
+    final updatedModels = current.allInOneModels.map((m) {
+      if (m.isWallMounted == isWallMounted &&
+          m.tankVolumeLitres >= minLtr &&
+          m.tankVolumeLitres <= maxLtr) {
+        count++;
+        return m.copyWith(defaultImagePath: imagePath);
+      }
+      return m;
+    }).toList();
+    final updatedSettings = current.copyWith(allInOneModels: updatedModels);
+    await updateSettings(updatedSettings);
+    return count;
+  }
+
+  Future<int> applyPoolImageToRange({
+    required String imagePath,
+    required double minKw,
+    required double maxKw,
+  }) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    int count = 0;
+    final updatedModels = current.poolModels.map((m) {
+      if (m.capacityKw >= minKw && m.capacityKw <= maxKw) {
+        count++;
+        return m.copyWith(defaultImagePath: imagePath);
+      }
+      return m;
+    }).toList();
+    final updatedSettings = current.copyWith(poolModels: updatedModels);
+    await updateSettings(updatedSettings);
+    return count;
+  }
+
+
   Future<void> setCoverImage(String? path) async {
     final current = state.valueOrNull ?? await _repo.getSettings();
     final updated = current.copyWith(defaultCoverImagePath: path);
@@ -116,6 +219,28 @@ class SettingsNotifier extends StateNotifier<AsyncValue<GeneratorCompanySettings
   Future<void> setStampImage(String? path) async {
     final current = state.valueOrNull ?? await _repo.getSettings();
     final updated = current.copyWith(stampImagePath: path);
+    await updateSettings(updated);
+  }
+
+  Future<void> setTypeImage(String type, String? path) async {
+    final current = state.valueOrNull ?? await _repo.getSettings();
+    GeneratorCompanySettings updated;
+    switch (type) {
+      case 'domestic':
+        updated = current.copyWith(domesticHpImagePath: path);
+        break;
+      case 'allInOne':
+        updated = current.copyWith(allInOneImagePath: path);
+        break;
+      case 'allInOneWall':
+        updated = current.copyWith(allInOneWallImagePath: path);
+        break;
+      case 'swimmingPool':
+        updated = current.copyWith(swimmingPoolImagePath: path);
+        break;
+      default:
+        return;
+    }
     await updateSettings(updated);
   }
 }

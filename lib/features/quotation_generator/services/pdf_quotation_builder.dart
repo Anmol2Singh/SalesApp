@@ -1,13 +1,14 @@
-// lib/features/quotation_generator/services/pdf_quotation_builder.dart
-
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/services/pdf_service.dart';
 import '../config/dynamic_annexure_resolver.dart';
 import '../config/quote_template_config.dart';
 import '../config/quote_type.dart';
@@ -19,6 +20,7 @@ import '../models/tank_line_item.dart';
 import '../models/heat_pump_line_item.dart';
 import '../models/pool_heat_pump_model.dart';
 import '../models/all_in_one_model.dart';
+import '../models/heat_pump_model.dart';
 import 'price_calculator.dart';
 import 'qg_payment_sentence_builder.dart';
 
@@ -68,8 +70,47 @@ class PdfQuotationBuilder {
 
     final theme = pw.ThemeData.withFont(base: fontRegular, bold: fontBold);
 
-    // 2. Load Core Images
-    final izyheatLogo = await _loadImageBytes('assets/images/izyheat_logo.png');
+    // 1b. Resolve Company & Bank details from active PDF template (app_companies)
+    final resolvedConfig = await PdfService.resolveTemplateConfig(null);
+    final companyName = (resolvedConfig['company_name'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['company_name'] as String).trim()
+        : settings.companyName;
+    final companyAddress = (resolvedConfig['company_address'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['company_address'] as String).trim()
+        : settings.shortAddress;
+    final companyEmail = (resolvedConfig['company_email'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['company_email'] as String).trim()
+        : settings.companyEmail;
+    final companyPhone = (resolvedConfig['company_phone'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['company_phone'] as String).trim()
+        : settings.companyPhone;
+    final companyPhone2 = settings.companyPhone2;
+    final companyWebsite = (resolvedConfig['company_website'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['company_website'] as String).trim()
+        : settings.companyWebsite;
+
+    final bankAccountName = (resolvedConfig['bank_account_name'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['bank_account_name'] as String).trim()
+        : settings.bankAccountName;
+    final bankName = (resolvedConfig['bank_name'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['bank_name'] as String).trim()
+        : settings.bankName;
+    final bankAccountNumber = (resolvedConfig['bank_account_no'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['bank_account_no'] as String).trim()
+        : settings.bankAccountNumber;
+    final bankBranch = (resolvedConfig['bank_branch'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['bank_branch'] as String).trim()
+        : settings.bankBranch;
+    final bankIfsc = (resolvedConfig['bank_ifsc'] as String?)?.trim().isNotEmpty == true
+        ? (resolvedConfig['bank_ifsc'] as String).trim()
+        : settings.bankIfsc;
+
+    // 2. Load Core Images (Template Logo & Stamp with fallbacks)
+    final logoUrl = resolvedConfig['logo_url'] as String?;
+    final logoBytes = (logoUrl != null && logoUrl.isNotEmpty)
+        ? await _loadImageBytes(logoUrl)
+        : await _loadImageBytes('assets/images/izyheat_logo.png');
+
     final coverImage = await _loadImageBytes(quotation.coverImagePath ??
         settings.defaultCoverImagePath ??
         'assets/images/cover_proposal.png');
@@ -78,14 +119,16 @@ class PdfQuotationBuilder {
             settings.defaultBannerImagePath ??
             'assets/images/insiya_banner.png')
         : null;
-    final stampImage = await _loadImageBytes(
-        settings.stampImagePath ?? 'assets/images/company_stamp.png');
+    final stampUrl = resolvedConfig['stamp_url'] as String? ?? settings.stampImagePath;
+    final stampImage = (stampUrl != null && stampUrl.isNotEmpty)
+        ? await _loadImageBytes(stampUrl)
+        : await _loadImageBytes('assets/images/company_stamp.png');
     final fbIcon = await _loadImageBytes('assets/images/facebook_icon.png');
     final igIcon = await _loadImageBytes('assets/images/instagram_icon.png');
     final product38c =
         await _loadImageBytes('assets/images/product_iz_38c.png');
 
-    // Product Images for the final page
+    // Product Images for the final page (Resolves by Heat Pump Type)
     final List<Uint8List> productImages = [];
     if (quotation.includeProductImagePage) {
       if (quotation.productImagePaths.isNotEmpty) {
@@ -93,13 +136,139 @@ class PdfQuotationBuilder {
           final b = await _loadImageBytes(p);
           if (b != null) productImages.add(b);
         }
-      } else if (product38c != null &&
-          (quotation.model.modelName.contains('38') ||
-              quotation.quoteType == QuoteType.hpWithTank)) {
-        productImages.add(product38c);
-      } else {
-        final b = await _loadImageBytes(quotation.model.defaultImagePath);
-        if (b != null) productImages.add(b);
+      }
+      if (productImages.isEmpty) {
+        Uint8List? resolvedImageBytes;
+        final qType = quotation.quoteType;
+        final modelLower = quotation.model.modelName.toLowerCase();
+
+        // 1. SWIMMING POOL
+        if (qType == QuoteType.swimmingPool ||
+            modelLower.contains('pool') ||
+            modelLower.contains('sp')) {
+          String? imgPath = quotation.poolModel?.defaultImagePath;
+          if (imgPath == null || imgPath.isEmpty) {
+            final match = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
+              (m) => m?.id == quotation.poolModel?.id || m?.modelName == quotation.poolModel?.modelName,
+              orElse: () => null,
+            );
+            if (match != null && match.defaultImagePath.isNotEmpty) {
+              imgPath = match.defaultImagePath;
+            }
+          }
+          if (imgPath == null || imgPath.isEmpty) {
+            // Find any pool model with an image
+            final anyPool = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
+              (m) => (m?.defaultImagePath ?? '').isNotEmpty,
+              orElse: () => null,
+            );
+            imgPath = anyPool?.defaultImagePath ?? settings.swimmingPoolImagePath;
+          }
+          if (imgPath != null && imgPath.isNotEmpty) {
+            resolvedImageBytes = await _loadImageBytes(imgPath);
+          }
+        }
+        // 2. ALL IN ONE WALL MOUNTED
+        else if (qType == QuoteType.allInOneWall ||
+            modelLower.contains('wall') ||
+            modelLower.contains('wm')) {
+          String? imgPath = quotation.allInOneModel?.defaultImagePath;
+          if (imgPath == null || imgPath.isEmpty) {
+            final match = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+              (m) => (m?.isWallMounted ?? false) && (m?.id == quotation.allInOneModel?.id || m?.modelName == quotation.allInOneModel?.modelName),
+              orElse: () => null,
+            );
+            if (match != null && match.defaultImagePath.isNotEmpty) {
+              imgPath = match.defaultImagePath;
+            }
+          }
+          if (imgPath == null || imgPath.isEmpty) {
+            final anyWall = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+              (m) => (m?.isWallMounted ?? false) && (m?.defaultImagePath ?? '').isNotEmpty,
+              orElse: () => null,
+            );
+            imgPath = anyWall?.defaultImagePath ?? settings.allInOneWallImagePath;
+          }
+          if (imgPath != null && imgPath.isNotEmpty) {
+            resolvedImageBytes = await _loadImageBytes(imgPath);
+          }
+        }
+        // 3. ALL IN ONE FLOOR
+        else if (qType == QuoteType.allInOneFloor ||
+            modelLower.contains('all in one') ||
+            modelLower.contains('aio')) {
+          String? imgPath = quotation.allInOneModel?.defaultImagePath;
+          if (imgPath == null || imgPath.isEmpty) {
+            final match = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+              (m) => !(m?.isWallMounted ?? true) && (m?.id == quotation.allInOneModel?.id || m?.modelName == quotation.allInOneModel?.modelName),
+              orElse: () => null,
+            );
+            if (match != null && match.defaultImagePath.isNotEmpty) {
+              imgPath = match.defaultImagePath;
+            }
+          }
+          if (imgPath == null || imgPath.isEmpty) {
+            final anyAio = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+              (m) => !(m?.isWallMounted ?? true) && (m?.defaultImagePath ?? '').isNotEmpty,
+              orElse: () => null,
+            );
+            imgPath = anyAio?.defaultImagePath ?? settings.allInOneImagePath;
+          }
+          if (imgPath != null && imgPath.isNotEmpty) {
+            resolvedImageBytes = await _loadImageBytes(imgPath);
+          }
+        }
+        // 4. DOMESTIC HEAT PUMP (IZ-#C)
+        else {
+          String? imgPath = quotation.model.defaultImagePath;
+          final match = settings.models.cast<HeatPumpModel?>().firstWhere(
+            (m) => m?.id == quotation.model.id || m?.modelName == quotation.model.modelName,
+            orElse: () => null,
+          );
+          if (match != null && match.defaultImagePath.isNotEmpty && match.defaultImagePath != 'assets/images/model_iz_4c.png') {
+            imgPath = match.defaultImagePath;
+          }
+
+          // If no specific custom image, match by capacity range (e.g. 4-8kW vs > 8kW)
+          if (imgPath.isEmpty || imgPath == 'assets/images/model_iz_4c.png') {
+            final kw = quotation.model.displayCapacityKw;
+            if (kw <= 8.0) {
+              // 4 to 8 kW range
+              final rangeMatch = settings.models.cast<HeatPumpModel?>().firstWhere(
+                (m) => (m?.displayCapacityKw ?? 0) <= 8.0 && (m?.defaultImagePath ?? '').isNotEmpty && m?.defaultImagePath != 'assets/images/model_iz_4c.png',
+                orElse: () => null,
+              );
+              if (rangeMatch != null) {
+                imgPath = rangeMatch.defaultImagePath;
+              } else if (settings.domesticHpImagePath != null && settings.domesticHpImagePath!.isNotEmpty) {
+                imgPath = settings.domesticHpImagePath;
+              } else {
+                imgPath = 'assets/images/model_iz_4c.png';
+              }
+            } else {
+              // > 8 kW (e.g. 10kW - 40kW)
+              final rangeMatch = settings.models.cast<HeatPumpModel?>().firstWhere(
+                (m) => (m?.displayCapacityKw ?? 0) > 8.0 && (m?.defaultImagePath ?? '').isNotEmpty,
+                orElse: () => null,
+              );
+              if (rangeMatch != null) {
+                imgPath = rangeMatch.defaultImagePath;
+              } else if (settings.domesticHpImagePath != null && settings.domesticHpImagePath!.isNotEmpty) {
+                imgPath = settings.domesticHpImagePath;
+              } else {
+                imgPath = 'assets/images/product_iz_38c.png';
+              }
+            }
+          }
+
+          if (imgPath != null && imgPath.isNotEmpty) {
+            resolvedImageBytes = await _loadImageBytes(imgPath);
+          }
+        }
+
+        if (resolvedImageBytes != null) {
+          productImages.add(resolvedImageBytes);
+        }
       }
     }
 
@@ -107,7 +276,6 @@ class PdfQuotationBuilder {
     final navyColor = PdfColor.fromHex('#1E3A5F');
     final blueLink = PdfColor.fromHex('#1E88E5');
     final paleGreen = PdfColor.fromHex('#9CCC65');
-    final darkGold = PdfColor.fromHex('#F4B400');
     final greyText = PdfColor.fromHex('#555555');
 
     // ─── REUSABLE HEADER / FOOTER BUILDERS ─────────────────────────────────
@@ -135,7 +303,7 @@ class PdfQuotationBuilder {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Text(
-                          settings.companyName,
+                          companyName,
                           style: pw.TextStyle(
                             color: navyColor,
                             fontSize: 13,
@@ -145,21 +313,21 @@ class PdfQuotationBuilder {
                         ),
                         pw.SizedBox(height: 2),
                         pw.Text(
-                          'ADDRESS: - ${settings.shortAddress}',
+                          'ADDRESS: - $companyAddress',
                           style: pw.TextStyle(
                               fontSize: 7.5,
                               color: greyText,
                               fontStyle: pw.FontStyle.italic),
                         ),
                         pw.Text(
-                          'EMAIL ID: - ${settings.companyEmail}',
+                          'EMAIL ID: - $companyEmail',
                           style: pw.TextStyle(
                               fontSize: 7.5,
                               color: greyText,
                               fontStyle: pw.FontStyle.italic),
                         ),
                         pw.Text(
-                          'CONTACT: ${settings.companyPhone}',
+                          'CONTACT: $companyPhone${companyPhone2.isNotEmpty ? ' / $companyPhone2' : ''}',
                           style: pw.TextStyle(
                               fontSize: 7.5,
                               color: greyText,
@@ -175,7 +343,7 @@ class PdfQuotationBuilder {
                                   fontStyle: pw.FontStyle.italic),
                             ),
                             pw.Text(
-                              settings.companyWebsite,
+                              companyWebsite,
                               style: pw.TextStyle(
                                 fontSize: 7.5,
                                 color: blueLink,
@@ -189,11 +357,11 @@ class PdfQuotationBuilder {
                     ),
                   ],
                 ),
-                if (izyheatLogo != null)
+                if (logoBytes != null)
                   pw.Container(
                     width: 115,
                     height: 42,
-                    child: pw.Image(pw.MemoryImage(izyheatLogo),
+                    child: pw.Image(pw.MemoryImage(logoBytes),
                         fit: pw.BoxFit.contain),
                   ),
               ],
@@ -339,26 +507,36 @@ class PdfQuotationBuilder {
                   pw.Positioned.fill(
                     child: pw.Container(color: navyColor),
                   ),
-                // Customer Name & Address overlay
+                // 1. Proposal title placed upside in the sky area, exactly as in reference image
                 pw.Positioned(
-                  bottom: 155,
+                  top: 140,
+                  left: 20,
+                  right: 20,
+                  child: pw.Center(
+                    child: pw.Text(
+                      'Proposal',
+                      style: pw.TextStyle(
+                        font: pw.Font.timesBold(),
+                        color: PdfColors.white,
+                        fontSize: 52,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 2. Customer Name & Address overlay at the bottom dark banner
+                pw.Positioned(
+                  bottom: 125,
                   left: 36,
                   right: 36,
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
                       pw.Text(
-                        'Proposal',
+                        'TO.',
                         style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 26,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.SizedBox(height: 10),
-                      pw.Text(
-                        'TO,',
-                        style: pw.TextStyle(
+                          font: pw.Font.timesBold(),
                           color: PdfColors.white,
                           fontSize: 20,
                           fontWeight: pw.FontWeight.bold,
@@ -368,18 +546,20 @@ class PdfQuotationBuilder {
                       pw.Text(
                         '$custSalutation${quotation.customerName}',
                         style: pw.TextStyle(
+                          font: pw.Font.timesBold(),
                           color: PdfColors.white,
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
                         ),
                         textAlign: pw.TextAlign.center,
                       ),
-                      pw.SizedBox(height: 4),
+                      pw.SizedBox(height: 6),
                       pw.Text(
                         'Add-${quotation.customerAddress}',
                         style: pw.TextStyle(
+                          font: pw.Font.timesBold(),
                           color: PdfColors.white,
-                          fontSize: 14,
+                          fontSize: 18,
                           fontWeight: pw.FontWeight.bold,
                         ),
                         textAlign: pw.TextAlign.center,
@@ -545,7 +725,7 @@ class PdfQuotationBuilder {
                 ),
                 pw.SizedBox(height: 5),
                 pw.Text(
-                  '    "${settings.companyName}", under the brand Name "${settings.brandName}" Heat Pump the manufacturers of Heat Pump System is a 15 year old company that has been a market leader and a pioneer in the Heat Pump water heater system industry. It is one of the leading brands of water heaters in India and stands for Quality, Reliability and Performance. It is in house product since 2008.',
+                  '    "$companyName", under the brand Name "${settings.brandName}" Heat Pump the manufacturers of Heat Pump System is a 15 year old company that has been a market leader and a pioneer in the Heat Pump water heater system industry. It is one of the leading brands of water heaters in India and stands for Quality, Reliability and Performance. It is in house product since 2008.',
                   style: const pw.TextStyle(fontSize: 9, lineSpacing: 1.35),
                 ),
 
@@ -595,7 +775,7 @@ class PdfQuotationBuilder {
 
                 // Signoff & Contact Details
                 pw.Text(
-                  settings.companyName,
+                  companyName,
                   style: pw.TextStyle(
                     color: navyColor,
                     fontSize: 9,
@@ -604,14 +784,14 @@ class PdfQuotationBuilder {
                 ),
                 pw.SizedBox(height: 3),
                 pw.Text(
-                  'Mob: ${settings.companyPhone} / ${settings.companyPhone2}',
+                  'Mob: $companyPhone${companyPhone2.isNotEmpty ? ' / $companyPhone2' : ''}',
                   style: const pw.TextStyle(fontSize: 8.5),
                 ),
                 pw.Row(
                   children: [
                     pw.Text('Web: ', style: const pw.TextStyle(fontSize: 8.5)),
                     pw.Text(
-                      settings.companyWebsite,
+                      companyWebsite,
                       style: pw.TextStyle(
                         fontSize: 8.5,
                         color: blueLink,
@@ -620,7 +800,7 @@ class PdfQuotationBuilder {
                     ),
                   ],
                 ),
-                pw.Text('Email: ${settings.companyEmail}',
+                pw.Text('Email: $companyEmail',
                     style: const pw.TextStyle(fontSize: 8.5)),
                 pw.SizedBox(height: 6),
                 pw.Row(
@@ -722,7 +902,7 @@ class PdfQuotationBuilder {
                         decoration: pw.TextDecoration.underline),
                   ),
                   pw.SizedBox(height: 6),
-                  _buildGenericPriceTable(quotation, config),
+                  _buildGenericPriceTable(quotation, config, settings),
                   pw.Spacer(),
                   buildFooter(priceSchedulePage),
                 ],
@@ -769,17 +949,15 @@ class PdfQuotationBuilder {
                   // Merged Tank Specification Table (10 rows, multi-column support)
                   _buildMergedTankSpecTable(quotation),
 
-                  pw.SizedBox(height: 12),
+                  pw.SizedBox(height: 18),
 
                   // Insiya Banner
                   if (bannerImage != null)
-                    pw.Center(
-                      child: pw.Container(
-                        height: 185,
-                        width: double.infinity,
-                        child: pw.Image(pw.MemoryImage(bannerImage),
-                            fit: pw.BoxFit.contain),
-                      ),
+                    pw.Container(
+                      height: 190,
+                      width: double.infinity,
+                      child: pw.Image(pw.MemoryImage(bannerImage),
+                          fit: pw.BoxFit.fill),
                     ),
 
                   pw.Spacer(),
@@ -827,14 +1005,12 @@ class PdfQuotationBuilder {
                         AllInOneModel.defaultFloorModel()),
                   ],
                   if (bannerImage != null) ...[
-                    pw.SizedBox(height: 12),
-                    pw.Center(
-                      child: pw.Container(
-                        height: 180,
-                        width: double.infinity,
-                        child: pw.Image(pw.MemoryImage(bannerImage),
-                            fit: pw.BoxFit.contain),
-                      ),
+                    pw.SizedBox(height: 18),
+                    pw.Container(
+                      height: 185,
+                      width: double.infinity,
+                      child: pw.Image(pw.MemoryImage(bannerImage),
+                          fit: pw.BoxFit.fill),
                     ),
                   ],
                   pw.Spacer(),
@@ -995,11 +1171,11 @@ class PdfQuotationBuilder {
                       2: const pw.FlexColumnWidth(),
                     },
                     children: [
-                      _bankRow('Account Name', settings.bankAccountName),
-                      _bankRow('Bank Name', '${settings.bankName},'),
-                      _bankRow('Account Number', settings.bankAccountNumber),
-                      _bankRow('Branch', '${settings.bankBranch},'),
-                      _bankRow('IFSC Code', settings.bankIfsc),
+                      _bankRow('Account Name', bankAccountName),
+                      _bankRow('Bank Name', '$bankName,'),
+                      _bankRow('Account Number', bankAccountNumber),
+                      _bankRow('Branch', '$bankBranch,'),
+                      _bankRow('IFSC Code', bankIfsc),
                     ],
                   ),
                 ),
@@ -1017,7 +1193,7 @@ class PdfQuotationBuilder {
                 pw.Text('Thanks & Regard',
                     style: const pw.TextStyle(fontSize: 9)),
                 pw.Text('For', style: const pw.TextStyle(fontSize: 9)),
-                pw.Text(settings.companyName,
+                pw.Text(companyName,
                     style: pw.TextStyle(
                         fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 6),
@@ -1911,7 +2087,8 @@ class PdfQuotationBuilder {
   // ─── GENERIC PRICE TABLE (for non-hpWithTank quote types) ──────────────────
 
   static pw.Widget _buildGenericPriceTable(
-      GeneratorQuotation quotation, QuoteTemplateConfig config) {
+      GeneratorQuotation quotation, QuoteTemplateConfig config,
+      [GeneratorCompanySettings? settings]) {
     final hasDiscountCol = config.priceColumnKeys.contains('discount');
     final rows = quotation.priceRows;
 
@@ -1993,6 +2170,74 @@ class PdfQuotationBuilder {
                     includeSymbol: false);
               }
 
+              final dLower = r.description.toLowerCase();
+              final isAioRow = quotation.quoteType == QuoteType.allInOneFloor ||
+                  quotation.quoteType == QuoteType.allInOneWall ||
+                  dLower.contains('all in one') ||
+                  dLower.contains('aio') ||
+                  r.metadata?['type'] == 'allInOne' ||
+                  r.metadata?['type'] == 'wallMounted';
+
+              AllInOneModel? aioModel;
+              if (isAioRow) {
+                aioModel = quotation.allInOneModel;
+                if (aioModel == null || aioModel.description.trim().isEmpty) {
+                  final list = settings?.allInOneModels ?? [];
+                  if (list.isNotEmpty) {
+                    final cap = r.systemLph ??
+                        (dLower.contains('100')
+                            ? 100
+                            : (dLower.contains('300')
+                                ? 300
+                                : (dLower.contains('200') ? 200 : null)));
+                    aioModel = list.cast<AllInOneModel?>().firstWhere(
+                      (m) =>
+                          (cap != null && m?.tankVolumeLitres == cap) ||
+                          (m != null &&
+                              dLower.contains(m.modelName.toLowerCase())),
+                      orElse: () => list.first,
+                    );
+                  }
+                }
+              }
+
+              pw.Widget descWidget;
+              if (isAioRow &&
+                  aioModel != null &&
+                  aioModel.description.trim().isNotEmpty) {
+                final extraDesc = aioModel.description.trim();
+                final showBoth =
+                    !r.description.toLowerCase().contains(extraDesc.toLowerCase());
+                descWidget = pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 2.5),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        r.description,
+                        style: pw.TextStyle(
+                          fontSize: 7.5,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      if (showBoth) ...[
+                        pw.SizedBox(height: 1.5),
+                        pw.Text(
+                          extraDesc,
+                          style: const pw.TextStyle(
+                            fontSize: 6.5,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              } else {
+                descWidget = _tc(r.description);
+              }
+
               if (hasDiscountCol) {
                 final discStr = r.discountAmount != null &&
                         r.discountAmount! > 0
@@ -2002,7 +2247,7 @@ class PdfQuotationBuilder {
                 return pw.TableRow(
                   children: [
                     _tc(srText, center: true),
-                    _tc(r.description),
+                    descWidget,
                     _tc('${r.qty}', center: true),
                     _tc(rateStr, center: true),
                     _tc(discStr, center: true),
@@ -2013,7 +2258,7 @@ class PdfQuotationBuilder {
                 return pw.TableRow(
                   children: [
                     _tc(srText, center: true),
-                    _tc(r.description),
+                    descWidget,
                     _tc(r.unitLabel ?? 'NOS', center: true),
                     _tc('${r.qty}', center: true),
                     _tc(rateStr, center: true),
@@ -2175,6 +2420,27 @@ class PdfQuotationBuilder {
             ? '${q.effectiveTanks.first.capacityLitres}'
             : '500');
 
+    // If single heat pump and model has dynamic specs configured, render them directly
+    if (hpList.length <= 1 && q.model.specs.isNotEmpty) {
+      int idx = 1;
+      return q.model.specs.entries.map((entry) {
+        final sl = (idx < 10) ? '0$idx' : '$idx';
+        idx++;
+        String val = entry.value;
+        if (entry.key.toLowerCase().contains('capacity in litre') ||
+            entry.key.toLowerCase().contains('capacity in ltr')) {
+          val = tankCap;
+        }
+        return pw.TableRow(
+          children: [
+            _tc(sl, center: true),
+            _tc(entry.key),
+            _tc(val, center: true),
+          ],
+        );
+      }).toList();
+    }
+
     final rowsData = [
       [
         '01',
@@ -2257,6 +2523,35 @@ class PdfQuotationBuilder {
   }
 
   static pw.Widget _buildPoolSpecTable(PoolHeatPumpModel m) {
+    if (m.specs.isNotEmpty) {
+      int idx = 1;
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(28),
+          1: const pw.FlexColumnWidth(2.5),
+          2: const pw.FlexColumnWidth(2.5),
+        },
+        children: [
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
+            children: [_th('SL'), _th('DESCRIPTION'), _th('SPECIFICATION')],
+          ),
+          ...m.specs.entries.map((entry) {
+            final sl = (idx < 10) ? '0$idx' : '$idx';
+            idx++;
+            return pw.TableRow(
+              children: [
+                _tc(sl, center: true),
+                _tc(entry.key),
+                _tc(entry.value),
+              ],
+            );
+          }),
+        ],
+      );
+    }
+
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
       columnWidths: {
@@ -2321,6 +2616,35 @@ class PdfQuotationBuilder {
   }
 
   static pw.Widget _buildAllInOneSpecTable(AllInOneModel m) {
+    if (m.specs.isNotEmpty) {
+      int idx = 1;
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(28),
+          1: const pw.FlexColumnWidth(2.5),
+          2: const pw.FlexColumnWidth(2.5),
+        },
+        children: [
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
+            children: [_th('SL'), _th('DESCRIPTION'), _th('SPECIFICATION')],
+          ),
+          ...m.specs.entries.map((entry) {
+            final sl = (idx < 10) ? '0$idx' : '$idx';
+            idx++;
+            return pw.TableRow(
+              children: [
+                _tc(sl, center: true),
+                _tc(entry.key),
+                _tc(entry.value),
+              ],
+            );
+          }),
+        ],
+      );
+    }
+
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
       columnWidths: {
@@ -2472,21 +2796,73 @@ class PdfQuotationBuilder {
     );
   }
 
-  static Future<Uint8List?> _loadImageBytes(String pathOrUrl) async {
+  static Future<Uint8List?> _loadImageBytes(String? pathOrUrl) async {
+    if (pathOrUrl == null || pathOrUrl.trim().isEmpty) return null;
+    final trimmed = pathOrUrl.trim();
     try {
-      if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-        final res = await http.get(Uri.parse(pathOrUrl));
-        if (res.statusCode == 200) return res.bodyBytes;
-      } else if (pathOrUrl.startsWith('assets/')) {
-        final data = await rootBundle.load(pathOrUrl);
+      // 1. Base64 data URI (e.g. data:image/png;base64,...)
+      if (trimmed.startsWith('data:image')) {
+        final commaIdx = trimmed.indexOf(',');
+        if (commaIdx != -1) {
+          return base64Decode(trimmed.substring(commaIdx + 1));
+        }
+      }
+
+      // 2. Pure Base64 string
+      if (trimmed.length > 100 &&
+          !trimmed.contains('/') &&
+          !trimmed.contains('\\') &&
+          !trimmed.contains(':')) {
+        try {
+          return base64Decode(trimmed);
+        } catch (_) {}
+      }
+
+      // 3. Asset path
+      if (trimmed.startsWith('assets/')) {
+        final data = await rootBundle.load(trimmed);
         return data.buffer.asUint8List();
-      } else {
-        final file = File(pathOrUrl);
+      }
+
+      // 4. Supabase Storage URL - bypasses browser CORS via Supabase client SDK
+      if (trimmed.contains('/storage/v1/object/')) {
+        try {
+          final uri = Uri.parse(trimmed);
+          final pathSegments = uri.pathSegments;
+          final objIdx = pathSegments.indexOf('object');
+          if (objIdx != -1 && pathSegments.length > objIdx + 2) {
+            final bucket = pathSegments[objIdx + 2];
+            final filePath = pathSegments.sublist(objIdx + 3).join('/');
+            if (bucket.isNotEmpty && filePath.isNotEmpty) {
+              final downloaded = await Supabase.instance.client.storage
+                  .from(bucket)
+                  .download(filePath);
+              return downloaded;
+            }
+          }
+        } catch (_) {
+          // Fall through to http.get
+        }
+      }
+
+      // 5. HTTP / HTTPS / Blob URL
+      if (trimmed.startsWith('http://') ||
+          trimmed.startsWith('https://') ||
+          trimmed.startsWith('blob:')) {
+        final res = await http.get(Uri.parse(trimmed));
+        if (res.statusCode == 200) return res.bodyBytes;
+      }
+
+      // 6. Local File (ONLY on non-web platforms to avoid Web UnsupportedError)
+      if (!kIsWeb) {
+        final file = File(trimmed);
         if (await file.exists()) {
           return await file.readAsBytes();
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error loading image bytes for $trimmed: $e');
+    }
     return null;
   }
 }

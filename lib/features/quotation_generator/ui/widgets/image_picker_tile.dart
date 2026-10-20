@@ -1,6 +1,7 @@
 // lib/features/quotation_generator/ui/widgets/image_picker_tile.dart
 
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -51,9 +52,12 @@ class _ImagePickerTileState extends ConsumerState<ImagePickerTile> {
       setState(() => _isUploading = true);
 
       final supabase = ref.read(supabaseClientProvider);
-      final publicUrl = await QuotationStorageService.uploadImageFile(
+      final bytes = await picked.readAsBytes();
+
+      final publicUrl = await QuotationStorageService.uploadImageBytes(
         supabase: supabase,
-        file: File(picked.path),
+        bytes: bytes,
+        fileName: picked.name,
         bucket: widget.bucket,
         folder: widget.folder,
       );
@@ -106,9 +110,15 @@ class _ImagePickerTileState extends ConsumerState<ImagePickerTile> {
         errorBuilder: (_, __, ___) => Image.asset(widget.defaultAssetPath, fit: _containOrCover(widget.title)),
       );
     } else if (current != null && !current.startsWith('assets/')) {
-      final file = File(current);
-      if (file.existsSync()) {
-        imageWidget = Image.file(file, fit: _containOrCover(widget.title));
+      if (current.startsWith('blob:') || current.startsWith('data:')) {
+        imageWidget = Image.network(current, fit: _containOrCover(widget.title));
+      } else if (!kIsWeb) {
+        final file = File(current);
+        if (file.existsSync()) {
+          imageWidget = Image.file(file, fit: _containOrCover(widget.title));
+        } else {
+          imageWidget = Image.asset(widget.defaultAssetPath, fit: _containOrCover(widget.title));
+        }
       } else {
         imageWidget = Image.asset(widget.defaultAssetPath, fit: _containOrCover(widget.title));
       }
