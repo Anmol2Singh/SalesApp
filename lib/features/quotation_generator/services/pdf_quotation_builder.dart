@@ -21,6 +21,7 @@ import '../models/heat_pump_line_item.dart';
 import '../models/pool_heat_pump_model.dart';
 import '../models/all_in_one_model.dart';
 import '../models/heat_pump_model.dart';
+import '../data/quotation_supabase_repository.dart';
 import 'price_calculator.dart';
 import 'qg_payment_sentence_builder.dart';
 
@@ -33,6 +34,70 @@ class PdfQuotationBuilder {
     final config = QuoteTemplateConfig.forType(quotation.quoteType);
     final hasTank = quotation.hasTank;
     final dateStr = DateFormat('dd/MM/yyyy').format(quotation.date);
+
+    // 0. Merge effectiveSettings with full module settings from Supabase
+    GeneratorCompanySettings effectiveSettings = settings;
+    try {
+      final repoSettings = await QuotationSupabaseRepository(Supabase.instance.client).getSettings();
+      effectiveSettings = effectiveSettings.copyWith(
+        models: repoSettings.models.isNotEmpty ? repoSettings.models : effectiveSettings.models,
+        allInOneModels: repoSettings.allInOneModels.isNotEmpty ? repoSettings.allInOneModels : effectiveSettings.allInOneModels,
+        poolModels: repoSettings.poolModels.isNotEmpty ? repoSettings.poolModels : effectiveSettings.poolModels,
+        defaultCoverImagePath: (repoSettings.defaultCoverImagePath?.isNotEmpty == true) ? repoSettings.defaultCoverImagePath : effectiveSettings.defaultCoverImagePath,
+        defaultBannerImagePath: (repoSettings.defaultBannerImagePath?.isNotEmpty == true) ? repoSettings.defaultBannerImagePath : effectiveSettings.defaultBannerImagePath,
+        stampImagePath: (repoSettings.stampImagePath?.isNotEmpty == true) ? repoSettings.stampImagePath : effectiveSettings.stampImagePath,
+        domesticHpImagePath: (repoSettings.domesticHpImagePath?.isNotEmpty == true) ? repoSettings.domesticHpImagePath : effectiveSettings.domesticHpImagePath,
+        allInOneImagePath: (repoSettings.allInOneImagePath?.isNotEmpty == true) ? repoSettings.allInOneImagePath : effectiveSettings.allInOneImagePath,
+        allInOneWallImagePath: (repoSettings.allInOneWallImagePath?.isNotEmpty == true) ? repoSettings.allInOneWallImagePath : effectiveSettings.allInOneWallImagePath,
+        swimmingPoolImagePath: (repoSettings.swimmingPoolImagePath?.isNotEmpty == true) ? repoSettings.swimmingPoolImagePath : effectiveSettings.swimmingPoolImagePath,
+      );
+    } catch (e) {
+      debugPrint('PdfQuotationBuilder settings merge error: $e');
+    }
+
+    // Resolve models from Module Settings
+    final isAioQuote = quotation.quoteType == QuoteType.allInOneFloor ||
+        quotation.quoteType == QuoteType.allInOneWall ||
+        quotation.priceRows.any((r) => r.description.toLowerCase().contains('all in one') || r.description.toLowerCase().contains('aio'));
+
+    AllInOneModel? resolvedAio = quotation.allInOneModel;
+    if (isAioQuote || resolvedAio != null) {
+      final isWall = quotation.quoteType == QuoteType.allInOneWall || (resolvedAio?.isWallMounted ?? false);
+      final targetVol = resolvedAio?.tankVolumeLitres ?? 200;
+      final matchedAio = effectiveSettings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+        (m) => m != null && m.isWallMounted == isWall &&
+               (m.tankVolumeLitres == targetVol || (resolvedAio != null && m.modelName.toLowerCase() == resolvedAio.modelName.toLowerCase())),
+        orElse: () => effectiveSettings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+          (m) => m != null && (m.tankVolumeLitres == targetVol || m.modelName.toLowerCase().contains('$targetVol')),
+          orElse: () => null,
+        ),
+      );
+      if (matchedAio != null) {
+        resolvedAio = matchedAio;
+      }
+    }
+
+    PoolHeatPumpModel? resolvedPool = quotation.poolModel;
+    if (quotation.quoteType == QuoteType.swimmingPool || resolvedPool != null) {
+      final matchedPool = effectiveSettings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
+        (m) => m != null && (m.id == resolvedPool?.id || m.modelName.toLowerCase() == resolvedPool?.modelName.toLowerCase()),
+        orElse: () => effectiveSettings.poolModels.isNotEmpty ? effectiveSettings.poolModels.first : null,
+      );
+      if (matchedPool != null) {
+        resolvedPool = matchedPool;
+      }
+    }
+
+    HeatPumpModel resolvedHp = quotation.model;
+    final matchedHp = effectiveSettings.models.cast<HeatPumpModel?>().firstWhere(
+      (m) => m != null && (m.id == resolvedHp.id ||
+             m.modelName.toLowerCase() == resolvedHp.modelName.toLowerCase() ||
+             (m.displayCapacityKw - resolvedHp.displayCapacityKw).abs() < 0.1),
+      orElse: () => null,
+    );
+    if (matchedHp != null) {
+      resolvedHp = matchedHp;
+    }
 
     final annexureResolver = DynamicAnnexureResolver(
       quoteType: quotation.quoteType,
@@ -112,14 +177,14 @@ class PdfQuotationBuilder {
         : await _loadImageBytes('assets/images/izyheat_logo.png');
 
     final coverImage = await _loadImageBytes(quotation.coverImagePath ??
-        settings.defaultCoverImagePath ??
+        effectiveSettings.defaultCoverImagePath ??
         'assets/images/cover_proposal.png');
     final bannerImage = quotation.includeBanner
         ? await _loadImageBytes(quotation.bannerImagePath ??
-            settings.defaultBannerImagePath ??
+            effectiveSettings.defaultBannerImagePath ??
             'assets/images/insiya_banner.png')
         : null;
-    final stampUrl = resolvedConfig['stamp_url'] as String? ?? settings.stampImagePath;
+    final stampUrl = resolvedConfig['stamp_url'] as String? ?? effectiveSettings.stampImagePath;
     final stampImage = (stampUrl != null && stampUrl.isNotEmpty)
         ? await _loadImageBytes(stampUrl)
         : await _loadImageBytes('assets/images/company_stamp.png');
@@ -146,23 +211,18 @@ class PdfQuotationBuilder {
         if (qType == QuoteType.swimmingPool ||
             modelLower.contains('pool') ||
             modelLower.contains('sp')) {
-          String? imgPath = quotation.poolModel?.defaultImagePath;
+          String? imgPath = (resolvedPool?.defaultImagePath.isNotEmpty == true)
+              ? resolvedPool!.defaultImagePath
+              : null;
           if (imgPath == null || imgPath.isEmpty) {
-            final match = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
-              (m) => m?.id == quotation.poolModel?.id || m?.modelName == quotation.poolModel?.modelName,
-              orElse: () => null,
-            );
-            if (match != null && match.defaultImagePath.isNotEmpty) {
-              imgPath = match.defaultImagePath;
-            }
-          }
-          if (imgPath == null || imgPath.isEmpty) {
-            // Find any pool model with an image
-            final anyPool = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
+            final match = effectiveSettings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
               (m) => (m?.defaultImagePath ?? '').isNotEmpty,
               orElse: () => null,
             );
-            imgPath = anyPool?.defaultImagePath ?? settings.swimmingPoolImagePath;
+            imgPath = match?.defaultImagePath;
+            if (imgPath == null || imgPath.isEmpty) {
+              imgPath = effectiveSettings.swimmingPoolImagePath;
+            }
           }
           if (imgPath != null && imgPath.isNotEmpty) {
             resolvedImageBytes = await _loadImageBytes(imgPath);
@@ -172,47 +232,46 @@ class PdfQuotationBuilder {
         else if (qType == QuoteType.allInOneWall ||
             modelLower.contains('wall') ||
             modelLower.contains('wm')) {
-          String? imgPath = quotation.allInOneModel?.defaultImagePath;
+          String? imgPath = (resolvedAio?.defaultImagePath.isNotEmpty == true)
+              ? resolvedAio!.defaultImagePath
+              : null;
           if (imgPath == null || imgPath.isEmpty) {
-            final match = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
-              (m) => (m?.isWallMounted ?? false) && (m?.id == quotation.allInOneModel?.id || m?.modelName == quotation.allInOneModel?.modelName),
-              orElse: () => null,
-            );
-            if (match != null && match.defaultImagePath.isNotEmpty) {
-              imgPath = match.defaultImagePath;
-            }
-          }
-          if (imgPath == null || imgPath.isEmpty) {
-            final anyWall = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+            final match = effectiveSettings.allInOneModels.cast<AllInOneModel?>().firstWhere(
               (m) => (m?.isWallMounted ?? false) && (m?.defaultImagePath ?? '').isNotEmpty,
               orElse: () => null,
             );
-            imgPath = anyWall?.defaultImagePath ?? settings.allInOneWallImagePath;
+            imgPath = match?.defaultImagePath;
+            if (imgPath == null || imgPath.isEmpty) {
+              imgPath = effectiveSettings.allInOneWallImagePath;
+            }
           }
           if (imgPath != null && imgPath.isNotEmpty) {
             resolvedImageBytes = await _loadImageBytes(imgPath);
           }
         }
         // 3. ALL IN ONE FLOOR
-        else if (qType == QuoteType.allInOneFloor ||
+        else if (isAioQuote ||
+            qType == QuoteType.allInOneFloor ||
             modelLower.contains('all in one') ||
             modelLower.contains('aio')) {
-          String? imgPath = quotation.allInOneModel?.defaultImagePath;
+          String? imgPath = (resolvedAio?.defaultImagePath.isNotEmpty == true)
+              ? resolvedAio!.defaultImagePath
+              : null;
           if (imgPath == null || imgPath.isEmpty) {
-            final match = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
-              (m) => !(m?.isWallMounted ?? true) && (m?.id == quotation.allInOneModel?.id || m?.modelName == quotation.allInOneModel?.modelName),
+            final exactMatch = effectiveSettings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+              (m) => !(m?.isWallMounted ?? true) &&
+                     m?.tankVolumeLitres == (resolvedAio?.tankVolumeLitres ?? 200) &&
+                     (m?.defaultImagePath ?? '').isNotEmpty,
               orElse: () => null,
             );
-            if (match != null && match.defaultImagePath.isNotEmpty) {
-              imgPath = match.defaultImagePath;
-            }
-          }
-          if (imgPath == null || imgPath.isEmpty) {
-            final anyAio = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+            final anyMatch = exactMatch ?? effectiveSettings.allInOneModels.cast<AllInOneModel?>().firstWhere(
               (m) => !(m?.isWallMounted ?? true) && (m?.defaultImagePath ?? '').isNotEmpty,
               orElse: () => null,
             );
-            imgPath = anyAio?.defaultImagePath ?? settings.allInOneImagePath;
+            imgPath = anyMatch?.defaultImagePath;
+            if (imgPath == null || imgPath.isEmpty) {
+              imgPath = effectiveSettings.allInOneImagePath;
+            }
           }
           if (imgPath != null && imgPath.isNotEmpty) {
             resolvedImageBytes = await _loadImageBytes(imgPath);
@@ -220,48 +279,24 @@ class PdfQuotationBuilder {
         }
         // 4. DOMESTIC HEAT PUMP (IZ-#C)
         else {
-          String? imgPath = quotation.model.defaultImagePath;
-          final match = settings.models.cast<HeatPumpModel?>().firstWhere(
-            (m) => m?.id == quotation.model.id || m?.modelName == quotation.model.modelName,
-            orElse: () => null,
-          );
-          if (match != null && match.defaultImagePath.isNotEmpty && match.defaultImagePath != 'assets/images/model_iz_4c.png') {
-            imgPath = match.defaultImagePath;
-          }
-
-          // If no specific custom image, match by capacity range (e.g. 4-8kW vs > 8kW)
+          String? imgPath = resolvedHp.defaultImagePath;
           if (imgPath.isEmpty || imgPath == 'assets/images/model_iz_4c.png') {
-            final kw = quotation.model.displayCapacityKw;
+            final kw = resolvedHp.displayCapacityKw;
             if (kw <= 8.0) {
-              // 4 to 8 kW range
-              final rangeMatch = settings.models.cast<HeatPumpModel?>().firstWhere(
+              final rangeMatch = effectiveSettings.models.cast<HeatPumpModel?>().firstWhere(
                 (m) => (m?.displayCapacityKw ?? 0) <= 8.0 && (m?.defaultImagePath ?? '').isNotEmpty && m?.defaultImagePath != 'assets/images/model_iz_4c.png',
                 orElse: () => null,
               );
-              if (rangeMatch != null) {
-                imgPath = rangeMatch.defaultImagePath;
-              } else if (settings.domesticHpImagePath != null && settings.domesticHpImagePath!.isNotEmpty) {
-                imgPath = settings.domesticHpImagePath;
-              } else {
-                imgPath = 'assets/images/model_iz_4c.png';
-              }
+              imgPath = rangeMatch?.defaultImagePath ?? effectiveSettings.domesticHpImagePath ?? 'assets/images/model_iz_4c.png';
             } else {
-              // > 8 kW (e.g. 10kW - 40kW)
-              final rangeMatch = settings.models.cast<HeatPumpModel?>().firstWhere(
+              final rangeMatch = effectiveSettings.models.cast<HeatPumpModel?>().firstWhere(
                 (m) => (m?.displayCapacityKw ?? 0) > 8.0 && (m?.defaultImagePath ?? '').isNotEmpty,
                 orElse: () => null,
               );
-              if (rangeMatch != null) {
-                imgPath = rangeMatch.defaultImagePath;
-              } else if (settings.domesticHpImagePath != null && settings.domesticHpImagePath!.isNotEmpty) {
-                imgPath = settings.domesticHpImagePath;
-              } else {
-                imgPath = 'assets/images/product_iz_38c.png';
-              }
+              imgPath = rangeMatch?.defaultImagePath ?? effectiveSettings.domesticHpImagePath ?? 'assets/images/product_iz_38c.png';
             }
           }
-
-          if (imgPath != null && imgPath.isNotEmpty) {
+          if (imgPath.isNotEmpty) {
             resolvedImageBytes = await _loadImageBytes(imgPath);
           }
         }
@@ -880,7 +915,18 @@ class PdfQuotationBuilder {
                         fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                   ),
                   pw.SizedBox(height: 1.5),
-                  _buildHpSpecTable(quotation, settings),
+                  _buildHpSpecTable(quotation, effectiveSettings),
+
+                  // For HP Only, show Banner immediately beneath to fill empty space
+                  if (quotation.quoteType == QuoteType.hpOnly && bannerImage != null) ...[
+                    pw.SizedBox(height: 10),
+                    pw.Container(
+                      height: 150,
+                      width: double.infinity,
+                      child: pw.Image(pw.MemoryImage(bannerImage),
+                          fit: pw.BoxFit.fill),
+                    ),
+                  ],
 
                   pw.Spacer(),
                   buildFooter(priceSchedulePage),
@@ -888,7 +934,7 @@ class PdfQuotationBuilder {
               ),
             );
           } else {
-            // Flexible layout for other types
+            // Flexible layout for other types (allInOne, swimmingPool, tankOnly, etc.)
             return withWatermark(
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -901,8 +947,52 @@ class PdfQuotationBuilder {
                         fontWeight: pw.FontWeight.bold,
                         decoration: pw.TextDecoration.underline),
                   ),
-                  pw.SizedBox(height: 6),
-                  _buildGenericPriceTable(quotation, config, settings),
+                  pw.SizedBox(height: 4),
+                  _buildGenericPriceTable(quotation, config, effectiveSettings),
+
+                  // Annexure II immediately beneath price table on the same page (No big empty space)
+                  if (config.hasTechnicalSpecs) ...[
+                    pw.SizedBox(height: 8),
+                    if (config.specMode == SpecMode.allInOne) ...[
+                      pw.Text(
+                        'Annexure – II: TECHNICAL SPECIFICATION FOR : ALL IN ONE HEAT PUMP – ${resolvedAio?.modelName ?? "All in one 200Ltr"}',
+                        style: pw.TextStyle(
+                            fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.SizedBox(height: 2),
+                      _buildAllInOneSpecTable(resolvedAio ??
+                          AllInOneModel.defaultFloorModel()),
+                    ] else if (config.specMode == SpecMode.swimmingPool) ...[
+                      pw.Text(
+                        'Annexure – II: TECHNICAL SPECIFICATION FOR : SWIMMING POOL HEAT PUMP – ${resolvedPool?.modelName ?? "IZ-35SP"}',
+                        style: pw.TextStyle(
+                            fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.SizedBox(height: 2),
+                      _buildPoolSpecTable(resolvedPool ??
+                          PoolHeatPumpModel.defaultModel()),
+                    ] else if (config.specMode == SpecMode.tankOnly) ...[
+                      pw.Text(
+                        'Annexure – II: TECHNICAL SPECIFICATION FOR : HOT WATER STORAGE TANK',
+                        style: pw.TextStyle(
+                            fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.SizedBox(height: 2),
+                      _buildMergedTankSpecTable(quotation),
+                    ],
+                  ],
+
+                  // Insiya Showcase Banner on same page to eliminate empty space
+                  if (bannerImage != null) ...[
+                    pw.SizedBox(height: 10),
+                    pw.Container(
+                      height: 150,
+                      width: double.infinity,
+                      child: pw.Image(pw.MemoryImage(bannerImage),
+                          fit: pw.BoxFit.fill),
+                    ),
+                  ],
+
                   pw.Spacer(),
                   buildFooter(priceSchedulePage),
                 ],
@@ -962,59 +1052,6 @@ class PdfQuotationBuilder {
 
                   pw.Spacer(),
                   buildFooter(tankSpecPage!),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-    } else if (config.hasTechnicalSpecs &&
-        quotation.quoteType != QuoteType.hpWithTank &&
-        quotation.quoteType != QuoteType.hpOnly) {
-      // Other types with technical specs (tankOnly, pool, allInOne)
-      pdf.addPage(
-        pw.Page(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.fromLTRB(36, 24, 36, 20),
-          build: (context) {
-            return withWatermark(
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  buildHeader(showSubHeader: true),
-                  if (config.specMode == SpecMode.tankOnly) ...[
-                    _buildMergedTankSpecTable(quotation),
-                  ] else if (config.specMode == SpecMode.swimmingPool) ...[
-                    pw.Text(
-                      'TECHNICAL SPECIFICATION FOR : SWIMMING POOL HEAT PUMP – ${quotation.poolModel?.modelName ?? "IZ-35SP"}',
-                      style: pw.TextStyle(
-                          fontSize: 8.5, fontWeight: pw.FontWeight.bold),
-                    ),
-                    pw.SizedBox(height: 4),
-                    _buildPoolSpecTable(quotation.poolModel ??
-                        PoolHeatPumpModel.defaultModel()),
-                  ] else if (config.specMode == SpecMode.allInOne) ...[
-                    pw.Text(
-                      'TECHNICAL SPECIFICATION FOR : ALL IN ONE HEAT PUMP – ${quotation.allInOneModel?.modelName ?? "IZ-200A"}',
-                      style: pw.TextStyle(
-                          fontSize: 8.5, fontWeight: pw.FontWeight.bold),
-                    ),
-                    pw.SizedBox(height: 4),
-                    _buildAllInOneSpecTable(quotation.allInOneModel ??
-                        AllInOneModel.defaultFloorModel()),
-                  ],
-                  if (bannerImage != null) ...[
-                    pw.SizedBox(height: 18),
-                    pw.Container(
-                      height: 185,
-                      width: double.infinity,
-                      child: pw.Image(pw.MemoryImage(bannerImage),
-                          fit: pw.BoxFit.fill),
-                    ),
-                  ],
-                  pw.Spacer(),
-                  buildFooter(priceSchedulePage + 1),
                 ],
               ),
             );
@@ -2180,57 +2217,96 @@ class PdfQuotationBuilder {
 
               AllInOneModel? aioModel;
               if (isAioRow) {
-                aioModel = quotation.allInOneModel;
-                if (aioModel == null || aioModel.description.trim().isEmpty) {
-                  final list = settings?.allInOneModels ?? [];
-                  if (list.isNotEmpty) {
-                    final cap = r.systemLph ??
-                        (dLower.contains('100')
-                            ? 100
-                            : (dLower.contains('300')
-                                ? 300
-                                : (dLower.contains('200') ? 200 : null)));
-                    aioModel = list.cast<AllInOneModel?>().firstWhere(
-                      (m) =>
-                          (cap != null && m?.tankVolumeLitres == cap) ||
-                          (m != null &&
-                              dLower.contains(m.modelName.toLowerCase())),
-                      orElse: () => list.first,
-                    );
-                  }
+                final list = settings?.allInOneModels ?? [];
+                final cap = r.systemLph ??
+                    (dLower.contains('100')
+                        ? 100
+                        : (dLower.contains('300')
+                            ? 300
+                            : (dLower.contains('200') ? 200 : 200)));
+                if (list.isNotEmpty) {
+                  aioModel = list.cast<AllInOneModel?>().firstWhere(
+                    (m) =>
+                        m != null &&
+                        (m.tankVolumeLitres == cap ||
+                            dLower.contains(m.modelName.toLowerCase()) ||
+                            m.modelName.toLowerCase().contains(dLower)),
+                    orElse: () => null,
+                  );
+                }
+                aioModel ??= quotation.allInOneModel;
+              }
+
+              final isHpRow = !isAioRow && (
+                  quotation.quoteType == QuoteType.hpOnly ||
+                  quotation.quoteType == QuoteType.hpWithTank ||
+                  dLower.contains('heat pump') ||
+                  dLower.contains('iz-') ||
+                  r.metadata?['type'] == 'heatPump'
+              );
+              final isPoolRow = quotation.quoteType == QuoteType.swimmingPool ||
+                  dLower.contains('swimming') ||
+                  dLower.contains('pool') ||
+                  r.metadata?['type'] == 'pool';
+
+              String extraDesc = '';
+              if (isAioRow && aioModel != null) {
+                extraDesc = aioModel.description.trim();
+              } else if (isPoolRow) {
+                final poolList = settings?.poolModels ?? [];
+                PoolHeatPumpModel? pm;
+                if (poolList.isNotEmpty) {
+                  pm = poolList.cast<PoolHeatPumpModel?>().firstWhere(
+                    (m) => m != null && (dLower.contains(m.modelName.toLowerCase()) || m.modelName.toLowerCase().contains(dLower)),
+                    orElse: () => null,
+                  );
+                }
+                pm ??= quotation.poolModel;
+                extraDesc = pm?.description.trim() ?? '';
+              } else if (isHpRow) {
+                final hpKw = r.hpKw ?? quotation.model.displayCapacityKw;
+                final hpList = settings?.models ?? [];
+                HeatPumpModel? hp;
+                if (hpList.isNotEmpty) {
+                  hp = hpList.cast<HeatPumpModel?>().firstWhere(
+                    (m) => m != null && ((m.displayCapacityKw - hpKw).abs() < 0.1 || dLower.contains(m.modelName.toLowerCase())),
+                    orElse: () => null,
+                  );
+                }
+                hp ??= quotation.model;
+                if (hp.makeModelLine.isNotEmpty && hp.makeModelLine.toLowerCase() != r.description.trim().toLowerCase()) {
+                  extraDesc = hp.makeModelLine.trim();
+                } else if (hp.descriptionLine.isNotEmpty && hp.descriptionLine.toLowerCase() != r.description.trim().toLowerCase()) {
+                  extraDesc = hp.descriptionLine.trim();
                 }
               }
 
+              final shouldShowExtra = extraDesc.isNotEmpty &&
+                  extraDesc.toLowerCase() != r.description.trim().toLowerCase();
+
               pw.Widget descWidget;
-              if (isAioRow &&
-                  aioModel != null &&
-                  aioModel.description.trim().isNotEmpty) {
-                final extraDesc = aioModel.description.trim();
-                final showBoth =
-                    !r.description.toLowerCase().contains(extraDesc.toLowerCase());
+              if (shouldShowExtra) {
                 descWidget = pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 2.5),
+                      horizontal: 4, vertical: 3),
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
                         r.description,
                         style: pw.TextStyle(
-                          fontSize: 7.5,
+                          fontSize: 8,
                           fontWeight: pw.FontWeight.bold,
                         ),
                       ),
-                      if (showBoth) ...[
-                        pw.SizedBox(height: 1.5),
-                        pw.Text(
-                          extraDesc,
-                          style: const pw.TextStyle(
-                            fontSize: 6.5,
-                            color: PdfColors.black,
-                          ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        extraDesc,
+                        style: const pw.TextStyle(
+                          fontSize: 7,
+                          color: PdfColors.black,
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 );
@@ -2830,14 +2906,24 @@ class PdfQuotationBuilder {
           final uri = Uri.parse(trimmed);
           final pathSegments = uri.pathSegments;
           final objIdx = pathSegments.indexOf('object');
-          if (objIdx != -1 && pathSegments.length > objIdx + 2) {
-            final bucket = pathSegments[objIdx + 2];
-            final filePath = pathSegments.sublist(objIdx + 3).join('/');
-            if (bucket.isNotEmpty && filePath.isNotEmpty) {
-              final downloaded = await Supabase.instance.client.storage
-                  .from(bucket)
-                  .download(filePath);
-              return downloaded;
+          if (objIdx != -1) {
+            int bucketIdx = objIdx + 1;
+            if (bucketIdx < pathSegments.length &&
+                (pathSegments[bucketIdx] == 'public' ||
+                 pathSegments[bucketIdx] == 'authenticated' ||
+                 pathSegments[bucketIdx] == 'sign')) {
+              bucketIdx++;
+            }
+            if (bucketIdx < pathSegments.length) {
+              final bucket = pathSegments[bucketIdx];
+              final rawPath = pathSegments.sublist(bucketIdx + 1).join('/');
+              final filePath = Uri.decodeComponent(rawPath);
+              if (bucket.isNotEmpty && filePath.isNotEmpty) {
+                final downloaded = await Supabase.instance.client.storage
+                    .from(bucket)
+                    .download(filePath);
+                return downloaded;
+              }
             }
           }
         } catch (_) {

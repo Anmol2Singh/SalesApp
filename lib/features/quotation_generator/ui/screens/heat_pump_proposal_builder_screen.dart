@@ -1235,12 +1235,27 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                 label: Text(isConfirmed ? 'Preview PDF' : 'Preview (Draft)'),
                 onPressed: () {
                   final company = ref.read(companyForProductProvider('heat_pump'));
-                  final companySettings = GeneratorCompanySettings.fromAppCompany(company);
+                  final moduleSettings = ref.read(quotationSettingsProvider).valueOrNull;
+                  var companySettings = GeneratorCompanySettings.fromAppCompany(company);
+                  if (moduleSettings != null) {
+                    companySettings = companySettings.copyWith(
+                      models: moduleSettings.models.isNotEmpty ? moduleSettings.models : null,
+                      allInOneModels: moduleSettings.allInOneModels.isNotEmpty ? moduleSettings.allInOneModels : null,
+                      poolModels: moduleSettings.poolModels.isNotEmpty ? moduleSettings.poolModels : null,
+                      defaultCoverImagePath: moduleSettings.defaultCoverImagePath,
+                      defaultBannerImagePath: moduleSettings.defaultBannerImagePath,
+                      stampImagePath: moduleSettings.stampImagePath,
+                      domesticHpImagePath: moduleSettings.domesticHpImagePath,
+                      allInOneImagePath: moduleSettings.allInOneImagePath,
+                      allInOneWallImagePath: moduleSettings.allInOneWallImagePath,
+                      swimmingPoolImagePath: moduleSettings.swimmingPoolImagePath,
+                    );
+                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (ctx) => QuotationPreviewScreen(
-                        quotation: draft.toGeneratorQuotation(),
+                        quotation: draft.toGeneratorQuotation(settings: companySettings),
                         settings: companySettings,
                       ),
                     ),

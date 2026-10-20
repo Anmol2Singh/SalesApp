@@ -504,7 +504,7 @@ class QgProposalDraft {
 
   /// Converts this draft to a GeneratorQuotation instance for rendering with PdfQuotationBuilder
   GeneratorQuotation toGeneratorQuotation({GeneratorCompanySettings? settings}) {
-    final heatPumpModel = HeatPumpModel(
+    HeatPumpModel heatPumpModel = HeatPumpModel(
       id: hpModel,
       modelName: hpModel,
       displayCapacityKw: hpKw.toDouble(),
@@ -515,6 +515,18 @@ class QgProposalDraft {
       defaultImagePath: 'assets/images/model_iz_4c.png',
       specs: Map<String, String>.from(hpSpecs),
     );
+    if (settings != null && settings.models.isNotEmpty) {
+      final matchedHp = settings.models.cast<HeatPumpModel?>().firstWhere(
+        (m) => m != null && (m.id == hpModel || m.modelName.toLowerCase() == hpModel.toLowerCase() || (m.displayCapacityKw - hpKw).abs() < 0.1),
+        orElse: () => null,
+      );
+      if (matchedHp != null) {
+        heatPumpModel = matchedHp.copyWith(
+          displayCapacityKw: hpKw > 0 ? hpKw.toDouble() : matchedHp.displayCapacityKw,
+          specs: hpSpecs.isNotEmpty ? Map<String, String>.from(hpSpecs) : matchedHp.specs,
+        );
+      }
+    }
 
     // Multi Heat Pump Lines
     final hpLineItems = <HeatPumpLineItem>[];
@@ -696,25 +708,44 @@ class QgProposalDraft {
         orElse: () => items.isNotEmpty ? items.first : ParsedItemResult(rawDescription: 'All in one 200Ltr', type: ParsedItemType.allInOne, status: ItemResolveStatus.resolved, aioCapacityLitres: 200),
       );
       final cap = aioItem.aioCapacityLitres ?? 200;
-      resolvedAioModel = AllInOneModel(
-        id: 'IZ-${cap}A',
-        modelName: 'IZ-${cap}A',
-        mountType: isWallMounted ? 'wall' : 'floor',
-        tankVolumeLitres: cap,
-        description: aioItem.rawDescription.isNotEmpty ? aioItem.rawDescription : 'ALL IN ONE HEAT PUMP Make: IZYHEAT Model: IZ-${cap}A',
-        specs: {
-          'Product Dimension': cap <= 200 ? '570x1810mm' : '640x1920mm',
-          'Power Supply': '220V-240V/50Hz',
-          'Heating Rate / Water Yield': cap <= 200 ? '42 L/h' : '65 L/h',
-          'COP': '4.76',
-          'Compressor': 'PANASONIC',
-          'Refrigerant': 'R134a',
-          'Max Outlet Water Temp': '65°C',
-          'Ambient Temperature': '-7~45°C',
-          'Water Tank Material': 'Tank with enamel coating',
-          'Net Weight': cap <= 200 ? '93 KG' : '110 KG',
-        },
-      );
+      final rawDescLower = aioItem.rawDescription.toLowerCase();
+
+      AllInOneModel? matchedModel;
+      if (settings != null && settings.allInOneModels.isNotEmpty) {
+        matchedModel = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+          (m) =>
+              m != null &&
+              m.isWallMounted == isWallMounted &&
+              (m.tankVolumeLitres == cap ||
+                  rawDescLower.contains(m.modelName.toLowerCase()) ||
+                  rawDescLower.contains('${m.tankVolumeLitres}')),
+          orElse: () => null,
+        );
+      }
+
+      if (matchedModel != null) {
+        resolvedAioModel = matchedModel;
+      } else {
+        resolvedAioModel = AllInOneModel(
+          id: 'IZ-${cap}A',
+          modelName: 'All in One ${cap}Ltr',
+          mountType: isWallMounted ? 'wall' : 'floor',
+          tankVolumeLitres: cap,
+          description: 'Make: IZYHEAT All in one Heat pump\nModel: All in one ${cap}Ltr\nCapacity: ${cap} Ltr\nPower Input: 850W, Output: 3.5KW, 220V/50Hz',
+          specs: {
+            'Product Dimension': cap <= 200 ? '570x1810mm' : '640x1920mm',
+            'Power Supply': '220V-240V/50Hz',
+            'Heating Rate / Water Yield': cap <= 200 ? '42 L/h' : '65 L/h',
+            'COP': '4.76',
+            'Compressor': 'PANASONIC',
+            'Refrigerant': 'R134a',
+            'Max Outlet Water Temp': '65°C',
+            'Ambient Temperature': '-7~45°C',
+            'Water Tank Material': 'Tank with enamel coating',
+            'Net Weight': cap <= 200 ? '93 KG' : '110 KG',
+          },
+        );
+      }
     }
 
     int advSplit = 70;
@@ -787,6 +818,15 @@ class QgProposalDraft {
       ],
       coverImagePath: coverImagePath,
       bannerImagePath: bannerImagePath,
+      productImagePaths: [
+        if (productImagePath != null && productImagePath!.isNotEmpty)
+          productImagePath!
+        else if (resolvedAioModel?.defaultImagePath.isNotEmpty == true)
+          resolvedAioModel!.defaultImagePath
+        else if (heatPumpModel.defaultImagePath.isNotEmpty &&
+            heatPumpModel.defaultImagePath != 'assets/images/model_iz_4c.png')
+          heatPumpModel.defaultImagePath
+      ],
       createdAt: quotationUpdatedAt,
       updatedAt: draftUpdatedAt,
     );
