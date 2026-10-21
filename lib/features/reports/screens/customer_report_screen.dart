@@ -162,8 +162,15 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
                             ),
                           )
                         : ListView.separated(
+                            padding: EdgeInsets.only(
+                              bottom: MediaQuery.of(context).size.width >= 800
+                                  ? 8.0
+                                  : (MediaQuery.of(context).padding.bottom > 20
+                                      ? MediaQuery.of(context).padding.bottom
+                                      : 88.0),
+                            ),
                             itemCount: filteredCustomers.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                             itemBuilder: (context, index) {
                               final c = filteredCustomers[index];
                               final title = c.customerName.trim().isNotEmpty
@@ -307,10 +314,18 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
   }
 
   Widget _buildReportDetails(Customer360Data data) {
+    final isWide = MediaQuery.of(context).size.width >= 800;
+    final bottomPad = isWide
+        ? 8.0
+        : (MediaQuery.of(context).padding.bottom > 20
+            ? MediaQuery.of(context).padding.bottom
+            : 88.0);
+
     return Column(
       children: [
         Expanded(
           child: ListView(
+            padding: const EdgeInsets.only(bottom: 12),
             children: [
               _buildCustomerInfoCard(),
               const SizedBox(height: 16),
@@ -334,12 +349,14 @@ class _CustomerReportScreenState extends ConsumerState<CustomerReportScreen> {
               _buildSectionTitle('Service Visits (${data.serviceVisits.length})', Icons.handyman),
               ...data.serviceVisits.map((s) => _buildDataCard(s['technician_name'] ?? 'Visit', s['status'] ?? '-', s['scheduled_date'])),
               if (data.serviceVisits.isEmpty) const Text('No service visits found', style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _buildActionButtons(data),
+        Padding(
+          padding: EdgeInsets.only(top: 8, bottom: bottomPad),
+          child: _buildActionButtons(data),
+        ),
       ],
     );
   }

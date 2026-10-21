@@ -81,6 +81,8 @@ import '../../features/project_manager/presentation/screens/pm_filter_screen.dar
 import '../../features/dashboard/screens/product_interests_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_quick_call_remark_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
+import '../../features/assigned_work/presentation/screens/assigned_work_screen.dart';
+
 
 // Customer app imports
 import '../../features/customer_app/features/auth/screens/otp_screen.dart';
@@ -160,6 +162,7 @@ class AppRoutes {
   static const String userActivityReport = '/reports/activity';
   static const String customerReport = '/reports/customer';
   static const String products = '/products';
+  static const String assignedWork = '/assigned-work';
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -467,6 +470,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.pmDailyTransactions,
             builder: (context, state) => const PmDailyTransactionsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.assignedWork,
+            builder: (context, state) => const AssignedWorkScreen(),
           ),
           ShellRoute(
             builder: (context, state, child) {

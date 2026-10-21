@@ -19,6 +19,7 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../../../core/models/user_role.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../data/models/pm_company.dart';
+import '../../data/models/pm_project.dart';
 
 class PmProjectDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -138,11 +139,13 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
             final customerSince = record.createdAt != null
                 ? DateFormat('dd/MM/yyyy').format(record.createdAt!)
                 : (record.reminderDate != null ? DateFormat('dd/MM/yyyy').format(record.reminderDate!) : '10/10/2026');
-            final smCandidate = (record.salesMan != null && record.salesMan!.trim().isNotEmpty)
-                ? record.salesMan!.trim()
-                : ((record.salesmanName != null && record.salesmanName!.trim().isNotEmpty)
-                    ? record.salesmanName!.trim()
-                    : (record.customer?.salesmanName ?? record.customer?.assignedToName ?? ''));
+            final smCandidate = (record.salesMan != null && (record.salesMan as String).trim().isNotEmpty)
+                ? (record.salesMan as String).trim()
+                : ((record.salesmanName != null && (record.salesmanName as String).trim().isNotEmpty)
+                    ? (record.salesmanName as String).trim()
+                    : (record is PmProject
+                        ? (record.customer?.salesmanName ?? record.customer?.assignedToName ?? '')
+                        : ''));
             final salesMan = smCandidate.isNotEmpty ? smCandidate : 'Unassigned';
 
             final companies = ref.watch(pmCompaniesListProvider);
@@ -150,7 +153,10 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
               (c) => c?.id == record.companyId,
               orElse: () => null,
             );
-            final firmName = matchedCompany?.name ?? (record.firmName.isNotEmpty ? record.firmName : 'Insiya Solar Industry');
+            final firmName = matchedCompany?.name ??
+                (record.firmName != null && (record.firmName as String).trim().isNotEmpty
+                    ? (record.firmName as String).trim()
+                    : 'Insiya Solar Industry');
 
             return LayoutBuilder(
               builder: (context, screenConstraints) {
@@ -431,7 +437,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Customer Since: $customerSince (ID: ${record.idNo})',
+                                '${widget.isPurchase ? "Vendor" : "Customer"} Since: $customerSince (ID: ${record.idNo})',
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF15803D)),
                               ),
                               const SizedBox(width: 4),
@@ -458,21 +464,22 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${record.address ?? "Installation Site"}, GSTIN : ${record.gstNo ?? "27AAPCM6498L1ZE Maharashtra"}',
+                      '${record.address ?? (widget.isPurchase ? "Vendor Address" : "Installation Site")}${record.gstNo != null && (record.gstNo as String).isNotEmpty ? ", GSTIN : ${record.gstNo}" : ""}',
                       style: TextStyle(fontSize: isMobile ? 11.5 : 12.5, color: const Color(0xFF64748B)),
                     ),
-                    const SizedBox(height: 12),
-                    // Technical spec tags row
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        _SpecTag(label: 'Item Name: ${record.itemPurchased ?? "GI Pressurized Tank 500ltr"}'),
-                        _SpecTag(label: 'Item Qty: ${record.itemQuantity ?? 2}'),
-                        _SpecTag(label: 'Tank Type: ${record.tankType ?? "SOLAR WATER HEATER 700/38"}'),
-                        _SpecTag(label: 'Tank: ${record.tankCapacity ?? 45}'),
-                      ],
-                    ),
+                    if (!widget.isPurchase || record.itemPurchased != null) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _SpecTag(label: 'Item Name: ${record.itemPurchased ?? "GI Pressurized Tank 500ltr"}'),
+                          _SpecTag(label: 'Item Qty: ${record.itemQuantity ?? 2}'),
+                          _SpecTag(label: 'Tank Type: ${record.tankType ?? "SOLAR WATER HEATER 700/38"}'),
+                          _SpecTag(label: 'Tank: ${record.tankCapacity ?? 45}'),
+                        ],
+                      ),
+                    ],
                   ],
                 );
 

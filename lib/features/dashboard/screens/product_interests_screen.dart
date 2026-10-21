@@ -360,7 +360,14 @@ class _ProductInterestsScreenState extends ConsumerState<ProductInterestsScreen>
             return const Center(child: Text('No product interests found.'));
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              MediaQuery.of(context).padding.bottom > 20
+                  ? MediaQuery.of(context).padding.bottom + 16
+                  : 96,
+            ),
             itemCount: interests.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {

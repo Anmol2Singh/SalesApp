@@ -16,6 +16,8 @@ import '../providers/sidebar_provider.dart';
 import '../../features/customers/providers/customers_provider.dart';
 import '../../features/daily_tasks/providers/daily_tasks_provider.dart';
 import '../../features/project_manager/providers/pm_providers.dart';
+import '../../features/assigned_work/presentation/widgets/today_tasks_dialog.dart';
+import '../../features/assigned_work/providers/assigned_work_providers.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -28,6 +30,7 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
+  static bool _hasCheckedTodayTasks = false;
   String? _expandedGroup; // 'crm', 'sales', 'finance', 'fieldOps', 'reports', 'catalog'
   String? _fieldOpsSubGroup; // 'installations', 'complaints'
   bool _pdfLibraryExpanded = false;
@@ -90,6 +93,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       return 'fieldOps';
     }
     if (route == AppRoutes.dailyTasks ||
+        route == AppRoutes.assignedWork ||
+        route.startsWith('/assigned-work') ||
         route.startsWith('/reports') ||
         route.startsWith('/search-pdf') ||
         route == AppRoutes.searchPdf ||
@@ -132,11 +137,38 @@ class _AppShellState extends ConsumerState<AppShell> {
     _pdfLibraryExpanded = widget.currentRoute == AppRoutes.pdfList ||
         widget.currentRoute == AppRoutes.searchPdf ||
         widget.currentRoute.startsWith('/search-pdf');
+
+    _triggerStartupTodayTasksPopup();
+  }
+
+  void _triggerStartupTodayTasksPopup() {
+    if (_hasCheckedTodayTasks) return;
+    _hasCheckedTodayTasks = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 700));
+      if (!mounted) return;
+
+      final profile = ref.read(currentProfileProvider);
+      if (profile == null || profile.primaryRole == UserRole.customer) return;
+
+      try {
+        final tasks = await ref.read(todayTasksForCurrentUserProvider.future);
+        if (!mounted) return;
+        if (tasks.isNotEmpty) {
+          TodayTasksDialog.show(context);
+        }
+      } catch (_) {}
+    });
   }
 
   @override
   void didUpdateWidget(AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!_hasCheckedTodayTasks) {
+      _triggerStartupTodayTasksPopup();
+    }
     if (oldWidget.currentRoute != widget.currentRoute) {
       final activeGroup = _detectGroup(widget.currentRoute);
       _expandedGroup = activeGroup;
@@ -794,6 +826,14 @@ class _AppShellState extends ConsumerState<AppShell> {
                           unselectedTextColor: unselectedTextColor,
                           selectedBgColor: selectedBgColor,
                         ),
+                        _buildChildTile(
+                          label: 'Assigned Work',
+                          route: AppRoutes.assignedWork,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          selectedTextColor: selectedTextColor,
+                          unselectedTextColor: unselectedTextColor,
+                          selectedBgColor: selectedBgColor,
+                        ),
                         if (canAccessPdfLibrary) ...[
                           _buildSubGroupHeader(
                             label: 'PDF Library',
@@ -837,19 +877,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                 ],
 
-                // 7. Alerts & Notifications
-                if (!hasAccounts || hasAdminOrManager)
-                  _buildNavItemTile(
-                    route: AppRoutes.notifications,
-                    label: isSidebarCollapsed ? 'Alerts' : 'Alerts & Notifications',
-                    icon: const Icon(Icons.notifications_outlined),
-                    selectedIcon: const Icon(Icons.notifications),
-                    selectedTextColor: selectedTextColor,
-                    unselectedTextColor: unselectedTextColor,
-                    selectedBgColor: selectedBgColor,
-                  ),
-
-                // 8. Catalog & Inventory Group (Expandable)
+                // 7. Catalog & Inventory Group (Expandable)
                 if (hasAdminOrManager && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Catalog & Inventory',
@@ -886,6 +914,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                     ),
                   ),
                 ],
+
+                // 8. Alerts & Notifications
+                if (!hasAccounts || hasAdminOrManager)
+                  _buildNavItemTile(
+                    route: AppRoutes.notifications,
+                    label: isSidebarCollapsed ? 'Alerts' : 'Alerts & Notifications',
+                    icon: const Icon(Icons.notifications_outlined),
+                    selectedIcon: const Icon(Icons.notifications),
+                    selectedTextColor: selectedTextColor,
+                    unselectedTextColor: unselectedTextColor,
+                    selectedBgColor: selectedBgColor,
+                  ),
 
                 // Specific role tasks for technicians, factory, purchase, boq
                 if (isTechnician && !hasComplaints) ...[
@@ -1657,6 +1697,31 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool isPurchase = roles.any((r) => r == UserRole.purchase);
     final bool isTechnician = roles.any((r) => r == UserRole.technician);
     final bool hasAccounts = roles.any((r) => r == UserRole.accounts);
+    final bool isAssignedWorkRoute = widget.currentRoute == AppRoutes.assignedWork ||
+        widget.currentRoute.startsWith('/assigned-work');
+
+    // 0.4 Assigned Work contextual route
+    if (!isWide && isAssignedWorkRoute) {
+      addItem(const _NavItem(
+        route: AppRoutes.assignedWork,
+        label: 'Work',
+        icon: Icon(Icons.calendar_month_outlined),
+        selectedIcon: Icon(Icons.calendar_month),
+      ));
+      addItem(_NavItem(
+        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.projectManager : AppRoutes.salesDashboard),
+        label: 'Home',
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
+      ));
+      addItem(const _NavItem(
+        route: AppRoutes.notifications,
+        label: 'Alerts',
+        icon: Icon(Icons.notifications_outlined),
+        selectedIcon: Icon(Icons.notifications),
+      ));
+      return uniqueItems.values.toList();
+    }
 
     final bool isPmRoute = widget.currentRoute.startsWith('/pm');
 

@@ -23,7 +23,6 @@ class CrmShell extends ConsumerWidget {
     final isAdmin = profile?.roles.contains(UserRole.admin) ?? false;
     final hasComplaints = profile?.roles.contains(UserRole.serviceHead) ?? false;
     final canAccessCrmDashboard = isSalesOrAdmin || isCrmStaff;
-    final canAccessLeads = isSalesOrAdmin || isCrmStaff;
     final canAccessCustomers = isSalesOrAdmin; // CRM staff cannot access Customers unless they have sales/admin
 
     // Non-sales/non-CRM staff roles (BOQ, factory, material staff) must only access Prospects
@@ -81,40 +80,26 @@ class CrmShell extends ConsumerWidget {
       },
       child: Scaffold(
         extendBody: true,
-        body: Column(
-          children: [
-            if (isWide)
-              _buildDesktopCrmTabs(
-                context,
-                isCrmStaff: isCrmStaff,
-                canAccessDashboard: canAccessCrmDashboard,
-                canAccessLeads: canAccessLeads,
-                canAccessCustomers: canAccessCustomers,
-              ),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  if (!isWide && canAccessCrmDashboard) {
-                    final mq = MediaQuery.of(context);
-                    final bottomInset = mq.viewPadding.bottom;
-                    final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
-                    return MediaQuery(
-                      data: mq.copyWith(
-                        padding: mq.padding.copyWith(
-                          bottom: topOfNavBar + 8,
-                        ),
-                        viewPadding: mq.viewPadding.copyWith(
-                          bottom: topOfNavBar + 8,
-                        ),
-                      ),
-                      child: child,
-                    );
-                  }
-                  return child;
-                },
-              ),
-            ),
-          ],
+        body: Builder(
+          builder: (context) {
+            if (!isWide && canAccessCrmDashboard) {
+              final mq = MediaQuery.of(context);
+              final bottomInset = mq.viewPadding.bottom;
+              final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
+              return MediaQuery(
+                data: mq.copyWith(
+                  padding: mq.padding.copyWith(
+                    bottom: topOfNavBar + 8,
+                  ),
+                  viewPadding: mq.viewPadding.copyWith(
+                    bottom: topOfNavBar + 8,
+                  ),
+                ),
+                child: child,
+              );
+            }
+            return child;
+          },
         ),
         bottomNavigationBar: (isWide || !canAccessCrmDashboard)
             ? null
@@ -124,59 +109,6 @@ class CrmShell extends ConsumerWidget {
                 canAccessCustomers: canAccessCustomers,
                 hasComplaints: hasComplaints,
               ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopCrmTabs(
-    BuildContext context, {
-    required bool isCrmStaff,
-    required bool canAccessDashboard,
-    required bool canAccessLeads,
-    required bool canAccessCustomers,
-  }) {
-    return Container(
-      color: AppColors.surface,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          Text('CRM Mode', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 32),
-          if (canAccessDashboard)
-            _DesktopTab(
-              label: 'Dashboard',
-              icon: Icons.dashboard,
-              isSelected: currentRoute == '/crm/dashboard',
-              onTap: () => context.go('/crm/dashboard'),
-            ),
-          _DesktopTab(
-            label: 'Prospects',
-            icon: Icons.person_search,
-            isSelected: currentRoute.startsWith('/crm/prospects'),
-            onTap: () => context.go('/crm/prospects'),
-          ),
-          if (canAccessLeads)
-            _DesktopTab(
-              label: 'Leads',
-              icon: Icons.trending_up,
-              isSelected: currentRoute.startsWith('/crm/leads'),
-              onTap: () => context.go('/crm/leads'),
-            ),
-          if (isCrmStaff)
-            _DesktopTab(
-              label: "Today's Report",
-              icon: Icons.assessment,
-              isSelected: currentRoute == '/reports/activity',
-              onTap: () => context.push('/reports/activity'),
-            ),
-          if (canAccessCustomers)
-            _DesktopTab(
-              label: 'Customers',
-              icon: Icons.people,
-              isSelected: currentRoute.startsWith('/crm/customers'),
-              onTap: () => context.go('/crm/customers'),
-            ),
-        ],
       ),
     );
   }
@@ -374,48 +306,6 @@ class CrmShell extends ConsumerWidget {
               }),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DesktopTab extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _DesktopTab({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: isSelected ? AppColors.primary : AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
         ),
       ),
     );

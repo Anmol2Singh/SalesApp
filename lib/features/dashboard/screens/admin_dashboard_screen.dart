@@ -888,6 +888,12 @@ class _QuickActionsGrid extends ConsumerWidget {
           color: const Color(0xFF10B981),
           actions: [
             _QuickActionBtn(
+              label: 'Assigned Work',
+              icon: Icons.calendar_month_outlined,
+              color: const Color(0xFF4F46E5),
+              onTap: () => context.push(AppRoutes.assignedWork),
+            ),
+            _QuickActionBtn(
               label: 'Daily Tasks',
               icon: Icons.fact_check_outlined,
               color: const Color(0xFF8B5CF6),

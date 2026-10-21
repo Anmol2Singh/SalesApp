@@ -457,6 +457,15 @@ class SalesDashboardScreen extends ConsumerWidget {
 
                     actions.add(
                       _QuickActionBtn(
+                        icon: Icons.calendar_month_outlined,
+                        label: 'Assigned Work',
+                        color: const Color(0xFF4F46E5),
+                        onTap: () => context.push(AppRoutes.assignedWork),
+                      ),
+                    );
+
+                    actions.add(
+                      _QuickActionBtn(
                         icon: Icons.fact_check_outlined,
                         label: 'Daily Tasks',
                         color: const Color(0xFF8B5CF6),

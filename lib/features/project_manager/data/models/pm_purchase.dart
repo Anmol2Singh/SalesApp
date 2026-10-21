@@ -26,6 +26,8 @@ class PmPurchase {
   int? get itemQuantity => null;
   String? get tankType => null;
   int? get tankCapacity => null;
+  dynamic get customer => null;
+  String? get customerId => null;
 
   // Derived follow-up fields
   final DateTime? reminderDate;

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../../../core/providers/supabase_provider.dart';
 import '../theme/pm_tokens.dart';
 import '../widgets/pm_card.dart';
 import '../widgets/pm_badge.dart';
@@ -672,6 +673,23 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
     super.dispose();
   }
 
+  Future<void> _openPartySearchDialog() async {
+    final selected = await showDialog<PmPartyOption>(
+      context: context,
+      builder: (ctx) => const _PartySearchDialog(),
+    );
+    if (selected != null) {
+      setState(() {
+        _partyController.text = selected.name;
+        if (selected.firmName != null &&
+            selected.firmName!.isNotEmpty &&
+            _firmController.text.trim().isEmpty) {
+          _firmController.text = selected.firmName!;
+        }
+      });
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -830,13 +848,74 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                 ),
                 const SizedBox(height: 12),
 
-                // Party Name
+                // Party Name with Click-to-Search
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Party / Customer / Vendor Name *',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _openPartySearchDialog,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.search, size: 14, color: Color(0xFF2563EB)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Click to Search List',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: _partyController,
-                  decoration: const InputDecoration(
-                    labelText: 'Party / Customer / Vendor Name *',
-                    prefixIcon: Icon(LucideIcons.user, size: 16),
+                  decoration: InputDecoration(
+                    hintText: 'Click to search or type party name...',
+                    prefixIcon: const Icon(LucideIcons.user, size: 16),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_partyController.text.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            tooltip: 'Clear',
+                            onPressed: () {
+                              setState(() => _partyController.clear());
+                            },
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.search, size: 20, color: Color(0xFF2563EB)),
+                          tooltip: 'Search Party / Customer / Vendor',
+                          onPressed: _openPartySearchDialog,
+                        ),
+                      ],
+                    ),
                   ),
+                  onTap: () {
+                    if (_partyController.text.isEmpty) {
+                      _openPartySearchDialog();
+                    }
+                  },
                   validator: (v) => v == null || v.trim().isEmpty ? 'Please enter party name' : null,
                 ),
                 const SizedBox(height: 12),
@@ -924,3 +1003,408 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
     );
   }
 }
+
+// ─── SEARCHABLE PARTY / CUSTOMER / VENDOR PICKER ─────────────────────────────
+
+class PmPartyOption {
+  final String name;
+  final String? firmName;
+  final String? phone;
+  final String category; // 'Customer', 'Vendor', 'Project', 'Party', 'Custom'
+
+  const PmPartyOption({
+    required this.name,
+    this.firmName,
+    this.phone,
+    required this.category,
+  });
+
+  Color get categoryColor {
+    switch (category) {
+      case 'Customer':
+        return const Color(0xFF2563EB); // Blue
+      case 'Vendor':
+        return const Color(0xFF0D9488); // Teal
+      case 'Project':
+        return const Color(0xFF7C3AED); // Purple
+      default:
+        return const Color(0xFFD97706); // Amber
+    }
+  }
+}
+
+final pmDailyTransactionPartiesProvider = FutureProvider.autoDispose<List<PmPartyOption>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final activeCompany = ref.watch(pmActiveCompanyProvider);
+  final Map<String, PmPartyOption> uniqueMap = {};
+
+  // 1. Fetch CRM Customers
+  try {
+    final custRes = await supabase
+        .from('customers')
+        .select('id, customer_name, company_name, phone')
+        .isFilter('deleted_at', null)
+        .order('customer_name', ascending: true);
+    for (final c in (custRes as List)) {
+      final name = (c['customer_name'] as String? ?? '').trim();
+      final comp = (c['company_name'] as String? ?? '').trim();
+      final phone = (c['phone'] as String? ?? '').trim();
+      final primaryName = name.isNotEmpty ? name : comp;
+      if (primaryName.isNotEmpty) {
+        uniqueMap.putIfAbsent(
+          primaryName.toLowerCase(),
+          () => PmPartyOption(
+            name: primaryName,
+            firmName: comp.isNotEmpty && comp != primaryName ? comp : null,
+            phone: phone.isNotEmpty ? phone : null,
+            category: 'Customer',
+          ),
+        );
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fetch Vendors from pm_purchases for active company
+  try {
+    final vendRes = await supabase
+        .from('pm_purchases')
+        .select('site_name, party_name, firm_name, mobile_number')
+        .eq('company_id', activeCompany.id)
+        .order('site_name', ascending: true);
+    for (final v in (vendRes as List)) {
+      final site = (v['site_name'] as String? ?? '').trim();
+      final party = (v['party_name'] as String? ?? '').trim();
+      final firm = (v['firm_name'] as String? ?? '').trim();
+      final phone = (v['mobile_number'] as String? ?? '').trim();
+      final name = site.isNotEmpty ? site : party;
+      if (name.isNotEmpty) {
+        uniqueMap.putIfAbsent(
+          name.toLowerCase(),
+          () => PmPartyOption(
+            name: name,
+            firmName: firm.isNotEmpty ? firm : (party.isNotEmpty && party != name ? party : null),
+            phone: phone.isNotEmpty ? phone : null,
+            category: 'Vendor',
+          ),
+        );
+      }
+    }
+  } catch (_) {}
+
+  // 3. Fetch Sites/Projects from pm_projects for active company
+  try {
+    final projRes = await supabase
+        .from('pm_projects')
+        .select('site_name')
+        .eq('company_id', activeCompany.id)
+        .order('site_name', ascending: true);
+    for (final p in (projRes as List)) {
+      final site = (p['site_name'] as String? ?? '').trim();
+      if (site.isNotEmpty) {
+        uniqueMap.putIfAbsent(
+          site.toLowerCase(),
+          () => PmPartyOption(
+            name: site,
+            category: 'Project',
+          ),
+        );
+      }
+    }
+  } catch (_) {}
+
+  // 4. Fetch distinct party names from existing pm_daily_transactions
+  try {
+    final txRes = await supabase
+        .from('pm_daily_transactions')
+        .select('party_name, firm_name')
+        .eq('company_id', activeCompany.id)
+        .order('created_at', ascending: false)
+        .limit(200);
+    for (final t in (txRes as List)) {
+      final party = (t['party_name'] as String? ?? '').trim();
+      final firm = (t['firm_name'] as String? ?? '').trim();
+      if (party.isNotEmpty) {
+        uniqueMap.putIfAbsent(
+          party.toLowerCase(),
+          () => PmPartyOption(
+            name: party,
+            firmName: firm.isNotEmpty ? firm : null,
+            category: 'Party',
+          ),
+        );
+      }
+    }
+  } catch (_) {}
+
+  final list = uniqueMap.values.toList();
+  list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  return list;
+});
+
+class _PartySearchDialog extends ConsumerStatefulWidget {
+  const _PartySearchDialog();
+
+  @override
+  ConsumerState<_PartySearchDialog> createState() => _PartySearchDialogState();
+}
+
+class _PartySearchDialogState extends ConsumerState<_PartySearchDialog> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  String _selectedCategory = 'All';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final partiesAsync = ref.watch(pmDailyTransactionPartiesProvider);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(LucideIcons.users, color: Color(0xFF2563EB), size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Party / Customer / Vendor',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Search across customers, vendors, and past parties',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF94A3B8)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Search Box
+              TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Search by name, company, or phone...',
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF2563EB)),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                  ),
+                ),
+                onChanged: (val) => setState(() => _query = val.trim()),
+              ),
+              const SizedBox(height: 12),
+
+              // Category Filter Chips
+              partiesAsync.maybeWhen(
+                data: (parties) {
+                  final categories = ['All', 'Customer', 'Vendor', 'Project', 'Party'];
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: categories.map((cat) {
+                        final isSelected = _selectedCategory == cat;
+                        final count = cat == 'All'
+                            ? parties.length
+                            : parties.where((p) => p.category == cat).length;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(
+                              '$cat ($count)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? Colors.white : const Color(0xFF475569),
+                              ),
+                            ),
+                            selected: isSelected,
+                            selectedColor: const Color(0xFF2563EB),
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            onSelected: (val) {
+                              if (val) setState(() => _selectedCategory = cat);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
+                orElse: () => const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const SizedBox(height: 6),
+
+              // Filtered list
+              Expanded(
+                child: partiesAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Error loading parties: $e')),
+                  data: (parties) {
+                    final q = _query.toLowerCase();
+                    final filtered = parties.where((p) {
+                      final matchCat = _selectedCategory == 'All' || p.category == _selectedCategory;
+                      if (!matchCat) return false;
+                      if (q.isEmpty) return true;
+                      final name = p.name.toLowerCase();
+                      final firm = (p.firmName ?? '').toLowerCase();
+                      final phone = (p.phone ?? '').toLowerCase();
+                      return name.contains(q) || firm.contains(q) || phone.contains(q);
+                    }).toList();
+
+                    final hasExactMatch = filtered.any((p) => p.name.toLowerCase() == q);
+
+                    if (filtered.isEmpty && (_query.isEmpty || hasExactMatch)) {
+                      return const Center(
+                        child: Text(
+                          'No parties found.',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      itemCount: filtered.length + (_query.isNotEmpty && !hasExactMatch ? 1 : 0),
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF8FAFC)),
+                      itemBuilder: (context, index) {
+                        // Custom Typed Query Option at top
+                        if (_query.isNotEmpty && !hasExactMatch && index == 0) {
+                          return ListTile(
+                            leading: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.add, color: Color(0xFF2563EB), size: 20),
+                            ),
+                            title: Text(
+                              'Use "$_query" as party name',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                            ),
+                            subtitle: const Text('Add as new or custom party', style: TextStyle(fontSize: 12)),
+                            onTap: () {
+                              Navigator.pop(context, PmPartyOption(name: _query, category: 'Custom'));
+                            },
+                          );
+                        }
+
+                        final itemIndex = (_query.isNotEmpty && !hasExactMatch) ? index - 1 : index;
+                        final p = filtered[itemIndex];
+
+                        final subtitleParts = [
+                          if (p.firmName != null && p.firmName!.isNotEmpty) 'Firm: ${p.firmName}',
+                          if (p.phone != null && p.phone!.isNotEmpty) '📞 ${p.phone}',
+                        ];
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          leading: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: p.categoryColor.withValues(alpha: 0.12),
+                            child: Text(
+                              p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
+                              style: TextStyle(
+                                color: p.categoryColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            p.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1E293B)),
+                          ),
+                          subtitle: subtitleParts.isNotEmpty
+                              ? Text(
+                                  subtitleParts.join(' • '),
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                )
+                              : null,
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: p.categoryColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: p.categoryColor.withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              p.category.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: p.categoryColor,
+                              ),
+                            ),
+                          ),
+                          onTap: () => Navigator.pop(context, p),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

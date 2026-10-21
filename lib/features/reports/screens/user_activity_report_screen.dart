@@ -1238,6 +1238,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                     ),
                     const SizedBox(height: 16),
                     _buildSection('Complaints Handled (${data.complaints.length})', data.complaints, (c) => c['title'] ?? 'Complaint', (c) => 'Ticket: ${c['ticket_number'] ?? c['id']}'),
+                    SizedBox(height: MediaQuery.of(context).size.width >= 800 ? 20 : 90),
                   ],
                 );
               },
@@ -1248,25 +1249,28 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         ],
       ),
       floatingActionButton: dataAsync.whenOrNull(
-        data: (data) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FloatingActionButton.extended(
-              heroTag: 'export_excel_fab',
-              onPressed: () => _exportReportExcel(context, data),
-              icon: const Icon(Icons.table_chart_outlined, size: 18),
-              label: const Text('Export Excel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              backgroundColor: Colors.teal.shade700,
-            ),
-            const SizedBox(width: 12),
-            FloatingActionButton.extended(
-              heroTag: 'download_pdf_fab',
-              onPressed: () => _showPdfSectionPicker(context, data),
-              icon: const Icon(Icons.picture_as_pdf, size: 18),
-              label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              backgroundColor: AppColors.primary,
-            ),
-          ],
+        data: (data) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton.extended(
+                heroTag: 'export_excel_fab',
+                onPressed: () => _exportReportExcel(context, data),
+                icon: const Icon(Icons.table_chart_outlined, size: 18),
+                label: const Text('Export Excel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                backgroundColor: Colors.teal.shade700,
+              ),
+              const SizedBox(width: 12),
+              FloatingActionButton.extended(
+                heroTag: 'download_pdf_fab',
+                onPressed: () => _showPdfSectionPicker(context, data),
+                icon: const Icon(Icons.picture_as_pdf, size: 18),
+                label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                backgroundColor: AppColors.primary,
+              ),
+            ],
+          ),
         ),
       ),
     );
