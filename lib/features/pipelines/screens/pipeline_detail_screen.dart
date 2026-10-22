@@ -27,6 +27,7 @@ import '../../quotation_generator/models/qg_noc_document.dart';
 import '../../quotation_generator/models/qg_noc_builder_state.dart';
 import '../../quotation_generator/services/pdf_noc_builder.dart';
 import '../../quotation_generator/services/qg_noc_extractor.dart';
+import '../widgets/work_progress_box.dart';
 
 class PipelineDetailScreen extends ConsumerWidget {
   final String pipelineId;
@@ -453,7 +454,10 @@ class _PipelineDetailContent extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
           ],
-          // Step tracker
+          // Work Progress Box
+          WorkProgressBox(pipeline: pipeline),
+          const SizedBox(height: 16),
+          // Step tracker (Deal Progress)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -2625,6 +2629,7 @@ class _NocActionCard extends ConsumerStatefulWidget {
 class _NocActionCardState extends ConsumerState<_NocActionCard> {
   List<QgNocDocument>? _nocDocs;
   bool _loading = true;
+  bool _isInstallationComplete = false;
 
   @override
   void initState() {
@@ -2632,12 +2637,34 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
     _fetchNocs();
   }
 
+  @override
+  void didUpdateWidget(covariant _NocActionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pipeline.id != widget.pipeline.id ||
+        oldWidget.pipeline.updatedAt != widget.pipeline.updatedAt ||
+        oldWidget.pipeline.notes != widget.pipeline.notes) {
+      _fetchNocs();
+    }
+  }
+
   Future<void> _fetchNocs() async {
     try {
-      final docs = await QgNocRepository.listNocs(dealId: widget.pipeline.id);
+      final supabase = ref.read(supabaseClientProvider);
+      final docsFuture = QgNocRepository.listNocs(dealId: widget.pipeline.id);
+      final instFuture = WorkProgressService.isInstallationComplete(
+        supabase,
+        widget.pipeline.customerId,
+        widget.pipeline.id,
+      );
+
+      final results = await Future.wait([docsFuture, instFuture]);
+      final docs = results[0] as List<QgNocDocument>;
+      final isInstDone = results[1] as bool;
+
       if (mounted) {
         setState(() {
           _nocDocs = docs;
+          _isInstallationComplete = isInstDone;
           _loading = false;
         });
       }
@@ -2714,6 +2741,25 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       return;
     }
 
+    final supabase = ref.read(supabaseClientProvider);
+    final isInstallationComplete = await WorkProgressService.isInstallationComplete(
+      supabase,
+      pipeline.customerId,
+      pipeline.id,
+    );
+    if (!isInstallationComplete) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot generate NOC: Customer installation must be completed (status: Resolved/Closed) first.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -3030,11 +3076,13 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
           Text(
             hasDocs
                 ? 'Satisfactory installation & commissioning certificate issued for ${_getNocProductName(docs.first, widget.pipeline)}. Strictly 1 NOC per deal.'
-                : 'Generate official No Objection Certificate (NOC) for customer sign-off and commissioning handover.',
-            style: const TextStyle(
+                : !_isInstallationComplete
+                    ? 'No Objection Certificate (NOC) is locked. The customer installation step must be completed and marked as resolved before generating NOC.'
+                    : 'Generate official No Objection Certificate (NOC) for customer sign-off and commissioning handover.',
+            style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: !_isInstallationComplete && !hasDocs ? const Color(0xFFD97706) : AppColors.textSecondary,
               height: 1.4,
             ),
           ),
@@ -3044,12 +3092,30 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
             child: ElevatedButton.icon(
               onPressed: hasDocs
                   ? () => _viewNocPdf(docs.first)
-                  : (isManagerOnly ? null : () => _generateNocDirectly()),
-              icon: Icon(hasDocs ? Icons.picture_as_pdf : Icons.add_circle_outline, size: 16, color: Colors.white),
-              label: Text(hasDocs ? 'View NOC' : (isManagerOnly ? 'NOC Not Issued' : 'Generate NOC')),
+                  : ((isManagerOnly || !_isInstallationComplete) ? null : () => _generateNocDirectly()),
+              icon: Icon(
+                hasDocs
+                    ? Icons.picture_as_pdf
+                    : !_isInstallationComplete
+                        ? Icons.lock_outline_rounded
+                        : Icons.add_circle_outline,
+                size: 16,
+                color: Colors.white,
+              ),
+              label: Text(
+                hasDocs
+                    ? 'View NOC'
+                    : !_isInstallationComplete
+                        ? 'Installation Incomplete (NOC Locked)'
+                        : (isManagerOnly ? 'NOC Not Issued' : 'Generate NOC'),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF286B37),
+                backgroundColor: hasDocs || _isInstallationComplete
+                    ? const Color(0xFF286B37)
+                    : Colors.grey.shade400,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey.shade300,
+                disabledForegroundColor: Colors.grey.shade600,
                 elevation: 0,
                 minimumSize: const Size.fromHeight(44),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

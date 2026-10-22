@@ -12,6 +12,7 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
+import '../../pipelines/widgets/work_progress_box.dart';
 
 class DeliveryChallanModal extends ConsumerStatefulWidget {
   final String pipelineId;
@@ -132,6 +133,16 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         _challanDate,
       );
       final fileName = '${challanNo.replaceAll('/', '_')}.pdf';
+
+      // 4b. Record Delivery Challan generation in Work Progress
+      try {
+        await WorkProgressService.updateProgressMeta(
+          supabase,
+          widget.pipelineId,
+          challanGenerated: true,
+        );
+        ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      } catch (_) {}
 
       if (!mounted) return;
       Navigator.of(context).pop(); // Close bottom sheet
