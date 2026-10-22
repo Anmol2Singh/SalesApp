@@ -202,6 +202,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                       context: context,
                       builder: (ctx) => _MoveCopyCustomerDialog(
                         project: record,
+                        isPurchase: widget.isPurchase,
                         onSuccess: () {
                           if (context.canPop()) {
                             context.pop();
@@ -226,7 +227,9 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                         const Icon(LucideIcons.folderInput, size: 14, color: Color(0xFF005CE6)),
                         const SizedBox(width: 6),
                         Text(
-                          isMobile ? 'Move / Copy' : 'Move / Copy Customer',
+                          isMobile
+                              ? 'Move / Copy'
+                              : (widget.isPurchase ? 'Move / Copy Vendor' : 'Move / Copy Customer'),
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
                         ),
                       ],
@@ -239,8 +242,8 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text('Delete Account?'),
-                        content: const Text('This will delete this project/vendor account along with all its ledger entries. Cannot be undone.'),
+                        title: Text('Delete ${widget.isPurchase ? "Vendor" : "Account"}?'),
+                        content: Text('This will delete this ${widget.isPurchase ? "vendor" : "project"} account along with all its ledger entries. Cannot be undone.'),
                         actions: [
                           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
                           ElevatedButton(
@@ -282,7 +285,9 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                         const Icon(LucideIcons.trash2, size: 14, color: Color(0xFFEF4444)),
                         const SizedBox(width: 6),
                         Text(
-                          isMobile ? 'Delete' : 'Delete Project',
+                          isMobile
+                              ? 'Delete'
+                              : (widget.isPurchase ? 'Delete Vendor' : 'Delete Project'),
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFEF4444)),
                         ),
                       ],
@@ -372,19 +377,20 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF0284C7)),
                       ),
                     ),
-                    // Sales Man Pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(9999),
-                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                    // Sales Man Pill (Only for Customer/Project, NOT for Vendor)
+                    if (!widget.isPurchase)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(9999),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Text(
+                          'Sales Man: $salesMan',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)),
+                        ),
                       ),
-                      child: Text(
-                        'Sales Man: $salesMan',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)),
-                      ),
-                    ),
                     // Firm Pill
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -400,7 +406,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                     ),
                     // Customer Since Pill (Click to edit)
                     Tooltip(
-                      message: isManagerOnly ? 'Customer Since' : 'Click to edit Customer Since date',
+                      message: isManagerOnly ? (widget.isPurchase ? 'Vendor Since' : 'Customer Since') : 'Click to edit date',
                       child: InkWell(
                         onTap: isManagerOnly
                             ? null
@@ -467,7 +473,7 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                       '${record.address ?? (widget.isPurchase ? "Vendor Address" : "Installation Site")}${record.gstNo != null && (record.gstNo as String).isNotEmpty ? ", GSTIN : ${record.gstNo}" : ""}',
                       style: TextStyle(fontSize: isMobile ? 11.5 : 12.5, color: const Color(0xFF64748B)),
                     ),
-                    if (!widget.isPurchase || record.itemPurchased != null) ...[
+                    if (!widget.isPurchase && record.itemPurchased != null) ...[
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
@@ -490,38 +496,59 @@ class _PmProjectDetailScreenState extends ConsumerState<PmProjectDetailScreen> w
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
-                  child: isMobile
-                      ? Column(
-                          children: [
-                            Row(
+                  child: widget.isPurchase
+                      ? (isMobile
+                          ? Row(
                               children: [
-                                Expanded(child: _FinanceMetric(label: 'ORDER VALUE', value: '₹${_currencyFormat.format(orderVal)}', color: const Color(0xFF0F172A))),
-                                const SizedBox(width: 12),
-                                Expanded(child: _FinanceMetric(label: 'EXTRA WORK', value: '₹${_currencyFormat.format(extraVal)}', color: const Color(0xFF0F172A))),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(child: _FinanceMetric(label: 'RECEIVED', value: '₹${_currencyFormat.format(paidVal)}', color: const Color(0xFF16A34A))),
-                                const SizedBox(width: 12),
+                                Expanded(child: _FinanceMetric(label: 'QUOTATION VALUE', value: '₹${_currencyFormat.format(orderVal)}', color: const Color(0xFF0F172A))),
+                                const SizedBox(width: 8),
+                                Expanded(child: _FinanceMetric(label: 'PAID', value: '₹${_currencyFormat.format(paidVal)}', color: const Color(0xFF16A34A))),
+                                const SizedBox(width: 8),
                                 Expanded(child: _FinanceMetric(label: 'BALANCE', value: '₹${_currencyFormat.format(bal)}', color: const Color(0xFF16A34A))),
                               ],
-                            ),
-                          ],
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _FinanceMetric(label: 'ORDER VALUE', value: '₹${_currencyFormat.format(orderVal)}', color: const Color(0xFF0F172A)),
-                            const SizedBox(width: 24),
-                            _FinanceMetric(label: 'EXTRA WORK', value: '₹${_currencyFormat.format(extraVal)}', color: const Color(0xFF0F172A)),
-                            const SizedBox(width: 24),
-                            _FinanceMetric(label: 'RECEIVED', value: '₹${_currencyFormat.format(paidVal)}', color: const Color(0xFF16A34A)),
-                            const SizedBox(width: 24),
-                            _FinanceMetric(label: 'BALANCE', value: '₹${_currencyFormat.format(bal)}', color: const Color(0xFF16A34A)),
-                          ],
-                        ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _FinanceMetric(label: 'QUOTATION VALUE', value: '₹${_currencyFormat.format(orderVal)}', color: const Color(0xFF0F172A)),
+                                const SizedBox(width: 24),
+                                _FinanceMetric(label: 'PAID', value: '₹${_currencyFormat.format(paidVal)}', color: const Color(0xFF16A34A)),
+                                const SizedBox(width: 24),
+                                _FinanceMetric(label: 'BALANCE', value: '₹${_currencyFormat.format(bal)}', color: const Color(0xFF16A34A)),
+                              ],
+                            ))
+                      : (isMobile
+                          ? Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: _FinanceMetric(label: 'ORDER VALUE', value: '₹${_currencyFormat.format(orderVal)}', color: const Color(0xFF0F172A))),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _FinanceMetric(label: 'EXTRA WORK', value: '₹${_currencyFormat.format(extraVal)}', color: const Color(0xFF0F172A))),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(child: _FinanceMetric(label: 'RECEIVED', value: '₹${_currencyFormat.format(paidVal)}', color: const Color(0xFF16A34A))),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _FinanceMetric(label: 'BALANCE', value: '₹${_currencyFormat.format(bal)}', color: const Color(0xFF16A34A))),
+                                  ],
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _FinanceMetric(label: 'ORDER VALUE', value: '₹${_currencyFormat.format(orderVal)}', color: const Color(0xFF0F172A)),
+                                const SizedBox(width: 24),
+                                _FinanceMetric(label: 'EXTRA WORK', value: '₹${_currencyFormat.format(extraVal)}', color: const Color(0xFF0F172A)),
+                                const SizedBox(width: 24),
+                                _FinanceMetric(label: 'RECEIVED', value: '₹${_currencyFormat.format(paidVal)}', color: const Color(0xFF16A34A)),
+                                const SizedBox(width: 24),
+                                _FinanceMetric(label: 'BALANCE', value: '₹${_currencyFormat.format(bal)}', color: const Color(0xFF16A34A)),
+                              ],
+                            )),
                 );
 
                 return NestedScrollView(
@@ -845,10 +872,12 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 
 class _MoveCopyCustomerDialog extends ConsumerStatefulWidget {
   final dynamic project;
+  final bool isPurchase;
   final VoidCallback onSuccess;
 
   const _MoveCopyCustomerDialog({
     required this.project,
+    this.isPurchase = false,
     required this.onSuccess,
   });
 
@@ -874,6 +903,8 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
       _selectedCompanyId = other.id;
     }
 
+    final entityName = widget.isPurchase ? 'Vendor' : 'Customer';
+
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -898,10 +929,10 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
                     child: const Icon(LucideIcons.copyPlus, color: Color(0xFF005CE6), size: 20),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Move / Copy Customer',
-                      style: TextStyle(
+                      'Move / Copy $entityName',
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF0F172A),
@@ -921,7 +952,7 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
                 TextSpan(
                   style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569), height: 1.4),
                   children: [
-                    const TextSpan(text: 'Transfer or duplicate customer '),
+                    TextSpan(text: 'Transfer or duplicate ${entityName.toLowerCase()} '),
                     TextSpan(
                       text: widget.project.siteName,
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
@@ -1036,9 +1067,9 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
                             const SizedBox(width: 8),
                             const Icon(LucideIcons.arrowLeftRight, size: 16, color: Color(0xFF005CE6)),
                             const SizedBox(width: 6),
-                            const Text(
-                              'Move Customer',
-                              style: TextStyle(
+                            Text(
+                              'Move $entityName',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF0F172A),
@@ -1092,9 +1123,9 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
                             const SizedBox(width: 8),
                             const Icon(LucideIcons.copy, size: 16, color: Color(0xFF005CE6)),
                             const SizedBox(width: 6),
-                            const Text(
-                              'Copy Customer',
-                              style: TextStyle(
+                            Text(
+                              'Copy $entityName',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF0F172A),
@@ -1112,8 +1143,8 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
               // Helper message
               Text(
                 _isMove
-                    ? 'Removes the customer from current company and transfers all records to the target company.'
-                    : 'Creates a duplicate copy of this customer and all associated records under the target company.',
+                    ? 'Removes the ${entityName.toLowerCase()} from current company and transfers all records to the target company.'
+                    : 'Creates a duplicate copy of this ${entityName.toLowerCase()} and all associated records under the target company.',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
               ),
 
@@ -1145,7 +1176,7 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
                     child: _isLoading
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : Text(
-                            _isMove ? 'Move Customer' : 'Copy Customer',
+                            _isMove ? 'Move $entityName' : 'Copy $entityName',
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                   ),
@@ -1167,27 +1198,52 @@ class _MoveCopyCustomerDialogState extends ConsumerState<_MoveCopyCustomerDialog
       return;
     }
 
+    final entityName = widget.isPurchase ? 'Vendor' : 'Customer';
     setState(() => _isLoading = true);
     try {
-      final repo = ref.read(pmProjectsRepositoryProvider);
-      if (_isMove) {
-        await repo.moveProject(widget.project.id, _selectedCompanyId!);
-        ref.invalidate(pmProjectsListProvider);
-        if (mounted) {
-          Navigator.of(context).pop();
-          widget.onSuccess();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Customer successfully moved to target company.')),
-          );
+      if (widget.isPurchase) {
+        final repo = ref.read(pmPurchasesRepositoryProvider);
+        if (_isMove) {
+          await repo.movePurchase(widget.project.id, _selectedCompanyId!);
+          ref.invalidate(pmPurchasesListProvider);
+          if (mounted) {
+            Navigator.of(context).pop();
+            widget.onSuccess();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$entityName successfully moved to target company.')),
+            );
+          }
+        } else {
+          await repo.copyPurchase(widget.project.id, _selectedCompanyId!);
+          ref.invalidate(pmPurchasesListProvider);
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$entityName duplicate created in target company.')),
+            );
+          }
         }
       } else {
-        await repo.copyProject(widget.project.id, _selectedCompanyId!);
-        ref.invalidate(pmProjectsListProvider);
-        if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Customer duplicate created in target company.')),
-          );
+        final repo = ref.read(pmProjectsRepositoryProvider);
+        if (_isMove) {
+          await repo.moveProject(widget.project.id, _selectedCompanyId!);
+          ref.invalidate(pmProjectsListProvider);
+          if (mounted) {
+            Navigator.of(context).pop();
+            widget.onSuccess();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$entityName successfully moved to target company.')),
+            );
+          }
+        } else {
+          await repo.copyProject(widget.project.id, _selectedCompanyId!);
+          ref.invalidate(pmProjectsListProvider);
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$entityName duplicate created in target company.')),
+            );
+          }
         }
       }
     } catch (e) {

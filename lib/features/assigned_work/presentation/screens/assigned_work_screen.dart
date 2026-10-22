@@ -19,6 +19,8 @@ class AssignedWorkScreen extends ConsumerStatefulWidget {
 
 class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
   final TextEditingController _searchController = TextEditingController();
+  bool _monthSlideForward = true;
+  bool _daySlideForward = true;
 
   @override
   void dispose() {
@@ -27,21 +29,55 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
   }
 
   void _previousMonth() {
+    setState(() => _monthSlideForward = false);
     final current = ref.read(assignedWorkMonthProvider);
     final prev = DateTime(current.year, current.month - 1, 1);
     ref.read(assignedWorkMonthProvider.notifier).state = prev;
   }
 
   void _nextMonth() {
+    setState(() => _monthSlideForward = true);
     final current = ref.read(assignedWorkMonthProvider);
     final next = DateTime(current.year, current.month + 1, 1);
     ref.read(assignedWorkMonthProvider.notifier).state = next;
   }
 
+  void _previousDay() {
+    final current = ref.read(assignedWorkSelectedDateProvider);
+    final prev = current.subtract(const Duration(days: 1));
+    setState(() => _daySlideForward = false);
+    ref.read(assignedWorkSelectedDateProvider.notifier).state = prev;
+
+    final month = ref.read(assignedWorkMonthProvider);
+    if (prev.month != month.month || prev.year != month.year) {
+      setState(() => _monthSlideForward = false);
+      ref.read(assignedWorkMonthProvider.notifier).state = DateTime(prev.year, prev.month, 1);
+    }
+  }
+
+  void _nextDay() {
+    final current = ref.read(assignedWorkSelectedDateProvider);
+    final next = current.add(const Duration(days: 1));
+    setState(() => _daySlideForward = true);
+    ref.read(assignedWorkSelectedDateProvider.notifier).state = next;
+
+    final month = ref.read(assignedWorkMonthProvider);
+    if (next.month != month.month || next.year != month.year) {
+      setState(() => _monthSlideForward = true);
+      ref.read(assignedWorkMonthProvider.notifier).state = DateTime(next.year, next.month, 1);
+    }
+  }
+
   void _goToToday() {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final currentSel = ref.read(assignedWorkSelectedDateProvider);
+    setState(() {
+      _daySlideForward = today.isAfter(currentSel);
+      _monthSlideForward = today.isAfter(ref.read(assignedWorkMonthProvider));
+    });
     ref.read(assignedWorkMonthProvider.notifier).state = DateTime(now.year, now.month, 1);
-    ref.read(assignedWorkSelectedDateProvider.notifier).state = DateTime(now.year, now.month, now.day);
+    ref.read(assignedWorkSelectedDateProvider.notifier).state = today;
   }
 
   @override
@@ -304,47 +340,69 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
             ),
           ),
 
-          // Calendar Grid - Weekly rows to ensure strict height without blank spaces
+          // Calendar Grid - Weekly rows with smooth swipe animation
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            child: Column(
-              children: [
-                for (int week = 0; week < numWeeks; week++) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: [
-                        for (int col = 0; col < 7; col++) ...[
-                          Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                final slotIndex = week * 7 + col;
-                                if (slotIndex < leadingEmpty || slotIndex >= totalSlots) {
-                                  return const SizedBox.shrink();
-                                }
+            child: ClipRect(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final offset = _monthSlideForward ? const Offset(1.0, 0.0) : const Offset(-1.0, 0.0);
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: offset,
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: FadeTransition(opacity: animation, child: child),
+                  );
+                },
+                child: Column(
+                  key: ValueKey<String>('${currentMonth.year}-${currentMonth.month}'),
+                  children: [
+                    for (int week = 0; week < numWeeks; week++) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            for (int col = 0; col < 7; col++) ...[
+                              Expanded(
+                                child: Builder(
+                                  builder: (context) {
+                                    final slotIndex = week * 7 + col;
+                                    if (slotIndex < leadingEmpty || slotIndex >= totalSlots) {
+                                      return const SizedBox.shrink();
+                                    }
 
-                                final dayNumber = slotIndex - leadingEmpty + 1;
-                                final cellDate = DateTime(currentMonth.year, currentMonth.month, dayNumber);
-                                final dayTasks = mapTasksForDate(items, cellDate);
+                                    final dayNumber = slotIndex - leadingEmpty + 1;
+                                    final cellDate = DateTime(currentMonth.year, currentMonth.month, dayNumber);
+                                    final dayTasks = mapTasksForDate(items, cellDate);
 
-                                final isSelected = cellDate.year == selectedDate.year &&
-                                    cellDate.month == selectedDate.month &&
-                                    cellDate.day == selectedDate.day;
+                                    final isSelected = cellDate.year == selectedDate.year &&
+                                        cellDate.month == selectedDate.month &&
+                                        cellDate.day == selectedDate.day;
 
-                                final isToday = cellDate.year == todayNormalized.year &&
-                                    cellDate.month == todayNormalized.month &&
-                                    cellDate.day == todayNormalized.day;
+                                    final isToday = cellDate.year == todayNormalized.year &&
+                                        cellDate.month == todayNormalized.month &&
+                                        cellDate.day == todayNormalized.day;
 
-                                final pendingCount = dayTasks.where((t) => !t.isTrace && t.status == WorkStatus.pending).length;
-                                final completedCount = dayTasks.where((t) => !t.isTrace && t.status == WorkStatus.completed).length;
-                                final traceCount = dayTasks.where((t) => t.isTrace).length;
+                                    final pendingCount = dayTasks.where((t) => !t.isTrace && t.status == WorkStatus.pending).length;
+                                    final completedCount = dayTasks.where((t) => !t.isTrace && t.status == WorkStatus.completed).length;
+                                    final traceCount = dayTasks.where((t) => t.isTrace).length;
 
-                                return AspectRatio(
-                                  aspectRatio: 1.0,
-                                  child: InkWell(
-                                    onTap: () {
-                                      ref.read(assignedWorkSelectedDateProvider.notifier).state = cellDate;
-                                    },
+                                    return AspectRatio(
+                                      aspectRatio: 1.0,
+                                      child: InkWell(
+                                        onTap: () {
+                                          final current = ref.read(assignedWorkSelectedDateProvider);
+                                          if (cellDate.isAfter(current)) {
+                                            setState(() => _daySlideForward = true);
+                                          } else if (cellDate.isBefore(current)) {
+                                            setState(() => _daySlideForward = false);
+                                          }
+                                          ref.read(assignedWorkSelectedDateProvider.notifier).state = cellDate;
+                                        },
                                     borderRadius: BorderRadius.circular(10),
                                     child: AnimatedContainer(
                                       duration: const Duration(milliseconds: 180),
@@ -429,6 +487,8 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
               ],
             ),
           ),
+        ),
+      ),
 
           // Legend Bar
           Container(
@@ -767,6 +827,23 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
                   ),
                 ),
               ],
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 20, color: Color(0xFF64748B)),
+                onPressed: _previousDay,
+                tooltip: 'Previous Day',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 20, color: Color(0xFF64748B)),
+                onPressed: _nextDay,
+                tooltip: 'Next Day',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+              ),
             ],
           ),
         ),
@@ -798,102 +875,140 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
     DateTime selectedDate, {
     bool shrinkWrap = false,
   }) {
-    return tasksAsync.when(
-      data: (tasks) {
-        if (tasks.isEmpty) {
-          final now = DateTime.now();
-          final today = DateTime(now.year, now.month, now.day);
-          final selNormalized = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-          final isPast = selNormalized.isBefore(today);
+    double dragAccumulator = 0;
 
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: isPast ? const Color(0xFFF1F5F9) : const Color(0xFFEEF2FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isPast ? Icons.history_toggle_off_rounded : Icons.event_available_rounded,
-                      size: 48,
-                      color: isPast ? const Color(0xFF94A3B8) : const Color(0xFF6366F1),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    isPast ? 'No Tasks on This Past Date' : 'No Tasks for This Date',
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    isPast
-                        ? 'No active tasks or traces on this day. Tasks cannot be added in the past.'
-                        : 'Tap "Add Work" to assign tasks to team members or yourself.',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 18),
-                  if (isPast)
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        ref.read(assignedWorkSelectedDateProvider.notifier).state = today;
-                        AddEditWorkDialog.show(context, date: today);
-                      },
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add Work for Today'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F46E5),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) => dragAccumulator = 0,
+      onHorizontalDragUpdate: (details) => dragAccumulator += details.primaryDelta ?? 0,
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity < -120 || dragAccumulator < -40) {
+          _nextDay();
+        } else if (velocity > 120 || dragAccumulator > 40) {
+          _previousDay();
+        }
+      },
+      child: ClipRect(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final offset = _daySlideForward ? const Offset(0.35, 0.0) : const Offset(-0.35, 0.0);
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: offset,
+                end: Offset.zero,
+              ).animate(animation),
+              child: FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey<String>('${selectedDate.year}-${selectedDate.month}-${selectedDate.day}'),
+            child: tasksAsync.when(
+              data: (tasks) {
+                if (tasks.isEmpty) {
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+                  final selNormalized = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+                  final isPast = selNormalized.isBefore(today);
+
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: isPast ? const Color(0xFFF1F5F9) : const Color(0xFFEEF2FF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isPast ? Icons.history_toggle_off_rounded : Icons.event_available_rounded,
+                              size: 48,
+                              color: isPast ? const Color(0xFF94A3B8) : const Color(0xFF6366F1),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            isPast ? 'No Tasks on This Past Date' : 'No Tasks for This Date',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            isPast
+                                ? 'No active tasks or traces on this day. Tasks cannot be added in the past.'
+                                : 'Tap "Add Work" to assign tasks to team members or yourself.',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 18),
+                          if (isPast)
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                ref.read(assignedWorkSelectedDateProvider.notifier).state = today;
+                                AddEditWorkDialog.show(context, date: today);
+                              },
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add Work for Today'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4F46E5),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            )
+                          else
+                            ElevatedButton.icon(
+                              onPressed: () => AddEditWorkDialog.show(context, date: selectedDate),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add New Work'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4F46E5),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                        ],
                       ),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      onPressed: () => AddEditWorkDialog.show(context, date: selectedDate),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add New Work'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F46E5),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
                     ),
-                ],
+                  );
+                }
+
+                return ListView.separated(
+                  shrinkWrap: shrinkWrap,
+                  physics: shrinkWrap ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(),
+                  itemCount: tasks.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+                    return _buildTaskCard(task);
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) => Center(
+                child: Text('Error loading tasks: $err', style: const TextStyle(color: Colors.red)),
               ),
             ),
-          );
-        }
-
-        return ListView.separated(
-          shrinkWrap: shrinkWrap,
-          physics: shrinkWrap ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(),
-          itemCount: tasks.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final task = tasks[index];
-            return _buildTaskCard(task);
-          },
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(
-        child: Text('Error loading tasks: $err', style: const TextStyle(color: Colors.red)),
+          ),
+        ),
       ),
     );
   }

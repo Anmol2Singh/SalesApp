@@ -166,9 +166,9 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
             final titleWidget = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Ledger Records',
-                  style: TextStyle(
+                Text(
+                  widget.isPurchase ? 'Purchase Ledger Records' : 'Ledger Records',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
@@ -176,9 +176,11 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text(
-                  'Detailed financial history for this project',
-                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                Text(
+                  widget.isPurchase
+                      ? 'Detailed financial history for this vendor'
+                      : 'Detailed financial history for this project',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
                 ),
               ],
             );
@@ -246,12 +248,9 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                               'Date',
                               'Payment Type',
                               'Particulars',
-                              'Sales M',
-                              'M Outward',
-                              'Order Value',
-                              'Extra Work',
+                              'Bill',
+                              'Quotation Val',
                               'Paid',
-                              'Status'
                             ]
                           : [
                               'Sr',
@@ -270,13 +269,23 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                       final rows = entries.asMap().entries.map((mapEntry) {
                         final idx = mapEntry.key + 1;
                         final e = mapEntry.value;
+                        if (widget.isPurchase) {
+                          return [
+                            '$idx',
+                            DateFormat('dd-MM-yyyy').format(e.date),
+                            e.paymentType ?? '-',
+                            e.particulars ?? '-',
+                            e.billReceived ? 'BILL RECEIVED' : (e.paymentBill ? 'PAYMENT BILL' : 'PENDING'),
+                            e.orderValue > 0 ? e.orderValue.toStringAsFixed(2) : '0.00',
+                            e.paymentReceived > 0 ? e.paymentReceived.toStringAsFixed(2) : '0.00',
+                          ];
+                        }
                         return [
                           '$idx',
                           DateFormat('dd-MM-yyyy').format(e.date),
                           e.paymentType ?? '-',
                           e.particulars ?? '-',
-                          if (!widget.isPurchase)
-                            (e.billSubmitted ? 'Submitted' : 'Pending'),
+                          (e.billSubmitted ? 'Submitted' : 'Pending'),
                           e.salesMValue > 0
                               ? e.salesMValue.toStringAsFixed(0)
                               : '-',
@@ -292,15 +301,15 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                           e.paymentReceived > 0
                               ? e.paymentReceived.toStringAsFixed(0)
                               : '-',
-                          if (widget.isPurchase)
-                            (e.billReceived ? 'Received' : 'Pending'),
-                          if (!widget.isPurchase) (e.workRemark ?? '-'),
+                          e.workRemark ?? '-',
                         ];
                       }).toList();
 
                       ExportPreviewDialog.show(
                         context,
-                        title: 'Project Ledger — ${widget.project.siteName}',
+                        title: widget.isPurchase
+                            ? 'Purchase Ledger — ${widget.project.siteName}'
+                            : 'Project Ledger — ${widget.project.siteName}',
                         fileName: 'Ledger_${widget.project.siteName}.xlsx',
                         headers: headers,
                         rows: rows,
@@ -364,34 +373,35 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                     ),
                   ),
                 ),
-                // Full Screen Button
-                InkWell(
-                  onTap: () => _openFullScreenLedger(),
-                  borderRadius: BorderRadius.circular(9999),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.maximize2,
-                            size: 14, color: Color(0xFF0F172A)),
-                        SizedBox(width: 6),
-                        Text('Full Screen',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A))),
-                      ],
+                // Full Screen Button (Only for Projects, hidden on Purchase Ledger as per design)
+                if (!widget.isPurchase)
+                  InkWell(
+                    onTap: () => _openFullScreenLedger(),
+                    borderRadius: BorderRadius.circular(9999),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(9999),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.maximize2,
+                              size: 14, color: Color(0xFF0F172A)),
+                          SizedBox(width: 6),
+                          Text('Full Screen',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A))),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                // + Add New Entry Button
+                // + Add Purchase Entry / + Add New Entry Button
                 InkWell(
                   onTap: () => _showAddEditDialog(null, entries.length + 1),
                   borderRadius: BorderRadius.circular(9999),
@@ -409,16 +419,18 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(LucideIcons.plus, size: 15, color: Colors.white),
-                        SizedBox(width: 6),
-                        Text('Add New Entry',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white)),
+                        const Icon(LucideIcons.plus, size: 15, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.isPurchase ? 'Add Purchase Entry' : 'Add New Entry',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
+                        ),
                       ],
                     ),
                   ),
@@ -498,8 +510,348 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                         builder: (context, ledgerConstraints) {
                           final double availableWidth =
                               ledgerConstraints.maxWidth;
-                          // 11 columns. Clamped spacing ensures all columns including ACTIONS
-                          // fit comfortably within standard desktop views without getting pushed off-screen.
+
+                          if (widget.isPurchase) {
+                            final double dynamicSpacing =
+                                ((availableWidth - 750) / 7).clamp(12.0, 36.0);
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        BoxConstraints(minWidth: availableWidth),
+                                    child: DataTable(
+                                      headingRowColor: WidgetStateProperty.all(
+                                          const Color(0xFFF8FAFC)),
+                                      headingRowHeight: 44,
+                                      dataRowMinHeight: 48,
+                                      dataRowMaxHeight: 52,
+                                      horizontalMargin: 14,
+                                      columnSpacing: dynamicSpacing,
+                                      columns: [
+                                        const DataColumn(
+                                          label: Text('SR',
+                                              style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF475569))),
+                                        ),
+                                        const DataColumn(
+                                          label: Text('DATE',
+                                              style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF475569))),
+                                        ),
+                                        const DataColumn(
+                                          label: Text('PAYMENT TYPE',
+                                              style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF475569))),
+                                        ),
+                                        const DataColumn(
+                                          label: Text('PARTICULARS',
+                                              style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF475569))),
+                                        ),
+                                        const DataColumn(
+                                          label: Text('BILL',
+                                              style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF475569))),
+                                        ),
+                                        DataColumn(
+                                          numeric: true,
+                                          label: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE0F2FE).withValues(alpha: 0.5),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text('QUOTATION VAL',
+                                                style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF0F172A))),
+                                          ),
+                                        ),
+                                        DataColumn(
+                                          numeric: true,
+                                          label: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE0F2FE).withValues(alpha: 0.5),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text('PAID',
+                                                style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF0F172A))),
+                                          ),
+                                        ),
+                                        const DataColumn(
+                                          label: Text('ACTION',
+                                              style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF475569))),
+                                        ),
+                                      ],
+                                      rows: [
+                                        ...entries.asMap().entries.map((mapEntry) {
+                                          final index = mapEntry.key;
+                                          final e = mapEntry.value;
+                                          final sr = index + 1;
+                                          final billReceived = e.billReceived;
+                                          final paymentBill = e.paymentBill;
+
+                                          return DataRow(
+                                            cells: [
+                                              DataCell(Text('$sr',
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Color(0xFF64748B)))),
+                                              DataCell(Text(
+                                                  _dateFormat.format(e.date),
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Color(0xFF0F172A)))),
+                                              DataCell(
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 10, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFE0F2FE),
+                                                    borderRadius:
+                                                        BorderRadius.circular(9999),
+                                                  ),
+                                                  child: Text(
+                                                    (e.paymentType ?? 'ONLINE')
+                                                        .toUpperCase(),
+                                                    style: const TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w800,
+                                                        color: Color(0xFF0284C7)),
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                ConstrainedBox(
+                                                  constraints: const BoxConstraints(
+                                                      maxWidth: 180),
+                                                  child: Text(
+                                                    e.particulars ?? 'Bill',
+                                                    style: const TextStyle(
+                                                        fontSize: 12.5,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Color(0xFF0F172A)),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 10, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: billReceived
+                                                        ? const Color(0xFF00875A)
+                                                        : (paymentBill
+                                                            ? const Color(0xFF0284C7)
+                                                            : const Color(0xFFF1F5F9)),
+                                                    borderRadius:
+                                                        BorderRadius.circular(9999),
+                                                    border: (billReceived || paymentBill)
+                                                        ? null
+                                                        : Border.all(
+                                                            color: const Color(
+                                                                0xFFCBD5E1)),
+                                                  ),
+                                                  child: Text(
+                                                    billReceived
+                                                        ? 'BILL RECEIVED'
+                                                        : (paymentBill
+                                                            ? 'PAYMENT BILL'
+                                                            : 'PENDING'),
+                                                    style: TextStyle(
+                                                      fontSize: 9.5,
+                                                      fontWeight: FontWeight.w800,
+                                                      color: (billReceived || paymentBill)
+                                                          ? Colors.white
+                                                          : const Color(0xFF64748B),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Text(
+                                                  e.orderValue > 0
+                                                      ? '₹${_currencyFormat.format(e.orderValue)}.00'
+                                                      : '',
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Color(0xFF0F172A)),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Text(
+                                                  '₹${_currencyFormat.format(e.paymentReceived)}.00',
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w800,
+                                                      color: Color(0xFF16A34A)),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Tooltip(
+                                                      message: 'Edit Entry',
+                                                      child: InkWell(
+                                                        onTap: () =>
+                                                            _showAddEditDialog(e),
+                                                        borderRadius:
+                                                            BorderRadius.circular(6),
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets.all(5),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(
+                                                                0xFFEFF6FF),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                    6),
+                                                            border: Border.all(
+                                                                color: const Color(
+                                                                    0xFFDBEAFE)),
+                                                          ),
+                                                          child: const Icon(
+                                                              LucideIcons.pencil,
+                                                              size: 13,
+                                                              color:
+                                                                  Color(0xFF005CE6)),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Tooltip(
+                                                      message: 'Delete Entry',
+                                                      child: InkWell(
+                                                        onTap: () =>
+                                                            _deleteEntry(e.id),
+                                                        borderRadius:
+                                                            BorderRadius.circular(6),
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets.all(5),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(
+                                                                0xFFFEF2F2),
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                    6),
+                                                            border: Border.all(
+                                                                color: const Color(
+                                                                    0xFFFEE2E2)),
+                                                          ),
+                                                          child: const Icon(
+                                                              LucideIcons.trash2,
+                                                              size: 13,
+                                                              color:
+                                                                  Color(0xFFEF4444)),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        }),
+                                        // NET TOTALS FOOTER ROW
+                                        DataRow(
+                                          color: WidgetStateProperty.all(
+                                              const Color(0xFFF8FAFC)),
+                                          cells: [
+                                            const DataCell(Text('')),
+                                            const DataCell(Text('')),
+                                            const DataCell(Text('')),
+                                            const DataCell(Text('')),
+                                            const DataCell(
+                                              Text(
+                                                'NET TOTALS:',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Color(0xFF0F172A)),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(
+                                                '₹${_currencyFormat.format(totalOrderVal)}.00',
+                                                style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Color(0xFF0F172A)),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(
+                                                '₹${_currencyFormat.format(totalReceived)}.00',
+                                                style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Color(0xFF16A34A)),
+                                              ),
+                                            ),
+                                            const DataCell(Text('')),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 14, bottom: 4, left: 4),
+                                  child: Row(
+                                    children: [
+                                      const Text(
+                                        'TOTAL BALANCE: ',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${_currencyFormat.format(totalOrderVal - totalReceived)}.00',
+                                        style: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+
+                          // 11 columns for Customer Project
                           final double dynamicSpacing =
                               ((availableWidth - 900) / 10).clamp(10.0, 24.0);
 
@@ -1009,7 +1361,9 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
       _billSubmitted = widget.isPurchase
           ? widget.entry!.billReceived
           : widget.entry!.billSubmitted;
-      _paymentReceipt = widget.entry!.paymentReceived > 0;
+      _paymentReceipt = widget.isPurchase
+          ? widget.entry!.paymentBill
+          : (widget.entry!.paymentReceipt || widget.entry!.paymentReceived > 0);
     }
   }
 
@@ -1056,10 +1410,13 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
           'quotation_value': double.tryParse(_orderValueCtrl.text) ?? 0.0,
         if (widget.isPurchase)
           'payment_paid': double.tryParse(_paymentRecdCtrl.text) ?? 0.0,
-        if (widget.isPurchase)
-          'bill_received': _billSubmitted
-        else
+        if (widget.isPurchase) ...{
+          'bill_received': _billSubmitted,
+          'payment_bill': _paymentReceipt,
+        } else ...{
           'bill_submitted': _billSubmitted,
+          'payment_receipt': _paymentReceipt,
+        },
       };
 
       final repo = ref.read(pmLedgerRepositoryProvider);
@@ -1170,9 +1527,13 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        widget.entry != null
-                            ? 'Edit Ledger Entry'
-                            : 'Add Ledger Entry',
+                        widget.isPurchase
+                            ? (widget.entry != null
+                                ? 'Edit Purchase Entry'
+                                : 'Add Purchase Entry')
+                            : (widget.entry != null
+                                ? 'Edit Ledger Entry'
+                                : 'Add Ledger Entry'),
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -1214,8 +1575,9 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2035),
                                 );
-                                if (picked != null)
+                                if (picked != null) {
                                   setState(() => _date = picked);
+                                }
                               },
                               child: _buildDropdownWrapper(
                                 child: Row(
@@ -1279,8 +1641,9 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                                                   color: Color(0xFF0F172A)))))
                                       .toList(),
                                   onChanged: (val) {
-                                    if (val != null)
+                                    if (val != null) {
                                       setState(() => _paymentType = val);
+                                    }
                                   },
                                 ),
                               ),
@@ -1382,8 +1745,9 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                                             color: Color(0xFF0F172A)))))
                                 .toList(),
                             onChanged: (val) {
-                              if (val != null)
+                              if (val != null) {
                                 setState(() => _particulars = val);
+                              }
                             },
                           ),
                         ),
@@ -1403,7 +1767,7 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
 
                   const SizedBox(height: 14),
 
-                  // Checkboxes: Bill Submitted & Payment Receipt
+                  // Checkboxes: Bill Submitted / Bill Received & Payment Receipt / Payment Bill
                   Row(
                     children: [
                       Row(
@@ -1417,8 +1781,11 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                             onChanged: (val) =>
                                 setState(() => _billSubmitted = val ?? false),
                           ),
-                          const Text('Bill Submitted',
-                              style: TextStyle(
+                          Text(
+                              widget.isPurchase
+                                  ? 'Bill Received'
+                                  : 'Bill Submitted',
+                              style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF0F172A))),
@@ -1436,8 +1803,11 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                             onChanged: (val) =>
                                 setState(() => _paymentReceipt = val ?? false),
                           ),
-                          const Text('Payment Receipt',
-                              style: TextStyle(
+                          Text(
+                              widget.isPurchase
+                                  ? 'Payment Bill'
+                                  : 'Payment Receipt',
+                              style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF0F172A))),
@@ -1446,62 +1816,64 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                     ],
                   ),
 
-                  const Divider(color: Color(0xFFE2E8F0), height: 28),
+                  if (!widget.isPurchase) ...[
+                    const Divider(color: Color(0xFFE2E8F0), height: 28),
 
-                  // Material Section
-                  const Text(
-                    'Material Section',
-                    style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Sales M Value',
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _salesMCtrl,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(
-                                  fontSize: 13.5, color: Color(0xFF0F172A)),
-                              decoration: _fieldDecoration(),
-                            ),
-                          ],
+                    // Material Section
+                    const Text(
+                      'Material Section',
+                      style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Sales M Value',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _salesMCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('M Outward Value',
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _mOutwardCtrl,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(
-                                  fontSize: 13.5, color: Color(0xFF0F172A)),
-                              decoration: _fieldDecoration(),
-                            ),
-                          ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('M Outward Value',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _mOutwardCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
 
                   const Divider(color: Color(0xFFE2E8F0), height: 28),
 
@@ -1514,72 +1886,119 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                         color: Color(0xFF0284C7)),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Order Value',
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _orderValueCtrl,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(
-                                  fontSize: 13.5, color: Color(0xFF0F172A)),
-                              decoration: _fieldDecoration(),
-                            ),
-                          ],
+                  if (widget.isPurchase)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Quotation Value',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _orderValueCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Extra Work Value',
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _extraWorkCtrl,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(
-                                  fontSize: 13.5, color: Color(0xFF0F172A)),
-                              decoration: _fieldDecoration(),
-                            ),
-                          ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Payment Paid',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _paymentRecdCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Payment Received',
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF475569))),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _paymentRecdCtrl,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(
-                                  fontSize: 13.5, color: Color(0xFF0F172A)),
-                              decoration: _fieldDecoration(),
-                            ),
-                          ],
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Order Value',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _orderValueCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Extra Work Value',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _extraWorkCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Payment Received',
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _paymentRecdCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: Color(0xFF0F172A)),
+                                decoration: _fieldDecoration(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
 
                   const SizedBox(height: 24),
 

@@ -156,4 +156,7 @@ class PmLedgerEntry {
       paymentBill: paymentBill ?? this.paymentBill,
     );
   }
+
+  double get quotationValue => orderValue;
+  double get paymentPaid => paymentReceived;
 }

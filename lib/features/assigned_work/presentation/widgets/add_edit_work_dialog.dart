@@ -1,5 +1,3 @@
-// lib/features/assigned_work/presentation/widgets/add_edit_work_dialog.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,8 +5,13 @@ import '../../../../core/models/profile.dart';
 import '../../../../core/models/user_role.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../crm/data/models/lead_model.dart';
+import '../../../crm/data/models/prospect_model.dart';
+import '../../../crm/providers/crm_providers.dart';
 import '../../models/assigned_work_item.dart';
 import '../../providers/assigned_work_providers.dart';
+
+enum WorkRelatedEntityType { customer, prospect, lead }
 
 class AddEditWorkDialog extends ConsumerStatefulWidget {
   final AssignedWorkItem? initialItem;
@@ -48,6 +51,7 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
   WorkPriority _priority = WorkPriority.medium;
 
   Profile? _assignedToUser;
+  WorkRelatedEntityType _selectedEntityType = WorkRelatedEntityType.customer;
   String? _selectedCustomerId;
   String? _selectedCustomerName;
 
@@ -93,6 +97,11 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
 
     _selectedCustomerId = item?.customerId;
     _selectedCustomerName = item?.customerName;
+
+    Future.microtask(() {
+      ref.read(prospectsProvider.notifier).load();
+      ref.read(leadsProvider.notifier).load();
+    });
   }
 
   @override
@@ -269,8 +278,7 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
 
     final assignableUsersAsync = ref.watch(assignableUsersProvider);
     final currentRoles = currentProfile?.roles ?? [];
-    final canAssignOthers = currentRoles.contains(UserRole.admin) ||
-        currentRoles.contains(UserRole.manager) ||
+    final canAssignTo = currentRoles.contains(UserRole.admin) ||
         currentRoles.contains(UserRole.salesHead);
 
     return Dialog(
@@ -322,7 +330,7 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          canAssignOthers
+                          canAssignTo
                               ? 'Assign task to team members with date & priority'
                               : 'Create or schedule a task for yourself',
                           style: TextStyle(
@@ -393,133 +401,129 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                       ),
                       const SizedBox(height: 18),
 
-                      // Assign to User (Searchable)
-                      Row(
-                        children: [
-                          const Text(
-                            'Assign To *',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                              color: Color(0xFF334155),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (currentRoles.contains(UserRole.salesHead))
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEEF2FF),
-                                borderRadius: BorderRadius.circular(6),
+                      if (canAssignTo) ...[
+                        // Assign to User (Searchable)
+                        Row(
+                          children: [
+                            const Text(
+                              'Assign To *',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: Color(0xFF334155),
                               ),
-                              child: const Text(
-                                'Sales Team Only',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4338CA),
+                            ),
+                            const SizedBox(width: 8),
+                            if (currentRoles.contains(UserRole.salesHead))
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEEF2FF),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Sales Team Only',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF4338CA),
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      assignableUsersAsync.when(
-                        data: (users) {
-                          if (users.isEmpty) {
-                            return Text(
-                              'No assignable users found',
-                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                            );
-                          }
-
-                          // If _assignedToUser is null, find matches or default
-                          if (_assignedToUser == null) {
-                            if (widget.initialItem != null) {
-                              _assignedToUser = users.firstWhere(
-                                (u) => u.id == widget.initialItem!.assignedToUserId,
-                                orElse: () => users.first,
-                              );
-                            } else {
-                              _assignedToUser = users.firstWhere(
-                                (u) => u.id == currentProfile?.id,
-                                orElse: () => users.first,
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        assignableUsersAsync.when(
+                          data: (users) {
+                            if (users.isEmpty) {
+                              return Text(
+                                'No assignable users found',
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                               );
                             }
-                          }
 
-                          return InkWell(
-                            onTap: canAssignOthers ? () => _showUserPickerModal(users) : null,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: const Color(0xFF4F46E5),
-                                    child: Text(
-                                      (_assignedToUser?.fullName.isNotEmpty == true
-                                              ? _assignedToUser!.fullName[0]
-                                              : 'U')
-                                          .toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
+                            // If _assignedToUser is null, find matches or default
+                            if (_assignedToUser == null) {
+                              if (widget.initialItem != null) {
+                                _assignedToUser = users.firstWhere(
+                                  (u) => u.id == widget.initialItem!.assignedToUserId,
+                                  orElse: () => users.first,
+                                );
+                              } else {
+                                _assignedToUser = users.firstWhere(
+                                  (u) => u.id == currentProfile?.id,
+                                  orElse: () => users.first,
+                                );
+                              }
+                            }
+
+                            return InkWell(
+                              onTap: () => _showUserPickerModal(users),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: const Color(0xFF4F46E5),
+                                      child: Text(
+                                        (_assignedToUser?.fullName.isNotEmpty == true
+                                                ? _assignedToUser!.fullName[0]
+                                                : 'U')
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _assignedToUser?.fullName ?? 'Select User',
-                                          style: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13.5,
-                                            color: Color(0xFF1E293B),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _assignedToUser?.fullName ?? 'Select User',
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13.5,
+                                              color: Color(0xFF1E293B),
+                                            ),
                                           ),
-                                        ),
-                                        Text(
-                                          '${_assignedToUser?.primaryRole.displayName ?? ''} • ${_assignedToUser?.email ?? ''}',
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 11,
-                                            color: Colors.grey.shade600,
+                                          Text(
+                                            '${_assignedToUser?.primaryRole.displayName ?? ''} • ${_assignedToUser?.email ?? ''}',
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 11,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  if (canAssignOthers)
-                                    const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B))
-                                  else
-                                    const Tooltip(
-                                      message: 'Assigned to self',
-                                      child: Icon(Icons.lock_outline, size: 16, color: Colors.grey),
-                                    ),
-                                ],
+                                    const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                        loading: () => const LinearProgressIndicator(),
-                        error: (err, _) => Text('Error loading users: $err', style: const TextStyle(color: Colors.red)),
-                      ),
-                      const SizedBox(height: 18),
+                            );
+                          },
+                          loading: () => const LinearProgressIndicator(),
+                          error: (err, _) => Text('Error loading users: $err', style: const TextStyle(color: Colors.red)),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
 
                       // Date & Due Time
                       Row(
@@ -695,11 +699,11 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                       ),
                       const SizedBox(height: 18),
 
-                      // Customer Name (Searchable, Optional)
+                      // Related Entity Selection (Customer, Prospect, Leads - only 1 can be selected)
                       Row(
                         children: [
                           const Text(
-                            'Customer Name',
+                            'Related To',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontWeight: FontWeight.w600,
@@ -709,7 +713,7 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            '(Optional)',
+                            '(Select one: Customer, Prospect, or Lead)',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 11,
@@ -718,16 +722,53 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _buildEntityTypeTab(WorkRelatedEntityType.customer, 'Customer', Icons.business_rounded),
+                          const SizedBox(width: 8),
+                          _buildEntityTypeTab(WorkRelatedEntityType.prospect, 'Prospect', Icons.person_search_rounded),
+                          const SizedBox(width: 8),
+                          _buildEntityTypeTab(WorkRelatedEntityType.lead, 'Lead', Icons.trending_up_rounded),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Consumer(
                         builder: (context, ref, _) {
-                          final customersAsync = ref.watch(assignableCustomersProvider);
-                          final hasCustomer = _selectedCustomerName != null && _selectedCustomerName!.trim().isNotEmpty;
+                          final hasSelection = _selectedCustomerName != null && _selectedCustomerName!.trim().isNotEmpty;
+                          String hintText;
+                          IconData leadingIcon;
+                          VoidCallback onTapModal;
+
+                          switch (_selectedEntityType) {
+                            case WorkRelatedEntityType.customer:
+                              hintText = 'Click to search customers...';
+                              leadingIcon = Icons.business_rounded;
+                              onTapModal = () {
+                                final list = ref.watch(assignableCustomersProvider).valueOrNull ?? [];
+                                _showCustomerPickerModal(list);
+                              };
+                              break;
+                            case WorkRelatedEntityType.prospect:
+                              hintText = 'Click to search prospects...';
+                              leadingIcon = Icons.person_search_rounded;
+                              onTapModal = () {
+                                final list = ref.watch(prospectsProvider).valueOrNull ?? [];
+                                _showProspectPickerModal(list);
+                              };
+                              break;
+                            case WorkRelatedEntityType.lead:
+                              hintText = 'Click to search leads...';
+                              leadingIcon = Icons.trending_up_rounded;
+                              onTapModal = () {
+                                final list = ref.watch(leadsProvider).valueOrNull ?? [];
+                                _showLeadPickerModal(list);
+                              };
+                              break;
+                          }
 
                           return InkWell(
-                            onTap: () {
-                              final list = customersAsync.valueOrNull ?? [];
-                              _showCustomerPickerModal(list);
-                            },
+                            onTap: onTapModal,
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -735,32 +776,34 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                                 color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: hasCustomer ? const Color(0xFF818CF8) : const Color(0xFFE2E8F0),
-                                  width: hasCustomer ? 1.4 : 1.0,
+                                  color: hasSelection ? const Color(0xFF818CF8) : const Color(0xFFE2E8F0),
+                                  width: hasSelection ? 1.4 : 1.0,
                                 ),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
-                                    hasCustomer ? Icons.business_rounded : Icons.person_search_rounded,
-                                    color: hasCustomer ? const Color(0xFF4F46E5) : const Color(0xFF6366F1),
+                                    hasSelection ? leadingIcon : Icons.search_rounded,
+                                    color: hasSelection ? const Color(0xFF4F46E5) : const Color(0xFF6366F1),
                                     size: 20,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      hasCustomer
+                                      hasSelection
                                           ? _selectedCustomerName!
-                                          : 'Click to search customers...',
+                                          : hintText,
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: 13.5,
-                                        fontWeight: hasCustomer ? FontWeight.w600 : FontWeight.w400,
-                                        color: hasCustomer ? const Color(0xFF1E293B) : Colors.grey.shade400,
+                                        fontWeight: hasSelection ? FontWeight.w600 : FontWeight.w400,
+                                        color: hasSelection ? const Color(0xFF1E293B) : Colors.grey.shade400,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  if (hasCustomer)
+                                  if (hasSelection)
                                     GestureDetector(
                                       onTap: () {
                                         setState(() {
@@ -996,6 +1039,457 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                                   onTap: () {
                                     setState(() {
                                       _assignedToUser = u;
+                                    });
+                                    Navigator.of(ctx).pop();
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildEntityTypeTab(WorkRelatedEntityType type, String label, IconData icon) {
+    final isSelected = _selectedEntityType == type;
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          if (_selectedEntityType != type) {
+            setState(() {
+              _selectedEntityType = type;
+              _selectedCustomerId = null;
+              _selectedCustomerName = null;
+              _customerSearchController.clear();
+            });
+          }
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: isSelected ? Colors.white : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? Colors.white : const Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showProspectPickerModal(List<Prospect> allProspects) {
+    String modalFilterQuery = '';
+    final searchCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = allProspects.where((p) {
+              if (modalFilterQuery.isEmpty) return true;
+              final q = modalFilterQuery.toLowerCase();
+              final name = p.name.toLowerCase();
+              final phone = p.phone.toLowerCase();
+              final company = (p.company ?? '').toLowerCase();
+              return name.contains(q) || phone.contains(q) || company.contains(q);
+            }).toList();
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 560),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Select Prospect',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Total Prospects (${allProspects.length})',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11.5,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: searchCtrl,
+                      autofocus: true,
+                      onChanged: (val) {
+                        setModalState(() => modalFilterQuery = val.trim());
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search by prospect name, phone, company...',
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF6366F1)),
+                        suffixIcon: searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 16),
+                                onPressed: () {
+                                  searchCtrl.clear();
+                                  setModalState(() => modalFilterQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF1F5F9),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (modalFilterQuery.isNotEmpty)
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedCustomerId = null;
+                            _selectedCustomerName = modalFilterQuery;
+                            _customerSearchController.text = modalFilterQuery;
+                          });
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFC7D2FE)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.add_circle_outline, size: 18, color: Color(0xFF4F46E5)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Use "$modalFilterQuery" as custom name',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF4338CA),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text(
+                                modalFilterQuery.isEmpty
+                                    ? 'No prospects found'
+                                    : 'No prospect matching "$modalFilterQuery"',
+                                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final p = filtered[i];
+                                final name = p.name;
+                                final phone = p.phone;
+                                final company = p.company ?? '';
+                                final isSel = _selectedCustomerId == p.id;
+
+                                return ListTile(
+                                  dense: true,
+                                  leading: CircleAvatar(
+                                    backgroundColor: isSel ? const Color(0xFF4F46E5) : const Color(0xFFEEF2FF),
+                                    foregroundColor: isSel ? Colors.white : const Color(0xFF4338CA),
+                                    child: const Icon(Icons.person_search_rounded, size: 16),
+                                  ),
+                                  title: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                                      color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    [if (company.isNotEmpty) company, if (phone.isNotEmpty) phone].join(' • '),
+                                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                                  ),
+                                  trailing: isSel
+                                      ? const Icon(Icons.check_circle, color: Color(0xFF4F46E5))
+                                      : null,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedCustomerId = p.id;
+                                      final displayName = company.isNotEmpty ? '$name ($company)' : name;
+                                      _selectedCustomerName = displayName;
+                                      _customerSearchController.text = displayName;
+                                    });
+                                    Navigator.of(ctx).pop();
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showLeadPickerModal(List<Lead> allLeads) {
+    String modalFilterQuery = '';
+    final searchCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = allLeads.where((l) {
+              if (modalFilterQuery.isEmpty) return true;
+              final q = modalFilterQuery.toLowerCase();
+              final name = (l.prospectName ?? '').toLowerCase();
+              final product = l.productName.toLowerCase();
+              final phone = (l.contactPhone ?? '').toLowerCase();
+              return name.contains(q) || product.contains(q) || phone.contains(q);
+            }).toList();
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 560),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Select Lead',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Total Leads (${allLeads.length})',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11.5,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: searchCtrl,
+                      autofocus: true,
+                      onChanged: (val) {
+                        setModalState(() => modalFilterQuery = val.trim());
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search by lead name, product, phone...',
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF6366F1)),
+                        suffixIcon: searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 16),
+                                onPressed: () {
+                                  searchCtrl.clear();
+                                  setModalState(() => modalFilterQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF1F5F9),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (modalFilterQuery.isNotEmpty)
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedCustomerId = null;
+                            _selectedCustomerName = modalFilterQuery;
+                            _customerSearchController.text = modalFilterQuery;
+                          });
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFC7D2FE)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.add_circle_outline, size: 18, color: Color(0xFF4F46E5)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Use "$modalFilterQuery" as custom name',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF4338CA),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text(
+                                modalFilterQuery.isEmpty
+                                    ? 'No leads found'
+                                    : 'No lead matching "$modalFilterQuery"',
+                                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final l = filtered[i];
+                                final name = (l.prospectName != null && l.prospectName!.isNotEmpty)
+                                    ? l.prospectName!
+                                    : l.productName;
+                                final phone = l.contactPhone ?? '';
+                                final isSel = _selectedCustomerId == l.id;
+
+                                return ListTile(
+                                  dense: true,
+                                  leading: CircleAvatar(
+                                    backgroundColor: isSel ? const Color(0xFF4F46E5) : const Color(0xFFEEF2FF),
+                                    foregroundColor: isSel ? Colors.white : const Color(0xFF4338CA),
+                                    child: const Icon(Icons.trending_up_rounded, size: 16),
+                                  ),
+                                  title: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                                      color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    [l.productName, if (phone.isNotEmpty) phone, l.status].join(' • '),
+                                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                                  ),
+                                  trailing: isSel
+                                      ? const Icon(Icons.check_circle, color: Color(0xFF4F46E5))
+                                      : null,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedCustomerId = l.id;
+                                      final displayName = (l.prospectName != null && l.prospectName!.isNotEmpty)
+                                          ? '${l.prospectName} (${l.productName})'
+                                          : l.productName;
+                                      _selectedCustomerName = displayName;
+                                      _customerSearchController.text = displayName;
                                     });
                                     Navigator.of(ctx).pop();
                                   },

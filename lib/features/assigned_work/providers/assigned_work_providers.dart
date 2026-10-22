@@ -41,14 +41,28 @@ final assignedWorkSearchQueryProvider = StateProvider<String>((ref) => '');
 // ─── MONTH TASKS PROVIDER ────────────────────────────────────────────────────
 
 /// Fetches tasks for the active calendar month (with 7-day padding for calendar grid)
+/// Visibility: Admin and Sales Head see all tasks; other roles see only tasks added by or assigned to them.
 final assignedWorkMonthItemsProvider = FutureProvider<List<AssignedWorkItem>>((ref) async {
   final repo = ref.watch(assignedWorkRepositoryProvider);
   final month = ref.watch(assignedWorkMonthProvider);
+  final currentProfile = ref.watch(currentProfileProvider);
 
   final startRange = DateTime(month.year, month.month, 1).subtract(const Duration(days: 7));
   final endRange = DateTime(month.year, month.month + 1, 0).add(const Duration(days: 14));
 
-  return repo.fetchWorkItems(startDate: startRange, endDate: endRange);
+  final items = await repo.fetchWorkItems(startDate: startRange, endDate: endRange);
+
+  if (currentProfile == null) return [];
+
+  final roles = currentProfile.roles;
+  final canSeeAll = roles.contains(UserRole.admin) || roles.contains(UserRole.salesHead);
+
+  if (canSeeAll) {
+    return items;
+  }
+
+  final uid = currentProfile.id;
+  return items.where((it) => it.assignedToUserId == uid || it.assignedByUserId == uid).toList();
 });
 
 // ─── TASK ROLLOVER & TRACE MAPPING ──────────────────────────────────────────

@@ -1,5 +1,6 @@
 // lib/features/crm/providers/crm_providers.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/models/prospect_model.dart';
@@ -1451,4 +1452,27 @@ class CrmInteractionTypesNotifier extends StateNotifier<AsyncValue<List<String>>
     await load();
   }
 }
+
+/// Provider to get the set of lead IDs that currently have quotations awaiting approval.
+final leadsWithPendingQuotationApprovalProvider =
+    FutureProvider<Set<String>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    final res = await supabase
+        .from('quotations')
+        .select('lead_id')
+        .eq('status', 'pending_approval');
+    final set = <String>{};
+    for (final row in (res as List)) {
+      final leadId = row['lead_id'] as String?;
+      if (leadId != null && leadId.isNotEmpty) {
+        set.add(leadId);
+      }
+    }
+    return set;
+  } catch (e) {
+    debugPrint('Error fetching pending quotation approvals: $e');
+    return <String>{};
+  }
+});
 

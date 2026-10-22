@@ -98,7 +98,8 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
         profile?.roles.contains(UserRole.sales) == true ||
         (!isAdmin && (lead?.assignedTo == profile?.id || lead?.createdBy == profile?.id));
     final isConverted = lead != null && (lead.convertedToCustomerId != null || lead.status.toLowerCase() == 'won');
-    final isAssignedToMe = !isConverted && lead != null && lead.assignedTo != null && lead.assignedTo == profile?.id;
+    final isLost = lead != null && lead.status.toLowerCase() == 'lost';
+    final isAssignedToMe = !isConverted && !isLost && lead != null && lead.assignedTo != null && lead.assignedTo == profile?.id;
 
     if (lead == null) {
       if (leadsAsync.isLoading) {
@@ -652,7 +653,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                                   ),
                                 ),
                               ),
-                              if (!isConverted) ...[
+                              if (!isConverted && !isLost) ...[
                                 if (isAdmin) ...[
                                   InkWell(
                                     onTap: () => _showAssignLeadSheet(context, ref, lead),
@@ -738,7 +739,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
             // 3. Lead Quotations & Revision History
             _LeadQuotationsSection(
               lead: lead,
-              canCreateQuotation: profile?.primaryRole.canCreateQuotation ?? false,
+              canCreateQuotation: !isLost && (profile?.primaryRole.canCreateQuotation ?? false),
             ),
             const SizedBox(height: 16),
 
@@ -746,6 +747,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
             _LeadCommunicationSection(
               leadId: lead.id,
               isWon: lead.status == 'Won',
+              isLost: isLost,
               onDownloadPdf: () => _downloadReportPdf(context, ref, lead, prospect),
             ),
             const SizedBox(height: 24),
@@ -777,7 +779,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               )
-            else if (isSalesOrAdmin) ...[
+            else if (!isLost && isSalesOrAdmin) ...[
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
@@ -789,7 +791,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                 icon: const Icon(Icons.star, color: Colors.white),
                 label: const Text('Convert to Customer (Won)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-              if (!isConverted) ...[
+              if (!isConverted && !isLost) ...[
                 if (isAdmin) ...[
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
@@ -2165,11 +2167,13 @@ class _EditLeadSheetState extends ConsumerState<_EditLeadSheet> {
 class _LeadCommunicationSection extends ConsumerWidget {
   final String leadId;
   final bool isWon;
+  final bool isLost;
   final VoidCallback onDownloadPdf;
 
   const _LeadCommunicationSection({
     required this.leadId,
     this.isWon = false,
+    this.isLost = false,
     required this.onDownloadPdf,
   });
 
@@ -2178,7 +2182,7 @@ class _LeadCommunicationSection extends ConsumerWidget {
     final commsAsync = ref.watch(leadCommunicationsProvider(leadId));
     final profile = ref.watch(currentProfileProvider);
     final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
-    final canAddLog = !isWon || isAdmin;
+    final canAddLog = !isLost && (!isWon || isAdmin);
 
     return Card(
       elevation: 0,
@@ -3433,7 +3437,8 @@ class _LeadQuotationsSectionState
     final canApprove = (profile?.primaryRole.canApproveQuotations ?? false) || (profile?.roles.any((r) => r.canApproveQuotations) ?? false);
     final isSalesExecutive = !canApprove;
     final isWon = widget.lead.status == 'Won';
-    final isLeadClosed = (isWon || widget.lead.status == 'Lost') && !isAdmin;
+    final isLost = widget.lead.status.toLowerCase() == 'lost';
+    final isLeadClosed = isWon || isLost;
 
     return Card(
       elevation: 0,

@@ -111,6 +111,56 @@ class PmPurchasesRepository {
     await _supabase.from('pm_purchases').delete().inFilter('id', ids);
   }
 
+  /// Move a vendor and all its records to a target company
+  Future<void> movePurchase(String purchaseId, String targetCompanyId) async {
+    await _supabase.from('pm_purchases').update({
+      'company_id': targetCompanyId,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', purchaseId);
+  }
+
+  /// Copy/duplicate a vendor and all its child records into a target company
+  Future<String> copyPurchase(String purchaseId, String targetCompanyId) async {
+    final origRes = await _supabase.from('pm_purchases').select().eq('id', purchaseId).single();
+    final orig = Map<String, dynamic>.from(origRes);
+
+    orig.remove('id');
+    orig.remove('created_at');
+    orig.remove('updated_at');
+
+    final nextId = await getNextIdNo();
+    orig['id_no'] = nextId;
+    orig['company_id'] = targetCompanyId;
+    orig['created_at'] = DateTime.now().toIso8601String();
+    orig['updated_at'] = DateTime.now().toIso8601String();
+
+    final inserted = await _supabase.from('pm_purchases').insert(orig).select('id').single();
+    final newId = inserted['id'] as String;
+
+    // Duplicate purchase child tables
+    final childTables = [
+      'pm_purchase_ledger_entries',
+      'pm_calling_records',
+    ];
+
+    for (final tbl in childTables) {
+      try {
+        final fkCol = tbl == 'pm_calling_records' ? 'project_id' : 'purchase_id';
+        final rows = await _supabase.from(tbl).select().eq(fkCol, purchaseId);
+        for (final row in rows as List<dynamic>) {
+          final copyRow = Map<String, dynamic>.from(row as Map);
+          copyRow.remove('id');
+          copyRow.remove('created_at');
+          copyRow.remove('updated_at');
+          copyRow[fkCol] = newId;
+          await _supabase.from(tbl).insert(copyRow);
+        }
+      } catch (_) {}
+    }
+
+    return newId;
+  }
+
   /// Get next ID number for vendor
   Future<int> getNextIdNo() async {
     try {
