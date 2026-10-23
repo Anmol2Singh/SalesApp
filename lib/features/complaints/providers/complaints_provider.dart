@@ -432,13 +432,17 @@ final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) 
   try {
     final supabase = ref.watch(supabaseClientProvider);
     
-    // 1. Fetch from technicians table
+    // 1. Fetch from technicians table (only active rows)
     try {
       final techsResponse = await supabase.from('technicians').select();
       if (techsResponse.isNotEmpty) {
         for (final json in (techsResponse as List)) {
           final id = json['id'] as String? ?? '';
           final rawEmail = json['email'] as String?;
+          final status = json['status'] as String? ?? 'Available';
+          if (status.toLowerCase() == 'inactive' || status.toLowerCase() == 'deleted') {
+            continue;
+          }
           final normEmail = rawEmail?.trim().toLowerCase();
           final key = (normEmail != null && normEmail.isNotEmpty) ? normEmail : id;
           if (key.isEmpty) continue;
@@ -450,7 +454,7 @@ final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) 
             phone: json['phone'] as String?,
             plainPassword: json['password'] as String?,
             avatarUrl: json['avatar_url'] as String? ?? '',
-            status: json['status'] as String? ?? 'Available',
+            status: status,
             distance: 'Nearby',
             activeTasksCount: json['active_tasks_count'] as int? ?? 0,
             rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
@@ -459,11 +463,13 @@ final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) 
       }
     } catch (_) {}
 
-    // 2. Fetch from profiles table (authenticated staff with technician role)
+    // 2. Fetch from profiles table (authenticated staff with technician role who are active and not deleted)
     try {
       final profilesResponse = await supabase
           .from('profiles')
           .select()
+          .eq('is_active', true)
+          .isFilter('deleted_at', null)
           .or('role.eq.technician,roles.cs.{"technician"}');
           
       if (profilesResponse.isNotEmpty) {
@@ -531,6 +537,26 @@ final availableTechniciansProvider = FutureProvider<List<TechnicianInfo>>((ref) 
               );
             }
           }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Purge any technician from techMap whose profile is deactivated or soft-deleted
+    try {
+      final inactiveProfiles = await supabase
+          .from('profiles')
+          .select('id, email')
+          .or('is_active.eq.false,deleted_at.not.is.null');
+
+      for (final p in (inactiveProfiles as List)) {
+        final pId = p['id'] as String?;
+        final pEmail = (p['email'] as String?)?.trim().toLowerCase();
+        if (pId != null && pId.isNotEmpty) {
+          techMap.removeWhere((k, v) => v.id == pId);
+        }
+        if (pEmail != null && pEmail.isNotEmpty) {
+          techMap.remove(pEmail);
+          techMap.removeWhere((k, v) => v.email?.trim().toLowerCase() == pEmail);
         }
       }
     } catch (_) {}

@@ -491,24 +491,62 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
     if (confirm == true) {
       try {
         final supabase = ref.read(supabaseClientProvider);
+        final nowStr = DateTime.now().toIso8601String();
+
+        // 1. Attempt delete via user management RPC
         if (tech.id.isNotEmpty) {
-          await supabase.from('technicians').delete().eq('id', tech.id);
           try {
-            await supabase.from('profiles').update({'is_active': false}).eq('id', tech.id);
+            await supabase.rpc('delete_existing_user', params: {
+              'target_user_id': tech.id,
+            });
           } catch (_) {}
         }
+
+        // 2. Delete or soft-deactivate from technicians table
+        if (tech.id.isNotEmpty) {
+          try {
+            await supabase.from('technicians').delete().eq('id', tech.id);
+          } catch (_) {
+            try {
+              await supabase.from('technicians').update({'status': 'Inactive'}).eq('id', tech.id);
+            } catch (_) {}
+          }
+          try {
+            await supabase.from('profiles').update({
+              'is_active': false,
+              'deleted_at': nowStr,
+            }).eq('id', tech.id);
+          } catch (_) {}
+        }
+
         if (tech.email != null && tech.email!.isNotEmpty) {
           try {
             await supabase.from('technicians').delete().ilike('email', tech.email!);
-            await supabase.from('profiles').update({'is_active': false}).ilike('email', tech.email!);
+          } catch (_) {
+            try {
+              await supabase.from('technicians').update({'status': 'Inactive'}).ilike('email', tech.email!);
+            } catch (_) {}
+          }
+          try {
+            await supabase.from('profiles').update({
+              'is_active': false,
+              'deleted_at': nowStr,
+            }).ilike('email', tech.email!);
           } catch (_) {}
         } else {
-          await supabase.from('technicians').delete().eq('name', tech.name);
+          try {
+            await supabase.from('technicians').delete().eq('name', tech.name);
+          } catch (_) {
+            try {
+              await supabase.from('technicians').update({'status': 'Inactive'}).eq('name', tech.name);
+            } catch (_) {}
+          }
         }
+
         ref.invalidate(availableTechniciansProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Technician deleted.')),
+            const SnackBar(content: Text('Technician deleted successfully.')),
           );
         }
       } catch (e) {

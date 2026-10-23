@@ -109,11 +109,17 @@ class _BoomBarrierProposalBuilderScreenState
     }
   }
 
+  bool _hasUnsavedChanges = false;
+
+  void _markChanged() {
+    if (!_hasUnsavedChanges && mounted) {
+      setState(() => _hasUnsavedChanges = true);
+    }
+  }
+
   void _scheduleAutoSave() {
-    _autoSaveDebounce?.cancel();
-    _autoSaveDebounce = Timer(const Duration(milliseconds: 1000), () {
-      _saveDraft(showSnackbar: false);
-    });
+    // Auto-save disabled per user requirement: mark as having unsaved changes
+    _markChanged();
   }
 
   Future<void> _saveDraft({bool showSnackbar = true}) async {
@@ -121,6 +127,7 @@ class _BoomBarrierProposalBuilderScreenState
     setState(() => _isSaving = true);
     try {
       await QgBoomBarrierDraftsService.saveDraft(_draft!);
+      _hasUnsavedChanges = false;
       if (showSnackbar && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -142,6 +149,51 @@ class _BoomBarrierProposalBuilderScreenState
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Future<bool> _handlePopScope() async {
+    if (!_hasUnsavedChanges) return true;
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+            SizedBox(width: 8),
+            Text('Unsaved Changes'),
+          ],
+        ),
+        content: const Text(
+          'You have unsaved changes in this proposal. Do you want to save your changes before leaving?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            child: const Text('Discard'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            child: const Text('Save & Exit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'save') {
+      await _saveDraft(showSnackbar: false);
+      return true;
+    } else if (result == 'discard') {
+      return true;
+    }
+    return false;
   }
 
   void _recalculateTotals({bool save = true}) {
@@ -261,84 +313,99 @@ class _BoomBarrierProposalBuilderScreenState
     final draft = _draft!;
     final isConfirmed = draft.status.toLowerCase() == 'confirmed';
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A5F),
-        foregroundColor: Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    draft.quotationNumber,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: isConfirmed ? Colors.green.shade700 : Colors.amber.shade800,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isConfirmed ? 'CONFIRMED' : 'DRAFT',
-                    style: const TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldPop = await _handlePopScope();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF1E3A5F),
+          foregroundColor: Colors.white,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      draft.quotationNumber,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: isConfirmed ? Colors.green.shade700 : Colors.amber.shade800,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      isConfirmed ? 'CONFIRMED' : 'DRAFT',
+                      style: const TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                draft.customerName,
+                style: const TextStyle(fontSize: 11, color: Colors.white70),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          actions: [
+            if (_isSaving)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
                 ),
-              ],
-            ),
-            Text(
-              draft.customerName,
-              style: const TextStyle(fontSize: 11, color: Colors.white70),
-              overflow: TextOverflow.ellipsis,
+              )
+            else if (_hasUnsavedChanges)
+              TextButton.icon(
+                icon: const Icon(Icons.save_outlined, size: 16, color: Colors.white),
+                label: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () => _saveDraft(showSnackbar: true),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Center(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cloud_done_outlined, size: 14, color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isRestoredFromDraft ? 'Draft Restored' : 'Saved',
+                        style: const TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            IconButton(
+              tooltip: 'Reset to Deal Quotation',
+              icon: const Icon(Icons.restore),
+              onPressed: _resetToDealQuotation,
             ),
           ],
         ),
-        actions: [
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Center(
-                child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Center(
-                child: Row(
-                  children: [
-                    const Icon(Icons.cloud_done_outlined, size: 14, color: Colors.white70),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isRestoredFromDraft ? 'Draft Restored' : 'Auto-saved',
-                      style: const TextStyle(fontSize: 11, color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          IconButton(
-            tooltip: 'Reset to Deal Quotation',
-            icon: const Icon(Icons.restore),
-            onPressed: _resetToDealQuotation,
-          ),
-        ],
-      ),
       bottomNavigationBar: _buildBottomActionBar(),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -383,8 +450,9 @@ class _BoomBarrierProposalBuilderScreenState
           const SizedBox(height: 32),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildWatermarkBanner() {
     return Container(

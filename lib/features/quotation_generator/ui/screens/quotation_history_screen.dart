@@ -15,6 +15,7 @@ import '../../templates/boom_barrier_template.dart';
 import '../../templates/heat_pump_template.dart';
 import '../../templates/qg_template_registry.dart';
 import 'quotation_settings_screen.dart';
+import 'boom_barrier_settings_screen.dart';
 import 'proposal_builder_screen.dart';
 
 /// Automated Deal Hub listing all deal quotations created for supported products.
@@ -33,6 +34,7 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
   final _searchCtrl = TextEditingController();
   String _selectedProductFilter = 'All Products'; // All Products, Heat Pump, Boom Barrier
   String _selectedStatusFilter = 'All'; // All, Draft, Pending, Confirmed, Rejected
+  String _selectedModuleSetting = 'Heat Pump'; // 'Heat Pump' or 'Boom Barrier'
   Timer? _pollingTimer;
 
   @override
@@ -151,11 +153,67 @@ class _QuotationHistoryScreenState extends ConsumerState<QuotationHistoryScreen>
                 controller: _tabController,
                 children: [
                   _buildDealQuotationsQueueTab(),
-                  const QuotationSettingsScreen(),
+                  _buildModuleSettingsTab(),
                 ],
               )
             : _buildDealQuotationsQueueTab(),
       ),
+    );
+  }
+
+  Widget _buildModuleSettingsTab() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: isDark ? Colors.white12 : Colors.grey.shade200,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Text(
+                'Configure Module:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'Heat Pump',
+                      label: Text('Heat Pump'),
+                      icon: Icon(Icons.water_drop_outlined, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: 'Boom Barrier',
+                      label: Text('Boom Barrier'),
+                      icon: Icon(Icons.shield_outlined, size: 16),
+                    ),
+                  ],
+                  selected: {_selectedModuleSetting},
+                  onSelectionChanged: (set) {
+                    if (set.isNotEmpty) {
+                      setState(() => _selectedModuleSetting = set.first);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _selectedModuleSetting == 'Boom Barrier'
+              ? const BoomBarrierSettingsScreen()
+              : const QuotationSettingsScreen(),
+        ),
+      ],
     );
   }
 

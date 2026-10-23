@@ -58,7 +58,7 @@ class CrmPdfService {
                     ),
                   ),
                   pw.Text(
-                    'IZYHEAT CRM • Lead & Interaction Record',
+                    'IZYHEAT CRM | Lead & Interaction Record',
                     style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
                   ),
                 ],
@@ -188,12 +188,13 @@ class CrmPdfService {
                 cellStyle: const pw.TextStyle(fontSize: 8.5),
                 cellAlignment: pw.Alignment.centerLeft,
                 cellPadding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                headers: ['#', 'Date & Time', 'Type', 'Interaction Summary / Outcome'],
+                headers: ['#', 'Date & Time', 'Type', 'Interaction Summary / Outcome', 'Logged By'],
                 columnWidths: {
-                  0: const pw.FixedColumnWidth(25),
-                  1: const pw.FixedColumnWidth(110),
-                  2: const pw.FixedColumnWidth(70),
+                  0: const pw.FixedColumnWidth(20),
+                  1: const pw.FixedColumnWidth(95),
+                  2: const pw.FixedColumnWidth(60),
                   3: const pw.FlexColumnWidth(3),
+                  4: const pw.FixedColumnWidth(80),
                 },
                 data: List.generate(communications.length, (index) {
                   final c = communications[index];
@@ -202,6 +203,7 @@ class CrmPdfService {
                     _dateTimeFormat.format(c.createdAt),
                     c.type,
                     c.summary,
+                    c.loggedByName ?? (c.loggedBy.isNotEmpty ? c.loggedBy.substring(0, 8) : 'Staff'),
                   ];
                 }),
               ),

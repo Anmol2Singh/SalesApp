@@ -20,11 +20,13 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
   bool _hasMore = true;
   String _sortBy = 'recent'; // 'recent', 'alphabetical'
   String _filterBy = ''; // '', 'active_deal', 'active_amc'
+  String _productFilter = ''; // Filter by product name
   String _searchQuery = '';
   Timer? _debounceTimer;
   List<Customer> _allCustomersCache = [];
 
   int get totalCount => _totalCount;
+  String get productFilter => _productFilter;
 
   bool _isLoading = false;
 
@@ -139,6 +141,14 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
         }).toList();
       }
 
+      if (_productFilter.isNotEmpty) {
+        final pf = _productFilter.toLowerCase();
+        customers = customers.where((c) {
+          final p = c.pipelines;
+          return p != null && p.any((pipe) => pipe.productName.toLowerCase().contains(pf));
+        }).toList();
+      }
+
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         customers = customers.where((c) {
@@ -236,9 +246,10 @@ class CustomersNotifier extends StateNotifier<AsyncValue<List<Customer>>> {
     super.dispose();
   }
 
-  Future<void> setFilterAndSort({required String filter, required String sort}) async {
+  Future<void> setFilterAndSort({required String filter, required String sort, String product = ''}) async {
     _filterBy = filter;
     _sortBy = sort;
+    _productFilter = product;
     await load(refresh: true);
   }
 

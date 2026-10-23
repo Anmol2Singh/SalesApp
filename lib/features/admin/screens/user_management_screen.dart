@@ -33,6 +33,7 @@ final usersListProvider = FutureProvider<List<Profile>>((ref) async {
   return rawProfiles
       .where((p) =>
           p.isActive != false &&
+          p.deletedAt == null &&
           !p.roles.contains(UserRole.customer) &&
           p.primaryRole != UserRole.customer &&
           p.primaryRole != UserRole.technician &&
@@ -684,6 +685,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           await supabase.from('profiles').update({
             'is_active': false,
             'roles': ['deactivated'],
+            'deleted_at': DateTime.now().toIso8601String(),
           }).eq('id', user.id);
           deleted = true;
         }
@@ -1101,6 +1103,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         'role': selectedRole.value,
                         'roles': [selectedRole.value],
                         'is_active': true,
+                        'deleted_at': null,
                         'password': cleanPassword,
                         'plain_password': cleanPassword,
                         if (cleanPhone.isNotEmpty) 'phone': cleanPhone,

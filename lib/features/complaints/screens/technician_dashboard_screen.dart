@@ -121,7 +121,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 74),
+        padding: const EdgeInsets.only(bottom: 8),
         child: FloatingActionButton.extended(
           onPressed: () => context.push('/complaints/book'),
           backgroundColor: const Color(0xFF0F172A),
@@ -313,7 +313,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               padding: EdgeInsets.all(isWide ? 32.0 : 16.0),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  // 1. Quick Actions Section (Leaderboard, View Products, Installations)
+                  // 1. Quick Actions Section (Admin Dashboard Theme)
                   const Text(
                     'Quick Actions',
                     style: TextStyle(
@@ -325,26 +325,75 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      // Quick Action 1: Daily Tasks
+                      // Quick Action 1: Assigned Work
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'Assigned Work',
+                          subtitle: 'Plan & roster',
+                          icon: Icons.calendar_month_outlined,
+                          color: const Color(0xFF4F46E5),
+                          isDark: isDark,
+                          onTap: () => context.push(AppRoutes.assignedWork),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Quick Action 2: Daily Tasks
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
                           title: 'Daily Tasks',
                           subtitle: 'Tasks completed',
                           icon: Icons.fact_check_outlined,
-                          gradientColors: const [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                          color: const Color(0xFF8B5CF6),
+                          isDark: isDark,
                           onTap: () => context.push(AppRoutes.dailyTasks),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Quick Action 3: Installations
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'Installations',
+                          subtitle: '${assignedInstallations.length} assigned',
+                          icon: Icons.build_circle_outlined,
+                          color: const Color(0xFF0284C7),
+                          isDark: isDark,
+                          onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      // Quick Action 2: Leaderboard
+                      // Quick Action 4: View Products
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'View Products',
+                          subtitle: 'Catalog & specs',
+                          icon: Icons.inventory_2_outlined,
+                          color: const Color(0xFF10B981),
+                          isDark: isDark,
+                          onTap: () => context.push('/products'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Quick Action 5: Leaderboard
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
                           title: 'Leaderboard',
                           subtitle: 'Rankings & points',
                           icon: Icons.emoji_events_outlined,
-                          gradientColors: const [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                          color: const Color(0xFFF59E0B),
+                          isDark: isDark,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -355,37 +404,22 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           },
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      // Quick Action 3: View Products
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          context,
-                          title: 'View Products',
-                          subtitle: 'Catalog & specs',
-                          icon: Icons.inventory_2_outlined,
-                          gradientColors: const [Color(0xFF0D9488), Color(0xFF10B981)],
-                          onTap: () => context.push('/products'),
-                        ),
-                      ),
                       const SizedBox(width: 10),
-                      // Quick Action 4: Installations
+                      // Quick Action 6: New Complaint
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
-                          title: 'Installations',
-                          subtitle: '${assignedInstallations.length} assigned',
-                          icon: Icons.build_circle_outlined,
-                          gradientColors: const [Color(0xFF0284C7), Color(0xFF0EA5E9)],
-                          onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                          title: 'New Complaint',
+                          subtitle: 'Register ticket',
+                          icon: Icons.add_circle_outline,
+                          color: const Color(0xFF2563EB),
+                          isDark: isDark,
+                          onTap: () => context.push('/complaints/book'),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
 
                   // 2. 2x2 Bento Metric Cards Grid
                   GridView.count(
@@ -735,7 +769,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                       },
                     ),
                   ],
-                  const SizedBox(height: 140),
+                  const SizedBox(height: 32),
                 ]),
               ),
             ),
@@ -748,77 +782,79 @@ class TechnicianDashboardScreen extends ConsumerWidget {
   Widget _buildQuickActionButton(
     BuildContext context, {
     required String title,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
-    required List<Color> gradientColors,
+    required Color color,
     required VoidCallback onTap,
+    bool isDark = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: gradientColors.first.withValues(alpha: 0.25),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 2),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 1),
                       Text(
                         subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Inter',
-                          fontSize: 10,
-                          color: Colors.white70,
+                          fontSize: 10.5,
+                          color: isDark ? Colors.grey.shade400 : AppColors.textSecondary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
+                  ],
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 12),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import '../../../core/widgets/shimmer_loader.dart';
 import '../../../core/widgets/sync_status_indicator.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../admin/screens/product_catalog_screen.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/customers_provider.dart';
 import '../../../core/models/customer.dart';
@@ -145,7 +146,9 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
             Consumer(
               builder: (context, ref, _) {
                 final notifier = ref.watch(customersNotifierProvider.notifier);
-                final hasActive = notifier.filterBy.isNotEmpty || notifier.sortBy != 'recent';
+                final hasActive = notifier.filterBy.isNotEmpty ||
+                    notifier.sortBy != 'recent' ||
+                    notifier.productFilter.isNotEmpty;
                 return Stack(
                   alignment: Alignment.center,
                   children: [
@@ -590,8 +593,9 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
           child: _CustomerFilterSheet(
             currentFilter: notifier.filterBy,
             currentSort: notifier.sortBy,
-            onApply: (filter, sort) {
-              notifier.setFilterAndSort(filter: filter, sort: sort);
+            currentProduct: notifier.productFilter,
+            onApply: (filter, sort, product) {
+              notifier.setFilterAndSort(filter: filter, sort: sort, product: product);
             },
           ),
         );
@@ -603,11 +607,13 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
 class _CustomerFilterSheet extends StatefulWidget {
   final String currentFilter;
   final String currentSort;
-  final Function(String filter, String sort) onApply;
+  final String currentProduct;
+  final Function(String filter, String sort, String product) onApply;
 
   const _CustomerFilterSheet({
     required this.currentFilter,
     required this.currentSort,
+    this.currentProduct = '',
     required this.onApply,
   });
 
@@ -618,12 +624,14 @@ class _CustomerFilterSheet extends StatefulWidget {
 class _CustomerFilterSheetState extends State<_CustomerFilterSheet> {
   late String _filter;
   late String _sort;
+  late String _product;
 
   @override
   void initState() {
     super.initState();
     _filter = widget.currentFilter;
     _sort = widget.currentSort;
+    _product = widget.currentProduct;
   }
 
   @override
@@ -744,6 +752,45 @@ class _CustomerFilterSheetState extends State<_CustomerFilterSheet> {
               ),
             ],
           ),
+          const SizedBox(height: 20),
+
+          // Filter By Product
+          const Text(
+            'FILTER BY PRODUCT',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Consumer(
+            builder: (context, ref, _) {
+              final productsAsync = ref.watch(productsProvider);
+              final products = productsAsync.valueOrNull ?? [];
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildOption(
+                    label: 'All Products',
+                    icon: Icons.all_inclusive,
+                    selected: _product.isEmpty,
+                    onTap: () => setState(() => _product = ''),
+                  ),
+                  for (final p in products)
+                    _buildOption(
+                      label: p.name,
+                      icon: Icons.inventory_2_outlined,
+                      selected: _product.toLowerCase() == p.name.toLowerCase(),
+                      onTap: () => setState(() => _product = p.name),
+                    ),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 24),
 
           // Action Buttons
@@ -759,8 +806,9 @@ class _CustomerFilterSheetState extends State<_CustomerFilterSheet> {
                     setState(() {
                       _filter = '';
                       _sort = 'recent';
+                      _product = '';
                     });
-                    widget.onApply('', 'recent');
+                    widget.onApply('', 'recent', '');
                     Navigator.pop(context);
                   },
                   child: const Text('Reset All', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -776,7 +824,7 @@ class _CustomerFilterSheetState extends State<_CustomerFilterSheet> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: () {
-                    widget.onApply(_filter, _sort);
+                    widget.onApply(_filter, _sort, _product);
                     Navigator.pop(context);
                   },
                   child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold)),

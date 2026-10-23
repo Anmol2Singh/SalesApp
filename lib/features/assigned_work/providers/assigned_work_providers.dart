@@ -148,7 +148,7 @@ final selectedDateTasksProvider = Provider<AsyncValue<List<AssignedWorkItem>>>((
     final dayItems = mapTasksForDate(rawItems, selectedDate);
 
     // 2. Filter tasks
-    return dayItems.where((it) {
+    final filtered = dayItems.where((it) {
       // Status filter
       if (statusFilter == 'pending') {
         // In pending filter: show pending active tasks AND traces (which represent unfinished tasks)
@@ -175,8 +175,43 @@ final selectedDateTasksProvider = Provider<AsyncValue<List<AssignedWorkItem>>>((
 
       return true;
     }).toList();
+
+    // 3. Move completed tasks to bottom, arrange pending tasks on top as per priority
+    return sortTasksByPriorityAndStatus(filtered);
   });
 });
+
+int _priorityWeight(WorkPriority priority) {
+  switch (priority) {
+    case WorkPriority.urgent:
+      return 4;
+    case WorkPriority.high:
+      return 3;
+    case WorkPriority.medium:
+      return 2;
+    case WorkPriority.low:
+      return 1;
+  }
+}
+
+List<AssignedWorkItem> sortTasksByPriorityAndStatus(List<AssignedWorkItem> items) {
+  final list = List<AssignedWorkItem>.from(items);
+  list.sort((a, b) {
+    final aCompleted = a.status == WorkStatus.completed || a.status == WorkStatus.cancelled;
+    final bCompleted = b.status == WorkStatus.completed || b.status == WorkStatus.cancelled;
+    // 1. Move completed tasks to bottom
+    if (aCompleted != bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+    // 2. Arrange pending tasks on top as per priority (urgent -> high -> medium -> low)
+    final pDiff = _priorityWeight(b.priority).compareTo(_priorityWeight(a.priority));
+    if (pDiff != 0) return pDiff;
+
+    // 3. Same priority: sort by taskDate
+    return a.taskDate.compareTo(b.taskDate);
+  });
+  return list;
+}
 
 // ─── TODAY'S TASKS FOR CURRENT USER (STARTUP POPUP) ──────────────────────────
 
@@ -188,8 +223,9 @@ final todayTasksForCurrentUserProvider = FutureProvider<List<AssignedWorkItem>>(
   final rawList = await repo.fetchTodayTasksForUser(currentProfile.id);
   // Map tasks for today so any uncompleted past tasks move to today
   final mapped = mapTasksForDate(rawList, DateTime.now());
-  // Show active tasks for today (not traces)
-  return mapped.where((t) => !t.isTrace).toList();
+  // Show active tasks for today (not traces), sorted: pending by priority on top, completed at bottom
+  final activeTasks = mapped.where((t) => !t.isTrace).toList();
+  return sortTasksByPriorityAndStatus(activeTasks);
 });
 
 // ─── ASSIGNABLE USERS PROVIDER (RULE-BASED PERMISSIONS) ──────────────────────

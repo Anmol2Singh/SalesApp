@@ -140,17 +140,91 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
     }
   }
 
+  bool _hasUnsavedChanges = false;
+
+  void _markChanged() {
+    if (!_hasUnsavedChanges && mounted) {
+      setState(() => _hasUnsavedChanges = true);
+    }
+  }
+
   void _triggerAutoSave() {
-    _autoSaveDebounce?.cancel();
-    _autoSaveDebounce = Timer(const Duration(milliseconds: 600), () async {
-      if (_draft != null && mounted) {
-        setState(() => _isSaving = true);
-        await QgDraftsService.saveDraft(_draft!);
-        if (mounted) {
-          setState(() => _isSaving = false);
-        }
+    // Auto-save disabled per requirement: mark changes as unsaved
+    _markChanged();
+  }
+
+  Future<void> _saveDraft({bool showSnackbar = true}) async {
+    if (_draft == null) return;
+    setState(() => _isSaving = true);
+    try {
+      await QgDraftsService.saveDraft(_draft!);
+      _hasUnsavedChanges = false;
+      if (showSnackbar && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Heat Pump proposal draft saved successfully'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
-    });
+    } catch (e) {
+      if (showSnackbar && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Save error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<bool> _handlePopScope() async {
+    if (!_hasUnsavedChanges) return true;
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+            SizedBox(width: 8),
+            Text('Unsaved Changes'),
+          ],
+        ),
+        content: const Text(
+          'You have unsaved changes in this proposal. Do you want to save your changes before leaving?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            child: const Text('Discard'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            child: const Text('Save & Exit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'save') {
+      await _saveDraft(showSnackbar: false);
+      return true;
+    } else if (result == 'discard') {
+      return true;
+    }
+    return false;
   }
 
   Future<void> _resetToDealQuotation() async {
@@ -246,90 +320,106 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
     final draft = _draft!;
     final isConfirmed = draft.isConfirmed;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Proposal Builder • ${draft.quotationNumber}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              draft.customerName,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-              overflow: TextOverflow.ellipsis,
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldPop = await _handlePopScope();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Proposal Builder • ${draft.quotationNumber}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                draft.customerName,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          actions: [
+            if (_isSaving)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+                ),
+              )
+            else if (_hasUnsavedChanges)
+              TextButton.icon(
+                icon: const Icon(Icons.save_outlined, size: 16, color: Colors.white),
+                label: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () => _saveDraft(showSnackbar: true),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Center(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cloud_done_outlined, size: 14, color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isRestoredFromDraft ? 'Draft Restored' : 'Saved',
+                        style: const TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            IconButton(
+              tooltip: 'Reset to Deal Quotation',
+              icon: const Icon(Icons.restore),
+              onPressed: _resetToDealQuotation,
             ),
           ],
         ),
-        actions: [
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Center(
-                child: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Center(
-                child: Row(
-                  children: [
-                    const Icon(Icons.cloud_done_outlined, size: 14, color: Colors.white70),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isRestoredFromDraft ? 'Draft Restored' : 'Auto-saved',
-                      style: const TextStyle(fontSize: 11, color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          IconButton(
-            tooltip: 'Reset to Deal Quotation',
-            icon: const Icon(Icons.restore),
-            onPressed: _resetToDealQuotation,
-          ),
-        ],
-      ),
-      bottomNavigationBar: _buildBottomActionBar(draft, isConfirmed),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Pre-approval Banner or CRM Changed Banner
-          _buildStatusBanners(draft, isConfirmed),
-          const SizedBox(height: 16),
+        bottomNavigationBar: _buildBottomActionBar(draft, isConfirmed),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Pre-approval Banner or CRM Changed Banner
+            _buildStatusBanners(draft, isConfirmed),
+            const SizedBox(height: 16),
 
-          // Section 1: Customer & Sales Block
-          _buildCustomerSalesSection(draft),
-          const SizedBox(height: 16),
+            // Section 1: Customer & Sales Block
+            _buildCustomerSalesSection(draft),
+            const SizedBox(height: 16),
 
-          // Section 2: Items & Specification Mapping
-          _buildItemsSection(draft),
-          const SizedBox(height: 16),
+            // Section 2: Items & Specification Mapping
+            _buildItemsSection(draft),
+            const SizedBox(height: 16),
 
-          // Section 3: Supplementary Items
-          _buildSupplementarySection(draft),
-          const SizedBox(height: 16),
+            // Section 3: Supplementary Items
+            _buildSupplementarySection(draft),
+            const SizedBox(height: 16),
 
-          // Section 4: Payment Terms & Totals
-          _buildPaymentAndTotalsSection(draft),
-          const SizedBox(height: 16),
+            // Section 4: Payment Terms & Totals
+            _buildPaymentAndTotalsSection(draft),
+            const SizedBox(height: 16),
 
-          // Section 5: Technical Specifications
-          _buildSpecificationsSection(draft),
-          const SizedBox(height: 16),
+            // Section 5: Technical Specifications
+            _buildSpecificationsSection(draft),
+            const SizedBox(height: 16),
 
-          // Section 6: Image Overrides
-          _buildImagesSection(draft),
-          const SizedBox(height: 32),
-        ],
+            // Section 6: Image Overrides
+            _buildImagesSection(draft),
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }

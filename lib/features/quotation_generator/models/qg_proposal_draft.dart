@@ -536,7 +536,35 @@ class QgProposalDraft {
       if (it.type == ParsedItemType.heatPump || it.type == ParsedItemType.allInOne || it.type == ParsedItemType.pool) {
         final kwVal = it.hpKw?.toDouble() ?? hpKw.toDouble();
         final model = it.hpModel ?? hpModel;
-        final specs = (model == hpModel) ? hpSpecs : _buildDefaultHpSpecs(kwVal.toInt(), model);
+        Map<String, String>? modelSpecsFromSettings;
+        if (settings != null) {
+          final matched = settings.models.cast<HeatPumpModel?>().firstWhere(
+            (m) => m != null && (m.id == model || m.modelName.toLowerCase() == model.toLowerCase() || (m.displayCapacityKw - kwVal).abs() < 0.1),
+            orElse: () => null,
+          );
+          if (matched != null && matched.specs.isNotEmpty) {
+            modelSpecsFromSettings = matched.specs;
+          } else {
+            final aioMatched = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
+              (m) => m != null && (m.id == model || m.modelName.toLowerCase() == model.toLowerCase()),
+              orElse: () => null,
+            );
+            if (aioMatched != null && aioMatched.specs.isNotEmpty) {
+              modelSpecsFromSettings = aioMatched.specs;
+            } else {
+              final poolMatched = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
+                (m) => m != null && (m.id == model || m.modelName.toLowerCase() == model.toLowerCase()),
+                orElse: () => null,
+              );
+              if (poolMatched != null && poolMatched.specs.isNotEmpty) {
+                modelSpecsFromSettings = poolMatched.specs;
+              }
+            }
+          }
+        }
+        final specs = (model == hpModel && hpSpecs.isNotEmpty)
+            ? hpSpecs
+            : (modelSpecsFromSettings ?? _buildDefaultHpSpecs(kwVal.toInt(), model));
         hpLineItems.add(HeatPumpLineItem(
           id: 'hp_${hpItemIdx++}',
           modelName: model,

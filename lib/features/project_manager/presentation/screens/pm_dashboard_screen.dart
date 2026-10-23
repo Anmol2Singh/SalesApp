@@ -16,6 +16,7 @@ import '../widgets/pm_pdf_preview_modal.dart';
 import '../widgets/pm_excel_preview_modal.dart';
 import '../widgets/pm_excel_import_modal.dart';
 import '../widgets/pm_excel_bulk_update_modal.dart';
+import '../../../../core/router/app_router.dart';
 
 class PmDashboardScreen extends ConsumerStatefulWidget {
   const PmDashboardScreen({super.key});
@@ -199,7 +200,118 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
                             },
                           ),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
+
+                          // Quick Actions (Admin Dashboard Theme)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => context.push(AppRoutes.assignedWork),
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: Colors.grey.shade200, width: 1.2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.02),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(Icons.calendar_month_outlined, color: Color(0xFF4F46E5), size: 20),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          const Expanded(
+                                            child: Text(
+                                              'Assigned Work',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF0F172A),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => context.push(AppRoutes.dailyTasks),
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: Colors.grey.shade200, width: 1.2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.02),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(Icons.fact_check_outlined, color: Color(0xFF8B5CF6), size: 20),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          const Expanded(
+                                            child: Text(
+                                              'Daily Tasks',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF0F172A),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
 
                           // Table Title & Action Bar (Matching Screenshot 1)
                           LayoutBuilder(

@@ -1257,11 +1257,20 @@ class LeadCommunicationsNotifier extends StateNotifier<AsyncValue<List<Communica
 
   Future<void> load() async {
     try {
-      final List<dynamic> response = await _supabase
-          .from('crm_communications')
-          .select()
-          .eq('lead_id', leadId)
-          .order('created_at', ascending: false);
+      List<dynamic> response;
+      try {
+        response = await _supabase
+            .from('crm_communications')
+            .select('*, profiles:logged_by(full_name)')
+            .eq('lead_id', leadId)
+            .order('created_at', ascending: false);
+      } catch (_) {
+        response = await _supabase
+            .from('crm_communications')
+            .select('*')
+            .eq('lead_id', leadId)
+            .order('created_at', ascending: false);
+      }
 
       final logs = response.map((json) => Communication.fromJson(json as Map<String, dynamic>)).toList();
       state = AsyncValue.data(logs);

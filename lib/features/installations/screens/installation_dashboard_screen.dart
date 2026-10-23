@@ -328,6 +328,30 @@ class _InstallationDashboardScreenState
             children: [
               Expanded(
                 child: _buildActionBtn(
+                  title: 'Assigned Work',
+                  subtitle: 'Calendar & Roster',
+                  icon: Icons.calendar_month_outlined,
+                  color: const Color(0xFF4F46E5),
+                  onTap: () => context.push(AppRoutes.assignedWork),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionBtn(
+                  title: 'Daily Tasks',
+                  subtitle: 'Tasks completed',
+                  icon: Icons.fact_check_outlined,
+                  color: const Color(0xFF8B5CF6),
+                  onTap: () => context.push(AppRoutes.dailyTasks),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionBtn(
                   title: 'All Installations',
                   subtitle: 'List & Filter ($totalCount)',
                   icon: Icons.list_alt_outlined,

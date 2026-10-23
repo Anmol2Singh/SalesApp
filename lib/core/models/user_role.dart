@@ -88,7 +88,8 @@ enum UserRole {
   bool get canViewAllCustomers =>
       this == UserRole.admin ||
       this == UserRole.manager ||
-      this == UserRole.salesHead;
+      this == UserRole.salesHead ||
+      this == UserRole.accounts;
 
   bool get canViewAllPipelines =>
       this == UserRole.admin ||

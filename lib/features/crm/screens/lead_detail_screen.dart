@@ -2278,6 +2278,19 @@ class _LeadCommunicationSection extends ConsumerWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(comm.summary, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                              if (comm.loggedByName != null && comm.loggedByName!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Logged by: ${comm.loggedByName}',
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),

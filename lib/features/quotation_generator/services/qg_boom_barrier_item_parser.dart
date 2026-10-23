@@ -196,63 +196,6 @@ class QgBoomBarrierItemParser {
       }
     }
 
-    // Ensure standard accessory rows exist per the template if only a simple deal was quoted
-    if (!foundArmRest && parsedItems.length <= 3) {
-      parsedItems.add(BoomBarrierLineItem(
-        srNo: srCounter++,
-        description: 'Arm Rest Stand:-',
-        qty: 1,
-        rate: 1500.0,
-        price: 1500.0,
-      ));
-    }
-    if (!foundPhotoCell && parsedItems.length <= 4) {
-      parsedItems.add(BoomBarrierLineItem(
-        srNo: srCounter++,
-        description: 'Photo Cell Pair:-',
-        qty: 1,
-        rate: 1500.0,
-        price: 1500.0,
-      ));
-    }
-    if (!foundTransportation && parsedItems.length <= 5) {
-      parsedItems.add(BoomBarrierLineItem(
-        srNo: srCounter++,
-        description: 'Transportation:-',
-        qty: 1,
-        rate: 5000.0,
-        price: 5000.0,
-      ));
-    }
-    if (!foundInstallation && parsedItems.length <= 6) {
-      parsedItems.add(BoomBarrierLineItem(
-        srNo: srCounter++,
-        description: 'Installation:-',
-        qty: 1,
-        rate: 7000.0,
-        price: 7000.0,
-      ));
-    }
-    if (!foundWiring) {
-      parsedItems.add(BoomBarrierLineItem(
-        srNo: srCounter++,
-        description: 'Wiring:-',
-        qty: 1,
-        rate: 0.0,
-        price: 0.0,
-        isExtra: true,
-      ));
-    }
-    if (!foundCivil) {
-      parsedItems.add(BoomBarrierLineItem(
-        srNo: srCounter++,
-        description: 'Civil Works:-',
-        qty: 1,
-        rate: 0.0,
-        price: 0.0,
-        isExtra: true,
-      ));
-    }
 
     return BoomBarrierParseResult(
       detectedModelNo: detectedModel,

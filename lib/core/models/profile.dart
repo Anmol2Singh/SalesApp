@@ -9,6 +9,7 @@ class Profile {
   final String? phone;
   final List<UserRole> roles;
   final bool isActive;
+  final DateTime? deletedAt;
   final String? pushToken;
   final String? plainPassword;
   final String themePreference;
@@ -22,6 +23,7 @@ class Profile {
     this.phone,
     required this.roles,
     required this.isActive,
+    this.deletedAt,
     this.pushToken,
     this.plainPassword,
     this.themePreference = 'light',
@@ -64,7 +66,10 @@ class Profile {
       email: json['email'] as String? ?? '',
       phone: json['phone'] as String?,
       roles: parsedRoles,
-      isActive: json['is_active'] as bool? ?? true,
+      isActive: (json['is_active'] as bool? ?? true) && json['deleted_at'] == null,
+      deletedAt: json['deleted_at'] != null
+          ? DateTime.tryParse(json['deleted_at'].toString())
+          : null,
       pushToken: json['push_token'] as String?,
       plainPassword: (json['plain_password'] ?? json['password']) as String?,
       themePreference: json['theme_preference'] as String? ?? 'light',
@@ -84,6 +89,7 @@ class Profile {
     'phone': phone,
     'roles': roles.map((r) => r.name).toList(),
     'is_active': isActive,
+    'deleted_at': deletedAt?.toIso8601String(),
     'push_token': pushToken,
     if (plainPassword != null) ...{
       'plain_password': plainPassword,
@@ -97,6 +103,7 @@ class Profile {
     String? phone,
     List<UserRole>? roles,
     bool? isActive,
+    DateTime? deletedAt,
     String? pushToken,
     String? plainPassword,
     String? themePreference,
@@ -108,6 +115,7 @@ class Profile {
       phone: phone ?? this.phone,
       roles: roles ?? this.roles,
       isActive: isActive ?? this.isActive,
+      deletedAt: deletedAt ?? this.deletedAt,
       pushToken: pushToken ?? this.pushToken,
       plainPassword: plainPassword ?? this.plainPassword,
       themePreference: themePreference ?? this.themePreference,

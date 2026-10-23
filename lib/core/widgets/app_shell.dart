@@ -18,6 +18,8 @@ import '../../features/daily_tasks/providers/daily_tasks_provider.dart';
 import '../../features/project_manager/providers/pm_providers.dart';
 import '../../features/assigned_work/presentation/widgets/today_tasks_dialog.dart';
 import '../../features/assigned_work/providers/assigned_work_providers.dart';
+import '../../features/assigned_work/models/assigned_work_item.dart';
+import '../models/profile.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -143,20 +145,29 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _triggerStartupTodayTasksPopup() {
     if (_hasCheckedTodayTasks) return;
-    _hasCheckedTodayTasks = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await Future.delayed(const Duration(milliseconds: 700));
+      await Future.delayed(const Duration(milliseconds: 900));
       if (!mounted) return;
 
       final profile = ref.read(currentProfileProvider);
-      if (profile == null || profile.primaryRole == UserRole.customer) return;
+      if (profile == null) return;
+      if (profile.primaryRole == UserRole.customer) {
+        _hasCheckedTodayTasks = true;
+        return;
+      }
+
+      _hasCheckedTodayTasks = true;
 
       try {
         final tasks = await ref.read(todayTasksForCurrentUserProvider.future);
         if (!mounted) return;
-        if (tasks.isNotEmpty) {
+        // Show pop of assigned task only if there is any pending task, else don't show pop-up
+        final hasPending = tasks.any((t) =>
+            t.status != WorkStatus.completed &&
+            t.status != WorkStatus.cancelled);
+        if (hasPending) {
           TodayTasksDialog.show(context);
         }
       } catch (_) {}
@@ -202,6 +213,12 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<Profile?>(currentProfileProvider, (prev, next) {
+      if (next != null && !_hasCheckedTodayTasks) {
+        _triggerStartupTodayTasksPopup();
+      }
+    });
+
     ref.watch(realtimeSubscriptionProvider);
     final profile = ref.watch(currentProfileProvider);
     final unreadCount = ref.watch(unreadNotificationCountProvider).value ?? 0;

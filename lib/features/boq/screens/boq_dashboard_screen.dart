@@ -119,6 +119,7 @@ class BoqDashboardScreen extends ConsumerWidget {
       if (profile?.roles.contains(UserRole.purchase) == true) 'Purchase',
     ];
     final headerRoleLabel = headerRoleLabels.isEmpty ? 'OPERATIONS' : headerRoleLabels.join(' · ').toUpperCase();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -426,12 +427,22 @@ class BoqDashboardScreen extends ConsumerWidget {
                             final buttons = <Widget>[
                               _buildQuickActionButton(
                                 context,
+                                title: 'Assigned Work',
+                                subtitle: 'Task calendar & roster',
+                                icon: Icons.calendar_month_outlined,
+                                color: const Color(0xFF4F46E5),
+                                isDark: isDark,
+                                onTap: () => context.push(AppRoutes.assignedWork),
+                              ),
+                              _buildQuickActionButton(
+                                context,
                                 title: 'Deals & Pipelines',
                                 subtitle: pendingBoqDeals.isNotEmpty
                                     ? '${pendingBoqDeals.length} Action Required'
                                     : 'View customer deals',
                                 icon: Icons.work_outline,
-                                gradientColors: const [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                                color: const Color(0xFF2563EB),
+                                isDark: isDark,
                                 onTap: () => context.go(AppRoutes.pipelines),
                               ),
                               if (hasBoqRole)
@@ -440,7 +451,8 @@ class BoqDashboardScreen extends ConsumerWidget {
                                   title: 'Configure BOQ',
                                   subtitle: '$totalBoqItems BOM items',
                                   icon: Icons.format_list_bulleted,
-                                  gradientColors: const [Color(0xFFD97706), Color(0xFFF59E0B)],
+                                  color: const Color(0xFFD97706),
+                                  isDark: isDark,
                                   onTap: () => context.push('/boq/manage-items'),
                                 ),
                               if (hasFactoryRole)
@@ -449,7 +461,8 @@ class BoqDashboardScreen extends ConsumerWidget {
                                   title: 'Factory Queue',
                                   subtitle: 'View factory orders',
                                   icon: Icons.precision_manufacturing_outlined,
-                                  gradientColors: const [Color(0xFFEA580C), Color(0xFFF97316)],
+                                  color: const Color(0xFFEA580C),
+                                  isDark: isDark,
                                   onTap: () => context.push(AppRoutes.factoryQueue),
                                 ),
                               if (hasPurchaseRole)
@@ -458,15 +471,26 @@ class BoqDashboardScreen extends ConsumerWidget {
                                   title: 'Material Queue',
                                   subtitle: 'Purchase & requisitions',
                                   icon: Icons.shopping_cart_outlined,
-                                  gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+                                  color: const Color(0xFF059669),
+                                  isDark: isDark,
                                   onTap: () => context.push(AppRoutes.purchaseQueue),
                                 ),
+                              _buildQuickActionButton(
+                                context,
+                                title: 'Daily Tasks',
+                                subtitle: 'Tasks completed',
+                                icon: Icons.fact_check_outlined,
+                                color: const Color(0xFF8B5CF6),
+                                isDark: isDark,
+                                onTap: () => context.push(AppRoutes.dailyTasks),
+                              ),
                               _buildQuickActionButton(
                                 context,
                                 title: 'View Products',
                                 subtitle: 'Catalog & specs',
                                 icon: Icons.inventory_2_outlined,
-                                gradientColors: const [Color(0xFF0D9488), Color(0xFF14B8A6)],
+                                color: const Color(0xFF0D9488),
+                                isDark: isDark,
                                 onTap: () => context.push('/products'),
                               ),
                               _buildQuickActionButton(
@@ -474,7 +498,8 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 title: 'Daily Report',
                                 subtitle: 'PDF / Excel summary',
                                 icon: Icons.summarize_outlined,
-                                gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
+                                color: const Color(0xFF0284C7),
+                                isDark: isDark,
                                 onTap: () => DailyReportModal.show(context, ref),
                               ),
                               _buildQuickActionButton(
@@ -482,16 +507,9 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 title: 'Customer Prospects',
                                 subtitle: 'Track prospects',
                                 icon: Icons.person_search_outlined,
-                                gradientColors: const [Color(0xFF6366F1), Color(0xFF818CF8)],
+                                color: const Color(0xFF6366F1),
+                                isDark: isDark,
                                 onTap: () => context.go('/crm/prospects'),
-                              ),
-                              _buildQuickActionButton(
-                                context,
-                                title: 'Daily Tasks',
-                                subtitle: 'Tasks completed',
-                                icon: Icons.fact_check_outlined,
-                                gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
-                                onTap: () => context.push(AppRoutes.dailyTasks),
                               ),
                             ];
 
@@ -798,77 +816,79 @@ class BoqDashboardScreen extends ConsumerWidget {
   Widget _buildQuickActionButton(
     BuildContext context, {
     required String title,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
-    required List<Color> gradientColors,
+    required Color color,
     required VoidCallback onTap,
+    bool isDark = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: gradientColors.first.withValues(alpha: 0.25),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 22),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 2),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 1),
                       Text(
                         subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Inter',
-                          fontSize: 10,
-                          color: Colors.white70,
+                          fontSize: 10.5,
+                          color: isDark ? Colors.grey.shade400 : AppColors.textSecondary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
+                  ],
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 12),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
