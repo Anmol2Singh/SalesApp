@@ -104,6 +104,8 @@ class AssignedWorkItem {
   final WorkPriority priority;
   final WorkStatus status;
   final DateTime? completedAt;
+  final String? completedByUserId;
+  final String? completedByUserName;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isTrace;
@@ -127,6 +129,8 @@ class AssignedWorkItem {
     this.priority = WorkPriority.medium,
     this.status = WorkStatus.pending,
     this.completedAt,
+    this.completedByUserId,
+    this.completedByUserName,
     this.isTrace = false,
     this.isRolledOver = false,
     this.displayDate,
@@ -196,6 +200,8 @@ class AssignedWorkItem {
       priority: WorkPriority.fromString(json['priority']?.toString()),
       status: WorkStatus.fromString(json['status']?.toString()),
       completedAt: json['completed_at'] != null ? parseDate(json['completed_at']) : null,
+      completedByUserId: json['completed_by_user_id']?.toString() ?? json['completed_by']?.toString(),
+      completedByUserName: json['completed_by_user_name']?.toString(),
       createdAt: parseDate(json['created_at']),
       updatedAt: parseDate(json['updated_at']),
     );
@@ -218,6 +224,8 @@ class AssignedWorkItem {
     'priority': priority.value,
     'status': status.value,
     if (completedAt != null) 'completed_at': completedAt!.toUtc().toIso8601String(),
+    if (completedByUserId != null) 'completed_by_user_id': completedByUserId,
+    if (completedByUserName != null) 'completed_by_user_name': completedByUserName,
     'created_at': createdAt.toUtc().toIso8601String(),
     'updated_at': updatedAt.toUtc().toIso8601String(),
   };
@@ -238,6 +246,8 @@ class AssignedWorkItem {
     WorkPriority? priority,
     WorkStatus? status,
     DateTime? completedAt,
+    String? completedByUserId,
+    String? completedByUserName,
     DateTime? updatedAt,
     bool? isTrace,
     bool? isRolledOver,
@@ -260,6 +270,8 @@ class AssignedWorkItem {
       priority: priority ?? this.priority,
       status: status ?? this.status,
       completedAt: completedAt ?? this.completedAt,
+      completedByUserId: completedByUserId ?? this.completedByUserId,
+      completedByUserName: completedByUserName ?? this.completedByUserName,
       isTrace: isTrace ?? this.isTrace,
       isRolledOver: isRolledOver ?? this.isRolledOver,
       displayDate: displayDate ?? this.displayDate,
@@ -268,3 +280,4 @@ class AssignedWorkItem {
     );
   }
 }
+

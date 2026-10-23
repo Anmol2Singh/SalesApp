@@ -1243,15 +1243,16 @@ final leadByIdProvider = Provider.family<Lead?, String>((ref, id) {
 final leadCommunicationsProvider = StateNotifierProvider.family<LeadCommunicationsNotifier, AsyncValue<List<Communication>>, String>((ref, leadId) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
-  return LeadCommunicationsNotifier(supabase, leadId, profile?.id);
+  return LeadCommunicationsNotifier(supabase, leadId, profile?.id, profile?.fullName);
 });
 
 class LeadCommunicationsNotifier extends StateNotifier<AsyncValue<List<Communication>>> {
   final SupabaseClient _supabase;
   final String leadId;
   final String? _userId;
+  final String? _userName;
 
-  LeadCommunicationsNotifier(this._supabase, this.leadId, this._userId) : super(const AsyncValue.loading()) {
+  LeadCommunicationsNotifier(this._supabase, this.leadId, this._userId, [this._userName]) : super(const AsyncValue.loading()) {
     load();
   }
 
@@ -1272,7 +1273,45 @@ class LeadCommunicationsNotifier extends StateNotifier<AsyncValue<List<Communica
             .order('created_at', ascending: false);
       }
 
-      final logs = response.map((json) => Communication.fromJson(json as Map<String, dynamic>)).toList();
+      var logs = response.map((json) => Communication.fromJson(json as Map<String, dynamic>)).toList();
+
+      // Resolve missing names directly from profiles table
+      final missingUserIds = logs
+          .where((l) => (l.loggedByName == null || l.loggedByName!.isEmpty) && l.loggedBy.isNotEmpty)
+          .map((l) => l.loggedBy)
+          .toSet()
+          .toList();
+
+      if (missingUserIds.isNotEmpty) {
+        try {
+          final profileRows = await _supabase
+              .from('profiles')
+              .select('id, full_name')
+              .filter('id', 'in', missingUserIds);
+
+          final Map<String, String> nameMap = {};
+          for (final row in profileRows) {
+            final pid = row['id']?.toString();
+            final pname = row['full_name']?.toString();
+            if (pid != null && pname != null && pname.trim().isNotEmpty) {
+              nameMap[pid] = pname.trim();
+            }
+          }
+
+          if (nameMap.isNotEmpty) {
+            logs = logs.map((l) {
+              if (l.loggedByName == null || l.loggedByName!.isEmpty) {
+                final found = nameMap[l.loggedBy];
+                if (found != null) {
+                  return l.copyWith(loggedByName: found);
+                }
+              }
+              return l;
+            }).toList();
+          }
+        } catch (_) {}
+      }
+
       state = AsyncValue.data(logs);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -1293,7 +1332,19 @@ class LeadCommunicationsNotifier extends StateNotifier<AsyncValue<List<Communica
         'created_at': DateTime.now().toIso8601String(),
       };
 
-      await _supabase.from('crm_communications').insert(data);
+      try {
+        if (_userName != null && _userName.isNotEmpty) {
+          final dataWithName = Map<String, dynamic>.from(data);
+          dataWithName['logged_by_name'] = _userName;
+          await _supabase.from('crm_communications').insert(dataWithName);
+        } else {
+          await _supabase.from('crm_communications').insert(data);
+        }
+      } catch (_) {
+        // Fallback if logged_by_name column is not in crm_communications schema
+        await _supabase.from('crm_communications').insert(data);
+      }
+
       // Auto-update lead status to 'In Progress' if currently 'New'
       try {
         final leadRes = await _supabase.from('crm_leads').select('status').eq('id', leadId).maybeSingle();

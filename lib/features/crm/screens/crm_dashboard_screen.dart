@@ -81,7 +81,12 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
     final profile = ref.watch(currentProfileProvider);
     final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
     final isAdmin = profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true;
-    final canManageSources = !isCrmStaff && isAdmin;
+    final isAdminOrManager = isAdmin ||
+        profile?.primaryRole == UserRole.manager ||
+        profile?.roles.contains(UserRole.manager) == true ||
+        profile?.primaryRole == UserRole.salesHead ||
+        profile?.roles.contains(UserRole.salesHead) == true;
+    final canManageSources = !isCrmStaff && isAdminOrManager;
     _initTabController(canManageSources);
 
     return Scaffold(

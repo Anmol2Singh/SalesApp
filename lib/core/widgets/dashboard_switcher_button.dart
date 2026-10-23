@@ -28,6 +28,7 @@ class DashboardSwitcherButton extends ConsumerWidget {
     final hasInstallation = uniqueRoles.contains(UserRole.installation) || hasService;
     final hasCrm = uniqueRoles.contains(UserRole.crmStaff);
     final hasTechnician = uniqueRoles.contains(UserRole.technician);
+    final hasAccounts = uniqueRoles.contains(UserRole.accounts);
     // Per requirements 3(v-ix): no external BOQ/operations dashboard needed if sales role is present
     final hasOperations = !hasSales && !hasAdmin && (
         uniqueRoles.contains(UserRole.boq) ||
@@ -42,6 +43,7 @@ class DashboardSwitcherButton extends ConsumerWidget {
     if (hasCrm) distinctDashboards++;
     if (hasTechnician) distinctDashboards++;
     if (hasOperations) distinctDashboards++;
+    if (hasAccounts) distinctDashboards++;
 
     if (distinctDashboards <= 1) {
       return const SizedBox.shrink();
@@ -176,6 +178,21 @@ class DashboardSwitcherButton extends ConsumerWidget {
                   Icon(Icons.home_outlined, color: Color(0xFF4ADE80), size: 18),
                   SizedBox(width: 10),
                   Text('Technician Home', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (hasAccounts) {
+          items.add(
+            const PopupMenuItem<String>(
+              value: AppRoutes.accountsDashboard,
+              child: Row(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF0284C7), size: 18),
+                  SizedBox(width: 10),
+                  Text('Accounts Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),

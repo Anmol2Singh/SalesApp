@@ -487,7 +487,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   route: hasAdmin
                       ? AppRoutes.adminDashboard
                       : (hasAccounts
-                          ? AppRoutes.projectManager
+                          ? AppRoutes.accountsDashboard
                           : (hasSales || isManager
                               ? AppRoutes.salesDashboard
                               : (isBoq
@@ -1706,7 +1706,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool isManager = roles.any((r) => r == UserRole.manager);
     final bool hasAdminOrManager = hasAdmin || isManager;
     final bool hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
-    final bool hasCrm = roles.any((r) => r == UserRole.crmStaff);
+    final bool hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.salesHead);
     final bool hasComplaints = roles.any((r) => r == UserRole.serviceHead);
     final bool hasInstallations = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead || r == UserRole.salesHead);
     final bool isBoq = roles.any((r) => r == UserRole.boq);
@@ -1726,7 +1726,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         selectedIcon: Icon(Icons.calendar_month),
       ));
       addItem(_NavItem(
-        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.projectManager : AppRoutes.salesDashboard),
+        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.accountsDashboard : AppRoutes.salesDashboard),
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1748,7 +1748,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       addItem(const _NavItem(route: AppRoutes.pmDailyTransactions, label: 'Day-Book', icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long)));
       addItem(const _NavItem(route: AppRoutes.pmFilter, label: 'Reports', icon: Icon(Icons.filter_list_outlined), selectedIcon: Icon(Icons.filter_list)));
       addItem(_NavItem(
-        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.projectManager : AppRoutes.salesDashboard),
+        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.accountsDashboard : AppRoutes.salesDashboard),
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),

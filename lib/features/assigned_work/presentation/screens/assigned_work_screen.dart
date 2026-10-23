@@ -1226,6 +1226,12 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
   Widget _buildActiveTaskCard(AssignedWorkItem task) {
     final isDone = task.status == WorkStatus.completed;
 
+    // Block unmarking tasks completed on a previous day
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final taskDay = DateTime(task.taskDate.year, task.taskDate.month, task.taskDate.day);
+    final isPastDayCompleted = isDone && taskDay.isBefore(today);
+
     Color priorityColor;
     switch (task.priority) {
       case WorkPriority.low:
@@ -1298,23 +1304,45 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
               children: [
                 // Custom Checkbox
                 InkWell(
-                  onTap: () {
-                    ref.read(assignedWorkActionsProvider).toggleComplete(task.id, !isDone);
-                  },
+                  onTap: isPastDayCompleted
+                      ? () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.lock_outline, color: Colors.white, size: 16),
+                                  SizedBox(width: 8),
+                                  Expanded(child: Text('Cannot undo tasks completed on a previous day.')),
+                                ],
+                              ),
+                              backgroundColor: Color(0xFFB45309),
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      : () {
+                          ref.read(assignedWorkActionsProvider).toggleComplete(task.id, !isDone);
+                        },
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: isDone ? const Color(0xFF10B981) : Colors.white,
+                      color: isPastDayCompleted
+                          ? const Color(0xFFD1FAE5)
+                          : (isDone ? const Color(0xFF10B981) : Colors.white),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: isDone ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                        color: isPastDayCompleted
+                            ? const Color(0xFF6EE7B7)
+                            : (isDone ? const Color(0xFF10B981) : const Color(0xFF94A3B8)),
                         width: 2,
                       ),
                     ),
                     child: isDone
-                        ? const Icon(Icons.check, size: 16, color: Colors.white)
+                        ? Icon(isPastDayCompleted ? Icons.lock : Icons.check, size: 16,
+                            color: isPastDayCompleted ? const Color(0xFF059669) : Colors.white)
                         : null,
                   ),
                 ),
@@ -1530,30 +1558,43 @@ class _AssignedWorkScreenState extends ConsumerState<AssignedWorkScreen> {
                       ),
                     ),
                   // Completed Chip (if done)
-                  if (isDone && task.completedAt != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.check_circle, size: 12, color: Color(0xFF059669)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Completed ${DateFormat('dd MMM, hh:mm a').format(task.completedAt!)}',
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF065F46),
-                            ),
+                  if (isDone && task.completedAt != null) ...[
+                    Builder(
+                      builder: (context) {
+                        final completerName = (task.completedByUserName != null && task.completedByUserName!.trim().isNotEmpty)
+                            ? task.completedByUserName!.trim()
+                            : (task.assignedToUserName.trim().isNotEmpty ? task.assignedToUserName.trim() : task.assignedByUserName.trim());
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isPastDayCompleted ? Icons.lock : Icons.check_circle,
+                                size: 12,
+                                color: const Color(0xFF059669),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Completed ${DateFormat('dd MMM, hh:mm a').format(task.completedAt!)}'
+                                '${completerName.isNotEmpty ? ' by $completerName' : ''}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF065F46),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
+                  ],
                 ],
               ),
             ),

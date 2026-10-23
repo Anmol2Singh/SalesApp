@@ -123,13 +123,25 @@ class AssignedWorkRepository {
 
   // ─── TOGGLE STATUS ─────────────────────────────────────────────────────────
 
-  Future<AssignedWorkItem> toggleComplete(String id, bool completed) async {
+  Future<AssignedWorkItem> toggleComplete(
+    String id,
+    bool completed, {
+    String? completedByUserId,
+    String? completedByUserName,
+  }) async {
     final now = DateTime.now();
     final updateData = <String, dynamic>{
       'status': completed ? WorkStatus.completed.value : WorkStatus.pending.value,
       'completed_at': completed ? now.toUtc().toIso8601String() : null,
       'updated_at': now.toUtc().toIso8601String(),
     };
+    if (completed) {
+      if (completedByUserId != null) updateData['completed_by_user_id'] = completedByUserId;
+      if (completedByUserName != null) updateData['completed_by_user_name'] = completedByUserName;
+    } else {
+      updateData['completed_by_user_id'] = null;
+      updateData['completed_by_user_name'] = null;
+    }
 
     try {
       final res = await _supabase
@@ -145,11 +157,38 @@ class AssignedWorkRepository {
       return updated;
     } catch (e) {
       debugPrint('AssignedWorkRepository.toggleComplete error: $e');
+      // If table doesn't have completed_by columns, fallback to basic update
+      try {
+        final basicData = <String, dynamic>{
+          'status': completed ? WorkStatus.completed.value : WorkStatus.pending.value,
+          'completed_at': completed ? now.toUtc().toIso8601String() : null,
+          'updated_at': now.toUtc().toIso8601String(),
+        };
+        final res = await _supabase
+            .from('assigned_work')
+            .update(basicData)
+            .eq('id', id)
+            .select()
+            .single();
+        var updated = AssignedWorkItem.fromJson(Map<String, dynamic>.from(res));
+        if (completed && completedByUserName != null) {
+          updated = updated.copyWith(
+            completedByUserId: completedByUserId,
+            completedByUserName: completedByUserName,
+          );
+        }
+        final current = await _readFromLocalCache();
+        await _cacheLocal(current.map((e) => e.id == updated.id ? updated : e).toList());
+        return updated;
+      } catch (_) {}
+
       final current = await _readFromLocalCache();
       final existing = current.firstWhere((e) => e.id == id, orElse: () => throw e);
       final updated = existing.copyWith(
         status: completed ? WorkStatus.completed : WorkStatus.pending,
         completedAt: completed ? now : null,
+        completedByUserId: completed ? completedByUserId : null,
+        completedByUserName: completed ? completedByUserName : null,
         updatedAt: now,
       );
       await _cacheLocal(current.map((e) => e.id == updated.id ? updated : e).toList());

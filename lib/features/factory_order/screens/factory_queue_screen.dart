@@ -262,7 +262,6 @@ class FactoryQueueScreen extends ConsumerWidget {
                         Expanded(
                           child: _buildActionBtn(
                             title: 'Daily Tasks',
-                            subtitle: 'Tasks completed',
                             icon: Icons.fact_check_outlined,
                             color: const Color(0xFF6366F1),
                             onTap: () => context.push(AppRoutes.dailyTasks),
@@ -272,7 +271,6 @@ class FactoryQueueScreen extends ConsumerWidget {
                         Expanded(
                           child: _buildActionBtn(
                             title: 'View Products',
-                            subtitle: 'Catalog & Specs',
                             icon: Icons.inventory_2_outlined,
                             color: const Color(0xFF3B82F6),
                             onTap: () => context.push('/products'),
@@ -286,7 +284,6 @@ class FactoryQueueScreen extends ConsumerWidget {
                         Expanded(
                           child: _buildActionBtn(
                             title: 'Daily Report',
-                            subtitle: 'Export PDF / Excel',
                             icon: Icons.summarize_outlined,
                             color: const Color(0xFF8B5CF6),
                             onTap: () => DailyReportModal.show(context, ref),
@@ -697,7 +694,7 @@ class FactoryQueueScreen extends ConsumerWidget {
 
   static Widget _buildActionBtn({
     required String title,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
@@ -731,33 +728,16 @@ class FactoryQueueScreen extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

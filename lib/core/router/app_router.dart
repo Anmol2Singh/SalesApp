@@ -34,6 +34,7 @@ import '../../features/reports/screens/user_activity_report_screen.dart';
 import '../../features/reports/screens/customer_report_screen.dart';
 import '../../features/pdf_search/screens/search_pdf_screen.dart';
 import '../../features/dashboard/screens/sales_dashboard_screen.dart';
+import '../../features/dashboard/screens/accounts_dashboard_screen.dart';
 import '../../features/admin/screens/admin_panel_screen.dart';
 import '../../features/admin/screens/product_catalog_screen.dart';
 import '../../features/admin/screens/inventory_screen.dart';
@@ -108,6 +109,7 @@ class AppRoutes {
   static const String adminDashboard = '/admin/dashboard';
   static const String dashboard = adminDashboard;
   static const String salesDashboard = '/sales/dashboard';
+  static const String accountsDashboard = '/accounts/dashboard';
   static const String inventory = '/inventory';
   static const String customers = '/customers';
   static const String customerDetail = '/customers/:id';
@@ -265,12 +267,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             }
           }
 
-          // Guard Accounts role: access to Project Manager module only
+          // Guard Accounts role: access to Accounts Dashboard, Project Manager, and standard operational screens
           if (profile.roles.contains(UserRole.accounts) &&
               !profile.roles.contains(UserRole.admin) &&
               !profile.roles.contains(UserRole.manager)) {
-            if (!location.startsWith('/pm')) {
-              return AppRoutes.projectManager;
+            final isAllowedAccountsRoute = location.startsWith('/accounts') ||
+                location.startsWith('/pm') ||
+                location.startsWith('/assigned-work') ||
+                location.startsWith('/daily-tasks') ||
+                location.startsWith('/notifications') ||
+                location.startsWith('/reports') ||
+                location.startsWith('/pipelines') ||
+                location.startsWith('/customers');
+            if (!isAllowedAccountsRoute) {
+              return AppRoutes.accountsDashboard;
             }
           }
 
@@ -373,6 +383,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.salesDashboard,
             builder: (context, state) => const SalesDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.accountsDashboard,
+            builder: (context, state) => const AccountsDashboardScreen(),
           ),
           GoRoute(
             path: AppRoutes.adminDashboard,
@@ -840,7 +854,7 @@ String getRoleHome(UserRole role) {
     case UserRole.crmStaff:
       return '/crm/dashboard';
     case UserRole.accounts:
-      return AppRoutes.projectManager;
+      return AppRoutes.accountsDashboard;
   }
 }
 

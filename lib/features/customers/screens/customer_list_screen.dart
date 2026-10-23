@@ -895,9 +895,12 @@ class _CustomerTile extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: customer.reassignmentRequested ? const Color(0xFFFFFBEB) : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: customer.reassignmentRequested ? const Color(0xFFF59E0B) : AppColors.border,
+            width: customer.reassignmentRequested ? 1.6 : 1,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),

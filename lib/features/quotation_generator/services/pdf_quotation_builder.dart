@@ -2488,7 +2488,7 @@ class PdfQuotationBuilder {
               decoration: pw.BoxDecoration(color: PdfColor.fromHex('#E8E8E8')),
               children: headerChildren,
             ),
-            ..._buildMultiHpSpecRows(q, hpList),
+            ..._buildMultiHpSpecRows(q, hpList, settings),
           ],
         ),
       ],
@@ -2496,17 +2496,37 @@ class PdfQuotationBuilder {
   }
 
   static List<pw.TableRow> _buildMultiHpSpecRows(
-      GeneratorQuotation q, List<HeatPumpLineItem> hpList) {
+      GeneratorQuotation q, List<HeatPumpLineItem> hpList, GeneratorCompanySettings settings) {
     final tankCap = q.tankCapacityLitres > 0
         ? '${q.tankCapacityLitres}'
         : (q.effectiveTanks.isNotEmpty
             ? '${q.effectiveTanks.first.capacityLitres}'
             : '500');
 
+    // Resolve specs for single heat pump model from q.model or directly from settings module
+    Map<String, String> activeSpecs = Map.from(q.model.specs);
+    if (activeSpecs.isEmpty) {
+      final allSettingModels = [
+        ...settings.models,
+        ...settings.allInOneModels,
+        ...settings.poolModels,
+      ];
+      final targetName = q.model.modelName.trim().toLowerCase();
+      final match = allSettingModels.cast<HeatPumpModel?>().firstWhere(
+        (m) =>
+            (targetName.isNotEmpty && m?.modelName.trim().toLowerCase() == targetName) ||
+            (q.model.id.isNotEmpty && m?.id == q.model.id),
+        orElse: () => null,
+      );
+      if (match != null && match.specs.isNotEmpty) {
+        activeSpecs = Map.from(match.specs);
+      }
+    }
+
     // If single heat pump and model has dynamic specs configured, render them directly
-    if (hpList.length <= 1 && q.model.specs.isNotEmpty) {
+    if (hpList.length <= 1 && activeSpecs.isNotEmpty) {
       int idx = 1;
-      return q.model.specs.entries.map((entry) {
+      return activeSpecs.entries.map((entry) {
         final sl = (idx < 10) ? '0$idx' : '$idx';
         idx++;
         String val = entry.value;

@@ -3114,7 +3114,38 @@ class _LeadQuotationsSectionState
 
         // ─── HEAT PUMP / ALL-IN-ONE / MULTI-PAGE PROPOSAL ───
         final company = ref.read(companyForProductProvider(quot.productId));
-        final settings = GeneratorCompanySettings.fromAppCompany(company);
+        var settings = GeneratorCompanySettings.fromAppCompany(company);
+        final moduleSettings = ref.read(quotationSettingsProvider).valueOrNull;
+        if (moduleSettings != null) {
+          settings = settings.copyWith(
+            models: moduleSettings.models.isNotEmpty ? moduleSettings.models : null,
+            allInOneModels: moduleSettings.allInOneModels.isNotEmpty ? moduleSettings.allInOneModels : null,
+            poolModels: moduleSettings.poolModels.isNotEmpty ? moduleSettings.poolModels : null,
+            defaultCoverImagePath: moduleSettings.defaultCoverImagePath,
+            defaultBannerImagePath: moduleSettings.defaultBannerImagePath,
+            stampImagePath: moduleSettings.stampImagePath,
+            domesticHpImagePath: moduleSettings.domesticHpImagePath,
+            allInOneImagePath: moduleSettings.allInOneImagePath,
+            allInOneWallImagePath: moduleSettings.allInOneWallImagePath,
+            swimmingPoolImagePath: moduleSettings.swimmingPoolImagePath,
+          );
+        } else {
+          try {
+            final repoSettings = await ref.read(quotationRepositoryProvider).getSettings();
+            settings = settings.copyWith(
+              models: repoSettings.models.isNotEmpty ? repoSettings.models : null,
+              allInOneModels: repoSettings.allInOneModels.isNotEmpty ? repoSettings.allInOneModels : null,
+              poolModels: repoSettings.poolModels.isNotEmpty ? repoSettings.poolModels : null,
+              defaultCoverImagePath: repoSettings.defaultCoverImagePath,
+              defaultBannerImagePath: repoSettings.defaultBannerImagePath,
+              stampImagePath: repoSettings.stampImagePath,
+              domesticHpImagePath: repoSettings.domesticHpImagePath,
+              allInOneImagePath: repoSettings.allInOneImagePath,
+              allInOneWallImagePath: repoSettings.allInOneWallImagePath,
+              swimmingPoolImagePath: repoSettings.swimmingPoolImagePath,
+            );
+          } catch (_) {}
+        }
 
         final dealItem = DealQuotationItem(
           id: quot.id,
@@ -3453,6 +3484,9 @@ class _LeadQuotationsSectionState
     final isLost = widget.lead.status.toLowerCase() == 'lost';
     final isLeadClosed = isWon || isLost;
 
+    // Hide Add/Revise buttons while any quotation is pending approval
+    final hasAnyPendingApproval = _quotations.any((q) => q.status == QuotationStatus.pendingApproval);
+
     return Card(
       elevation: 0,
       color: AppColors.surface,
@@ -3505,7 +3539,7 @@ class _LeadQuotationsSectionState
                   ),
                 ),
                 const SizedBox(width: 6),
-                if (widget.canCreateQuotation && !isLeadClosed)
+                if (widget.canCreateQuotation && !isLeadClosed && !hasAnyPendingApproval)
                   ElevatedButton.icon(
                     onPressed: () => _openCreateQuotation(),
                     icon: const Icon(Icons.add, size: 14, color: Colors.white),
@@ -3768,7 +3802,7 @@ class _LeadQuotationsSectionState
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
                             ),
-                          if (widget.canCreateQuotation && !isLeadClosed) ...[
+                          if (widget.canCreateQuotation && !isLeadClosed && !hasAnyPendingApproval) ...[
                             ElevatedButton.icon(
                               onPressed: () => _openCreateQuotation(initialQuotation: quot),
                               icon: const Icon(Icons.history_edu, size: 14, color: Colors.white),

@@ -96,9 +96,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onPressed: () async {
               Navigator.pop(context);
               await ref.read(authControllerProvider.notifier).signOut();
-              if (mounted) {
-                context.go('/login');
-              }
+              if (!context.mounted) return;
+              context.go('/login');
             },
             child: const Text(
               'Log Out',
@@ -269,7 +268,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
+                            color: Colors.white.withValues(alpha: 0.3),
                             width: 2,
                           ),
                           gradient: const LinearGradient(
@@ -355,7 +354,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: (hasAmc ? const Color(0xFF10B981) : Colors.amber).withOpacity(0.15),
+                                  color: (hasAmc ? const Color(0xFF10B981) : Colors.amber).withValues(alpha: 0.15),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -394,7 +393,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: (hasAmc ? const Color(0xFF10B981) : Colors.grey).withOpacity(0.15),
+                                  color: (hasAmc ? const Color(0xFF10B981) : Colors.grey).withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -445,9 +444,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               width: double.infinity,
                               padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withOpacity(0.12),
+                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
                               ),
                               child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -687,15 +686,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 fontFamily: 'Inter',
                               ),
                               items: const [
-                                DropdownMenuItem(
+                                DropdownMenuItem<ThemeMode>(
                                   value: ThemeMode.system,
                                   child: Text('System'),
                                 ),
-                                DropdownMenuItem(
+                                DropdownMenuItem<ThemeMode>(
                                   value: ThemeMode.light,
                                   child: Text('Light'),
                                 ),
-                                DropdownMenuItem(
+                                DropdownMenuItem<ThemeMode>(
                                   value: ThemeMode.dark,
                                   child: Text('Dark'),
                                 ),
@@ -751,7 +750,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   width: double.infinity,
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: AppColors.danger.withOpacity(0.3),
+                      color: AppColors.danger.withValues(alpha: 0.3),
                     ),
                     borderRadius: BorderRadius.circular(16),
                   ),

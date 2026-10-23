@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "546303153314",
+    "project_id": "insiya-salesapp",
+    "storage_bucket": "insiya-salesapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:546303153314:android:4eba9efeea8e51955cb3fb",
+        "android_client_info": {
+          "package_name": "com.izyheat.salesapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0nujKAlXEL0p2PK7bNO7PLyKQGC0_DzA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -428,7 +428,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'Assigned Work',
-                                subtitle: 'Task calendar & roster',
                                 icon: Icons.calendar_month_outlined,
                                 color: const Color(0xFF4F46E5),
                                 isDark: isDark,
@@ -437,9 +436,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'Deals & Pipelines',
-                                subtitle: pendingBoqDeals.isNotEmpty
-                                    ? '${pendingBoqDeals.length} Action Required'
-                                    : 'View customer deals',
+
                                 icon: Icons.work_outline,
                                 color: const Color(0xFF2563EB),
                                 isDark: isDark,
@@ -449,7 +446,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 _buildQuickActionButton(
                                   context,
                                   title: 'Configure BOQ',
-                                  subtitle: '$totalBoqItems BOM items',
                                   icon: Icons.format_list_bulleted,
                                   color: const Color(0xFFD97706),
                                   isDark: isDark,
@@ -459,7 +455,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 _buildQuickActionButton(
                                   context,
                                   title: 'Factory Queue',
-                                  subtitle: 'View factory orders',
                                   icon: Icons.precision_manufacturing_outlined,
                                   color: const Color(0xFFEA580C),
                                   isDark: isDark,
@@ -469,7 +464,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 _buildQuickActionButton(
                                   context,
                                   title: 'Material Queue',
-                                  subtitle: 'Purchase & requisitions',
                                   icon: Icons.shopping_cart_outlined,
                                   color: const Color(0xFF059669),
                                   isDark: isDark,
@@ -478,7 +472,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'Daily Tasks',
-                                subtitle: 'Tasks completed',
                                 icon: Icons.fact_check_outlined,
                                 color: const Color(0xFF8B5CF6),
                                 isDark: isDark,
@@ -487,7 +480,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'View Products',
-                                subtitle: 'Catalog & specs',
                                 icon: Icons.inventory_2_outlined,
                                 color: const Color(0xFF0D9488),
                                 isDark: isDark,
@@ -496,7 +488,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'Daily Report',
-                                subtitle: 'PDF / Excel summary',
                                 icon: Icons.summarize_outlined,
                                 color: const Color(0xFF0284C7),
                                 isDark: isDark,
@@ -505,7 +496,6 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'Customer Prospects',
-                                subtitle: 'Track prospects',
                                 icon: Icons.person_search_outlined,
                                 color: const Color(0xFF6366F1),
                                 isDark: isDark,

@@ -352,7 +352,13 @@ class AssignedWorkActions {
 
   Future<void> toggleComplete(String id, bool completed) async {
     final repo = _ref.read(assignedWorkRepositoryProvider);
-    await repo.toggleComplete(id, completed);
+    final profile = _ref.read(currentProfileProvider);
+    await repo.toggleComplete(
+      id,
+      completed,
+      completedByUserId: profile?.id,
+      completedByUserName: profile?.fullName,
+    );
     _ref.invalidate(assignedWorkMonthItemsProvider);
     _ref.invalidate(todayTasksForCurrentUserProvider);
   }

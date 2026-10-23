@@ -183,14 +183,20 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                       final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
                       final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || profile?.roles.contains(UserRole.admin) == true;
 
+                      final isReassignReq = prospect.reassignmentRequested;
+
                       return Card(
                         elevation: 0,
-                        color: isAssignedToMe ? const Color(0xFFFFFBEB) : AppColors.surface,
+                        color: isReassignReq
+                            ? const Color(0xFFFFFBEB)
+                            : (isAssignedToMe ? const Color(0xFFFFFDF5) : AppColors.surface),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withOpacity(0.5),
-                            width: isAssignedToMe ? 2 : 1,
+                            color: isReassignReq
+                                ? const Color(0xFFF59E0B)
+                                : (isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withOpacity(0.5)),
+                            width: isReassignReq ? 1.6 : (isAssignedToMe ? 1.4 : 1),
                           ),
                         ),
                         child: ListTile(
@@ -315,25 +321,26 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                   ),
                                 ),
                               ],
-                              if (isAdmin && prospect.reassignmentRequested) ...[
+                              if (prospect.reassignmentRequested) ...[
                                 const SizedBox(height: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: AppColors.warningLight,
+                                    color: const Color(0xFFFEF3C7),
                                     borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFF59E0B)),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.warning_amber_rounded, size: 11, color: AppColors.warning),
+                                      Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFB45309)),
                                       SizedBox(width: 3),
                                       Text(
                                         'Reassign Requested',
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: AppColors.warning,
+                                          color: Color(0xFFB45309),
                                         ),
                                       ),
                                     ],

@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/models/user_role.dart';
 import '../../../core/models/pipeline.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/factory_order.dart';
@@ -1401,6 +1403,18 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
   // View NOC PDF preview
   Future<void> _viewNocPdf(QgNocDocument doc) async {
+    final profile = ref.read(currentProfileProvider);
+    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+    final canViewNoc = userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.manager) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead);
+    if (!canViewNoc) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to view NOC PDF.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
     try {
       final payload = QgNocPayload(
         companyName: doc.companySnapshot['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION',
@@ -1449,31 +1463,102 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     }
   }
 
-  // General step tap handler
+  // General step tap handler with role permissions
   void _handleStepTap(int stepIndex, bool isDone) {
+    final profile = ref.read(currentProfileProvider);
+    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+    final isAdminOrManager = userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.manager);
+    final isSales = userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead);
+    final isBoq = userRoles.contains(UserRole.boq);
+    final isFactory = userRoles.contains(UserRole.factory);
+    final isPurchase = userRoles.contains(UserRole.purchase);
+
     switch (stepIndex) {
       case 1: // Quotation
         if (isDone) {
+          if (!isAdminOrManager && !isSales) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You do not have permission to view Quotation PDF.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
           _viewQuotationPdf();
         } else {
+          if (!isAdminOrManager && !isSales) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You do not have permission to create Quotation.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
           context.push('/quotations/create?pipelineId=${widget.pipeline.id}&productId=${widget.pipeline.productId}&customerId=${widget.pipeline.customerId}');
         }
         break;
       case 2: // Sales Order
         if (isDone) {
+          if (!isAdminOrManager && !isSales && !isBoq) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You do not have permission to view Sales Order documents.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
           _viewSalesOrderDialog();
         } else {
+          if (!isAdminOrManager && !isSales) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You do not have permission to create Sales Order.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
           context.push('/sales-orders/create?pipelineId=${widget.pipeline.id}');
         }
         break;
       case 5: // Factory BOQ
       case 6: // Site BOQ
+        if (!isAdminOrManager && !isBoq && !isSales) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You do not have permission to view BOQ documents.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
         context.push('/boq/${widget.pipeline.id}');
         break;
       case 7: // Factory Manufacture
+        if (!isAdminOrManager && !isFactory) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You do not have permission to view Factory Order documents.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
         context.push('/factory-orders/${widget.pipeline.id}');
         break;
       case 8: // Purchase Order
+        if (!isAdminOrManager && !isPurchase) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You do not have permission to view Purchase Order documents.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
         context.push('/purchase-orders/${widget.pipeline.id}');
         break;
     }

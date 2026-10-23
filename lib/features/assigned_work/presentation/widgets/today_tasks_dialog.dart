@@ -240,6 +240,11 @@ class TodayTasksDialog extends ConsumerWidget {
                                 break;
                             }
 
+                            final now = DateTime.now();
+                            final today = DateTime(now.year, now.month, now.day);
+                            final taskDay = DateTime(task.taskDate.year, task.taskDate.month, task.taskDate.day);
+                            final isPastDayCompleted = isDone && (taskDay.isBefore(today) || (task.completedAt != null && DateTime(task.completedAt!.year, task.completedAt!.month, task.completedAt!.day).isBefore(today)));
+
                             return Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -254,24 +259,45 @@ class TodayTasksDialog extends ConsumerWidget {
                                 children: [
                                   // Checkbox
                                   InkWell(
-                                    onTap: () {
-                                      ref.read(assignedWorkActionsProvider).toggleComplete(task.id, !isDone);
-                                    },
+                                    onTap: isPastDayCompleted
+                                        ? () {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Icon(Icons.lock_outline, color: Colors.white, size: 16),
+                                                    SizedBox(width: 8),
+                                                    Expanded(child: Text('Cannot undo tasks completed on a previous day.')),
+                                                  ],
+                                                ),
+                                                backgroundColor: Color(0xFFB45309),
+                                                behavior: SnackBarBehavior.floating,
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                          }
+                                        : () {
+                                            ref.read(assignedWorkActionsProvider).toggleComplete(task.id, !isDone);
+                                          },
                                     borderRadius: BorderRadius.circular(6),
                                     child: Container(
                                       width: 22,
                                       height: 22,
                                       margin: const EdgeInsets.only(top: 2),
                                       decoration: BoxDecoration(
-                                        color: isDone ? const Color(0xFF10B981) : Colors.white,
+                                        color: isPastDayCompleted
+                                            ? const Color(0xFFD1FAE5)
+                                            : (isDone ? const Color(0xFF10B981) : Colors.white),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: isDone ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                          color: isPastDayCompleted
+                                              ? const Color(0xFF6EE7B7)
+                                              : (isDone ? const Color(0xFF10B981) : const Color(0xFF94A3B8)),
                                           width: 1.8,
                                         ),
                                       ),
                                       child: isDone
-                                          ? const Icon(Icons.check, size: 15, color: Colors.white)
+                                          ? Icon(isPastDayCompleted ? Icons.lock : Icons.check, size: 14, color: isPastDayCompleted ? const Color(0xFF047857) : Colors.white)
                                           : null,
                                     ),
                                   ),
@@ -414,6 +440,44 @@ class TodayTasksDialog extends ConsumerWidget {
                                                 ),
                                               ],
                                             ),
+                                          ),
+                                        ],
+                                        if (isDone && task.completedAt != null) ...[
+                                          const SizedBox(height: 6),
+                                          Builder(
+                                            builder: (context) {
+                                              final completerName = (task.completedByUserName != null && task.completedByUserName!.trim().isNotEmpty)
+                                                  ? task.completedByUserName!.trim()
+                                                  : (task.assignedToUserName.trim().isNotEmpty ? task.assignedToUserName.trim() : task.assignedByUserName.trim());
+                                              return Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFECFDF5),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      isPastDayCompleted ? Icons.lock : Icons.check_circle,
+                                                      size: 11,
+                                                      color: const Color(0xFF059669),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Completed ${DateFormat('dd MMM, hh:mm a').format(task.completedAt!)}'
+                                                      '${completerName.isNotEmpty ? ' by $completerName' : ''}',
+                                                      style: const TextStyle(
+                                                        fontFamily: 'Inter',
+                                                        fontSize: 9.5,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Color(0xFF065F46),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ],
                                       ],

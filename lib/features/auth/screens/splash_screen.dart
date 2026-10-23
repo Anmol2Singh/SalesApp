@@ -192,7 +192,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       case UserRole.installation:
         return AppRoutes.installationsDashboard;
       case UserRole.accounts:
-        return AppRoutes.projectManager;
+        return AppRoutes.accountsDashboard;
     }
   }
 }

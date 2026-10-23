@@ -480,7 +480,19 @@ class _PipelineDetailContent extends ConsumerWidget {
                 const SizedBox(height: 16),
                 StepTrackerWidget(
                   productId: pipeline.productId,
-                  currentStep: isDealCompleted ? PipelineStep.completed : pipeline.currentStep,
+                  currentStep: () {
+                    final roles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+                    final isBoqOnly = roles.contains(UserRole.boq) &&
+                        !roles.contains(UserRole.admin) &&
+                        !roles.contains(UserRole.manager) &&
+                        !roles.contains(UserRole.salesHead) &&
+                        !roles.contains(UserRole.factory) &&
+                        !roles.contains(UserRole.purchase);
+                    if (isBoqOnly) {
+                      return pipeline.boq != null ? PipelineStep.factoryOrder : PipelineStep.boq;
+                    }
+                    return isDealCompleted ? PipelineStep.completed : pipeline.currentStep;
+                  }(),
                   stepsConfig: pipeline.stepsConfig,
                   pdfUrls: {
                     if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.sales || profile?.primaryRole == UserRole.salesHead) ...{
@@ -853,19 +865,31 @@ class _StepActionCard extends ConsumerWidget {
     final isLocked = (!hasData && (stepIndex > currentStepIndex)) || isStepBlockedByApproval;
 
     // A step is only visually "completed" if it actually has data filled in
-    final displayCompleted = hasData && (step != PipelineStep.quotation || !isQuotationPending);
-    final displayActive = !hasData && !isLocked && (isActive || isCompleted);
-
-    // Show action section when: the step is the current active step OR step has data (completed)
-    // Or when the step is earlier than current (so Sales Head/Admin can fill missing steps)
-    final showActionSection = !isLocked && (isActive || isCompleted || hasData);
-    
-    // Post-Approval Lock and 100% Completion Lock
     final currentRoles = ref.watch(currentProfileProvider)?.roles ?? [];
     final isAdmin = currentRoles.contains(UserRole.admin);
     final isSalesHead = currentRoles.contains(UserRole.salesHead);
     final is100PercentComplete = pipeline.status == PipelineStatus.completed;
     final canApproveQuotations = currentRoles.any((r) => r.canApproveQuotations);
+
+    // BOQ role: cannot see Factory Order (step 4) or Purchase Order (step 5) as completed/active
+    final isBoqOnlyRole = currentRoles.contains(UserRole.boq) &&
+        !currentRoles.contains(UserRole.admin) &&
+        !currentRoles.contains(UserRole.manager) &&
+        !currentRoles.contains(UserRole.salesHead) &&
+        !currentRoles.contains(UserRole.factory) &&
+        !currentRoles.contains(UserRole.purchase);
+    final isRestrictedStepForBoq = isBoqOnlyRole &&
+        (step == PipelineStep.factoryOrder || step == PipelineStep.purchaseOrder);
+
+    final displayCompleted = hasData &&
+        (step != PipelineStep.quotation || !isQuotationPending) &&
+        !isRestrictedStepForBoq;
+    final displayActive = !hasData && !isLocked && !isRestrictedStepForBoq && (isActive || isCompleted);
+
+    // Show action section when: the step is the current active step OR step has data (completed)
+    // Or when the step is earlier than current (so Sales Head/Admin can fill missing steps)
+    // BOQ role cannot see action section for factory/purchase steps
+    final showActionSection = !isLocked && !isRestrictedStepForBoq && (isActive || isCompleted || hasData);
     
     bool isButtonEnabled = !isLocked;
     String buttonText = hasData ? 'View / Edit' : 'Fill In';

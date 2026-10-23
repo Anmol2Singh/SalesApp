@@ -221,18 +221,24 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
 
                       final isAssignedToMe = !isWon && lead.assignedTo != null && lead.assignedTo == profile?.id;
 
+                      final isReassignReq = !isWon && lead.reassignmentRequested;
+
                       return Card(
                         elevation: 0,
-                        color: hasPendingApproval
-                            ? const Color(0xFFFFFDF5)
-                            : (isAssignedToMe ? const Color(0xFFFFFDF5) : AppColors.surface),
+                        color: isReassignReq
+                            ? const Color(0xFFFFFBEB)
+                            : (hasPendingApproval
+                                ? const Color(0xFFFFFDF5)
+                                : (isAssignedToMe ? const Color(0xFFFFFDF5) : AppColors.surface)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: hasPendingApproval
+                            color: isReassignReq
                                 ? const Color(0xFFF59E0B)
-                                : (isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withOpacity(0.5)),
-                            width: hasPendingApproval ? 1.4 : (isAssignedToMe ? 1.2 : 1),
+                                : (hasPendingApproval
+                                    ? const Color(0xFFF59E0B)
+                                    : (isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withOpacity(0.5))),
+                            width: (isReassignReq || hasPendingApproval) ? 1.6 : (isAssignedToMe ? 1.2 : 1),
                           ),
                         ),
                         child: ListTile(
@@ -347,25 +353,26 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                                   ),
                                 ),
                               ],
-                              if (isAdmin && !isWon && lead.reassignmentRequested) ...[
+                              if (!isWon && lead.reassignmentRequested) ...[
                                 const SizedBox(height: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: AppColors.warningLight,
+                                    color: const Color(0xFFFEF3C7),
                                     borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFF59E0B)),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.warning_amber_rounded, size: 11, color: AppColors.warning),
+                                      Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFB45309)),
                                       SizedBox(width: 3),
                                       Text(
                                         'Reassign Requested',
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: AppColors.warning,
+                                          color: Color(0xFFB45309),
                                         ),
                                       ),
                                     ],

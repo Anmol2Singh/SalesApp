@@ -40,6 +40,26 @@ class Communication {
     );
   }
 
+  Communication copyWith({
+    String? id,
+    String? leadId,
+    String? type,
+    String? summary,
+    String? loggedBy,
+    String? loggedByName,
+    DateTime? createdAt,
+  }) {
+    return Communication(
+      id: id ?? this.id,
+      leadId: leadId ?? this.leadId,
+      type: type ?? this.type,
+      summary: summary ?? this.summary,
+      loggedBy: loggedBy ?? this.loggedBy,
+      loggedByName: loggedByName ?? this.loggedByName,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'lead_id': leadId,
@@ -49,3 +69,4 @@ class Communication {
     };
   }
 }
+
