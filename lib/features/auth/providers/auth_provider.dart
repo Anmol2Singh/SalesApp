@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
+import '../../../core/services/notification_service.dart';
 
 // Current auth user (Supabase User)
 final authUserProvider = StreamProvider<User?>((ref) {
@@ -473,6 +474,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   Future<void> signOut() async {
     state = const AsyncValue.loading();
     try {
+      await NotificationService.unregisterDeviceToken(_supabase);
       await _clearLocalSessions();
       await _supabase.auth.signOut();
       state = const AsyncValue.data(null);

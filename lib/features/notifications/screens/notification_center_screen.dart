@@ -17,6 +17,9 @@ class NotificationCenterScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsNotifierProvider);
 
+    final unreadCountAsync = ref.watch(unreadNotificationCountProvider);
+    final unreadCount = unreadCountAsync.value ?? 0;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -34,94 +37,172 @@ class NotificationCenterScreen extends ConsumerWidget {
           },
         ),
         backgroundColor: AppColors.navBarColor,
-        title: const Text('Notifications'),
+        title: Row(
+          children: [
+            const Text(
+              'Notifications',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+            if (unreadCount > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$unreadCount',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () => ref
-                .read(notificationsNotifierProvider.notifier)
-                .markAllAsRead(),
-            child: const Text(
+            onPressed: unreadCount > 0
+                ? () => ref
+                    .read(notificationsNotifierProvider.notifier)
+                    .markAllAsRead()
+                : null,
+            child: Text(
               'Mark all read',
               style: TextStyle(
-                color: Colors.white,
+                color: unreadCount > 0 ? Colors.white : Colors.white38,
                 fontFamily: 'Inter',
                 fontSize: 13,
+                fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ),
         ],
       ),
-      body: notificationsAsync.when(
-        data: (notifications) {
-          if (notifications.isEmpty) {
-            return Center(
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => ref.read(notificationsNotifierProvider.notifier).refresh(),
+        child: notificationsAsync.when(
+          data: (notifications) {
+            if (notifications.isEmpty) {
+              return LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySurface,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.notifications_none_rounded,
+                              size: 40,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No Notifications',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "You're all caught up!",
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            "Swipe down to refresh",
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textDisabled,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+              itemCount: notifications.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final n = notifications[index];
+                return _NotificationTile(
+                  notification: n,
+                  onTap: () {
+                    ref
+                        .read(notificationsNotifierProvider.notifier)
+                        .markAsRead(n.id);
+                    if (n.relatedPipelineId != null && n.relatedPipelineId!.isNotEmpty) {
+                      context.push(
+                        AppRoutes.pipelineDetail
+                            .replaceAll(':id', n.relatedPipelineId!),
+                      );
+                    } else if (n.relatedAmcId != null && n.relatedAmcId!.isNotEmpty) {
+                      context.push('/amc/details/${n.relatedAmcId}');
+                    }
+                  },
+                );
+              },
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+          error: (e, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySurface,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.notifications_none,
-                      size: 40,
-                      color: AppColors.primary,
-                    ),
-                  ),
+                  const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                  const SizedBox(height: 12),
+                  Text('Failed to load notifications: $e',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.textSecondary)),
                   const SizedBox(height: 16),
-                  const Text(
-                    'No Notifications',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "You're all caught up!",
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: AppColors.textSecondary,
-                    ),
+                  ElevatedButton(
+                    onPressed: () =>
+                        ref.read(notificationsNotifierProvider.notifier).refresh(),
+                    child: const Text('Retry'),
                   ),
                 ],
               ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-            itemCount: notifications.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final n = notifications[index];
-              return _NotificationTile(
-                notification: n,
-                onTap: () {
-                  ref
-                      .read(notificationsNotifierProvider.notifier)
-                      .markAsRead(n.id);
-                  if (n.relatedPipelineId != null) {
-                    context.push(
-                      AppRoutes.pipelineDetail
-                          .replaceAll(':id', n.relatedPipelineId!),
-                    );
-                  } else if (n.relatedAmcId != null) {
-                    context.push('/amc/details/${n.relatedAmcId}');
-                  }
-                },
-              );
-            },
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          ),
         ),
-        error: (e, _) => Center(child: Text('Error: $e')),
       ),
     );
   }
@@ -150,7 +231,7 @@ class _NotificationTile extends StatelessWidget {
           border: Border.all(
             color: notification.isRead
                 ? AppColors.border
-                : AppColors.primary.withOpacity(0.2),
+                : AppColors.primary.withValues(alpha: 0.2),
           ),
         ),
         child: Row(

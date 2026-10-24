@@ -90,13 +90,16 @@ class PdfQuotationBuilder {
 
     HeatPumpModel resolvedHp = quotation.model;
     final matchedHp = effectiveSettings.models.cast<HeatPumpModel?>().firstWhere(
-      (m) => m != null && (m.id == resolvedHp.id ||
+      (m) => m != null && (m.id.toLowerCase() == resolvedHp.id.toLowerCase() ||
              m.modelName.toLowerCase() == resolvedHp.modelName.toLowerCase() ||
              (m.displayCapacityKw - resolvedHp.displayCapacityKw).abs() < 0.1),
       orElse: () => null,
     );
-    if (matchedHp != null) {
-      resolvedHp = matchedHp;
+    if (matchedHp != null && matchedHp.specs.isNotEmpty) {
+      resolvedHp = matchedHp.copyWith(
+        displayCapacityKw: quotation.model.displayCapacityKw > 0 ? quotation.model.displayCapacityKw : matchedHp.displayCapacityKw,
+        specs: Map<String, String>.from(matchedHp.specs),
+      );
     }
 
     final annexureResolver = DynamicAnnexureResolver(
@@ -502,20 +505,23 @@ class PdfQuotationBuilder {
     pw.Widget withWatermark(pw.Widget content) {
       if (isConfirmed) return content;
       return pw.Stack(
+        fit: pw.StackFit.expand,
         children: [
           content,
           pw.Positioned.fill(
             child: pw.Center(
-              child: pw.Transform.rotateBox(
+              child: pw.Transform.rotate(
                 angle: -0.5,
                 child: pw.Opacity(
-                  opacity: 0.12,
+                  opacity: 0.28,
                   child: pw.Text(
                     'DRAFT - NOT APPROVED',
+                    maxLines: 1,
                     style: pw.TextStyle(
-                      fontSize: 44,
+                      fontSize: 38,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.red900,
+                      color: PdfColors.red800,
+                      letterSpacing: 3.0,
                     ),
                   ),
                 ),
@@ -922,7 +928,7 @@ class PdfQuotationBuilder {
                         fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                   ),
                   pw.SizedBox(height: 1.5),
-                  _buildHpSpecTable(quotation, effectiveSettings),
+                  _buildHpSpecTable(quotation.copyWith(model: resolvedHp), effectiveSettings),
 
                   // For HP Only, show Banner immediately beneath to fill empty space
                   if (quotation.quoteType == QuoteType.hpOnly && bannerImage != null) ...[
@@ -2505,26 +2511,41 @@ class PdfQuotationBuilder {
 
     // Resolve specs for single heat pump model from q.model or directly from settings module
     Map<String, String> activeSpecs = Map.from(q.model.specs);
-    if (activeSpecs.isEmpty) {
-      final allSettingModels = [
-        ...settings.models,
-        ...settings.allInOneModels,
-        ...settings.poolModels,
-      ];
-      final targetName = q.model.modelName.trim().toLowerCase();
-      final match = allSettingModels.cast<HeatPumpModel?>().firstWhere(
-        (m) =>
-            (targetName.isNotEmpty && m?.modelName.trim().toLowerCase() == targetName) ||
-            (q.model.id.isNotEmpty && m?.id == q.model.id),
-        orElse: () => null,
-      );
-      if (match != null && match.specs.isNotEmpty) {
-        activeSpecs = Map.from(match.specs);
-      }
+    final targetName = q.model.modelName.trim().toLowerCase();
+    final match = settings.models.cast<HeatPumpModel?>().firstWhere(
+      (m) =>
+          m != null &&
+          ((targetName.isNotEmpty && m.modelName.trim().toLowerCase() == targetName) ||
+              (q.model.id.isNotEmpty && m.id.toLowerCase() == q.model.id.toLowerCase()) ||
+              (m.displayCapacityKw - q.model.displayCapacityKw).abs() < 0.1),
+      orElse: () => null,
+    );
+    if (match != null && match.specs.isNotEmpty) {
+      activeSpecs = Map.from(match.specs);
+    } else if (activeSpecs.isEmpty) {
+      debugPrint('[PdfQuotationBuilder] Using fallback default specs for ${q.model.modelName} - no Module Settings found');
     }
 
+    // Resolve each HeatPumpLineItem's specs from Module Settings if missing
+    final List<HeatPumpLineItem> resolvedHpList = hpList.map<HeatPumpLineItem>((h) {
+      if (h.specs.isNotEmpty) return h;
+      final lineTargetName = h.modelName.trim().toLowerCase();
+      final lineMatch = settings.models.cast<HeatPumpModel?>().firstWhere(
+        (m) =>
+            m != null &&
+            ((lineTargetName.isNotEmpty && m.modelName.trim().toLowerCase() == lineTargetName) ||
+                (h.id.isNotEmpty && m.id.toLowerCase() == h.id.toLowerCase()) ||
+                (m.displayCapacityKw - h.kw).abs() < 0.1),
+        orElse: () => null,
+      );
+      if (lineMatch != null && lineMatch.specs.isNotEmpty) {
+        return h.copyWith(specs: Map<String, String>.from(lineMatch.specs));
+      }
+      return h;
+    }).toList();
+
     // If single heat pump and model has dynamic specs configured, render them directly
-    if (hpList.length <= 1 && activeSpecs.isNotEmpty) {
+    if (resolvedHpList.length <= 1 && activeSpecs.isNotEmpty) {
       int idx = 1;
       return activeSpecs.entries.map((entry) {
         final sl = (idx < 10) ? '0$idx' : '$idx';
@@ -2544,6 +2565,40 @@ class PdfQuotationBuilder {
       }).toList();
     }
 
+    // Dynamic Multi-HP column support: Gather all specification keys configured in Module Settings
+    final specKeys = <String>[];
+    for (final k in activeSpecs.keys) {
+      if (!specKeys.contains(k)) specKeys.add(k);
+    }
+    for (final h in resolvedHpList) {
+      for (final k in h.specs.keys) {
+        if (!specKeys.contains(k)) specKeys.add(k);
+      }
+    }
+
+    if (specKeys.isNotEmpty) {
+      int idx = 1;
+      return specKeys.map((key) {
+        final sl = (idx < 10) ? '0$idx' : '$idx';
+        idx++;
+        return pw.TableRow(
+          children: [
+            _tc(sl, center: true),
+            _tc(key),
+            ...resolvedHpList.map((HeatPumpLineItem h) {
+              String val = h.specs[key] ?? activeSpecs[key] ?? '-';
+              if (key.toLowerCase().contains('capacity in litre') ||
+                  key.toLowerCase().contains('capacity in ltr')) {
+                val = tankCap;
+              }
+              return _tc(val, center: true);
+            }),
+          ],
+        );
+      }).toList();
+    }
+
+    debugPrint('[PdfQuotationBuilder] Using fallback rowsData for multi-HP - no Module Settings found');
     final rowsData = [
       [
         '01',
@@ -2655,6 +2710,7 @@ class PdfQuotationBuilder {
       );
     }
 
+    debugPrint('[PdfQuotationBuilder] Using fallback default specs for PoolHeatPumpModel (${m.modelName}) - no Module Settings found');
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
       columnWidths: {
@@ -2748,6 +2804,7 @@ class PdfQuotationBuilder {
       );
     }
 
+    debugPrint('[PdfQuotationBuilder] Using fallback default specs for AllInOneModel (${m.modelName}) - no Module Settings found');
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
       columnWidths: {

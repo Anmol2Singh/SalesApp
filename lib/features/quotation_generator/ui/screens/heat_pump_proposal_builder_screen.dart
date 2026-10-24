@@ -116,14 +116,17 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         }
       } else {
         // Initial draft from source deal quotation
-        _draft = QgProposalDraft.fromDealQuotation(dealItem);
+        final settings = ref.read(quotationSettingsProvider).valueOrNull ?? await ref.read(quotationRepositoryProvider).getSettings();
+        _draft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
         _isRestoredFromDraft = false;
 
-        // Attempt catalog match for initial specs
-        final catalogService = QgCatalogService(supabase);
-        final specMatch = await catalogService.matchSpecifications(_draft!.hpKw);
-        _draft!.hpSpecs = specMatch.specs;
-        _draft!.specsCopiedFrom = specMatch.specsCopiedFrom;
+        // If Module Settings didn't have specs for this model, attempt catalog match
+        if (_draft!.specsCopiedFrom == null || !_draft!.specsCopiedFrom!.startsWith('Module Settings')) {
+          final catalogService = QgCatalogService(supabase);
+          final specMatch = await catalogService.matchSpecifications(_draft!.hpKw);
+          _draft!.hpSpecs = specMatch.specs;
+          _draft!.specsCopiedFrom = specMatch.specsCopiedFrom;
+        }
 
         // Save initial draft
         await QgDraftsService.saveDraft(_draft!);
@@ -254,10 +257,13 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       final supabase = ref.read(supabaseClientProvider);
       final catalogService = QgCatalogService(supabase);
 
-      final freshDraft = QgProposalDraft.fromDealQuotation(_dealQuotation!);
-      final specMatch = await catalogService.matchSpecifications(freshDraft.hpKw);
-      freshDraft.hpSpecs = specMatch.specs;
-      freshDraft.specsCopiedFrom = specMatch.specsCopiedFrom;
+      final settings = ref.read(quotationSettingsProvider).valueOrNull ?? await ref.read(quotationRepositoryProvider).getSettings();
+      final freshDraft = QgProposalDraft.fromDealQuotation(_dealQuotation!, settings: settings);
+      if (freshDraft.specsCopiedFrom == null || !freshDraft.specsCopiedFrom!.startsWith('Module Settings')) {
+        final specMatch = await catalogService.matchSpecifications(freshDraft.hpKw);
+        freshDraft.hpSpecs = specMatch.specs;
+        freshDraft.specsCopiedFrom = specMatch.specsCopiedFrom;
+      }
 
       await QgDraftsService.saveDraft(freshDraft);
 

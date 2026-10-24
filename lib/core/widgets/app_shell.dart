@@ -942,6 +942,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
+                    badgeCount: unreadCount,
                   ),
 
                 // Specific role tasks for technicians, factory, purchase, boq
@@ -1036,6 +1037,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     required Color selectedTextColor,
     required Color unselectedTextColor,
     required Color selectedBgColor,
+    int badgeCount = 0,
   }) {
     final isCollapsed = ref.watch(sidebarCollapsedProvider);
     final isSelected = widget.currentRoute == route || (route != '/' && widget.currentRoute.startsWith(route));
@@ -1068,7 +1070,20 @@ class _AppShellState extends ConsumerState<AppShell> {
                     color: isSelected ? selectedTextColor : unselectedTextColor,
                     size: 20,
                   ),
-                  child: isSelected ? selectedIcon : icon,
+                  child: badgeCount > 0
+                      ? Badge(
+                          label: Text(
+                            badgeCount > 99 ? '99+' : '$badgeCount',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          backgroundColor: AppColors.error,
+                          child: isSelected ? selectedIcon : icon,
+                        )
+                      : (isSelected ? selectedIcon : icon),
                 ),
               ),
             ),
@@ -1120,6 +1135,23 @@ class _AppShellState extends ConsumerState<AppShell> {
                     ),
                   ),
                 ),
+                if (badgeCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1627,7 +1659,20 @@ class _AppShellState extends ConsumerState<AppShell> {
                                           ? (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
                                           : (isDark ? Colors.white60 : AppColors.textSecondary),
                                     ),
-                                    child: isSelected ? item.selectedIcon : item.icon,
+                                    child: (item.route == AppRoutes.notifications && unreadCount > 0)
+                                        ? Badge(
+                                            label: Text(
+                                              unreadCount > 99 ? '99+' : '$unreadCount',
+                                              style: const TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            backgroundColor: AppColors.error,
+                                            child: isSelected ? item.selectedIcon : item.icon,
+                                          )
+                                        : (isSelected ? item.selectedIcon : item.icon),
                                   ),
                                 ),
                               ),

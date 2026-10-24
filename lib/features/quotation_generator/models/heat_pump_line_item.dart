@@ -25,6 +25,30 @@ class HeatPumpLineItem {
     this.specs = const {},
   }) : amount = amount ?? (rate * qty);
 
+  HeatPumpLineItem copyWith({
+    String? id,
+    String? modelName,
+    double? kw,
+    int? qty,
+    int? rate,
+    int? amount,
+    String? description,
+    HeatPumpModel? model,
+    Map<String, String>? specs,
+  }) {
+    return HeatPumpLineItem(
+      id: id ?? this.id,
+      modelName: modelName ?? this.modelName,
+      kw: kw ?? this.kw,
+      qty: qty ?? this.qty,
+      rate: rate ?? this.rate,
+      amount: amount ?? this.amount,
+      description: description ?? this.description,
+      model: model ?? this.model,
+      specs: specs ?? this.specs,
+    );
+  }
+
   String get kwDisplay => (kw == kw.toInt()) ? '${kw.toInt()}' : '$kw';
 
   HeatPumpModel toModel() {

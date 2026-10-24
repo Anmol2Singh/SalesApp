@@ -32,7 +32,10 @@ import '../../quotation_generator/templates/qg_template_registry.dart';
 import '../../quotation_generator/templates/boom_barrier_template.dart';
 import '../../quotation_generator/ui/screens/boom_barrier_preview_screen.dart';
 import '../../quotation_generator/models/qg_proposal_draft.dart';
+import '../../quotation_generator/models/heat_pump_model.dart';
 import '../../quotation_generator/services/qg_drafts_service.dart';
+import '../../../core/utils/global_click_guard.dart';
+import '../../../core/widgets/pdf_loading_dialog.dart';
 
 class LeadDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -830,7 +833,16 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
 );
   }
 
+  bool _isGeneratingReport = false;
   Future<void> _downloadReportPdf(BuildContext context, WidgetRef ref, Lead lead, Prospect? prospect) async {
+    if (_isGeneratingReport || !GlobalClickGuard.canClick()) return;
+    _isGeneratingReport = true;
+    final dismissLoading = PdfLoadingDialog.show(
+      context,
+      title: 'Generating Lead Report PDF...',
+      message: 'Compiling lead communications & activity.\nPlease wait...',
+    );
+
     try {
       final comms = ref.read(leadCommunicationsProvider(lead.id)).value ?? [];
       final pdfBytes = await CrmPdfService.generateLeadReportPdf(
@@ -841,6 +853,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
       final cleanName = (lead.prospectName ?? 'Lead').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
       final fileName = '${cleanName}_Communication_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
 
+      dismissLoading();
       if (context.mounted) {
         Navigator.push(
           context,
@@ -853,11 +866,14 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
         );
       }
     } catch (e) {
+      dismissLoading();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error generating PDF: $e'), backgroundColor: AppColors.error),
         );
       }
+    } finally {
+      _isGeneratingReport = false;
     }
   }
 
@@ -1500,6 +1516,7 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        bool isSubmitting = false;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final typeList = ref.watch(crmInteractionTypesProvider).value ?? CrmInteractionTypesNotifier.defaultTypes;
@@ -1582,20 +1599,40 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: () async {
-                      if (summaryCtrl.text.trim().isEmpty) return;
-                      await ref.read(leadCommunicationsProvider(leadId).notifier).logCommunication(
-                            type: selectedType,
-                            summary: summaryCtrl.text.trim(),
-                          );
-                      if (ctx.mounted) {
-                        ctx.pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Interaction logged!'), backgroundColor: AppColors.success),
-                        );
-                      }
-                    },
-                    child: const Text('Save Interaction', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            if (summaryCtrl.text.trim().isEmpty) return;
+                            if (!GlobalClickGuard.canClick()) return;
+
+                            setSheetState(() => isSubmitting = true);
+                            GlobalClickGuard.setBusy(true);
+
+                            try {
+                              await ref.read(leadCommunicationsProvider(leadId).notifier).logCommunication(
+                                    type: selectedType,
+                                    summary: summaryCtrl.text.trim(),
+                                  );
+                              if (ctx.mounted) {
+                                ctx.pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Interaction logged!'), backgroundColor: AppColors.success),
+                                );
+                              }
+                            } finally {
+                              GlobalClickGuard.setBusy(false);
+                              if (ctx.mounted) {
+                                setSheetState(() => isSubmitting = false);
+                              }
+                            }
+                          },
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Save Interaction', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -2745,6 +2782,8 @@ class _LeadQuotationsSection extends ConsumerStatefulWidget {
 class _LeadQuotationsSectionState
     extends ConsumerState<_LeadQuotationsSection> {
   bool _isLoading = true;
+  bool _isPdfActionBusy = false;
+  bool _isNavigatingToQuotationForm = false;
   List<Quotation> _quotations = [];
 
   @override
@@ -2779,6 +2818,8 @@ class _LeadQuotationsSectionState
   }
 
   Future<void> _viewPdf(Quotation quot) async {
+    if (_isPdfActionBusy || !GlobalClickGuard.canClick()) return;
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final choice = await showDialog<String>(
       context: context,
@@ -2867,7 +2908,10 @@ class _LeadQuotationsSectionState
                 // Card 1: Single Page Quotation
                 InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: () => Navigator.pop(ctx, 'single'),
+                  onTap: () {
+                    if (!GlobalClickGuard.canClick()) return;
+                    Navigator.pop(ctx, 'single');
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -2932,7 +2976,10 @@ class _LeadQuotationsSectionState
                 // Card 2: Multi-Page Quotation (Highlighted)
                 InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: () => Navigator.pop(ctx, 'multi'),
+                  onTap: () {
+                    if (!GlobalClickGuard.canClick()) return;
+                    Navigator.pop(ctx, 'multi');
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -3041,7 +3088,16 @@ class _LeadQuotationsSectionState
 
     if (choice == null) return;
 
+    _isPdfActionBusy = true;
+    GlobalClickGuard.setBusy(true);
+
     if (choice == 'multi') {
+      final dismissLoading = PdfLoadingDialog.show(
+        context,
+        title: 'Preparing Multi-Page Proposal...',
+        message: 'Loading specifications, equipment details & terms.\nPlease wait...',
+      );
+
       try {
         // Detect product from Lead product name, quotation line items, and product ID
         final leadProd = widget.lead.productName.trim();
@@ -3054,7 +3110,7 @@ class _LeadQuotationsSectionState
             combinedProduct.contains('barrier');
 
         if (isBoomBarrier) {
-          final prodKey = (quot.productId != null && quot.productId!.isNotEmpty) ? quot.productId : 'Boom Barrier';
+          final prodKey = quot.productId.isNotEmpty ? quot.productId : 'Boom Barrier';
           final company = ref.read(companyForProductProvider(prodKey));
           final profile = QgProductProfile.defaultBoomBarrier().withAppCompany(company).copyWith(
             logoPath: (company.logoUrl != null && !company.logoUrl!.contains('logo.png'))
@@ -3099,6 +3155,8 @@ class _LeadQuotationsSectionState
           }
 
           if (mounted) {
+            dismissLoading();
+            GlobalClickGuard.setBusy(false);
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -3179,11 +3237,31 @@ class _LeadQuotationsSectionState
           productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Heat Pump',
         );
 
-        QgProposalDraft? draft = await QgDraftsService.loadDraft(quot.id);
-        draft ??= QgProposalDraft.fromDealQuotation(dealItem);
+        final QgProposalDraft draft = (await QgDraftsService.loadDraft(quot.id)) ??
+            QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
+
+        // Ensure draft specs are in sync with Module Settings
+        if (settings.models.isNotEmpty) {
+          final matchedHp = settings.models.cast<HeatPumpModel?>().firstWhere(
+            (m) =>
+                m != null &&
+                (m.id.toLowerCase() == draft.hpModel.toLowerCase() ||
+                    m.modelName.toLowerCase() == draft.hpModel.toLowerCase() ||
+                    (m.displayCapacityKw - draft.hpKw).abs() < 0.1),
+            orElse: () => null,
+          );
+          if (matchedHp != null && matchedHp.specs.isNotEmpty) {
+            draft.hpSpecs = Map<String, String>.from(matchedHp.specs);
+            draft.specsCopiedFrom = 'Module Settings: ${matchedHp.modelName}';
+          }
+        }
+        await QgDraftsService.saveDraft(draft);
+
         final genQuot = draft.toGeneratorQuotation(settings: settings);
 
         if (mounted) {
+          dismissLoading();
+          GlobalClickGuard.setBusy(false);
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -3203,9 +3281,23 @@ class _LeadQuotationsSectionState
             ),
           );
         }
+      } finally {
+        dismissLoading();
+        GlobalClickGuard.setBusy(false);
+        if (mounted) {
+          setState(() => _isPdfActionBusy = false);
+        } else {
+          _isPdfActionBusy = false;
+        }
       }
       return;
     }
+
+    final dismissLoading = PdfLoadingDialog.show(
+      context,
+      title: 'Generating Quotation PDF...',
+      message: 'Preparing single-page commercial offer & BOQ summary.\nPlease wait...',
+    );
 
     try {
       final supabase = ref.read(supabaseClientProvider);
@@ -3276,6 +3368,8 @@ class _LeadQuotationsSectionState
         final fileName = quot.revision > 0
             ? '${quot.quotationNumber.replaceAll('/', '_')}_Rev${quot.revision}.pdf'
             : '${quot.quotationNumber.replaceAll('/', '_')}.pdf';
+        dismissLoading();
+        GlobalClickGuard.setBusy(false);
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -3294,6 +3388,14 @@ class _LeadQuotationsSectionState
             backgroundColor: AppColors.error,
           ),
         );
+      }
+    } finally {
+      dismissLoading();
+      GlobalClickGuard.setBusy(false);
+      if (mounted) {
+        setState(() => _isPdfActionBusy = false);
+      } else {
+        _isPdfActionBusy = false;
       }
     }
   }
@@ -3446,38 +3548,47 @@ class _LeadQuotationsSectionState
   }
 
   void _openCreateQuotation({Quotation? initialQuotation}) async {
-    final profile = ref.read(currentProfileProvider);
-    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
-    final isWon = widget.lead.status == 'Won';
-    if (isWon && !isAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Customer is Won. Creating new quotations or revisions is blocked.'),
-          backgroundColor: AppColors.error,
+    if (_isNavigatingToQuotationForm || !GlobalClickGuard.canClick()) return;
+    _isNavigatingToQuotationForm = true;
+    try {
+      final profile = ref.read(currentProfileProvider);
+      final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
+      final isWon = widget.lead.status == 'Won';
+      if (isWon && !isAdmin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer is Won. Creating new quotations or revisions is blocked.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      if (!widget.canCreateQuotation) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => QuotationFormScreen(
+            leadId: widget.lead.id,
+            initialQuotation: initialQuotation,
+            revisionNumber: initialQuotation != null ? initialQuotation.revision + 1 : null,
+          ),
         ),
       );
-      return;
+      _loadQuotations();
+    } finally {
+      if (mounted) {
+        setState(() => _isNavigatingToQuotationForm = false);
+      } else {
+        _isNavigatingToQuotationForm = false;
+      }
     }
-
-    if (!widget.canCreateQuotation) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (ctx) => QuotationFormScreen(
-          leadId: widget.lead.id,
-          initialQuotation: initialQuotation,
-          revisionNumber: initialQuotation != null ? initialQuotation.revision + 1 : null,
-        ),
-      ),
-    );
-    _loadQuotations();
   }
 
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat('#,##,##0.00', 'en_IN');
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = (profile?.primaryRole == UserRole.admin) || (profile?.roles.contains(UserRole.admin) ?? false);
     final canApprove = (profile?.primaryRole.canApproveQuotations ?? false) || (profile?.roles.any((r) => r.canApproveQuotations) ?? false);
     final isSalesExecutive = !canApprove;
     final isWon = widget.lead.status == 'Won';

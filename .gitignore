@@ -77,3 +77,10 @@ build/web/assets/NOTICES
 reference
 test
 tools
+
+#Firebase SDK
+google-services.json
+**/google-services.json
+*-firebase-adminsdk-*.json
+*service_account*.json
+

@@ -366,8 +366,8 @@ class QuotationSupabaseRepository {
         productName: prodName.isNotEmpty ? prodName : 'Heat Pump',
       );
 
-      final draft = QgProposalDraft.fromDealQuotation(dealItem);
-      return draft.toGeneratorQuotation();
+      final draft = QgProposalDraft.fromDealQuotation(dealItem, settings: _cachedSettings);
+      return draft.toGeneratorQuotation(settings: _cachedSettings);
     } catch (e) {
       debugPrint('_mapStandardRowToGeneratorQuotation error: $e');
       return null;

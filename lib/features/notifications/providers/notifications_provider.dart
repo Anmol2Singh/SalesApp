@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/models/notification.dart';
 import '../../../core/providers/supabase_provider.dart';
-import '../../../core/services/notification_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 // Notifications list with realtime subscription
@@ -55,7 +54,7 @@ class NotificationsNotifier
     _channel = _supabase
         .channel('notifications_$_userId')
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'notifications',
           filter: PostgresChangeFilter(
@@ -65,19 +64,24 @@ class NotificationsNotifier
           ),
           callback: (payload) {
             if (!mounted) return;
-            final newNotif = AppNotification.fromJson(
-              payload.newRecord,
-            );
             final current = state.value ?? [];
-            state = AsyncValue.data([newNotif, ...current]);
-            
-            // Trigger device push notification
-            NotificationService.showNotification(
-              id: newNotif.hashCode,
-              title: newNotif.title,
-              body: newNotif.body,
-              payload: newNotif.relatedPipelineId ?? newNotif.relatedAmcId,
-            );
+
+            if (payload.eventType == PostgresChangeEvent.insert) {
+              final newNotif = AppNotification.fromJson(payload.newRecord);
+              if (!current.any((n) => n.id == newNotif.id)) {
+                state = AsyncValue.data([newNotif, ...current]);
+              }
+            } else if (payload.eventType == PostgresChangeEvent.update) {
+              final updated = AppNotification.fromJson(payload.newRecord);
+              state = AsyncValue.data(
+                current.map((n) => n.id == updated.id ? updated : n).toList(),
+              );
+            } else if (payload.eventType == PostgresChangeEvent.delete) {
+              final oldId = payload.oldRecord['id'];
+              state = AsyncValue.data(
+                current.where((n) => n.id != oldId).toList(),
+              );
+            }
           },
         )
         .subscribe();

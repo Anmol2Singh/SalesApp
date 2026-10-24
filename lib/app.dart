@@ -12,6 +12,8 @@ import 'core/providers/connectivity_provider.dart';
 import 'core/providers/realtime_provider.dart';
 import 'core/services/offline_queue_service.dart';
 import 'core/services/adaptive_notification_manager.dart';
+import 'core/services/notification_service.dart';
+import 'core/utils/global_click_guard.dart';
 
 class IzyheatApp extends ConsumerWidget {
   const IzyheatApp({super.key});
@@ -20,6 +22,8 @@ class IzyheatApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Keep app-wide dynamic live updates active across all screens and roles
     ref.watch(realtimeSubscriptionProvider);
+    // Manage device push notification registration when user is logged in
+    ref.watch(fcmTokenLifecycleProvider);
 
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(appThemeModeProvider);
@@ -50,6 +54,17 @@ class IzyheatApp extends ConsumerWidget {
             ),
       themeMode: themeMode,
       routerConfig: router,
+      builder: (context, child) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: GlobalClickGuard.isBusyNotifier,
+          builder: (context, isBusy, _) {
+            return AbsorbPointer(
+              absorbing: isBusy,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+        );
+      },
     );
   }
 }

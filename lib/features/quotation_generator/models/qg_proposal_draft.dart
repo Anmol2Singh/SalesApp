@@ -1,5 +1,4 @@
-// lib/features/quotation_generator/models/qg_proposal_draft.dart
-
+import 'package:flutter/foundation.dart';
 import 'deal_quotation_item.dart';
 import 'generator_quotation.dart';
 import 'heat_pump_model.dart';
@@ -167,6 +166,7 @@ class QgProposalDraft {
   /// Initial factory from read-only DealQuotationItem
   factory QgProposalDraft.fromDealQuotation(
     DealQuotationItem q, {
+    GeneratorCompanySettings? settings,
     Map<String, String>? initialHpSpecs,
     String? initialSpecCategory,
     String? initialSpecsCopiedFrom,
@@ -241,8 +241,32 @@ class QgProposalDraft {
       }
     }
 
-    // 5. Default 13-row HP specs
-    final defaultSpecs = initialHpSpecs ?? _buildDefaultHpSpecs(highestKw, derivedHpModel);
+    // 5. HP specs from Module Settings, or initialHpSpecs, or explicit fallback
+    Map<String, String>? specsFromSettings;
+    String? specsCopiedSource = initialSpecsCopiedFrom;
+
+    if (settings != null && settings.models.isNotEmpty) {
+      final matchedHp = settings.models.cast<HeatPumpModel?>().firstWhere(
+        (m) =>
+            m != null &&
+            (m.id.toLowerCase() == derivedHpModel.toLowerCase() ||
+                m.modelName.toLowerCase() == derivedHpModel.toLowerCase() ||
+                (m.displayCapacityKw - highestKw).abs() < 0.1),
+        orElse: () => null,
+      );
+      if (matchedHp != null && matchedHp.specs.isNotEmpty) {
+        specsFromSettings = Map<String, String>.from(matchedHp.specs);
+        specsCopiedSource ??= 'Module Settings: ${matchedHp.modelName}';
+      }
+    }
+
+    final defaultSpecs = initialHpSpecs ??
+        specsFromSettings ??
+        (() {
+          debugPrint(
+              '[QuotationGenerator] Using fallback default specs for $derivedHpModel (${highestKw}kW) - no Module Settings found');
+          return _buildDefaultHpSpecs(highestKw, derivedHpModel);
+        })();
 
     // 6. Tank specifications
     final defaultTankSpecs = _buildDefaultTankSpecs(
@@ -315,7 +339,7 @@ class QgProposalDraft {
       hpModel: derivedHpModel,
       hpKw: highestKw,
       hpSpecs: defaultSpecs,
-      specsCopiedFrom: initialSpecsCopiedFrom,
+      specsCopiedFrom: specsCopiedSource,
       hasTank: hasTankLine,
       tankMaterial: tankMat,
       tankInsulation: 'Puff',
@@ -517,13 +541,21 @@ class QgProposalDraft {
     );
     if (settings != null && settings.models.isNotEmpty) {
       final matchedHp = settings.models.cast<HeatPumpModel?>().firstWhere(
-        (m) => m != null && (m.id == hpModel || m.modelName.toLowerCase() == hpModel.toLowerCase() || (m.displayCapacityKw - hpKw).abs() < 0.1),
+        (m) => m != null && (m.id.toLowerCase() == hpModel.toLowerCase() || m.modelName.toLowerCase() == hpModel.toLowerCase() || (m.displayCapacityKw - hpKw).abs() < 0.1),
         orElse: () => null,
       );
       if (matchedHp != null) {
+        final resolvedSpecs = matchedHp.specs.isNotEmpty
+            ? Map<String, String>.from(matchedHp.specs)
+            : (hpSpecs.isNotEmpty
+                ? Map<String, String>.from(hpSpecs)
+                : (() {
+                    debugPrint('[QuotationGenerator] Using fallback default specs for $hpModel (${hpKw}kW) - no Module Settings found');
+                    return _buildDefaultHpSpecs(hpKw, hpModel);
+                  })());
         heatPumpModel = matchedHp.copyWith(
           displayCapacityKw: hpKw > 0 ? hpKw.toDouble() : matchedHp.displayCapacityKw,
-          specs: hpSpecs.isNotEmpty ? Map<String, String>.from(hpSpecs) : matchedHp.specs,
+          specs: resolvedSpecs,
         );
       }
     }
@@ -539,32 +571,37 @@ class QgProposalDraft {
         Map<String, String>? modelSpecsFromSettings;
         if (settings != null) {
           final matched = settings.models.cast<HeatPumpModel?>().firstWhere(
-            (m) => m != null && (m.id == model || m.modelName.toLowerCase() == model.toLowerCase() || (m.displayCapacityKw - kwVal).abs() < 0.1),
+            (m) => m != null && (m.id.toLowerCase() == model.toLowerCase() || m.modelName.toLowerCase() == model.toLowerCase() || (m.displayCapacityKw - kwVal).abs() < 0.1),
             orElse: () => null,
           );
           if (matched != null && matched.specs.isNotEmpty) {
-            modelSpecsFromSettings = matched.specs;
+            modelSpecsFromSettings = Map<String, String>.from(matched.specs);
           } else {
             final aioMatched = settings.allInOneModels.cast<AllInOneModel?>().firstWhere(
-              (m) => m != null && (m.id == model || m.modelName.toLowerCase() == model.toLowerCase()),
+              (m) => m != null && (m.id.toLowerCase() == model.toLowerCase() || m.modelName.toLowerCase() == model.toLowerCase()),
               orElse: () => null,
             );
             if (aioMatched != null && aioMatched.specs.isNotEmpty) {
-              modelSpecsFromSettings = aioMatched.specs;
+              modelSpecsFromSettings = Map<String, String>.from(aioMatched.specs);
             } else {
               final poolMatched = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
-                (m) => m != null && (m.id == model || m.modelName.toLowerCase() == model.toLowerCase()),
+                (m) => m != null && (m.id.toLowerCase() == model.toLowerCase() || m.modelName.toLowerCase() == model.toLowerCase()),
                 orElse: () => null,
               );
               if (poolMatched != null && poolMatched.specs.isNotEmpty) {
-                modelSpecsFromSettings = poolMatched.specs;
+                modelSpecsFromSettings = Map<String, String>.from(poolMatched.specs);
               }
             }
           }
         }
-        final specs = (model == hpModel && hpSpecs.isNotEmpty)
-            ? hpSpecs
-            : (modelSpecsFromSettings ?? _buildDefaultHpSpecs(kwVal.toInt(), model));
+        final specs = (modelSpecsFromSettings != null && modelSpecsFromSettings.isNotEmpty)
+            ? modelSpecsFromSettings
+            : ((model == hpModel && hpSpecs.isNotEmpty)
+                ? hpSpecs
+                : (() {
+                    debugPrint('[QuotationGenerator] Using fallback default specs for line item $model (${kwVal}kW) - no Module Settings found');
+                    return _buildDefaultHpSpecs(kwVal.toInt(), model);
+                  })());
         hpLineItems.add(HeatPumpLineItem(
           id: 'hp_${hpItemIdx++}',
           modelName: model,
@@ -754,12 +791,14 @@ class QgProposalDraft {
       if (matchedModel != null) {
         resolvedAioModel = matchedModel;
       } else {
+        debugPrint(
+            '[QuotationGenerator] Using fallback default AllInOneModel ($cap Ltr) - no matching model in Module Settings');
         resolvedAioModel = AllInOneModel(
           id: 'IZ-${cap}A',
           modelName: 'All in One ${cap}Ltr',
           mountType: isWallMounted ? 'wall' : 'floor',
           tankVolumeLitres: cap,
-          description: 'Make: IZYHEAT All in one Heat pump\nModel: All in one ${cap}Ltr\nCapacity: ${cap} Ltr\nPower Input: 850W, Output: 3.5KW, 220V/50Hz',
+          description: 'Make: IZYHEAT All in one Heat pump\nModel: All in one ${cap}Ltr\nCapacity: $cap Ltr\nPower Input: 850W, Output: 3.5KW, 220V/50Hz',
           specs: {
             'Product Dimension': cap <= 200 ? '570x1810mm' : '640x1920mm',
             'Power Supply': '220V-240V/50Hz',
@@ -773,6 +812,25 @@ class QgProposalDraft {
             'Net Weight': cap <= 200 ? '93 KG' : '110 KG',
           },
         );
+      }
+    }
+
+    PoolHeatPumpModel? resolvedPoolModel;
+    if (isPool) {
+      if (settings != null && settings.poolModels.isNotEmpty) {
+        resolvedPoolModel = settings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
+          (m) =>
+              m != null &&
+              (m.id.toLowerCase() == hpModel.toLowerCase() ||
+                  m.modelName.toLowerCase() == hpModel.toLowerCase() ||
+                  (m.capacityKw - hpKw).abs() < 0.1),
+          orElse: () => settings.poolModels.first,
+        );
+      }
+      if (resolvedPoolModel == null) {
+        debugPrint(
+            '[QuotationGenerator] Using fallback PoolHeatPumpModel.defaultModel() - no pool models in Module Settings');
+        resolvedPoolModel = PoolHeatPumpModel.defaultModel();
       }
     }
 
@@ -807,7 +865,7 @@ class QgProposalDraft {
       salesMobile: salesmanPhone,
       model: heatPumpModel,
       allInOneModel: resolvedAioModel,
-      poolModel: isPool ? PoolHeatPumpModel.defaultModel() : null,
+      poolModel: resolvedPoolModel,
       heatPumpQty: hpQtyVal,
       heatPumpNumericPrice: hpRateVal,
       heatPumpAmountType: PriceRowType.amount,
