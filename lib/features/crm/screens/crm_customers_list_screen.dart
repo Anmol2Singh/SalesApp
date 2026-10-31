@@ -1,3 +1,6 @@
+import '../data/models/lead_model.dart';
+import '../../../core/models/crm_date_filter.dart';
+import '../../../core/widgets/crm_date_filter_bar.dart';
 // lib/features/crm/screens/crm_customers_list_screen.dart
 
 import 'package:flutter/material.dart';
@@ -16,10 +19,11 @@ class CrmCustomersListScreen extends ConsumerStatefulWidget {
 
 class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen> {
   String _searchQuery = '';
+  CrmDateFilter _dateFilter = const CrmDateFilter();
 
   @override
   Widget build(BuildContext context) {
-    final leadsAsync = ref.watch(leadsProvider);
+    final leadsAsync = ref.watch(crmWonCustomersProvider);
     final prospectsAsync = ref.watch(prospectsProvider);
 
     final wonLeadsCount = leadsAsync.value?.where((l) => l.convertedToCustomerId != null || l.status == 'Won').length ?? 0;
@@ -55,7 +59,7 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
             icon: const Icon(Icons.download),
             tooltip: 'Export Converted Customers',
             onPressed: () {
-              final leads = ref.read(leadsProvider).value;
+              final leads = ref.read(crmWonCustomersProvider).value;
               final prospects = ref.read(prospectsProvider).value ?? [];
               if (leads != null && leads.isNotEmpty) {
                 final wonLeads = leads.where((l) => l.convertedToCustomerId != null || l.status == 'Won').toList();
@@ -73,7 +77,7 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
             onPressed: () {
-              ref.read(leadsProvider.notifier).load(refresh: true);
+              ref.read(crmWonCustomersProvider.notifier).load(refresh: true);
               ref.read(prospectsProvider.notifier).load(refresh: true);
             },
           ),
@@ -116,10 +120,24 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
             ),
           ),
           const Divider(height: 1, color: AppColors.border),
+          CrmDateFilterBar(
+            filter: _dateFilter,
+            dateFieldName: 'Won Date',
+            resultCount: leadsAsync.value?.length ?? 0,
+            onFilterChanged: (newFilter) {
+              final needsReload = _dateFilter.preset != newFilter.preset ||
+                  _dateFilter.customStart != newFilter.customStart ||
+                  _dateFilter.customEnd != newFilter.customEnd;
+              setState(() => _dateFilter = newFilter);
+              if (needsReload) {
+                ref.read(crmWonCustomersProvider.notifier).load(dateFilter: newFilter);
+              }
+            },
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                ref.read(leadsProvider.notifier).load(refresh: true);
+                ref.read(crmWonCustomersProvider.notifier).load(refresh: true);
                 ref.read(prospectsProvider.notifier).load(refresh: true);
               },
               child: leadsAsync.when(
@@ -152,22 +170,16 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
                     );
                   }
 
-                  return ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, itemIndex) {
-                      final lead = filtered[itemIndex];
-                      final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
-                      final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
-                          ? lead.prospectName!
-                          : (prospect?.name ?? 'Customer');
-                      final displayPhone = (lead.contactPhone != null && lead.contactPhone!.isNotEmpty)
-                          ? lead.contactPhone!
-                          : (prospect?.phone ?? '');
+                                  Widget buildCustomerCard(Lead lead) {
+                  final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
+                  final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
+                      ? lead.prospectName!
+                      : (prospect?.name ?? 'Customer');
+                  final displayPhone = (lead.contactPhone != null && lead.contactPhone!.isNotEmpty)
+                      ? lead.contactPhone!
+                      : (prospect?.phone ?? '');
 
-                      return Card(
+                  return Card(
                         elevation: 0,
                         color: AppColors.surface,
                         shape: RoundedRectangleBorder(
@@ -204,10 +216,60 @@ class _CrmCustomersListScreenState extends ConsumerState<CrmCustomersListScreen>
                           trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
                         ),
                       );
-                    },
+                }
+
+                if (_dateFilter.isGrouped) {
+                  final Map<String, List<Lead>> grouped = {};
+                  for (final l in filtered) {
+                    final bucket = CrmDateFilter.getBucket(l.updatedAt);
+                    grouped.putIfAbsent(bucket, () => []).add(l);
+                  }
+
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                    children: [
+                      for (final entry in grouped.entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${entry.key} (${entry.value.length})',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
+                            ],
+                          ),
+                        ),
+                        for (final lead in entry.value) ...[
+                          buildCustomerCard(lead),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ],
                   );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
+                }
+
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, itemIndex) {
+                    return buildCustomerCard(filtered[itemIndex]);
+                  },
+                );
+              },
+loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
               ),
             ),

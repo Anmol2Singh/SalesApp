@@ -33,7 +33,8 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   static bool _hasCheckedTodayTasks = false;
-  String? _expandedGroup; // 'crm', 'sales', 'finance', 'fieldOps', 'reports', 'catalog'
+  String?
+      _expandedGroup; // 'crm', 'sales', 'finance', 'fieldOps', 'reports', 'catalog'
   String? _fieldOpsSubGroup; // 'installations', 'complaints'
   bool _pdfLibraryExpanded = false;
 
@@ -200,13 +201,17 @@ class _AppShellState extends ConsumerState<AppShell> {
       try {
         final taskFilter = ref.read(dailyTaskFilterProvider);
         if (taskFilter.searchQuery.isNotEmpty) {
-          ref.read(dailyTaskFilterProvider.notifier).update((s) => s.copyWith(searchQuery: ''));
+          ref
+              .read(dailyTaskFilterProvider.notifier)
+              .update((s) => s.copyWith(searchQuery: ''));
         }
       } catch (_) {}
       try {
         final txFilter = ref.read(dailyTransactionsFilterProvider);
         if (txFilter.searchQuery.isNotEmpty) {
-          ref.read(dailyTransactionsFilterProvider.notifier).update((s) => s.copyWith(searchQuery: ''));
+          ref
+              .read(dailyTransactionsFilterProvider.notifier)
+              .update((s) => s.copyWith(searchQuery: ''));
         }
       } catch (_) {}
     }
@@ -246,12 +251,13 @@ class _AppShellState extends ConsumerState<AppShell> {
           context.go(home);
           return;
         }
-        
+
         final shouldExit = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Exit IZYHEAT?'),
-            content: const Text("You'll be signed out of nothing — just closing the app."),
+            content: const Text(
+                "You'll be signed out of nothing — just closing the app."),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -268,7 +274,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           ),
         );
-        
+
         if (shouldExit == true) {
           SystemNavigator.pop();
         }
@@ -286,70 +292,73 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Scaffold(
           extendBody: true,
           body: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 800;
-            final isQuotationRoute = widget.currentRoute.startsWith('/heat-pump-quotations') ||
-                widget.currentRoute.startsWith('/quotation');
-            final showsNavBar = !isWide &&
-                !isQuotationRoute &&
-                profile.primaryRole != UserRole.customer &&
-                !widget.currentRoute.startsWith('/inventory') &&
-                widget.currentRoute != AppRoutes.inventory &&
-                (!widget.currentRoute.startsWith('/crm') ||
-                    profile.primaryRole == UserRole.boq ||
-                    profile.primaryRole == UserRole.factory ||
-                    profile.primaryRole == UserRole.purchase);
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 800;
+              final isQuotationRoute =
+                  widget.currentRoute.startsWith('/heat-pump-quotations') ||
+                      widget.currentRoute.startsWith('/quotation');
+              final showsNavBar = !isWide &&
+                  !isQuotationRoute &&
+                  profile.primaryRole != UserRole.customer &&
+                  !widget.currentRoute.startsWith('/inventory') &&
+                  widget.currentRoute != AppRoutes.inventory &&
+                  (!widget.currentRoute.startsWith('/crm') ||
+                      profile.primaryRole == UserRole.boq ||
+                      profile.primaryRole == UserRole.factory ||
+                      profile.primaryRole == UserRole.purchase);
 
-            if (isWide && profile.primaryRole != UserRole.customer) {
-              return Row(
-                children: [
-                  _buildNavRail(context, profile.roles, unreadCount, isWide),
-                  Expanded(child: widget.child),
-                ],
-              );
-            }
+              if (isWide && profile.primaryRole != UserRole.customer) {
+                return Row(
+                  children: [
+                    _buildNavRail(context, profile.roles, unreadCount, isWide),
+                    Expanded(child: widget.child),
+                  ],
+                );
+              }
 
-            // On mobile with the floating nav bar, inject extra bottom padding
-            // into MediaQuery so inner Scaffold FABs and scrollable content
-            // automatically clear the ~90px floating glass nav bar.
-            if (showsNavBar) {
-              final mq = MediaQuery.of(context);
-              final bottomInset = mq.viewPadding.bottom;
-              final topOfNavBar = 69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
-              return MediaQuery(
-                data: mq.copyWith(
-                  padding: mq.padding.copyWith(
-                    bottom: topOfNavBar + 8,
+              // On mobile with the floating nav bar, inject extra bottom padding
+              // into MediaQuery so inner Scaffold FABs and scrollable content
+              // automatically clear the ~90px floating glass nav bar.
+              if (showsNavBar) {
+                final mq = MediaQuery.of(context);
+                final bottomInset = mq.viewPadding.bottom;
+                final topOfNavBar =
+                    69.0 + (bottomInset > 0 ? bottomInset + 4 : 12);
+                return MediaQuery(
+                  data: mq.copyWith(
+                    padding: mq.padding.copyWith(
+                      bottom: topOfNavBar + 8,
+                    ),
+                    viewPadding: mq.viewPadding.copyWith(
+                      bottom: topOfNavBar + 8,
+                    ),
                   ),
-                  viewPadding: mq.viewPadding.copyWith(
-                    bottom: topOfNavBar + 8,
-                  ),
-                ),
-                child: widget.child,
-              );
-            }
+                  child: widget.child,
+                );
+              }
 
-            return widget.child;
-          },
-        ),
-        bottomNavigationBar: MediaQuery.of(context).size.width < 800 &&
-                !widget.currentRoute.startsWith('/heat-pump-quotations') &&
-                !widget.currentRoute.startsWith('/quotation') &&
-                profile.primaryRole != UserRole.customer &&
-                !widget.currentRoute.startsWith('/inventory') &&
-                widget.currentRoute != AppRoutes.inventory &&
-                (!widget.currentRoute.startsWith('/crm') ||
-                    profile.primaryRole == UserRole.boq ||
-                    profile.primaryRole == UserRole.factory ||
-                    profile.primaryRole == UserRole.purchase)
-            ? _buildNavBar(context, profile.roles, unreadCount, false)
-            : null,
+              return widget.child;
+            },
+          ),
+          bottomNavigationBar: MediaQuery.of(context).size.width < 800 &&
+                  !widget.currentRoute.startsWith('/heat-pump-quotations') &&
+                  !widget.currentRoute.startsWith('/quotation') &&
+                  profile.primaryRole != UserRole.customer &&
+                  !widget.currentRoute.startsWith('/inventory') &&
+                  widget.currentRoute != AppRoutes.inventory &&
+                  (!widget.currentRoute.startsWith('/crm') ||
+                      profile.primaryRole == UserRole.boq ||
+                      profile.primaryRole == UserRole.factory ||
+                      profile.primaryRole == UserRole.purchase)
+              ? _buildNavBar(context, profile.roles, unreadCount, false)
+              : null,
         ),
       ),
     );
   }
 
-  Widget _buildNavRail(BuildContext context, List<UserRole> roles, int unreadCount, bool isWide) {
+  Widget _buildNavRail(BuildContext context, List<UserRole> roles,
+      int unreadCount, bool isWide) {
     // Unified nav rail colors matching brand aesthetic across all pages
     final Color navBgColor = AppColors.navBarColor;
     const Color selectedTextColor = Colors.white;
@@ -361,12 +370,26 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final hasAdmin = roles.any((r) => r == UserRole.admin);
     final isManager = roles.any((r) => r == UserRole.manager);
-    final hasAdminOrManager = roles.any((r) => r == UserRole.admin || r == UserRole.manager);
-    final hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
+    final hasAdminOrManager =
+        roles.any((r) => r == UserRole.admin || r == UserRole.manager);
+    final hasSales =
+        roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final hasSalesHead = roles.any((r) => r == UserRole.salesHead);
-    final hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.sales || r == UserRole.salesHead);
-    final hasComplaints = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead);
-    final hasInstallations = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead || r == UserRole.salesHead);
+    final hasCrm = roles.any((r) =>
+        r == UserRole.crmStaff ||
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.sales ||
+        r == UserRole.salesHead);
+    final hasComplaints = roles.any((r) =>
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.serviceHead);
+    final hasInstallations = roles.any((r) =>
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.serviceHead ||
+        r == UserRole.salesHead);
     final isTechnician = roles.any((r) => r == UserRole.technician);
     final isBoq = roles.any((r) => r == UserRole.boq);
     final isFactory = roles.any((r) => r == UserRole.factory);
@@ -390,12 +413,13 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final isFinanceActive = widget.currentRoute.startsWith('/pm');
 
-    final isInstallationsActive = widget.currentRoute.startsWith('/installations') ||
-        widget.currentRoute == AppRoutes.installationsDashboard ||
-        widget.currentRoute == AppRoutes.installationsList ||
-        widget.currentRoute == AppRoutes.bookInstallation ||
-        widget.currentRoute == AppRoutes.assignInstallation ||
-        widget.currentRoute == AppRoutes.installationHistory;
+    final isInstallationsActive =
+        widget.currentRoute.startsWith('/installations') ||
+            widget.currentRoute == AppRoutes.installationsDashboard ||
+            widget.currentRoute == AppRoutes.installationsList ||
+            widget.currentRoute == AppRoutes.bookInstallation ||
+            widget.currentRoute == AppRoutes.assignInstallation ||
+            widget.currentRoute == AppRoutes.installationHistory;
 
     final isComplaintsActive = widget.currentRoute.startsWith('/complaints') ||
         widget.currentRoute.startsWith('/technician') ||
@@ -428,7 +452,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     final isReportsExpanded = _expandedGroup == 'reports';
     final isCatalogExpanded = _expandedGroup == 'catalog';
     final isSidebarCollapsed = ref.watch(sidebarCollapsedProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark || navBgColor != Colors.white;
+    final isDark = Theme.of(context).brightness == Brightness.dark ||
+        navBgColor != Colors.white;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -449,7 +474,9 @@ class _AppShellState extends ConsumerState<AppShell> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
-              mainAxisAlignment: isSidebarCollapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisAlignment: isSidebarCollapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
@@ -458,7 +485,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                     color: logoIconBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.whatshot_rounded, color: logoIcon, size: 28),
+                  child:
+                      Icon(Icons.whatshot_rounded, color: logoIcon, size: 28),
                 ),
                 if (!isSidebarCollapsed) ...[
                   const SizedBox(width: 12),
@@ -512,7 +540,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 if (hasCrm && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'CRM',
-                    icon: isCrmActive ? Icons.people_alt : Icons.people_alt_outlined,
+                    icon: isCrmActive
+                        ? Icons.people_alt
+                        : Icons.people_alt_outlined,
                     isExpanded: isCrmExpanded,
                     isActive: isCrmActive,
                     selectedTextColor: selectedTextColor,
@@ -567,7 +597,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 if ((hasAdminOrManager || hasSales) && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Sales',
-                    icon: isSalesActive ? Icons.point_of_sale : Icons.point_of_sale_outlined,
+                    icon: isSalesActive
+                        ? Icons.point_of_sale
+                        : Icons.point_of_sale_outlined,
                     isExpanded: isSalesExpanded,
                     isActive: isSalesActive,
                     selectedTextColor: selectedTextColor,
@@ -622,13 +654,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                 if (hasAdminOrManager || hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Finance',
-                    icon: isFinanceActive ? Icons.account_balance : Icons.account_balance_outlined,
+                    icon: isFinanceActive
+                        ? Icons.account_balance
+                        : Icons.account_balance_outlined,
                     isExpanded: isFinanceExpanded,
                     isActive: isFinanceActive,
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _openGroup('finance', AppRoutes.projectManager),
+                    onTap: () =>
+                        _openGroup('finance', AppRoutes.projectManager),
                   ),
                   _AnimatedExpandableSection(
                     isExpanded: isFinanceExpanded,
@@ -657,16 +692,25 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ],
 
                 // 5. Field Operations & Service Group (Expandable)
-                if ((hasAdminOrManager || hasComplaints || hasInstallations) && !hasAccounts) ...[
+                if ((hasAdminOrManager || hasComplaints || hasInstallations) &&
+                    !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Field Operations & Service',
-                    icon: isFieldOpsActive ? Icons.build_circle : Icons.build_circle_outlined,
+                    icon: isFieldOpsActive
+                        ? Icons.build_circle
+                        : Icons.build_circle_outlined,
                     isExpanded: isFieldOpsExpanded,
                     isActive: isFieldOpsActive,
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
-                    onTap: () => _openGroup('fieldOps', hasInstallations ? AppRoutes.installationsDashboard : (hasComplaints ? AppRoutes.complaintsDashboard : AppRoutes.amcList)),
+                    onTap: () => _openGroup(
+                        'fieldOps',
+                        hasInstallations
+                            ? AppRoutes.installationsDashboard
+                            : (hasComplaints
+                                ? AppRoutes.complaintsDashboard
+                                : AppRoutes.amcList)),
                   ),
                   _AnimatedExpandableSection(
                     isExpanded: isFieldOpsExpanded,
@@ -677,13 +721,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                         if (hasInstallations) ...[
                           _buildSubGroupHeader(
                             label: 'Installations',
-                            icon: isInstallationsActive ? Icons.build_circle : Icons.build_circle_outlined,
+                            icon: isInstallationsActive
+                                ? Icons.build_circle
+                                : Icons.build_circle_outlined,
                             isExpanded: _fieldOpsSubGroup == 'installations',
                             isActive: isInstallationsActive,
                             selectedTextColor: selectedTextColor,
                             unselectedTextColor: unselectedTextColor,
                             selectedBgColor: selectedBgColor,
-                            onTap: () => _openFieldOpsSubGroup('installations', AppRoutes.installationsDashboard),
+                            onTap: () => _openFieldOpsSubGroup('installations',
+                                AppRoutes.installationsDashboard),
                           ),
                           _AnimatedExpandableSection(
                             isExpanded: _fieldOpsSubGroup == 'installations',
@@ -709,7 +756,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                                 _buildSubChildTile(
                                   label: 'Assign Techs',
                                   route: AppRoutes.assignInstallation,
-                                  icon: const Icon(Icons.assignment_ind_outlined),
+                                  icon:
+                                      const Icon(Icons.assignment_ind_outlined),
                                   selectedTextColor: selectedTextColor,
                                   unselectedTextColor: unselectedTextColor,
                                   selectedBgColor: selectedBgColor,
@@ -731,13 +779,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                         if (hasComplaints) ...[
                           _buildSubGroupHeader(
                             label: 'Complaints',
-                            icon: isComplaintsActive ? Icons.support_agent : Icons.support_agent_outlined,
+                            icon: isComplaintsActive
+                                ? Icons.support_agent
+                                : Icons.support_agent_outlined,
                             isExpanded: _fieldOpsSubGroup == 'complaints',
                             isActive: isComplaintsActive,
                             selectedTextColor: selectedTextColor,
                             unselectedTextColor: unselectedTextColor,
                             selectedBgColor: selectedBgColor,
-                            onTap: () => _openFieldOpsSubGroup('complaints', AppRoutes.complaintsDashboard),
+                            onTap: () => _openFieldOpsSubGroup(
+                                'complaints', AppRoutes.complaintsDashboard),
                           ),
                           _AnimatedExpandableSection(
                             isExpanded: _fieldOpsSubGroup == 'complaints',
@@ -763,7 +814,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                                 _buildSubChildTile(
                                   label: 'Assign Techs',
                                   route: AppRoutes.assignTechnician,
-                                  icon: const Icon(Icons.assignment_ind_outlined),
+                                  icon:
+                                      const Icon(Icons.assignment_ind_outlined),
                                   selectedTextColor: selectedTextColor,
                                   unselectedTextColor: unselectedTextColor,
                                   selectedBgColor: selectedBgColor,
@@ -807,7 +859,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 if ((hasAdminOrManager || hasSales) && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Reports & Analytics',
-                    icon: isReportsActive ? Icons.analytics : Icons.analytics_outlined,
+                    icon: isReportsActive
+                        ? Icons.analytics
+                        : Icons.analytics_outlined,
                     isExpanded: isReportsExpanded,
                     isActive: isReportsActive,
                     selectedTextColor: selectedTextColor,
@@ -855,13 +909,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                         if (canAccessPdfLibrary) ...[
                           _buildSubGroupHeader(
                             label: 'PDF Library',
-                            icon: isPdfLibraryActive ? Icons.picture_as_pdf : Icons.picture_as_pdf_outlined,
+                            icon: isPdfLibraryActive
+                                ? Icons.picture_as_pdf
+                                : Icons.picture_as_pdf_outlined,
                             isExpanded: _pdfLibraryExpanded,
                             isActive: isPdfLibraryActive,
                             selectedTextColor: selectedTextColor,
                             unselectedTextColor: unselectedTextColor,
                             selectedBgColor: selectedBgColor,
-                            onTap: () => _openPdfLibrary(canAccessPdfList ? AppRoutes.pdfList : AppRoutes.searchPdf),
+                            onTap: () => _openPdfLibrary(canAccessPdfList
+                                ? AppRoutes.pdfList
+                                : AppRoutes.searchPdf),
                           ),
                           _AnimatedExpandableSection(
                             isExpanded: _pdfLibraryExpanded,
@@ -872,7 +930,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                                   _buildSubChildTile(
                                     label: 'List PDFs',
                                     route: AppRoutes.pdfList,
-                                    icon: const Icon(Icons.folder_copy_outlined),
+                                    icon:
+                                        const Icon(Icons.folder_copy_outlined),
                                     selectedTextColor: selectedTextColor,
                                     unselectedTextColor: unselectedTextColor,
                                     selectedBgColor: selectedBgColor,
@@ -899,7 +958,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 if (hasAdminOrManager && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Catalog & Inventory',
-                    icon: isCatalogActive ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                    icon: isCatalogActive
+                        ? Icons.inventory_2
+                        : Icons.inventory_2_outlined,
                     isExpanded: isCatalogExpanded,
                     isActive: isCatalogActive,
                     selectedTextColor: selectedTextColor,
@@ -937,7 +998,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 if (!hasAccounts || hasAdminOrManager)
                   _buildNavItemTile(
                     route: AppRoutes.notifications,
-                    label: isSidebarCollapsed ? 'Alerts' : 'Alerts & Notifications',
+                    label: isSidebarCollapsed
+                        ? 'Alerts'
+                        : 'Alerts & Notifications',
                     icon: const Icon(Icons.notifications_outlined),
                     selectedIcon: const Icon(Icons.notifications),
                     selectedTextColor: selectedTextColor,
@@ -1041,7 +1104,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     int badgeCount = 0,
   }) {
     final isCollapsed = ref.watch(sidebarCollapsedProvider);
-    final isSelected = widget.currentRoute == route || (route != '/' && widget.currentRoute.startsWith(route));
+    final isSelected = widget.currentRoute == route ||
+        (route != '/' && widget.currentRoute.startsWith(route));
 
     if (isCollapsed) {
       return Tooltip(
@@ -1130,15 +1194,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isSelected ? selectedTextColor : unselectedTextColor,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color:
+                          isSelected ? selectedTextColor : unselectedTextColor,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.w500,
                       fontSize: 14,
                     ),
                   ),
                 ),
                 if (badgeCount > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(10),
@@ -1181,7 +1248,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
-            color: isHighlighted ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+            color: isHighlighted
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: InkWell(
@@ -1193,7 +1262,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: Icon(
                   icon,
                   size: 20,
-                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                  color:
+                      isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
               ),
             ),
@@ -1208,7 +1278,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
-          color: isHighlighted ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+          color: isHighlighted
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: InkWell(
@@ -1222,7 +1294,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                 Icon(
                   icon,
                   size: 20,
-                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                  color:
+                      isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1230,8 +1303,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isHighlighted ? selectedTextColor : unselectedTextColor,
-                      fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+                      color: isHighlighted
+                          ? selectedTextColor
+                          : unselectedTextColor,
+                      fontWeight:
+                          isHighlighted ? FontWeight.bold : FontWeight.w600,
                       fontSize: 14,
                     ),
                   ),
@@ -1243,7 +1319,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                   child: Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 20,
-                    color: isHighlighted ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.7),
+                    color: isHighlighted
+                        ? selectedTextColor
+                        : unselectedTextColor.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -1325,8 +1403,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isSelected ? selectedTextColor : unselectedTextColor,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color:
+                          isSelected ? selectedTextColor : unselectedTextColor,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.w500,
                       fontSize: 13.5,
                     ),
                     maxLines: 1,
@@ -1399,7 +1479,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
           decoration: BoxDecoration(
-            color: isHighlighted ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+            color: isHighlighted
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: InkWell(
@@ -1411,7 +1493,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: Icon(
                   icon,
                   size: 18,
-                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                  color:
+                      isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
               ),
             ),
@@ -1426,7 +1509,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
-          color: isHighlighted ? Colors.white.withValues(alpha: 0.10) : Colors.transparent,
+          color: isHighlighted
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: InkWell(
@@ -1440,7 +1525,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                 Icon(
                   icon,
                   size: 17,
-                  color: isHighlighted ? selectedTextColor : unselectedTextColor,
+                  color:
+                      isHighlighted ? selectedTextColor : unselectedTextColor,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1448,8 +1534,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isHighlighted ? selectedTextColor : unselectedTextColor,
-                      fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+                      color: isHighlighted
+                          ? selectedTextColor
+                          : unselectedTextColor,
+                      fontWeight:
+                          isHighlighted ? FontWeight.bold : FontWeight.w600,
                       fontSize: 13.5,
                     ),
                   ),
@@ -1461,7 +1550,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                   child: Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 18,
-                    color: isHighlighted ? selectedTextColor : unselectedTextColor.withValues(alpha: 0.7),
+                    color: isHighlighted
+                        ? selectedTextColor
+                        : unselectedTextColor.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -1543,8 +1634,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                     label,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: isSelected ? selectedTextColor : unselectedTextColor,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color:
+                          isSelected ? selectedTextColor : unselectedTextColor,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.w500,
                       fontSize: 13,
                     ),
                     maxLines: 1,
@@ -1559,7 +1652,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
-  Widget _buildNavBar(BuildContext context, List<UserRole> roles, int unreadCount, bool isWide) {
+  Widget _buildNavBar(BuildContext context, List<UserRole> roles,
+      int unreadCount, bool isWide) {
     final items = _getNavItems(roles, isWide);
     final currentIndex = _getCurrentIndex(items);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1625,13 +1719,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? (isDark
-                                  ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
-                                  : const Color(0xFF1E3A5F).withValues(alpha: 0.1))
+                                  ? const Color(0xFF1E3A5F)
+                                      .withValues(alpha: 0.35)
+                                  : const Color(0xFF1E3A5F)
+                                      .withValues(alpha: 0.1))
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(20),
                           border: isSelected
                               ? Border.all(
-                                  color: (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
+                                  color: (isDark
+                                          ? const Color(0xFF60A5FA)
+                                          : AppColors.primary)
                                       .withValues(alpha: 0.25),
                                   width: 1,
                                 )
@@ -1647,9 +1745,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                               curve: Curves.easeOutBack,
                               child: AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 220),
-                                transitionBuilder: (child, anim) => FadeTransition(
+                                transitionBuilder: (child, anim) =>
+                                    FadeTransition(
                                   opacity: anim,
-                                  child: ScaleTransition(scale: anim, child: child),
+                                  child: ScaleTransition(
+                                      scale: anim, child: child),
                                 ),
                                 child: KeyedSubtree(
                                   key: ValueKey<bool>(isSelected),
@@ -1657,13 +1757,21 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     data: IconThemeData(
                                       size: 21,
                                       color: isSelected
-                                          ? (isDark ? const Color(0xFF60A5FA) : AppColors.primary)
-                                          : (isDark ? Colors.white60 : AppColors.textSecondary),
+                                          ? (isDark
+                                              ? const Color(0xFF60A5FA)
+                                              : AppColors.primary)
+                                          : (isDark
+                                              ? Colors.white60
+                                              : AppColors.textSecondary),
                                     ),
-                                    child: (item.route == AppRoutes.notifications && unreadCount > 0)
+                                    child: (item.route ==
+                                                AppRoutes.notifications &&
+                                            unreadCount > 0)
                                         ? Badge(
                                             label: Text(
-                                              unreadCount > 99 ? '99+' : '$unreadCount',
+                                              unreadCount > 99
+                                                  ? '99+'
+                                                  : '$unreadCount',
                                               style: const TextStyle(
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.bold,
@@ -1671,9 +1779,13 @@ class _AppShellState extends ConsumerState<AppShell> {
                                               ),
                                             ),
                                             backgroundColor: AppColors.error,
-                                            child: isSelected ? item.selectedIcon : item.icon,
+                                            child: isSelected
+                                                ? item.selectedIcon
+                                                : item.icon,
                                           )
-                                        : (isSelected ? item.selectedIcon : item.icon),
+                                        : (isSelected
+                                            ? item.selectedIcon
+                                            : item.icon),
                                   ),
                                 ),
                               ),
@@ -1685,11 +1797,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: isSelected ? 10.5 : 9.5,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                                 letterSpacing: -0.2,
                                 color: isSelected
-                                    ? (isDark ? const Color(0xFF93C5FD) : AppColors.primary)
-                                    : (isDark ? Colors.white60 : AppColors.textSecondary),
+                                    ? (isDark
+                                        ? const Color(0xFF93C5FD)
+                                        : AppColors.primary)
+                                    : (isDark
+                                        ? Colors.white60
+                                        : AppColors.textSecondary),
                               ),
                               child: Text(
                                 item.label,
@@ -1718,7 +1836,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (widget.currentRoute == items[i].route) {
         return i;
       }
-      if (widget.currentRoute.startsWith(items[i].route) && items[i].route.length > maxMatchLength) {
+      if (widget.currentRoute.startsWith(items[i].route) &&
+          items[i].route.length > maxMatchLength) {
         maxMatchLength = items[i].route.length;
         bestIndex = i;
       }
@@ -1727,18 +1846,20 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   List<_NavItem> _getNavItems(List<UserRole> roles, bool isWide) {
-    final bool isComplaintsRoute = widget.currentRoute.startsWith('/complaints') ||
-        widget.currentRoute.startsWith('/technician') ||
-        widget.currentRoute == AppRoutes.complaintsDashboard ||
-        widget.currentRoute == AppRoutes.assignTechnician ||
-        widget.currentRoute == AppRoutes.serviceHistory;
+    final bool isComplaintsRoute =
+        widget.currentRoute.startsWith('/complaints') ||
+            widget.currentRoute.startsWith('/technician') ||
+            widget.currentRoute == AppRoutes.complaintsDashboard ||
+            widget.currentRoute == AppRoutes.assignTechnician ||
+            widget.currentRoute == AppRoutes.serviceHistory;
 
-    final bool isInstallationsRoute = widget.currentRoute.startsWith('/installations') ||
-        widget.currentRoute == AppRoutes.installationsDashboard ||
-        widget.currentRoute == AppRoutes.installationsList ||
-        widget.currentRoute == AppRoutes.bookInstallation ||
-        widget.currentRoute == AppRoutes.assignInstallation ||
-        widget.currentRoute == AppRoutes.installationHistory;
+    final bool isInstallationsRoute =
+        widget.currentRoute.startsWith('/installations') ||
+            widget.currentRoute == AppRoutes.installationsDashboard ||
+            widget.currentRoute == AppRoutes.installationsList ||
+            widget.currentRoute == AppRoutes.bookInstallation ||
+            widget.currentRoute == AppRoutes.assignInstallation ||
+            widget.currentRoute == AppRoutes.installationHistory;
 
     final Map<String, _NavItem> uniqueItems = {};
 
@@ -1751,17 +1872,27 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool hasAdmin = roles.any((r) => r == UserRole.admin);
     final bool isManager = roles.any((r) => r == UserRole.manager);
     final bool hasAdminOrManager = hasAdmin || isManager;
-    final bool hasSales = roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
-    final bool hasCrm = roles.any((r) => r == UserRole.crmStaff || r == UserRole.admin || r == UserRole.manager || r == UserRole.salesHead);
+    final bool hasSales =
+        roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
+    final bool hasCrm = roles.any((r) =>
+        r == UserRole.crmStaff ||
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.salesHead);
     final bool hasComplaints = roles.any((r) => r == UserRole.serviceHead);
-    final bool hasInstallations = roles.any((r) => r == UserRole.admin || r == UserRole.manager || r == UserRole.serviceHead || r == UserRole.salesHead);
+    final bool hasInstallations = roles.any((r) =>
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.serviceHead ||
+        r == UserRole.salesHead);
     final bool isBoq = roles.any((r) => r == UserRole.boq);
     final bool isFactory = roles.any((r) => r == UserRole.factory);
     final bool isPurchase = roles.any((r) => r == UserRole.purchase);
     final bool isTechnician = roles.any((r) => r == UserRole.technician);
     final bool hasAccounts = roles.any((r) => r == UserRole.accounts);
-    final bool isAssignedWorkRoute = widget.currentRoute == AppRoutes.assignedWork ||
-        widget.currentRoute.startsWith('/assigned-work');
+    final bool isAssignedWorkRoute =
+        widget.currentRoute == AppRoutes.assignedWork ||
+            widget.currentRoute.startsWith('/assigned-work');
 
     // 0.4 Assigned Work contextual route
     if (!isWide && isAssignedWorkRoute) {
@@ -1772,7 +1903,11 @@ class _AppShellState extends ConsumerState<AppShell> {
         selectedIcon: Icon(Icons.calendar_month),
       ));
       addItem(_NavItem(
-        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.accountsDashboard : AppRoutes.salesDashboard),
+        route: hasAdmin
+            ? AppRoutes.adminDashboard
+            : (hasAccounts
+                ? AppRoutes.accountsDashboard
+                : AppRoutes.salesDashboard),
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1790,11 +1925,27 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // 0.5 Project Manager contextual route
     if (!isWide && (hasAdminOrManager || hasAccounts) && isPmRoute) {
-      addItem(const _NavItem(route: AppRoutes.projectManager, label: 'Projects', icon: Icon(Icons.solar_power_outlined), selectedIcon: Icon(Icons.solar_power)));
-      addItem(const _NavItem(route: AppRoutes.pmDailyTransactions, label: 'Day-Book', icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long)));
-      addItem(const _NavItem(route: AppRoutes.pmFilter, label: 'Reports', icon: Icon(Icons.filter_list_outlined), selectedIcon: Icon(Icons.filter_list)));
+      addItem(const _NavItem(
+          route: AppRoutes.projectManager,
+          label: 'Projects',
+          icon: Icon(Icons.solar_power_outlined),
+          selectedIcon: Icon(Icons.solar_power)));
+      addItem(const _NavItem(
+          route: AppRoutes.pmDailyTransactions,
+          label: 'Day-Book',
+          icon: Icon(Icons.receipt_long_outlined),
+          selectedIcon: Icon(Icons.receipt_long)));
+      addItem(const _NavItem(
+          route: AppRoutes.pmFilter,
+          label: 'Reports',
+          icon: Icon(Icons.filter_list_outlined),
+          selectedIcon: Icon(Icons.filter_list)));
       addItem(_NavItem(
-        route: hasAdmin ? AppRoutes.adminDashboard : (hasAccounts ? AppRoutes.accountsDashboard : AppRoutes.salesDashboard),
+        route: hasAdmin
+            ? AppRoutes.adminDashboard
+            : (hasAccounts
+                ? AppRoutes.accountsDashboard
+                : AppRoutes.salesDashboard),
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1804,114 +1955,310 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // 1. Complaints routes
     if (!isWide && (hasAdminOrManager || hasComplaints) && isComplaintsRoute) {
-      addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
-      addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
-      
+      addItem(const _NavItem(
+          route: AppRoutes.complaintsDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.complaintsList,
+          label: 'Complaints',
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(
+          route: AppRoutes.assignTechnician,
+          label: 'Assign',
+          icon: Icon(Icons.assignment_ind_outlined),
+          selectedIcon: Icon(Icons.assignment_ind)));
+
       if (hasCrm) {
-        addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+        addItem(const _NavItem(
+            route: '/crm/dashboard',
+            label: 'CRM',
+            icon: Icon(Icons.people_alt_outlined),
+            selectedIcon: Icon(Icons.people_alt)));
       } else if (hasSales) {
-        addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Sales', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
+        addItem(const _NavItem(
+            route: AppRoutes.salesDashboard,
+            label: 'Sales',
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart)));
       } else if (isBoq || isFactory || isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Operations', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+        addItem(const _NavItem(
+            route: AppRoutes.boqDashboard,
+            label: 'Operations',
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard)));
       } else {
-        addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
+        addItem(const _NavItem(
+            route: '/complaints/technicians',
+            label: 'Technicians',
+            icon: Icon(Icons.engineering_outlined),
+            selectedIcon: Icon(Icons.engineering)));
       }
-      addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      addItem(const _NavItem(
+          route: AppRoutes.serviceHistory,
+          label: 'History',
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
 
     // 1.5 Installations routes
     if (!isWide && hasInstallations && isInstallationsRoute) {
-      addItem(const _NavItem(route: AppRoutes.installationsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: AppRoutes.installationsList, label: 'Installations', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
-      addItem(const _NavItem(route: AppRoutes.assignInstallation, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
-      addItem(const _NavItem(route: AppRoutes.installationHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      addItem(const _NavItem(
+          route: AppRoutes.installationsDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.installationsList,
+          label: 'Installations',
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(
+          route: AppRoutes.assignInstallation,
+          label: 'Assign',
+          icon: Icon(Icons.assignment_ind_outlined),
+          selectedIcon: Icon(Icons.assignment_ind)));
+      addItem(const _NavItem(
+          route: AppRoutes.installationHistory,
+          label: 'History',
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
 
     // 2. Admin
     if (hasAdmin) {
-      addItem(const _NavItem(route: AppRoutes.adminDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
-      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
-      addItem(const _NavItem(route: AppRoutes.userManagement, label: 'Admin', icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings)));
+      addItem(const _NavItem(
+          route: AppRoutes.adminDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.customers,
+          label: 'Customers',
+          icon: Icon(Icons.business_outlined),
+          selectedIcon: Icon(Icons.business)));
+      addItem(const _NavItem(
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
+      addItem(const _NavItem(
+          route: AppRoutes.userManagement,
+          label: 'Admin',
+          icon: Icon(Icons.admin_panel_settings_outlined),
+          selectedIcon: Icon(Icons.admin_panel_settings)));
       return uniqueItems.values.toList();
     }
 
     // 2.5 Manager (no Admin Panel settings button)
     if (isManager) {
-      addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Dashboard', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
-      addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
-      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      addItem(const _NavItem(
+          route: AppRoutes.salesDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart)));
+      addItem(const _NavItem(
+          route: AppRoutes.customers,
+          label: 'Customers',
+          icon: Icon(Icons.business_outlined),
+          selectedIcon: Icon(Icons.business)));
+      addItem(const _NavItem(
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
       if (hasComplaints) {
-        addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
+        addItem(const _NavItem(
+            route: AppRoutes.complaintsDashboard,
+            label: 'Complaints',
+            icon: Icon(Icons.support_agent_outlined),
+            selectedIcon: Icon(Icons.support_agent)));
       } else {
-        addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+        addItem(const _NavItem(
+            route: '/crm/dashboard',
+            label: 'CRM',
+            icon: Icon(Icons.people_alt_outlined),
+            selectedIcon: Icon(Icons.people_alt)));
       }
       return uniqueItems.values.toList();
     }
 
     // 3. Sales / SalesHead
     if (hasSales) {
-      addItem(const _NavItem(route: AppRoutes.salesDashboard, label: 'Dashboard', icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart)));
-      addItem(const _NavItem(route: AppRoutes.customers, label: 'Customers', icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business)));
-      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.handshake_outlined), selectedIcon: Icon(Icons.handshake)));
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      addItem(const _NavItem(
+          route: AppRoutes.salesDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.bar_chart_outlined),
+          selectedIcon: Icon(Icons.bar_chart)));
+      addItem(const _NavItem(
+          route: AppRoutes.customers,
+          label: 'Customers',
+          icon: Icon(Icons.business_outlined),
+          selectedIcon: Icon(Icons.business)));
+      addItem(const _NavItem(
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
       if (hasComplaints) {
-        addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
+        addItem(const _NavItem(
+            route: AppRoutes.complaintsDashboard,
+            label: 'Complaints',
+            icon: Icon(Icons.support_agent_outlined),
+            selectedIcon: Icon(Icons.support_agent)));
       } else {
-        addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM', icon: Icon(Icons.people_alt_outlined), selectedIcon: Icon(Icons.people_alt)));
+        addItem(const _NavItem(
+            route: '/crm/dashboard',
+            label: 'CRM',
+            icon: Icon(Icons.people_alt_outlined),
+            selectedIcon: Icon(Icons.people_alt)));
       }
       return uniqueItems.values.toList();
     }
 
     // 4. CRM Staff
     if (hasCrm) {
-      addItem(const _NavItem(route: '/crm/dashboard', label: 'CRM Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-      addItem(const _NavItem(route: '/crm/leads', label: 'Leads', icon: Icon(Icons.trending_up_outlined), selectedIcon: Icon(Icons.trending_up)));
+      addItem(const _NavItem(
+          route: '/crm/dashboard',
+          label: 'CRM Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: '/crm/prospects',
+          label: 'Prospects',
+          icon: Icon(Icons.person_search_outlined),
+          selectedIcon: Icon(Icons.person_search)));
+      addItem(const _NavItem(
+          route: '/crm/leads',
+          label: 'Leads',
+          icon: Icon(Icons.trending_up_outlined),
+          selectedIcon: Icon(Icons.trending_up)));
       if (hasComplaints) {
-        addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Complaints', icon: Icon(Icons.support_agent_outlined), selectedIcon: Icon(Icons.support_agent)));
+        addItem(const _NavItem(
+            route: AppRoutes.complaintsDashboard,
+            label: 'Complaints',
+            icon: Icon(Icons.support_agent_outlined),
+            selectedIcon: Icon(Icons.support_agent)));
       } else if (isBoq || isFactory || isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Operations', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+        addItem(const _NavItem(
+            route: AppRoutes.boqDashboard,
+            label: 'Operations',
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard)));
       } else {
-        addItem(const _NavItem(route: '/reports/activity', label: "Today's Report", icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment)));
+        addItem(const _NavItem(
+            route: '/reports/activity',
+            label: "Today's Report",
+            icon: Icon(Icons.assessment_outlined),
+            selectedIcon: Icon(Icons.assessment)));
       }
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
       return uniqueItems.values.toList();
     }
 
     // 5. Service Head (when not on complaints route)
     if (hasComplaints) {
-      addItem(const _NavItem(route: AppRoutes.complaintsDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: AppRoutes.complaintsList, label: 'Complaints', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
-      addItem(const _NavItem(route: AppRoutes.assignTechnician, label: 'Assign', icon: Icon(Icons.assignment_ind_outlined), selectedIcon: Icon(Icons.assignment_ind)));
+      addItem(const _NavItem(
+          route: AppRoutes.complaintsDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.complaintsList,
+          label: 'Complaints',
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(
+          route: AppRoutes.assignTechnician,
+          label: 'Assign',
+          icon: Icon(Icons.assignment_ind_outlined),
+          selectedIcon: Icon(Icons.assignment_ind)));
       if (isBoq || isFactory || isPurchase) {
-        addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Operations', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
+        addItem(const _NavItem(
+            route: AppRoutes.boqDashboard,
+            label: 'Operations',
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard)));
       } else {
-        addItem(const _NavItem(route: '/complaints/technicians', label: 'Technicians', icon: Icon(Icons.engineering_outlined), selectedIcon: Icon(Icons.engineering)));
+        addItem(const _NavItem(
+            route: '/complaints/technicians',
+            label: 'Technicians',
+            icon: Icon(Icons.engineering_outlined),
+            selectedIcon: Icon(Icons.engineering)));
       }
-      addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      addItem(const _NavItem(
+          route: AppRoutes.serviceHistory,
+          label: 'History',
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
 
     // 6. Technician
     if (isTechnician) {
-      addItem(const _NavItem(route: AppRoutes.technicianDashboard, label: 'Home', icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home)));
-      addItem(const _NavItem(route: AppRoutes.technicianTasks, label: 'My Tasks', icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment)));
-      addItem(const _NavItem(route: AppRoutes.serviceHistory, label: 'History', icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history)));
+      addItem(const _NavItem(
+          route: AppRoutes.technicianDashboard,
+          label: 'Home',
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home)));
+      addItem(const _NavItem(
+          route: AppRoutes.technicianTasks,
+          label: 'My Tasks',
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(
+          route: AppRoutes.serviceHistory,
+          label: 'History',
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
 
     // 7. Operations (BOQ/Factory/Purchase)
     if (isBoq || isFactory || isPurchase) {
-      addItem(const _NavItem(route: AppRoutes.boqDashboard, label: 'Dashboard', icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(route: AppRoutes.pipelines, label: 'Deals', icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work)));
-      addItem(const _NavItem(route: '/crm/prospects', label: 'Prospects', icon: Icon(Icons.person_search_outlined), selectedIcon: Icon(Icons.person_search)));
-      addItem(const _NavItem(route: AppRoutes.notifications, label: 'Alerts', icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications)));
+      addItem(const _NavItem(
+          route: AppRoutes.boqDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.work_outline),
+          selectedIcon: Icon(Icons.work)));
+      addItem(const _NavItem(
+          route: '/crm/prospects',
+          label: 'Prospects',
+          icon: Icon(Icons.person_search_outlined),
+          selectedIcon: Icon(Icons.person_search)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
       return uniqueItems.values.take(5).toList();
     }
 
@@ -1958,4 +2305,3 @@ class _AnimatedExpandableSection extends StatelessWidget {
     );
   }
 }
-

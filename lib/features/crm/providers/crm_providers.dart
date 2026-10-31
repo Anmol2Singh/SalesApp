@@ -1,3 +1,4 @@
+import '../../../core/models/crm_date_filter.dart';
 // lib/features/crm/providers/crm_providers.dart
 
 import 'package:flutter/foundation.dart';
@@ -32,6 +33,9 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   final Profile? _profile;
   RealtimeChannel? _realtimeChannel;
 
+  CrmDateFilter _currentDateFilter = const CrmDateFilter();
+  CrmDateFilter get currentDateFilter => _currentDateFilter;
+
   ProspectsNotifier(this._supabase, this._userId, this._isAdmin, [this._profile]) : super(const AsyncValue.loading()) {
     load();
     _initRealtime();
@@ -59,7 +63,8 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     super.dispose();
   }
 
-  Future<void> load({bool refresh = false}) async {
+  Future<void> load({CrmDateFilter? dateFilter, bool refresh = false}) async {
+    if (dateFilter != null) _currentDateFilter = dateFilter;
     if (refresh && !state.hasValue) state = const AsyncValue.loading();
     try {
       dynamic query = _supabase.from('crm_prospects').select();
@@ -67,6 +72,14 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
       // Non-admins see only their own prospects or assigned to them
       if (!_isAdmin && _userId != null) {
         query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
+      }
+
+      // Choice: Filter prospects by created_at (when prospect was registered into CRM)
+      if (_currentDateFilter.startDate != null) {
+        query = query.gte('created_at', _currentDateFilter.startDate!.toIso8601String());
+      }
+      if (_currentDateFilter.endDate != null) {
+        query = query.lte('created_at', _currentDateFilter.endDate!.toIso8601String());
       }
 
       query = query.order('created_at', ascending: false);
@@ -583,6 +596,9 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
   final bool _isAdmin;
   RealtimeChannel? _realtimeChannel;
 
+  CrmDateFilter _currentDateFilter = const CrmDateFilter();
+  CrmDateFilter get currentDateFilter => _currentDateFilter;
+
   LeadsNotifier(this._supabase, this._userId, this._isAdmin) : super(const AsyncValue.loading()) {
     load();
     _initRealtime();
@@ -610,13 +626,22 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
     super.dispose();
   }
 
-  Future<void> load({bool refresh = false}) async {
+  Future<void> load({CrmDateFilter? dateFilter, bool refresh = false}) async {
+    if (dateFilter != null) _currentDateFilter = dateFilter;
     if (refresh && !state.hasValue) state = const AsyncValue.loading();
     try {
       dynamic query = _supabase.from('crm_leads').select();
 
       if (!_isAdmin && _userId != null) {
         query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
+      }
+
+      // Choice: Filter leads by created_at (when lead opportunity was created in CRM)
+      if (_currentDateFilter.startDate != null) {
+        query = query.gte('created_at', _currentDateFilter.startDate!.toIso8601String());
+      }
+      if (_currentDateFilter.endDate != null) {
+        query = query.lte('created_at', _currentDateFilter.endDate!.toIso8601String());
       }
 
       query = query.order('created_at', ascending: false);
@@ -1675,3 +1700,135 @@ final leadsWithPendingQuotationApprovalProvider =
   }
 });
 
+/// Provider to get the set of lead IDs that currently have approved/confirmed quotations.
+final leadsWithApprovedQuotationProvider =
+    FutureProvider<Set<String>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    // In DB, approved quotations have status 'confirmed' or approved_at is not null
+    final res = await supabase
+        .from('quotations')
+        .select('lead_id, status, approved_at')
+        .or('status.eq.confirmed,approved_at.not.is.null');
+    final set = <String>{};
+    for (final row in (res as List)) {
+      final leadId = row['lead_id'] as String?;
+      if (leadId != null && leadId.isNotEmpty) {
+        set.add(leadId);
+      }
+    }
+    return set;
+  } catch (e) {
+    debugPrint('Error fetching approved quotation leads: $e');
+    return <String>{};
+  }
+});
+
+
+// --- CRM WON CUSTOMERS PROVIDER ---
+
+final crmWonCustomersProvider = StateNotifierProvider<CrmWonCustomersNotifier, AsyncValue<List<Lead>>>((ref) {
+  final supabase = ref.watch(supabaseClientProvider);
+  final profile = ref.watch(currentProfileProvider);
+  final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
+      profile?.primaryRole == UserRole.manager ||
+      profile?.primaryRole == UserRole.salesHead ||
+      (profile?.roles.contains(UserRole.admin) ?? false) ||
+      (profile?.roles.contains(UserRole.salesHead) ?? false);
+  return CrmWonCustomersNotifier(supabase, profile?.id, isAdminOrSalesHead);
+});
+
+class CrmWonCustomersNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
+  final SupabaseClient _supabase;
+  final String? _userId;
+  final bool _isAdmin;
+  RealtimeChannel? _realtimeChannel;
+
+  CrmDateFilter _currentDateFilter = const CrmDateFilter();
+  CrmDateFilter get currentDateFilter => _currentDateFilter;
+
+  CrmWonCustomersNotifier(this._supabase, this._userId, this._isAdmin) : super(const AsyncValue.loading()) {
+    load();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    try {
+      _realtimeChannel = _supabase
+          .channel('crm_won_customers_realtime_')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'crm_leads',
+            callback: (payload) {
+              load();
+            },
+          )
+          .subscribe();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  Future<void> load({CrmDateFilter? dateFilter, bool refresh = false}) async {
+    if (dateFilter != null) _currentDateFilter = dateFilter;
+    if (refresh && !state.hasValue) state = const AsyncValue.loading();
+    try {
+      dynamic query = _supabase.from('crm_leads').select().or('status.eq.Won,converted_to_customer_id.not.is.null');
+
+      if (!_isAdmin && _userId != null) {
+        query = query.or('created_by.eq.,assigned_to.eq.');
+      }
+
+      // Choice: Filter converted customers by updated_at (date the deal was won/converted)
+      if (_currentDateFilter.startDate != null) {
+        query = query.gte('updated_at', _currentDateFilter.startDate!.toIso8601String());
+      }
+      if (_currentDateFilter.endDate != null) {
+        query = query.lte('updated_at', _currentDateFilter.endDate!.toIso8601String());
+      }
+
+      query = query.order('updated_at', ascending: false);
+      final List<dynamic> response = await query;
+
+      final userIds = <String>{};
+      for (final r in response) {
+        if (r['created_by'] != null) userIds.add(r['created_by'] as String);
+        if (r['assigned_to'] != null) userIds.add(r['assigned_to'] as String);
+      }
+
+      Map<String, Map<String, dynamic>> profilesMap = {};
+      if (userIds.isNotEmpty) {
+        try {
+          final profs = await _supabase
+              .from('profiles')
+              .select('id, full_name, role, roles')
+              .inFilter('id', userIds.toList());
+          for (final p in (profs as List? ?? [])) {
+            profilesMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
+          }
+        } catch (_) {}
+      }
+
+      final leads = response.map((json) {
+        final creatorProf = profilesMap[json['created_by']];
+        final assigneeProf = profilesMap[json['assigned_to']];
+
+        return Lead.fromJson({
+          ...(json as Map<String, dynamic>),
+          'creator': creatorProf,
+          'creator_name': creatorProf?['full_name'],
+          'assignee': assigneeProf,
+          'assignee_name': assigneeProf?['full_name'],
+        });
+      }).toList();
+      if (mounted) state = AsyncValue.data(leads);
+    } catch (e, st) {
+      if (mounted) state = AsyncValue.error(e, st);
+    }
+  }
+}

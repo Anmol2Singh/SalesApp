@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/services/notification_service.dart';
+import 'features/quotation_generator/data/catalog_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,6 +56,16 @@ Future<void> main() async {
     debugPrint('Supabase initialization AuthRetryableFetchException (offline mode): $e');
   } catch (e) {
     debugPrint('Supabase initialization network/offline exception: $e');
+  }
+
+  // Preload bundled quotation generator catalog models into memory
+  try {
+    await CatalogRepository.loadBundledModels();
+    await CatalogRepository.loadBundledPoolModels();
+    await CatalogRepository.loadBundledAllInOneModels();
+    await CatalogRepository.loadBundledTankPresets();
+  } catch (e) {
+    debugPrint('Preloading bundled catalog error: $e');
   }
 
   runApp(

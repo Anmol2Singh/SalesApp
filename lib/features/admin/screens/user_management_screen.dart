@@ -11,6 +11,7 @@ import '../../auth/providers/auth_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/app_config.dart';
 import 'user_roles_editor_screen.dart';
+import '../../reports/screens/user_activity_report_screen.dart' show allUsersProvider;
 
 final usersListProvider = FutureProvider<List<Profile>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
@@ -26,7 +27,12 @@ final usersListProvider = FutureProvider<List<Profile>>((ref) async {
   // Cache all staff profiles to local storage for quick access in reports
   try {
     final prefs = await SharedPreferences.getInstance();
-    final staffOnly = rawProfiles.where((p) => !p.roles.contains(UserRole.customer) && p.primaryRole != UserRole.customer).toList();
+    final staffOnly = rawProfiles.where((p) =>
+        p.isActive != false &&
+        p.deletedAt == null &&
+        !p.roles.contains(UserRole.customer) &&
+        p.primaryRole != UserRole.customer &&
+        !p.roles.any((r) => r.value == 'deactivated')).toList();
     await prefs.setString('cached_staff_profiles_v1', jsonEncode(staffOnly.map((p) => p.toJson()).toList()));
   } catch (_) {}
 
@@ -691,7 +697,37 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         }
       }
 
+      // Clean up technician table entry if present
+      try {
+        await supabase.from('technicians').delete().eq('id', user.id);
+      } catch (_) {
+        try {
+          await supabase.from('technicians').update({'status': 'Inactive'}).eq('id', user.id);
+        } catch (_) {}
+      }
+      if (user.email.isNotEmpty) {
+        try {
+          await supabase.from('technicians').delete().ilike('email', user.email);
+        } catch (_) {
+          try {
+            await supabase.from('technicians').update({'status': 'Inactive'}).ilike('email', user.email);
+          } catch (_) {}
+        }
+      }
+
+      // Purge from local cache
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString('cached_staff_profiles_v1');
+        if (cached != null && cached.isNotEmpty) {
+          final decoded = jsonDecode(cached) as List<dynamic>;
+          final updated = decoded.where((item) => (item is Map) && item['id'] != user.id && item['email'] != user.email).toList();
+          await prefs.setString('cached_staff_profiles_v1', jsonEncode(updated));
+        }
+      } catch (_) {}
+
       ref.invalidate(usersListProvider);
+      ref.invalidate(allUsersProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

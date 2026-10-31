@@ -1,3 +1,5 @@
+import '../providers/app_config_provider.dart';
+import 'package:go_router/go_router.dart';
 // lib/features/admin/screens/product_catalog_screen.dart
 // Stub — product viewing + basic management
 
@@ -91,6 +93,7 @@ class ProductCatalogScreen extends ConsumerWidget {
     final productsAsync = ref.watch(productsProvider);
     final profile = ref.watch(currentProfileProvider);
     final isAdmin = (profile?.primaryRole.canManageCatalog ?? false) && !isViewOnly;
+    final isProductAddUnlocked = ref.watch(productAddUnlockedProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -455,14 +458,62 @@ class ProductCatalogScreen extends ConsumerWidget {
       ),
       floatingActionButton: (isAdmin && !isViewOnly)
           ? FloatingActionButton.extended(
-              onPressed: () => _showAddProductDialog(context, ref),
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Add Product',
-                style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+              tooltip: isProductAddUnlocked
+                  ? 'Add New Product'
+                  : 'Product creation is locked. Enable in Admin > Configuration to add products.',
+              backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+              onPressed: () {
+                if (!isProductAddUnlocked) {
+                  _showProductAddLockedDialog(context);
+                } else {
+                  _showAddProductDialog(context, ref);
+                }
+              },
+              icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+              label: Text(
+                isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
+                style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, color: Colors.white),
               ),
             )
           : null,
+    );
+  }
+
+  void _showProductAddLockedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.lock, color: AppColors.error),
+            SizedBox(width: 8),
+            Text('Product Creation Locked', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'Product additions are globally locked in System Configuration to maintain catalog integrity. To add a new product, please unlock product additions.',
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.go('/admin/configuration');
+            },
+            child: const Text('Go to Configuration'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -565,12 +616,17 @@ class ProductCatalogScreen extends ConsumerWidget {
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
+                  if (e.toString().contains('PRODUCT_ADD_LOCKED')) {
+                    if (Navigator.canPop(ctx)) Navigator.pop(ctx);
+                    _showProductAddLockedDialog(context);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error adding product: $e'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Add'),
@@ -694,12 +750,17 @@ class ProductCatalogScreen extends ConsumerWidget {
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
+                  if (e.toString().contains('PRODUCT_ADD_LOCKED')) {
+                    if (Navigator.canPop(ctx)) Navigator.pop(ctx);
+                    _showProductAddLockedDialog(context);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error adding product: $e'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Save'),

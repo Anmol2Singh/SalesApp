@@ -32,6 +32,7 @@ class BoomBarrierMath {
   /// Calculates financial totals from a list of Boom Barrier line items.
   static BoomBarrierCalculationResult calculate({
     required List<BoomBarrierLineItem> items,
+    double supplementarySubtotal = 0.0,
     double gstPercent = defaultGstPercent,
   }) {
     double sub = 0.0;
@@ -41,8 +42,9 @@ class BoomBarrierMath {
       }
     }
 
-    final gst = (sub * (gstPercent / 100.0)).roundToDouble();
-    final grand = sub + gst;
+    final totalTaxable = sub + supplementarySubtotal;
+    final gst = (totalTaxable * (gstPercent / 100.0)).roundToDouble();
+    final grand = totalTaxable + gst;
 
     return BoomBarrierCalculationResult(
       subtotal: sub,

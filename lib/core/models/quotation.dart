@@ -101,13 +101,14 @@ enum QuotationStatus {
   rejected;
 
   static QuotationStatus fromString(String value) {
-    switch (value) {
+    switch (value.trim().toLowerCase()) {
       case 'draft':
         return QuotationStatus.draft;
       case 'pending_approval':
-      case 'pendingApproval':
+      case 'pendingapproval':
         return QuotationStatus.pendingApproval;
       case 'confirmed':
+      case 'approved':
         return QuotationStatus.confirmed;
       case 'rejected':
         return QuotationStatus.rejected;
@@ -161,7 +162,12 @@ class Quotation {
   final String? pdfUrl;
   final String? confirmedBy;
   final DateTime? confirmedAt;
+  final String? approvedBy;
+  final DateTime? approvedAt;
+  final String? approverName;
   final QuotationStatus status;
+
+  bool get isApproved => status == QuotationStatus.confirmed;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -185,12 +191,28 @@ class Quotation {
   final int? stateCode;
   final String? salesman;
   final String? remarks;
+  final String? rejectionReason;
 
   final String? leadId;
   final int revision;
   final List<Map<String, dynamic>>? paymentTerms;
   final List<SupplementaryItem>? supplementaryTerms;
   final double supplementarySubtotal;
+
+  /// Returns the rejection reason, falling back to parsed remarks if legacy.
+  String? get effectiveRejectionReason {
+    if (rejectionReason != null && rejectionReason!.trim().isNotEmpty) {
+      return rejectionReason!.trim();
+    }
+    if (remarks != null && remarks!.contains('[Rejected]:')) {
+      final parts = remarks!.split('[Rejected]:');
+      if (parts.length > 1) {
+        final reason = parts.last.trim();
+        if (reason.isNotEmpty) return reason;
+      }
+    }
+    return null;
+  }
 
   const Quotation({
     required this.id,
@@ -210,6 +232,9 @@ class Quotation {
     this.pdfUrl,
     this.confirmedBy,
     this.confirmedAt,
+    this.approvedBy,
+    this.approvedAt,
+    this.approverName,
     required this.status,
     required this.createdAt,
     required this.updatedAt,
@@ -230,6 +255,7 @@ class Quotation {
     this.stateCode,
     this.salesman,
     this.remarks = 'Being Quotation Generated',
+    this.rejectionReason,
     this.leadId,
     this.revision = 1,
     this.paymentTerms,
@@ -262,6 +288,13 @@ class Quotation {
       confirmedAt: json['confirmed_at'] != null
           ? DateTime.tryParse(json['confirmed_at'] as String? ?? '')
           : null,
+      approvedBy: json['approved_by'] as String? ?? json['confirmed_by'] as String?,
+      approvedAt: json['approved_at'] != null
+          ? DateTime.tryParse(json['approved_at'] as String? ?? '')
+          : (json['confirmed_at'] != null ? DateTime.tryParse(json['confirmed_at'] as String? ?? '') : null),
+      approverName: (json['approver'] is Map)
+          ? (json['approver']['full_name'] as String?)
+          : (json['approver_name'] as String?),
       status: QuotationStatus.fromString(json['status'] as String? ?? 'draft'),
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now())
@@ -288,6 +321,7 @@ class Quotation {
       stateCode: json['state_code'] as int?,
       salesman: json['salesman'] as String?,
       remarks: json['remarks'] as String? ?? 'Being Quotation Generated',
+      rejectionReason: json['rejection_reason'] as String?,
       leadId: json['lead_id'] as String?,
       revision: (json['revision'] as num?)?.toInt() ?? 1,
       paymentTerms: (json['payment_terms'] as List<dynamic>?)
@@ -313,6 +347,9 @@ class Quotation {
     'igst_amount': igstAmount,
     'grand_total': grandTotal,
     'terms_text': termsText,
+    if (approvedBy != null) 'approved_by': approvedBy,
+    if (approvedAt != null) 'approved_at': approvedAt!.toIso8601String(),
+    if (rejectionReason != null) 'rejection_reason': rejectionReason,
     'status': status.dbValue,
     'sales_order_no': salesOrderNo,
     'order_date': orderDate?.toIso8601String(),

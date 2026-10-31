@@ -51,9 +51,35 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
   final List<Profile> list = [];
   final Set<String> seenIds = {};
+  final Set<String> excludedEmails = {};
+  final Set<String> excludedIds = {};
+
+  // First fetch deactivated / deleted profile IDs & emails to ensure they are never included
+  try {
+    final inactiveRes = await supabase
+        .from('profiles')
+        .select('id, email')
+        .or('is_active.eq.false,deleted_at.not.is.null');
+    for (final row in (inactiveRes as List? ?? [])) {
+      if (row['id'] != null) excludedIds.add(row['id'].toString());
+      if (row['email'] != null) excludedEmails.add(row['email'].toString().trim().toLowerCase());
+    }
+  } catch (_) {}
+
+  bool isProfileValid(Profile p) {
+    if (p.id.isEmpty) return false;
+    if (excludedIds.contains(p.id)) return false;
+    if (p.email.isNotEmpty && excludedEmails.contains(p.email.trim().toLowerCase())) return false;
+    if (p.isActive == false) return false;
+    if (p.deletedAt != null) return false;
+    if (p.roles.contains(UserRole.customer) && p.roles.length == 1) return false;
+    if (p.primaryRole == UserRole.customer) return false;
+    if (p.roles.any((r) => r.value == 'deactivated')) return false;
+    return true;
+  }
 
   void addProfile(Profile p) {
-    if (p.id.isNotEmpty && !seenIds.contains(p.id)) {
+    if (isProfileValid(p) && !seenIds.contains(p.id)) {
       seenIds.add(p.id);
       list.add(p);
     }
@@ -74,7 +100,12 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
   // 2. Direct select from profiles table
   if (list.isEmpty) {
     try {
-      final response = await supabase.from('profiles').select().order('full_name');
+      final response = await supabase
+          .from('profiles')
+          .select()
+          .eq('is_active', true)
+          .isFilter('deleted_at', null)
+          .order('full_name');
       final profiles = (response as List).map((json) => Profile.fromJson(json)).toList();
       for (final p in profiles) {
         addProfile(p);
@@ -82,26 +113,28 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
     } catch (_) {}
   }
 
-  // 3. Fallback: Check local cache in SharedPreferences
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString('cached_staff_profiles_v1');
-    if (cached != null && cached.isNotEmpty) {
-      final decoded = jsonDecode(cached) as List<dynamic>;
-      for (final item in decoded) {
-        try {
-          addProfile(Profile.fromJson(Map<String, dynamic>.from(item)));
-        } catch (_) {}
+  // 3. Fallback: Check local cache in SharedPreferences ONLY IF list is still empty (offline mode)
+  if (list.isEmpty) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cached_staff_profiles_v1');
+      if (cached != null && cached.isNotEmpty) {
+        final decoded = jsonDecode(cached) as List<dynamic>;
+        for (final item in decoded) {
+          try {
+            addProfile(Profile.fromJson(Map<String, dynamic>.from(item)));
+          } catch (_) {}
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 
-  // 4. Fallback: Query distinct staff users from sales_pipelines & crm_leads
-  if (list.length <= 1) {
+  // 4. Fallback: Query distinct staff users from sales_pipelines & crm_leads ONLY IF list is still empty
+  if (list.isEmpty) {
     try {
       final pipes = await supabase
           .from('sales_pipelines')
-          .select('assigned_to, profiles!sales_pipelines_assigned_to_fkey(id, full_name, email, phone, role, roles)')
+          .select('assigned_to, profiles!sales_pipelines_assigned_to_fkey(id, full_name, email, phone, role, roles, is_active, deleted_at)')
           .not('assigned_to', 'is', null)
           .limit(100);
       for (final row in (pipes as List)) {
@@ -116,7 +149,7 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
     try {
       final leads = await supabase
           .from('crm_leads')
-          .select('assigned_to, profiles!crm_leads_assigned_to_fkey(id, full_name, email, phone, role, roles)')
+          .select('assigned_to, profiles!crm_leads_assigned_to_fkey(id, full_name, email, phone, role, roles, is_active, deleted_at)')
           .not('assigned_to', 'is', null)
           .limit(100);
       for (final row in (leads as List)) {
@@ -129,23 +162,21 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
     } catch (_) {}
   }
 
-  // 5. If we have profiles, persist to SharedPreferences cache
-  if (list.isNotEmpty) {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final enc = jsonEncode(list.map((p) => p.toJson()).toList());
-      await prefs.setString('cached_staff_profiles_v1', enc);
-    } catch (_) {}
-  }
-
-  // 6. Also include technicians from technicians table if not already in profiles
+  // 5. Also include active technicians from technicians table if not already in list
   try {
-    final techsRes = await supabase.from('technicians').select();
+    final techsRes = await supabase
+        .from('technicians')
+        .select();
     for (final t in (techsRes as List? ?? [])) {
       final tId = t['id']?.toString() ?? '';
       final tName = t['name']?.toString() ?? t['full_name']?.toString() ?? '';
       final tEmail = t['email']?.toString() ?? '';
       final tPhone = t['phone']?.toString();
+      final status = (t['status']?.toString() ?? 'Available').toLowerCase();
+
+      if (status == 'inactive' || status == 'deleted') continue;
+      if (excludedIds.contains(tId)) continue;
+      if (tEmail.isNotEmpty && excludedEmails.contains(tEmail.trim().toLowerCase())) continue;
 
       final exists = list.any((p) =>
           (tId.isNotEmpty && p.id == tId) ||
@@ -165,6 +196,15 @@ final allUsersProvider = FutureProvider<List<Profile>>((ref) async {
       }
     }
   } catch (_) {}
+
+  // 6. Overwrite cache with clean, active profiles only (clears any stale deleted profiles from disk)
+  if (list.isNotEmpty) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enc = jsonEncode(list.map((p) => p.toJson()).toList());
+      await prefs.setString('cached_staff_profiles_v1', enc);
+    } catch (_) {}
+  }
 
   list.sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
   return list;
@@ -462,12 +502,14 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (context, setPickerState) {
             final isAllSelected = selectedKeys.length == _reportSections.length;
+            final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.75,
@@ -475,7 +517,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -666,6 +708,8 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                       onPressed: (selectedKeys.isEmpty || isGeneratingPdf)
                           ? null
                           : () async {
+                              final navigator = Navigator.of(context, rootNavigator: true);
+                              final messenger = ScaffoldMessenger.of(context);
                               setPickerState(() => isGeneratingPdf = true);
                               try {
                                 final result = await _generateReportBytes(data, selectedKeys);
@@ -673,8 +717,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                                   Navigator.pop(sheetCtx);
                                 }
                                 if (mounted && result != null) {
-                                  Navigator.push(
-                                    context,
+                                  navigator.push(
                                     MaterialPageRoute(
                                       builder: (context) => PdfPreviewScreen(
                                         pdfBytes: result['bytes'] as Uint8List,
@@ -688,7 +731,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                                   setPickerState(() => isGeneratingPdf = false);
                                 }
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  messenger.showSnackBar(
                                     SnackBar(content: Text('Error generating report: $e'), backgroundColor: AppColors.error),
                                   );
                                 }
@@ -721,7 +764,12 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
     if (isAll) {
       final usersAsync = ref.read(allUsersProvider);
       final rawUsers = (usersAsync.valueOrNull ?? [])
-          .where((u) => u.primaryRole != UserRole.customer)
+          .where((u) =>
+              u.isActive != false &&
+              u.deletedAt == null &&
+              !u.roles.any((r) => r.value == 'deactivated') &&
+              u.primaryRole != UserRole.customer &&
+              !u.roles.contains(UserRole.customer))
           .toList();
 
       final users = rawUsers
@@ -824,6 +872,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
   }) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -832,9 +881,13 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setPickerState) {
-            // Allow all non-customer profiles (all roles) for Sales Head and Admin
+            // Allow all active non-customer profiles (all roles) for Sales Head and Admin
             final eligibleUsers = users.where((u) {
-              return u.primaryRole != UserRole.customer;
+              return u.isActive != false &&
+                  u.deletedAt == null &&
+                  !u.roles.any((r) => r.value == 'deactivated') &&
+                  u.primaryRole != UserRole.customer &&
+                  !u.roles.contains(UserRole.customer);
             }).toList()
               ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
@@ -850,10 +903,11 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             final isAllSelected = currentUserId == 'ALL';
             const allOptionTitle = 'All Users (All Staff)';
             const allOptionSubtitle = 'Generate complete report with each user on a new page';
+            final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.75,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -899,7 +953,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                       allOptionTitle.toLowerCase().contains(searchQuery.trim().toLowerCase())) ...[
                     Container(
                       decoration: BoxDecoration(
-                        color: isAllSelected ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                        color: isAllSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: isAllSelected ? AppColors.primary : Colors.grey.shade300,
@@ -951,7 +1005,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
 
                               return ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: isSelected ? AppColors.primary : AppColors.primary.withOpacity(0.1),
+                                  backgroundColor: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.1),
                                   child: Text(
                                     initials,
                                     style: TextStyle(
@@ -1000,6 +1054,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
     final canSelectUser = isAdmin || isSalesHead;
     final filter = ref.watch(reportFilterProvider);
     final dataAsync = ref.watch(activityReportProvider);
+    final isMobile = MediaQuery.of(context).size.width < 800;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1155,6 +1210,52 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
               ],
             ),
           ),
+          if (isMobile)
+            dataAsync.whenOrNull(
+              data: (data) => Container(
+                color: AppColors.surface,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal.shade700,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => _exportReportExcel(context, data),
+                        icon: const Icon(Icons.table_chart_outlined, size: 18, color: Colors.white),
+                        label: const Text(
+                          'Export Excel',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => _showPdfSectionPicker(context, data),
+                        icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
+                        label: const Text(
+                          'Download PDF',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ) ?? const SizedBox.shrink(),
           const SizedBox(height: 8),
           
           Expanded(
@@ -1238,7 +1339,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                     ),
                     const SizedBox(height: 16),
                     _buildSection('Complaints Handled (${data.complaints.length})', data.complaints, (c) => c['title'] ?? 'Complaint', (c) => 'Ticket: ${c['ticket_number'] ?? c['id']}'),
-                    SizedBox(height: MediaQuery.of(context).size.width >= 800 ? 20 : 90),
+                    SizedBox(height: isMobile ? (80.0 + MediaQuery.of(context).viewPadding.bottom) : 40.0),
                   ],
                 );
               },
@@ -1248,31 +1349,32 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
           ),
         ],
       ),
-      floatingActionButton: dataAsync.whenOrNull(
-        data: (data) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FloatingActionButton.extended(
-                heroTag: 'export_excel_fab',
-                onPressed: () => _exportReportExcel(context, data),
-                icon: const Icon(Icons.table_chart_outlined, size: 18),
-                label: const Text('Export Excel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                backgroundColor: Colors.teal.shade700,
+      floatingActionButton: isMobile
+          ? null
+          : dataAsync.whenOrNull(
+              data: (data) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.extended(
+                    heroTag: 'export_excel_fab',
+                    onPressed: () => _exportReportExcel(context, data),
+                    icon: const Icon(Icons.table_chart_outlined, size: 18, color: Colors.white),
+                    label: const Text('Export Excel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    backgroundColor: Colors.teal.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                  const SizedBox(width: 12),
+                  FloatingActionButton.extended(
+                    heroTag: 'download_pdf_fab',
+                    onPressed: () => _showPdfSectionPicker(context, data),
+                    icon: const Icon(Icons.picture_as_pdf, size: 18, color: Colors.white),
+                    label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              FloatingActionButton.extended(
-                heroTag: 'download_pdf_fab',
-                onPressed: () => _showPdfSectionPicker(context, data),
-                icon: const Icon(Icons.picture_as_pdf, size: 18),
-                label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                backgroundColor: AppColors.primary,
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 

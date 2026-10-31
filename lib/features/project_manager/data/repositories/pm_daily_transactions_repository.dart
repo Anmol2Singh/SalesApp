@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/pm_daily_transaction.dart';
+import '../models/pm_transaction_purpose.dart';
 
 class PmDailyTransactionsRepository {
   final SupabaseClient _supabase;
@@ -100,5 +101,65 @@ class PmDailyTransactionsRepository {
       }
     } catch (_) {}
     return 1;
+  }
+
+  static const List<PmTransactionPurpose> defaultPurposes = [
+    PmTransactionPurpose(id: '1', name: 'Advance Payment', sortOrder: 1),
+    PmTransactionPurpose(id: '2', name: 'Final Payment', sortOrder: 2),
+    PmTransactionPurpose(id: '3', name: 'Material Purchase', sortOrder: 3),
+    PmTransactionPurpose(id: '4', name: 'Transport / Freight', sortOrder: 4),
+    PmTransactionPurpose(id: '5', name: 'Labour / Installation', sortOrder: 5),
+    PmTransactionPurpose(id: '6', name: 'Site Expenses', sortOrder: 6),
+    PmTransactionPurpose(id: '7', name: 'Office Expense', sortOrder: 7),
+    PmTransactionPurpose(id: '8', name: 'Salary / Wages', sortOrder: 8),
+    PmTransactionPurpose(id: '9', name: 'Vendor Payment', sortOrder: 9),
+    PmTransactionPurpose(id: '10', name: 'Customer Receipt', sortOrder: 10),
+    PmTransactionPurpose(id: '11', name: 'Refund', sortOrder: 11),
+    PmTransactionPurpose(id: '12', name: 'Miscellaneous', sortOrder: 12),
+  ];
+
+  /// Get transaction purposes
+  Future<List<PmTransactionPurpose>> getTransactionPurposes() async {
+    try {
+      final res = await _supabase
+          .from('pm_transaction_purposes')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', ascending: true)
+          .order('name', ascending: true);
+      final list = (res as List<dynamic>).map((e) => PmTransactionPurpose.fromJson(e)).toList();
+      if (list.isNotEmpty) return list;
+    } catch (_) {
+      // Fall through to defaults if table not yet migrated or offline
+    }
+    return defaultPurposes;
+  }
+
+  /// Create purpose
+  Future<PmTransactionPurpose> createTransactionPurpose(String name) async {
+    final trimmed = name.trim();
+    final res = await _supabase
+        .from('pm_transaction_purposes')
+        .insert({'name': trimmed})
+        .select()
+        .single();
+    return PmTransactionPurpose.fromJson(res);
+  }
+
+  /// Update purpose
+  Future<PmTransactionPurpose> updateTransactionPurpose(String id, String newName) async {
+    final trimmed = newName.trim();
+    final res = await _supabase
+        .from('pm_transaction_purposes')
+        .update({'name': trimmed, 'updated_at': DateTime.now().toIso8601String()})
+        .eq('id', id)
+        .select()
+        .single();
+    return PmTransactionPurpose.fromJson(res);
+  }
+
+  /// Delete purpose
+  Future<void> deleteTransactionPurpose(String id) async {
+    await _supabase.from('pm_transaction_purposes').delete().eq('id', id);
   }
 }

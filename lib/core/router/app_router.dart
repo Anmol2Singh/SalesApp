@@ -17,7 +17,8 @@ import '../../features/pipelines/screens/pipeline_detail_screen.dart';
 import '../../features/quotation/screens/quotation_form_screen.dart';
 import '../../features/quotation_generator/config/quotation_generator_flags.dart';
 import '../../features/quotation_generator/ui/screens/quotation_history_screen.dart';
-import '../../features/quotation_generator/ui/screens/quotation_form_screen.dart' show QuotationGeneratorFormScreen;
+import '../../features/quotation_generator/ui/screens/quotation_form_screen.dart'
+    show QuotationGeneratorFormScreen;
 import '../../features/quotation_generator/ui/screens/noc_hub_screen.dart';
 import '../../features/quotation_generator/ui/screens/noc_builder_screen.dart';
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
@@ -84,7 +85,6 @@ import '../../features/project_manager/presentation/screens/pm_quick_call_remark
 import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
 import '../../features/assigned_work/presentation/screens/assigned_work_screen.dart';
 
-
 // Customer app imports
 import '../../features/customer_app/features/auth/screens/otp_screen.dart';
 import '../../features/customer_app/features/dashboard/screens/main_dashboard.dart';
@@ -100,7 +100,6 @@ import '../../features/customer_app/features/service_request/screens/service_boo
 import '../widgets/customer_app_shell.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
-
 
 // Route names
 class AppRoutes {
@@ -148,6 +147,7 @@ class AppRoutes {
   static const String boqDashboard = '/boq/dashboard';
   static const String manageBoqItems = '/boq/manage-items';
   static const String dailyTasks = '/daily-tasks';
+  static const String adminConfiguration = '/admin/configuration';
   static const String heatPumpQuotationHub = '/heat-pump-quotations';
   static const String heatPumpQuotationCreate = '/heat-pump-quotations/new';
   static const String nocHub = '/qg/noc';
@@ -231,8 +231,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           }
 
           // Guard Product Interests: strictly Admin & Sales Head (Item 4)
-          if ((location == AppRoutes.productInterests || location.startsWith('/product-interests')) &&
-              !isAdminOrManager && !isSalesHead) {
+          if ((location == AppRoutes.productInterests ||
+                  location.startsWith('/product-interests')) &&
+              !isAdminOrManager &&
+              !isSalesHead) {
             return _getRoleHome(profile.primaryRole);
           }
 
@@ -242,8 +244,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             return _getRoleHome(profile.primaryRole);
           }
           // Search PDF: strictly admin, manager, or salesHead
-          if ((location == AppRoutes.searchPdf || location.startsWith('/search-pdf')) &&
-              !isAdminOrManager && !isSalesHead) {
+          if ((location == AppRoutes.searchPdf ||
+                  location.startsWith('/search-pdf')) &&
+              !isAdminOrManager &&
+              !isSalesHead) {
             return _getRoleHome(profile.primaryRole);
           }
 
@@ -286,7 +290,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 
           // Guard Project Manager module: strictly admin, manager, or accounts
           if (location.startsWith('/pm')) {
-            final canAccess = profile.roles.any((r) => r.canAccessProjectManager);
+            final canAccess =
+                profile.roles.any((r) => r.canAccessProjectManager);
             if (!canAccess) {
               return _getRoleHome(profile.primaryRole);
             }
@@ -478,6 +483,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const QuotationHistoryScreen(),
           ),
           GoRoute(
+            path: AppRoutes.adminConfiguration,
+            builder: (context, state) =>
+                const AdminPanelScreen(initialIndex: 8),
+          ),
+          GoRoute(
             path: AppRoutes.projectManager,
             builder: (context, state) => const PmDashboardScreen(),
           ),
@@ -536,7 +546,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-
           GoRoute(
             path: AppRoutes.complaintsDashboard,
             builder: (context, state) => const CoordinatorDashboardScreen(),
@@ -549,7 +558,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.technicianTasks,
             builder: (context, state) {
               final tabParam = state.uri.queryParameters['tab'];
-              final initialTab = (tabParam == 'installations' || tabParam == '1') ? 1 : 0;
+              final initialTab =
+                  (tabParam == 'installations' || tabParam == '1') ? 1 : 0;
               return TechnicianTasksScreen(initialTab: initialTab);
             },
           ),
@@ -583,7 +593,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.assignInstallation,
-            builder: (context, state) => const AssignInstallationTechnicianScreen(),
+            builder: (context, state) =>
+                const AssignInstallationTechnicianScreen(),
           ),
           GoRoute(
             path: AppRoutes.installationHistory,
@@ -603,7 +614,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/products',
-            builder: (context, state) => const ProductCatalogScreen(isEmbedded: false),
+            builder: (context, state) =>
+                const ProductCatalogScreen(isEmbedded: false),
           ),
         ],
       ),
@@ -644,7 +656,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.uri.queryParameters['id'] ?? '';
           final type = state.uri.queryParameters['type'];
-          final isPurchase = type == 'purchase' || state.uri.queryParameters['mode'] == 'purchase';
+          final isPurchase = type == 'purchase' ||
+              state.uri.queryParameters['mode'] == 'purchase';
           return PmQuickCallRemarkScreen(id: id, isPurchase: isPurchase);
         },
       ),
@@ -795,7 +808,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final customerId = state.pathParameters['customerId']!;
           final pipelineId = state.uri.queryParameters['pipelineId'];
           final contractId = state.uri.queryParameters['contractId'];
-          return ServiceVisitFormScreen(customerId: customerId, pipelineId: pipelineId, contractId: contractId);
+          return ServiceVisitFormScreen(
+              customerId: customerId,
+              pipelineId: pipelineId,
+              contractId: contractId);
         },
       ),
       GoRoute(
@@ -803,7 +819,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final pipelineId = state.pathParameters['id']!;
           final customerId = state.uri.queryParameters['customerId'] ?? '';
-          return WarrantyCardScreen(pipelineId: pipelineId, customerId: customerId);
+          return WarrantyCardScreen(
+              pipelineId: pipelineId, customerId: customerId);
         },
       ),
       GoRoute(

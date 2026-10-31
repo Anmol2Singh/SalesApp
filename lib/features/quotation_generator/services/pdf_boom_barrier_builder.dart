@@ -1,11 +1,13 @@
 // lib/features/quotation_generator/services/pdf_boom_barrier_builder.dart
 
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/boom_barrier_proposal_draft.dart';
 import '../models/qg_product_profile.dart';
@@ -77,7 +79,8 @@ class PdfBoomBarrierBuilder {
     final imgNprs = assetOverrides?['nprs'] ??
         await _loadImageBytes(draft.galleryNprsPath ?? 'assets/images/boom_barrier/product_nprs.png');
 
-    final isConfirmed = draft.status.trim().toLowerCase() == 'confirmed';
+    final statusLower = draft.status.trim().toLowerCase();
+    final isConfirmed = statusLower == 'confirmed' || statusLower == 'approved';
     final generatedByName = await PdfService.resolveCurrentUserName();
 
     // ─── PAGE 1: COVER PAGE ──────────────────────────────────────────────
@@ -138,38 +141,33 @@ class PdfBoomBarrierBuilder {
       ),
     );
 
-    // ─── PAGE 2: QUOTATION & OPTION 1 PRICE TABLE ─────────────────────────
+    // ─── PAGE 2: QUOTATION, COMMERCIAL OFFER & SUPPLEMENTARY ITEMS ────────
     pdf.addPage(
-      pw.Page(
-        theme: theme,
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+      pw.MultiPage(
+        header: (context) => _buildHeader(profile, logoBytes),
+        footer: (context) => _buildSalesRepFooter(draft, generatedByName),
+        pageTheme: pw.PageTheme(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+          buildBackground: (context) => !isConfirmed ? _buildWatermark() : pw.SizedBox.shrink(),
+        ),
         build: (context) {
-          return pw.Stack(
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(profile, logoBytes),
-                  pw.SizedBox(height: 10),
-                  _buildRefDateBar(draft.refNumber, draft.quoteDate),
-                  pw.SizedBox(height: 8),
-                  _buildQuotationMeta(draft),
-                  pw.SizedBox(height: 8),
-                  _buildSubjectAndIntro(draft),
-                  pw.SizedBox(height: 8),
-                  _buildOption1Table(draft),
-                  pw.SizedBox(height: 8),
-                  _buildAtActualSection(draft),
-                  pw.SizedBox(height: 6),
-                  _buildNotesSection(draft),
-                  pw.Spacer(),
-                  _buildSalesRepFooter(draft, generatedByName),
-                ],
-              ),
-              if (!isConfirmed) _buildWatermark(),
-            ],
-          );
+          return [
+            pw.SizedBox(height: 10),
+            _buildRefDateBar(draft.refNumber, draft.quoteDate),
+            pw.SizedBox(height: 8),
+            _buildQuotationMeta(draft),
+            pw.SizedBox(height: 8),
+            _buildSubjectAndIntro(draft),
+            pw.SizedBox(height: 8),
+            _buildOption1Table(draft),
+            pw.SizedBox(height: 8),
+            _buildAtActualSection(draft),
+            pw.SizedBox(height: 6),
+            _buildNotesSection(draft),
+            pw.SizedBox(height: 14),
+          ];
         },
       ),
     );
@@ -193,7 +191,7 @@ class PdfBoomBarrierBuilder {
                   _buildTermsAndConditions(draft),
                   pw.SizedBox(height: 12),
                   _buildSpecsSection(draft),
-                  pw.Spacer(),
+                  pw.SizedBox(height: 12),
                   _buildBankDetails(draft),
                 ],
               ),
@@ -400,6 +398,99 @@ class PdfBoomBarrierBuilder {
     const double colDisc = 50;
     const double colPrice = 60;
 
+    final totalTaxable = draft.subtotal + draft.supplementarySubtotal;
+
+    final tableRows = <pw.TableRow>[
+      // Header Row
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: _headerBg),
+        children: [
+          _th('Sr.No', align: pw.TextAlign.center),
+          _th('Item Description', align: pw.TextAlign.left),
+          _th('Qty.', align: pw.TextAlign.center),
+          _th('Rate', align: pw.TextAlign.right),
+          _th('Discount', align: pw.TextAlign.center),
+          _th('Price', align: pw.TextAlign.right),
+        ],
+      ),
+      // Item Rows
+      for (final item in draft.items)
+        pw.TableRow(
+          children: [
+            _td('${item.srNo}', align: pw.TextAlign.center),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(3),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    item.description,
+                    style: pw.TextStyle(
+                      fontSize: 8,
+                      fontWeight: item.inclusions.isNotEmpty ? pw.FontWeight.bold : pw.FontWeight.normal,
+                    ),
+                  ),
+                  if (item.inclusions.isNotEmpty) ...[
+                    pw.SizedBox(height: 2),
+                    for (final inc in item.inclusions)
+                      pw.Text(
+                        inc,
+                        style: const pw.TextStyle(fontSize: 7.5, color: _mutedText),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            _td('${item.qty}', align: pw.TextAlign.center),
+            _td(item.formattedRateText, align: pw.TextAlign.right),
+            _td('', align: pw.TextAlign.center),
+            _td(
+              item.formattedPriceText,
+              align: pw.TextAlign.right,
+              bold: item.hasMonetaryValue,
+            ),
+          ],
+        ),
+    ];
+
+    // Supplementary items continuing the Sr. No!
+    int srNo = draft.items.length;
+    for (final item in draft.supplementaryItems) {
+      srNo++;
+      final rawDesc = (item['name'] ?? item['term'] ?? item['item_name'] ?? item['description'] ?? item['title'] ?? '')
+          .toString()
+          .trim();
+      final desc = rawDesc.isNotEmpty ? rawDesc : 'Supplementary Item';
+      final qty = (item['qty'] ?? item['quantity'] as num?)?.toInt() ?? 1;
+      final rate = (item['rate'] ?? item['unit_price'] as num?)?.toDouble() ?? 0.0;
+      final total = (item['amount'] ?? item['total'] as num?)?.toDouble() ?? (qty * rate);
+      final type = item['type']?.toString().toLowerCase();
+      final isIncluded = type == 'included' || (total <= 0 && rate <= 0);
+
+      tableRows.add(
+        pw.TableRow(
+          children: [
+            _td('$srNo', align: pw.TextAlign.center),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(3),
+              child: pw.Text(
+                desc,
+                style: const pw.TextStyle(fontSize: 8),
+              ),
+            ),
+            _td('$qty', align: pw.TextAlign.center),
+            _td(isIncluded ? 'Included' : BoomBarrierMath.formatRawOrIndian(rate), align: pw.TextAlign.right),
+            _td('', align: pw.TextAlign.center),
+            _td(
+              isIncluded ? 'Included' : BoomBarrierMath.formatRawOrIndian(total),
+              align: pw.TextAlign.right,
+              bold: !isIncluded,
+            ),
+          ],
+        ),
+      );
+    }
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -413,132 +504,96 @@ class PdfBoomBarrierBuilder {
         ),
         pw.SizedBox(height: 4),
         pw.Table(
-          border: pw.TableBorder.all(color: _borderColor, width: 1.0),
-          columnWidths: {
-            0: const pw.FixedColumnWidth(colSr),
-            1: const pw.FlexColumnWidth(),
-            2: const pw.FixedColumnWidth(colQty),
-            3: const pw.FixedColumnWidth(colRate),
-            4: const pw.FixedColumnWidth(colDisc),
-            5: const pw.FixedColumnWidth(colPrice),
+          border: const pw.TableBorder(
+            left: pw.BorderSide(color: _borderColor, width: 1.0),
+            right: pw.BorderSide(color: _borderColor, width: 1.0),
+            top: pw.BorderSide(color: _borderColor, width: 1.0),
+            bottom: pw.BorderSide(color: _borderColor, width: 1.0),
+            horizontalInside: pw.BorderSide(color: _borderColor, width: 1.0),
+            verticalInside: pw.BorderSide(color: _borderColor, width: 1.0),
+          ),
+          columnWidths: const {
+            0: pw.FixedColumnWidth(colSr),
+            1: pw.FlexColumnWidth(),
+            2: pw.FixedColumnWidth(colQty),
+            3: pw.FixedColumnWidth(colRate),
+            4: pw.FixedColumnWidth(colDisc),
+            5: pw.FixedColumnWidth(colPrice),
+          },
+          children: tableRows,
+        ),
+        // Unified Totals Block directly attached beneath the table
+        pw.Table(
+          border: const pw.TableBorder(
+            left: pw.BorderSide(color: _borderColor, width: 1.0),
+            right: pw.BorderSide(color: _borderColor, width: 1.0),
+            bottom: pw.BorderSide(color: _borderColor, width: 1.0),
+            horizontalInside: pw.BorderSide(color: _borderColor, width: 1.0),
+            verticalInside: pw.BorderSide(color: _borderColor, width: 1.0),
+          ),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(),
+            1: pw.FixedColumnWidth(colPrice),
           },
           children: [
-            // Header Row
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: _headerBg),
-              children: [
-                _th('Sr.No', align: pw.TextAlign.center),
-                _th('Item Description', align: pw.TextAlign.left),
-                _th('Qty.', align: pw.TextAlign.center),
-                _th('Rate', align: pw.TextAlign.right),
-                _th('Discount', align: pw.TextAlign.center),
-                _th('Price', align: pw.TextAlign.right),
-              ],
-            ),
-            // Item Rows
-            for (final item in draft.items)
-              pw.TableRow(
-                children: [
-                  _td('${item.srNo}', align: pw.TextAlign.center),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(3),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          item.description,
-                          style: pw.TextStyle(
-                            fontSize: 8,
-                            fontWeight: item.inclusions.isNotEmpty ? pw.FontWeight.bold : pw.FontWeight.normal,
-                          ),
-                        ),
-                        if (item.inclusions.isNotEmpty) ...[
-                          pw.SizedBox(height: 2),
-                          for (final inc in item.inclusions)
-                            pw.Text(
-                              inc,
-                              style: const pw.TextStyle(fontSize: 7.5, color: _mutedText),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  _td('${item.qty}', align: pw.TextAlign.center),
-                  _td(item.formattedRateText, align: pw.TextAlign.right),
-                  _td('', align: pw.TextAlign.center),
-                  _td(
-                    item.formattedPriceText,
-                    align: pw.TextAlign.right,
-                    bold: item.hasMonetaryValue,
-                  ),
-                ],
-              ),
-
-            // Sub Total Row
             pw.TableRow(
               children: [
-                _td(''),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 8),
                   child: pw.Text(
-                    'Sub Total',
-                    textAlign: pw.TextAlign.right,
+                    'Total Taxable Value:',
+                    style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: _navy),
+                  ),
+                ),
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+                  child: pw.Text(
+                    BoomBarrierMath.formatRawOrIndian(totalTaxable),
                     style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                   ),
                 ),
-                _td(''),
-                _td(''),
-                _td(''),
-                _td(
-                  BoomBarrierMath.formatRawOrIndian(draft.subtotal),
-                  align: pw.TextAlign.right,
-                  bold: true,
-                ),
               ],
             ),
-            // GST Row
             pw.TableRow(
               children: [
-                _td(''),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 8),
                   child: pw.Text(
-                    'GST ${draft.gstPercent.toInt()}%',
-                    textAlign: pw.TextAlign.right,
+                    'GST ${draft.gstPercent.toInt()}%:',
                     style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
                   ),
                 ),
-                _td(''),
-                _td(''),
-                _td(''),
-                _td(
-                  BoomBarrierMath.formatIndianCurrencyWithSymbol(draft.gstAmount),
-                  align: pw.TextAlign.right,
-                  bold: true,
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+                  child: pw.Text(
+                    BoomBarrierMath.formatIndianCurrencyWithSymbol(draft.gstAmount),
+                    style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                  ),
                 ),
               ],
             ),
-            // Total Row
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: _headerBg),
               children: [
-                _td(''),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                   child: pw.Text(
-                    'Total',
-                    textAlign: pw.TextAlign.right,
-                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _navy),
+                    'Grand Total:',
+                    style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: _navy),
                   ),
                 ),
-                _td(''),
-                _td(''),
-                _td(''),
-                _td(
-                  BoomBarrierMath.formatIndianCurrencyWithSymbol(draft.grandTotal),
-                  align: pw.TextAlign.right,
-                  bold: true,
-                  color: _navy,
+                pw.Container(
+                  alignment: pw.Alignment.centerRight,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                  child: pw.Text(
+                    BoomBarrierMath.formatIndianCurrencyWithSymbol(draft.grandTotal),
+                    style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: _navy),
+                  ),
                 ),
               ],
             ),
@@ -734,28 +789,20 @@ class PdfBoomBarrierBuilder {
   }
 
   static pw.Widget _buildBankDetails(BoomBarrierProposalDraft draft) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(8),
-      decoration: pw.BoxDecoration(
-        color: _headerBg,
-        borderRadius: pw.BorderRadius.circular(4),
-        border: pw.Border.all(color: _borderColor, width: 1.0),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            'BANK ACCOUNT DETAILS:',
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _navy),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text('Account Name   :- ${draft.bankAccountName}', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text('Bank Name      :- ${draft.bankName}', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text('Account Number :- ${draft.bankAccountNumber}', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text('Branch         :- ${draft.bankBranch}', style: const pw.TextStyle(fontSize: 8)),
-          pw.Text('IFSC Code      :- ${draft.bankIfsc}', style: const pw.TextStyle(fontSize: 8)),
-        ],
-      ),
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'BANK ACCOUNT DETAILS:',
+          style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: _navy),
+        ),
+        pw.SizedBox(height: 3),
+        pw.Text('Account Name   :- ${draft.bankAccountName}', style: const pw.TextStyle(fontSize: 8, color: _darkText)),
+        pw.Text('Bank Name      :- ${draft.bankName}', style: const pw.TextStyle(fontSize: 8, color: _darkText)),
+        pw.Text('Account Number :- ${draft.bankAccountNumber}', style: const pw.TextStyle(fontSize: 8, color: _darkText)),
+        pw.Text('Branch         :- ${draft.bankBranch}', style: const pw.TextStyle(fontSize: 8, color: _darkText)),
+        pw.Text('IFSC Code      :- ${draft.bankIfsc}', style: const pw.TextStyle(fontSize: 8, color: _darkText)),
+      ],
     );
   }
 
@@ -960,18 +1007,84 @@ class PdfBoomBarrierBuilder {
     );
   }
 
-  static Future<Uint8List?> _loadImageBytes(String path) async {
+  static Future<Uint8List?> _loadImageBytes(String? path) async {
+    if (path == null || path.trim().isEmpty) return null;
+    final trimmed = path.trim();
     try {
-      if (path.startsWith('http://') || path.startsWith('https://')) {
-        final res = await http.get(Uri.parse(path));
+      // 1. Base64 data URI
+      if (trimmed.startsWith('data:image')) {
+        final commaIdx = trimmed.indexOf(',');
+        if (commaIdx != -1) {
+          return base64Decode(trimmed.substring(commaIdx + 1));
+        }
+      }
+
+      // 2. Pure Base64
+      if (trimmed.length > 100 &&
+          !trimmed.contains('/') &&
+          !trimmed.contains('\\') &&
+          !trimmed.contains(':')) {
+        try {
+          return base64Decode(trimmed);
+        } catch (_) {}
+      }
+
+      // 3. Asset path (handles Flutter Web and Native)
+      if (trimmed.startsWith('assets/')) {
+        final data = await rootBundle.load(trimmed);
+        return data.buffer.asUint8List();
+      }
+
+      // 4. Supabase Storage URL - bypasses browser CORS via Supabase client SDK
+      if (trimmed.contains('/storage/v1/object/')) {
+        try {
+          final uri = Uri.parse(trimmed);
+          final pathSegments = uri.pathSegments;
+          final objIdx = pathSegments.indexOf('object');
+          if (objIdx != -1) {
+            int bucketIdx = objIdx + 1;
+            if (bucketIdx < pathSegments.length &&
+                (pathSegments[bucketIdx] == 'public' ||
+                 pathSegments[bucketIdx] == 'authenticated' ||
+                 pathSegments[bucketIdx] == 'sign')) {
+              bucketIdx++;
+            }
+            if (bucketIdx < pathSegments.length) {
+              final bucket = pathSegments[bucketIdx];
+              final rawPath = pathSegments.sublist(bucketIdx + 1).join('/');
+              final filePath = Uri.decodeComponent(rawPath);
+              if (bucket.isNotEmpty && filePath.isNotEmpty) {
+                final downloaded = await Supabase.instance.client.storage
+                    .from(bucket)
+                    .download(filePath);
+                return downloaded;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 5. Remote HTTP/HTTPS URL
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        final res = await http.get(Uri.parse(trimmed));
         if (res.statusCode == 200) return res.bodyBytes;
       }
-      final file = File(path);
-      if (await file.exists()) {
-        return await file.readAsBytes();
+
+      // 6. Local File (only on non-web platforms where dart:io File exists)
+      if (!kIsWeb) {
+        final file = File(trimmed);
+        if (await file.exists()) {
+          return await file.readAsBytes();
+        }
       }
-      final data = await rootBundle.load(path);
-      return data.buffer.asUint8List();
+
+      // 7. Fallback asset check
+      try {
+        final data = await rootBundle.load('assets/$trimmed');
+        return data.buffer.asUint8List();
+      } catch (_) {}
+
+      return null;
     } catch (_) {
       return null;
     }

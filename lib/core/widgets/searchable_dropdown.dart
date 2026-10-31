@@ -41,6 +41,7 @@ class SearchableDropdown<T> extends StatelessWidget {
     if (isWide) {
       showDialog(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ConstrainedBox(
@@ -63,29 +64,42 @@ class SearchableDropdown<T> extends StatelessWidget {
     } else {
       showModalBottomSheet(
         context: context,
+        useRootNavigator: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.75,
-          ),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: _SearchableDropdownModalContent<T>(
-            title: label,
-            items: items,
-            selectedItem: value,
-            itemLabel: itemLabel,
-            itemSubtitle: itemSubtitle,
-            itemLeading: itemLeading,
-            onSelected: (selected) {
-              Navigator.of(ctx).pop();
-              onChanged(selected);
-            },
-          ),
-        ),
+        builder: (ctx) {
+          final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+          final bottomPadding = MediaQuery.of(ctx).viewPadding.bottom;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.75,
+              ),
+              child: Material(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottomPadding),
+                  child: _SearchableDropdownModalContent<T>(
+                    title: label,
+                    items: items,
+                    selectedItem: value,
+                    itemLabel: itemLabel,
+                    itemSubtitle: itemSubtitle,
+                    itemLeading: itemLeading,
+                    onSelected: (selected) {
+                      Navigator.of(ctx).pop();
+                      onChanged(selected);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       );
     }
   }
@@ -287,27 +301,30 @@ class _SearchableDropdownModalContentState<T> extends State<_SearchableDropdownM
                     final label = widget.itemLabel(item);
                     final subtitle = widget.itemSubtitle?.call(item);
 
-                    return ListTile(
-                      leading: widget.itemLeading?.call(item),
-                      title: Text(
-                        label,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                    return Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        leading: widget.itemLeading?.call(item),
+                        title: Text(
+                          label,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                          ),
                         ),
+                        subtitle: subtitle != null
+                            ? Text(
+                                subtitle,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                              )
+                            : null,
+                        trailing: isSelected
+                            ? const Icon(Icons.check_circle, color: AppColors.primary, size: 20)
+                            : null,
+                        onTap: () => widget.onSelected(item),
                       ),
-                      subtitle: subtitle != null
-                          ? Text(
-                              subtitle,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            )
-                          : null,
-                      trailing: isSelected
-                          ? const Icon(Icons.check_circle, color: AppColors.primary, size: 20)
-                          : null,
-                      onTap: () => widget.onSelected(item),
                     );
                   },
                 ),

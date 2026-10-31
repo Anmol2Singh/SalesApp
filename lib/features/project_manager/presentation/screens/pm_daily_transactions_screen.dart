@@ -6,12 +6,15 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/providers/supabase_provider.dart';
+import '../../../../core/widgets/searchable_dropdown.dart';
 import '../theme/pm_tokens.dart';
 import '../widgets/pm_card.dart';
 import '../widgets/pm_badge.dart';
 import '../widgets/pm_button.dart';
 import '../widgets/pm_stat_card.dart';
 import '../../data/models/pm_daily_transaction.dart';
+import '../../data/models/pm_transaction_purpose.dart';
+import '../../data/repositories/pm_daily_transactions_repository.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../providers/pm_providers.dart';
 
@@ -634,6 +637,8 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
   late TextEditingController _amountController;
   late TextEditingController _remarkController;
 
+  String? _selectedFirm;
+  String? _selectedPurpose;
   String _paymentMode = 'Cash';
   PmEntryNature _nature = PmEntryNature.sale;
   PmTransactionFlow _flow = PmTransactionFlow.credit;
@@ -648,8 +653,15 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
     _date = edit?.date ?? DateTime.now();
     _srNoController = TextEditingController(text: edit != null ? edit.srNo.toString() : '1');
     _partyController = TextEditingController(text: edit?.partyName ?? '');
-    _firmController = TextEditingController(text: edit?.firmName ?? '');
-    _txNameController = TextEditingController(text: edit?.transactionName ?? '');
+
+    final editFirm = edit?.firmName;
+    _firmController = TextEditingController(text: editFirm ?? '');
+    _selectedFirm = (editFirm != null && editFirm.isNotEmpty) ? editFirm : null;
+
+    final editTx = edit?.transactionName;
+    _txNameController = TextEditingController(text: editTx ?? '');
+    _selectedPurpose = (editTx != null && editTx.isNotEmpty) ? editTx : null;
+
     final amt = edit != null
         ? (edit.type == PmTransactionFlow.credit ? edit.creditAmount : edit.debitAmount)
         : 0.0;
@@ -698,9 +710,24 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
             selected.firmName!.isNotEmpty &&
             _firmController.text.trim().isEmpty) {
           _firmController.text = selected.firmName!;
+          _selectedFirm = selected.firmName!;
         }
       });
     }
+  }
+
+  Future<void> _openManagePurposesDialog() async {
+    final newSelected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => const _ManagePurposesDialog(),
+    );
+    if (newSelected != null && newSelected.isNotEmpty) {
+      setState(() {
+        _selectedPurpose = newSelected;
+        _txNameController.text = newSelected;
+      });
+    }
+    ref.invalidate(pmTransactionPurposesProvider);
   }
 
   Future<void> _save() async {
@@ -761,6 +788,43 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
   Widget build(BuildContext context) {
     final pm = context.pm;
     final isEdit = widget.editing != null;
+
+    final companies = ref.watch(pmCompaniesListProvider);
+    final activeCompany = ref.watch(pmActiveCompanyProvider);
+    final companyNames = companies.map((c) => c.name.trim()).where((n) => n.isNotEmpty).toSet().toList();
+    if (companyNames.isEmpty) {
+      companyNames.addAll(['Insiya Solar Industry', 'Insiya Trading Corporation']);
+    }
+
+    if ((_selectedFirm == null || _selectedFirm!.isEmpty) && _firmController.text.isEmpty) {
+      _selectedFirm = activeCompany.name.trim();
+      _firmController.text = _selectedFirm!;
+    } else if (_selectedFirm == null && _firmController.text.isNotEmpty) {
+      _selectedFirm = _firmController.text.trim();
+    }
+
+    final firmOptions = <String>{...companyNames};
+    if (_firmController.text.trim().isNotEmpty) {
+      firmOptions.add(_firmController.text.trim());
+    }
+
+    final purposesAsync = ref.watch(pmTransactionPurposesProvider);
+    final purposes = purposesAsync.value ?? PmDailyTransactionsRepository.defaultPurposes;
+    final purposeNames = purposes.map((p) => p.name.trim()).where((n) => n.isNotEmpty).toSet().toList();
+
+    final allPurposeOptions = <String>{...purposeNames};
+    if (_txNameController.text.trim().isNotEmpty) {
+      allPurposeOptions.add(_txNameController.text.trim());
+    }
+
+    if ((_selectedPurpose == null || _selectedPurpose!.isEmpty) && allPurposeOptions.isNotEmpty) {
+      if (_txNameController.text.isNotEmpty && allPurposeOptions.contains(_txNameController.text.trim())) {
+        _selectedPurpose = _txNameController.text.trim();
+      } else if (!isEdit) {
+        _selectedPurpose = allPurposeOptions.first;
+        _txNameController.text = _selectedPurpose!;
+      }
+    }
 
     return AlertDialog(
       title: Text(isEdit ? 'Edit Transaction' : 'New Transaction Entry'),
@@ -865,15 +929,19 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Party / Customer / Vendor Name *',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF475569),
+                    const Expanded(
+                      child: Text(
+                        'Party / Customer / Vendor Name *',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     InkWell(
                       onTap: _openPartySearchDialog,
                       borderRadius: BorderRadius.circular(4),
@@ -933,13 +1001,33 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                 ),
                 const SizedBox(height: 12),
 
-                // Firm Name
-                TextFormField(
-                  controller: _firmController,
+                // Firm Name (Shows company names added in Project Manager)
+                DropdownButtonFormField<String>(
+                  value: firmOptions.contains(_selectedFirm) ? _selectedFirm : null,
                   decoration: const InputDecoration(
-                    labelText: 'Firm Name',
+                    labelText: 'Firm Name *',
                     prefixIcon: Icon(LucideIcons.building, size: 16),
                   ),
+                  isExpanded: true,
+                  items: firmOptions.map((name) {
+                    return DropdownMenuItem<String>(
+                      value: name,
+                      child: Text(
+                        name,
+                        style: const TextStyle(fontSize: 13.5),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _selectedFirm = val;
+                        _firmController.text = val;
+                      });
+                    }
+                  },
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Please select firm name' : null,
                 ),
                 const SizedBox(height: 12),
 
@@ -949,9 +1037,10 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                     Expanded(
                       child: DropdownButtonFormField<PmEntryNature>(
                         value: _nature,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Nature *'),
                         items: PmEntryNature.values.map((n) {
-                          return DropdownMenuItem(value: n, child: Text(n.displayName));
+                          return DropdownMenuItem(value: n, child: Text(n.displayName, overflow: TextOverflow.ellipsis));
                         }).toList(),
                         onChanged: (v) {
                           if (v != null) setState(() => _nature = v);
@@ -962,9 +1051,10 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _paymentMode,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Payment Mode *'),
                         items: _modes.map((m) {
-                          return DropdownMenuItem(value: m, child: Text(m));
+                          return DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis));
                         }).toList(),
                         onChanged: (v) {
                           if (v != null) setState(() => _paymentMode = v);
@@ -975,14 +1065,68 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
                 ),
                 const SizedBox(height: 12),
 
-                // Transaction Name / Description
-                TextFormField(
-                  controller: _txNameController,
+                // Transaction Purpose / Tag (Dropdown with "Manage List" button above)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Transaction Purpose / Tag *',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: _openManagePurposesDialog,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(LucideIcons.settings2, size: 14, color: Color(0xFF2563EB)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Manage List',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                SearchableDropdown<String>(
+                  label: 'Transaction Purpose',
+                  hint: 'Click to search or select purpose...',
+                  value: allPurposeOptions.contains(_selectedPurpose) ? _selectedPurpose : null,
+                  items: allPurposeOptions.toList(),
+                  itemLabel: (item) => item,
                   decoration: const InputDecoration(
-                    labelText: 'Transaction Purpose / Tag *',
-                    hintText: 'e.g. Advance Payment, Material, Transport',
+                    prefixIcon: Icon(LucideIcons.tag, size: 16),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _selectedPurpose = val;
+                        _txNameController.text = val;
+                      });
+                    }
+                  },
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Please select purpose' : null,
                 ),
                 const SizedBox(height: 12),
 
@@ -1011,6 +1155,218 @@ class _DailyTransactionDialogState extends ConsumerState<_DailyTransactionDialog
           child: _saving
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : Text(isEdit ? 'Save Changes' : 'Add Entry'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── MANAGE TRANSACTION PURPOSES / TAGS DIALOG ─────────────────────────────
+
+class _ManagePurposesDialog extends ConsumerStatefulWidget {
+  const _ManagePurposesDialog();
+
+  @override
+  ConsumerState<_ManagePurposesDialog> createState() => _ManagePurposesDialogState();
+}
+
+class _ManagePurposesDialogState extends ConsumerState<_ManagePurposesDialog> {
+  final _addController = TextEditingController();
+  bool _isAdding = false;
+  String? _lastSelected;
+
+  @override
+  void dispose() {
+    _addController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addPurpose() async {
+    final name = _addController.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _isAdding = true);
+    try {
+      final repo = ref.read(pmDailyTransactionsRepositoryProvider);
+      await repo.createTransactionPurpose(name);
+      _addController.clear();
+      _lastSelected = name;
+      ref.invalidate(pmTransactionPurposesProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add purpose: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
+  }
+
+  Future<void> _editPurpose(PmTransactionPurpose p) async {
+    final editCtrl = TextEditingController(text: p.name);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Transaction Purpose'),
+        content: TextField(
+          controller: editCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Purpose / Tag Name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && editCtrl.text.trim().isNotEmpty && editCtrl.text.trim() != p.name) {
+      try {
+        final repo = ref.read(pmDailyTransactionsRepositoryProvider);
+        await repo.updateTransactionPurpose(p.id, editCtrl.text.trim());
+        _lastSelected = editCtrl.text.trim();
+        ref.invalidate(pmTransactionPurposesProvider);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _deletePurpose(PmTransactionPurpose p) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Purpose'),
+        content: Text('Are you sure you want to delete "${p.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final repo = ref.read(pmDailyTransactionsRepositoryProvider);
+        await repo.deleteTransactionPurpose(p.id);
+        ref.invalidate(pmTransactionPurposesProvider);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final purposesAsync = ref.watch(pmTransactionPurposesProvider);
+
+    return AlertDialog(
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(LucideIcons.tag, size: 20, color: Color(0xFF2563EB)),
+              SizedBox(width: 8),
+              Text(
+                'Manage Purposes',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.x, size: 18),
+            onPressed: () => Navigator.pop(context, _lastSelected),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 420,
+        height: 480,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _addController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter new purpose...',
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    onSubmitted: (_) => _addPurpose(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _isAdding ? null : _addPurpose,
+                  icon: const Icon(LucideIcons.plus, size: 16),
+                  label: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            Expanded(
+              child: purposesAsync.when(
+                data: (list) {
+                  if (list.isEmpty) {
+                    return const Center(child: Text('No purposes added yet.'));
+                  }
+                  return ListView.separated(
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (ctx, idx) {
+                      final p = list[idx];
+                      return ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(LucideIcons.pencil, size: 16, color: Color(0xFF2563EB)),
+                              tooltip: 'Edit',
+                              onPressed: () => _editPurpose(p),
+                            ),
+                            IconButton(
+                              icon: const Icon(LucideIcons.trash2, size: 16, color: Color(0xFFEF4444)),
+                              tooltip: 'Delete',
+                              onPressed: () => _deletePurpose(p),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e')),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, _lastSelected),
+          child: const Text('Done'),
         ),
       ],
     );

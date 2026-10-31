@@ -509,6 +509,30 @@ class QgModelSpecsResolver {
       }
     }
 
+    // 3.8 Deterministic check for standard whole-number domestic/commercial models
+    if (resolvedKw == 20.0 || cleanId == 'iz-20c' || cleanModelName == 'iz-20c' || cleanModelName == 'iz20c') {
+      final specs20c = buildDefaultHpSpecs(20, 'IZ-20C');
+      return ResolvedModelSpecs(
+        modelId: cleanId.isNotEmpty ? cleanId : 'IZ-20C',
+        modelName: 'IZ-20C',
+        kw: 20.0,
+        specs: specs20c,
+        specsCopiedFrom: 'Standard Catalog (IZ-20C)',
+        heatPumpType: HeatPumpType.domesticCommercial,
+        matchedModel: HeatPumpModel(
+          id: 'IZ-20C',
+          modelName: 'IZ-20C',
+          displayCapacityKw: 20.0,
+          ratedHeatingCapacity: '20kw',
+          descriptionLine: 'Air Source Heat pump 20kw',
+          makeModelLine: 'Make: IZYHEAT Heat Pump Model: IZ-20C 20kw',
+          powerInputText: 'Power Input 4.60kw, output 20kw, 380-440V - 3Phase, 50Hz With Auto Defrost.',
+          defaultImagePath: 'assets/images/model_iz_4c.png',
+          specs: specs20c,
+        ),
+      );
+    }
+
     // 4. Higher Model Fallback Rule in standard models (preserve requested model ID)
     if (models.isNotEmpty) {
       final higherModels = models.where(
@@ -588,6 +612,40 @@ class QgModelSpecsResolver {
 
   /// Builds standard deterministic 13-row specs table for Domestic/Commercial Heat Pumps
   static Map<String, String> buildDefaultHpSpecs(int kw, String model) {
+    if (kw == 20 || model.toUpperCase() == 'IZ-20C' || model.toUpperCase() == 'IZ20C') {
+      return {
+        'Condenser': 'Shell and tube heat exchanger',
+        'Rated COP': '4.18',
+        'Compressor': 'Single',
+        'Refrigerant': 'R134A/410A',
+        'Power Supply': '380-440V - 3Phase',
+        'Size (W x D x H)': '936x385x550mm',
+        'Water Flow Noise': '<=47dB(A)',
+        'Rated Input Power': '4.60kw',
+        'Rated Water Yield': '430 L/h',
+        'Operating ambient Temp': '-15~43°C',
+        'Rated Heating Capacity': '20kw',
+        'Max Outlet Water Temperature': '60°C',
+        'Heat Pump Model': 'IZ-20C',
+      };
+    }
+    if (kw == 24 || model.toUpperCase() == 'IZ-24C' || model.toUpperCase() == 'IZ24C') {
+      return {
+        'Size (W x D x H)': '752x691x1000mm',
+        'Rated Heating Capacity': '24kw',
+        'Power Supply': '380V - 3Phase',
+        'Rated Input Power': '5.15kw',
+        'Rated COP': '4.27',
+        'Rated Water Yield': '473 L/h',
+        'Max Outlet Water Temperature': '60°C',
+        'Water Flow Noise': '<=57dB(A)',
+        'Condenser': 'Shell and tube heat exchanger',
+        'Refrigerant': 'R134A/410A',
+        'Operating ambient Temp': '-15~43°C',
+        'Compressor': 'Single',
+        'Heat Pump Model': 'IZ-24C',
+      };
+    }
     final powerSupply = kw <= 8 ? '220V - 1Phase' : '415V - 3Phase';
     final compressor = kw <= 24 ? 'Single' : 'Double';
     return {

@@ -913,94 +913,100 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
     final openDeals = leads.where((l) => l.status != 'Won' && l.status != 'Lost').toList();
     final recent = openDeals.take(5).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        side: const BorderSide(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recent Pipeline Deals',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Pipeline Deals',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-              TextButton(
-                onPressed: () => context.go('/crm/leads'),
-                child: const Text('View All', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const Divider(height: 16),
-          if (recent.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Center(
-                child: Text('No active deals found in pipeline.', style: TextStyle(color: AppColors.textSecondary)),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: recent.length,
-              separatorBuilder: (context, index) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final lead = recent[index];
-                final isWon = lead.status == 'Won';
+                TextButton(
+                  onPressed: () => context.go('/crm/leads'),
+                  child: const Text('View All', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const Divider(height: 16),
+            if (recent.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Center(
+                  child: Text('No active deals found in pipeline.', style: TextStyle(color: AppColors.textSecondary)),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: recent.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final lead = recent[index];
+                  final isWon = lead.status == 'Won';
 
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                  onTap: () => context.push('/crm/leads/${lead.id}'),
-                  leading: CircleAvatar(
-                    backgroundColor: isWon ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
-                    child: Icon(
-                      isWon ? Icons.check_circle : Icons.trending_up,
-                      color: isWon ? const Color(0xFF10B981) : const Color(0xFF3B82F6),
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    lead.prospectName ?? 'Lead #${lead.id.substring(0, 6)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    '${lead.productName} • ${DateFormat('dd MMM yyyy').format(lead.createdAt)}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '₹${NumberFormat('#,##,##0').format(lead.estimatedValue)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        lead.status,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: isWon ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                  return Material(
+                    color: Colors.transparent,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                      onTap: () => context.push('/crm/leads/${lead.id}'),
+                      leading: CircleAvatar(
+                        backgroundColor: isWon ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
+                        child: Icon(
+                          isWon ? Icons.check_circle : Icons.trending_up,
+                          color: isWon ? const Color(0xFF10B981) : const Color(0xFF3B82F6),
+                          size: 20,
                         ),
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-        ],
+                      title: Text(
+                        lead.prospectName ?? 'Lead #${lead.id.substring(0, 6)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        '${lead.productName} • ${DateFormat('dd MMM yyyy').format(lead.createdAt)}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹${NumberFormat('#,##,##0').format(lead.estimatedValue)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            lead.status,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isWon ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1392,12 +1398,13 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                   );
                 }
 
-                return Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
+                return Material(
+                  color: AppColors.surface,
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                    side: const BorderSide(color: AppColors.border),
                   ),
+                  clipBehavior: Clip.antiAlias,
                   child: ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -1406,25 +1413,27 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                     itemBuilder: (context, index) {
                       final src = sources[index];
 
-                      return ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(8),
+                      return Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.campaign_outlined, color: AppColors.primary, size: 20),
                           ),
-                          child: const Icon(Icons.campaign_outlined, color: AppColors.primary, size: 20),
-                        ),
-                        title: Text(
-                          src,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
-                              tooltip: 'Edit Name',
+                          title: Text(
+                            src,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                tooltip: 'Edit Name',
                               onPressed: () => _showEditSourceDialog(context, src),
                             ),
                             IconButton(
@@ -1434,10 +1443,11 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
-                );
+                      ),
+                    );
+                  },
+                ),
+              );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error loading sources: $e')),

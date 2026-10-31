@@ -504,7 +504,8 @@ class PdfQuotationBuilder {
       );
     }
 
-    final isConfirmed = quotation.status.toLowerCase() == 'confirmed';
+    final statusLower = quotation.status.trim().toLowerCase();
+    final isConfirmed = statusLower == 'confirmed' || statusLower == 'approved';
     pw.Widget withWatermark(pw.Widget content) {
       if (isConfirmed) return content;
       return pw.Stack(
@@ -2555,6 +2556,15 @@ class PdfQuotationBuilder {
         if (entry.key.toLowerCase().contains('capacity in litre') ||
             entry.key.toLowerCase().contains('capacity in ltr')) {
           val = tankCap;
+        } else if (entry.key == 'Heat Pump Model' || entry.key == 'Model no. Domestic') {
+          if (q.model.modelName.isNotEmpty) {
+            val = q.model.modelName;
+          }
+        } else if (entry.key == 'Rated Heating Capacity') {
+          final kwVal = q.model.displayCapacityKw;
+          if (kwVal > 0) {
+            val = '${kwVal.toInt() == kwVal ? kwVal.toInt() : kwVal}kw';
+          }
         }
         return pw.TableRow(
           children: [

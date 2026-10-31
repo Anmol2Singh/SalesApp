@@ -1,3 +1,5 @@
+import '../providers/app_config_provider.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
@@ -57,6 +59,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   @override
   Widget build(BuildContext context) {
     final inventoryAsync = ref.watch(inventoryProvider);
+    final isProductAddUnlocked = ref.watch(productAddUnlockedProvider);
     final isProductsTab = _tabController.index == 0;
 
     return Scaffold(
@@ -147,12 +150,21 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       ),
       floatingActionButton: isProductsTab
           ? FloatingActionButton.extended(
-              onPressed: () => _showAddProductDialog(context),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text(
-                'Add Product',
-                style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+              tooltip: isProductAddUnlocked
+                  ? 'Add Product'
+                  : 'Product creation is locked. Enable in Admin > Configuration to add products.',
+              backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+              onPressed: () {
+                if (!isProductAddUnlocked) {
+                  _showProductAddLockedDialog(context);
+                } else {
+                  _showAddProductDialog(context);
+                }
+              },
+              icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+              label: Text(
+                isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
+                style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
               ),
             )
           : _tabController.index == 1
@@ -182,6 +194,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   // ==========================================
   Widget _buildSellProductsTab() {
     final productsAsync = ref.watch(productsProvider);
+    final isProductAddUnlocked = ref.watch(productAddUnlockedProvider);
 
     return productsAsync.when(
       data: (products) {
@@ -247,10 +260,21 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                            onPressed: () => _showAddProductDialog(context),
-                            icon: const Icon(Icons.add, color: Colors.white),
-                            label: const Text('Add Product', style: TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+                            ),
+                            onPressed: () {
+                              if (!isProductAddUnlocked) {
+                                _showProductAddLockedDialog(context);
+                              } else {
+                                _showAddProductDialog(context);
+                              }
+                            },
+                            icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+                            label: Text(
+                              isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ),
                         ],
                       ),
@@ -987,6 +1011,44 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   // ==========================================
   // PRODUCT ACTIONS & DIALOGS
   // ==========================================
+  void _showProductAddLockedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.lock, color: AppColors.error),
+            SizedBox(width: 8),
+            Text('Product Creation Locked', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'Product additions are globally locked in System Configuration to maintain catalog integrity. To add a new product, please unlock product additions.',
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.go('/admin/configuration');
+            },
+            child: const Text('Go to Configuration'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddProductDialog(BuildContext context) {
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
@@ -1093,7 +1155,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           );
                         }
                       } catch (e) {
-                        if (ctx.mounted) {
+                        if (e.toString().contains('PRODUCT_ADD_LOCKED')) {
+                          if (ctx.mounted && Navigator.canPop(ctx)) Navigator.pop(ctx);
+                          _showProductAddLockedDialog(context);
+                        } else if (ctx.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Error adding product: $e'), backgroundColor: AppColors.error),
                           );

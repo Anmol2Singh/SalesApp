@@ -21,7 +21,7 @@ import '../services/qg_model_specs_resolver.dart';
 class QgProposalDraft {
   final String quotationId;
   final String quotationNumber;
-  final String status;
+  String status;
   final int revision;
   final DateTime quotationUpdatedAt;
   

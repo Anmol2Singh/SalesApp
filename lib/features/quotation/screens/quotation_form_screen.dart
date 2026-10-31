@@ -1,3 +1,5 @@
+import '../../quotation_generator/services/qg_drafts_service.dart';
+import '../../quotation_generator/services/qg_boom_barrier_drafts_service.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1487,12 +1489,18 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         throw Exception('No quotation to approve');
       }
 
-      // Update status to confirmed
+      // Update status to confirmed & approved
+      final nowStr = DateTime.now().toIso8601String();
+      final uid = supabase.auth.currentUser!.id;
       await supabase.from('quotations').update({
         'status': 'confirmed',
-        'confirmed_by': supabase.auth.currentUser!.id,
-        'confirmed_at': DateTime.now().toIso8601String(),
+        'confirmed_by': uid,
+        'confirmed_at': nowStr,
+        'approved_by': uid,
+        'approved_at': nowStr,
       }).eq('id', _existingQuotation!.id);
+      await QgDraftsService.deleteDraft(_existingQuotation!.id);
+      await QgBoomBarrierDraftsService.deleteDraft(_existingQuotation!.id);
 
       // Advance pipeline
       if (widget.pipelineId != null) {
@@ -1790,10 +1798,16 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       } else {
         // Direct approval (Admin / Sales Head)
         // Update confirmed_by/confirmed_at
+        final nowStr = DateTime.now().toIso8601String();
+        final uid = supabase.auth.currentUser!.id;
         await supabase.from('quotations').update({
-          'confirmed_by': supabase.auth.currentUser!.id,
-          'confirmed_at': DateTime.now().toIso8601String(),
+          'confirmed_by': uid,
+          'confirmed_at': nowStr,
+          'approved_by': uid,
+          'approved_at': nowStr,
         }).eq('id', quotationId);
+        await QgDraftsService.deleteDraft(quotationId);
+        await QgBoomBarrierDraftsService.deleteDraft(quotationId);
 
         if (widget.pipelineId != null) {
           // Advance pipeline to sales_order

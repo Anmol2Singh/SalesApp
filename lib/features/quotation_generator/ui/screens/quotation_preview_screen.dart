@@ -1,13 +1,13 @@
-// lib/features/quotation_generator/ui/screens/quotation_preview_screen.dart
-
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/providers/supabase_provider.dart';
 import '../../models/generator_quotation.dart';
 import '../../models/generator_company_settings.dart';
 import '../../services/pdf_quotation_builder.dart';
@@ -29,11 +29,58 @@ class QuotationPreviewScreen extends ConsumerStatefulWidget {
 class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen> {
   Uint8List? _cachedPdfBytes;
   bool _isSaving = false;
+  late GeneratorQuotation _currentQuotation;
+  bool _isApproved = false;
+  DateTime? _approvedAt;
+  String? _approverName;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentQuotation = widget.quotation;
+    _isApproved = widget.quotation.status.trim().toLowerCase() == 'confirmed' ||
+        widget.quotation.status.trim().toLowerCase() == 'approved';
+    _checkApprovalStatus();
+  }
+
+  Future<void> _checkApprovalStatus() async {
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final qId = widget.quotation.id;
+      if (qId.isNotEmpty) {
+        final res = await supabase
+            .from('quotations')
+            .select('status, approved_by, approved_at, confirmed_by, confirmed_at, approver:profiles!quotations_approved_by_fkey(full_name)')
+            .eq('id', qId)
+            .maybeSingle();
+        if (res != null) {
+          final s = res['status']?.toString().toLowerCase();
+          final isApp = s == 'confirmed' || s == 'approved';
+          final appDate = res['approved_at'] != null
+              ? DateTime.tryParse(res['approved_at'].toString())
+              : (res['confirmed_at'] != null ? DateTime.tryParse(res['confirmed_at'].toString()) : null);
+          final appName = res['approver'] is Map ? res['approver']['full_name']?.toString() : null;
+
+          if (mounted) {
+            setState(() {
+              _isApproved = isApp;
+              _approvedAt = appDate;
+              _approverName = appName;
+              if (isApp && _currentQuotation.status.toLowerCase() != 'confirmed') {
+                _currentQuotation = _currentQuotation.copyWith(status: 'confirmed');
+                _cachedPdfBytes = null;
+              }
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<Uint8List> _generatePdf() async {
     if (_cachedPdfBytes != null) return _cachedPdfBytes!;
     final bytes = await PdfQuotationBuilder.buildQuotationPdf(
-      widget.quotation,
+      _currentQuotation,
       widget.settings,
     );
     _cachedPdfBytes = bytes;
@@ -42,7 +89,7 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
 
   Future<void> _saveToDevice() async {
     setState(() => _isSaving = true);
-    final fileName = widget.quotation.safePdfFileName;
+    final fileName = _currentQuotation.safePdfFileName;
     try {
       final bytes = await _generatePdf();
 
@@ -113,7 +160,7 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
   Future<void> _sharePdf() async {
     try {
       final bytes = await _generatePdf();
-      final fileName = widget.quotation.safePdfFileName;
+      final fileName = _currentQuotation.safePdfFileName;
       await Printing.sharePdf(bytes: bytes, filename: fileName);
     } catch (e) {
       if (mounted) {
@@ -137,11 +184,11 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.quotation.customerName.isNotEmpty ? widget.quotation.customerName : 'Quotation Preview',
+              _currentQuotation.customerName.isNotEmpty ? _currentQuotation.customerName : 'Quotation Preview',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             Text(
-              widget.quotation.quoteRefNo.isNotEmpty ? 'Ref: ${widget.quotation.quoteRefNo}' : 'Quotation Proposal Preview',
+              _currentQuotation.quoteRefNo.isNotEmpty ? 'Ref: ${_currentQuotation.quoteRefNo}' : 'Quotation Proposal Preview',
               style: const TextStyle(fontSize: 11, color: Colors.white70),
             ),
           ],
@@ -163,16 +210,90 @@ class _QuotationPreviewScreenState extends ConsumerState<QuotationPreviewScreen>
           ),
         ],
       ),
-      body: PdfPreview(
-        build: (format) => _generatePdf(),
-        canChangeOrientation: false,
-        canChangePageFormat: false,
-        canDebug: false,
-        pdfFileName: widget.quotation.safePdfFileName,
-        actions: [
-          PdfPreviewAction(
-            icon: const Icon(Icons.download, color: Colors.white),
-            onPressed: (context, build, pageFormat) async => _saveToDevice(),
+      body: Column(
+        children: [
+          // Quotation Dates and Approver Status Banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Quotation Date', style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(_currentQuotation.date),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text('Approval Date', style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _isApproved && _approvedAt != null
+                            ? DateFormat('dd MMM yyyy').format(_approvedAt!)
+                            : 'Pending',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: _isApproved ? const Color(0xFF10B981) : Colors.amber.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text('Approved By', style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _isApproved
+                            ? (_approverName ?? 'Admin / Sales Head')
+                            : '—',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: PdfPreview(
+              build: (format) => _generatePdf(),
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              canDebug: false,
+              pdfFileName: _currentQuotation.safePdfFileName,
+              actions: [
+                PdfPreviewAction(
+                  icon: const Icon(Icons.download, color: Colors.white),
+                  onPressed: (context, build, pageFormat) async => _saveToDevice(),
+                ),
+              ],
+            ),
           ),
         ],
       ),

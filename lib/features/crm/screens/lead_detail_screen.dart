@@ -34,6 +34,7 @@ import '../../quotation_generator/ui/screens/boom_barrier_preview_screen.dart';
 import '../../quotation_generator/models/qg_proposal_draft.dart';
 import '../../quotation_generator/services/qg_drafts_service.dart';
 import '../../quotation_generator/services/qg_model_specs_resolver.dart';
+import '../../quotation_generator/data/catalog_repository.dart';
 import '../../../core/utils/global_click_guard.dart';
 import '../../../core/widgets/pdf_loading_dialog.dart';
 
@@ -2541,17 +2542,19 @@ class _AssignLeadDetailSheetState extends ConsumerState<_AssignLeadDetailSheet> 
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email, is_active, deleted_at').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
+        if (r['is_active'] == false || r['deleted_at'] != null) continue;
         final role = (r['role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List)
             ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()
             : [];
+        if (rolesList.contains('deactivated') || role == 'deactivated') continue;
         final name = (r['full_name'] as String? ?? '').toLowerCase();
         final email = (r['email'] as String? ?? '').toLowerCase();
 
@@ -2796,11 +2799,20 @@ class _LeadQuotationsSectionState
     setState(() => _isLoading = true);
     try {
       final supabase = ref.read(supabaseClientProvider);
-      final res = await supabase
-          .from('quotations')
-          .select()
-          .eq('lead_id', widget.lead.id)
-          .order('revision', ascending: false);
+      dynamic res;
+      try {
+        res = await supabase
+            .from('quotations')
+            .select('*, approver:profiles!quotations_approved_by_fkey(full_name)')
+            .eq('lead_id', widget.lead.id)
+            .order('revision', ascending: false);
+      } catch (_) {
+        res = await supabase
+            .from('quotations')
+            .select()
+            .eq('lead_id', widget.lead.id)
+            .order('revision', ascending: false);
+      }
 
       final list = (res as List)
           .map((json) => Quotation.fromJson(json as Map<String, dynamic>))
@@ -2819,6 +2831,21 @@ class _LeadQuotationsSectionState
 
   Future<void> _viewPdf(Quotation quot) async {
     if (_isPdfActionBusy || !GlobalClickGuard.canClick()) return;
+
+
+
+    final supabase = ref.read(supabaseClientProvider);
+    Quotation activeQuot = quot;
+    try {
+      final freshRes = await supabase
+          .from('quotations')
+          .select('*, approver:profiles!quotations_approved_by_fkey(full_name)')
+          .eq('id', activeQuot.id)
+          .maybeSingle();
+      if (freshRes != null) {
+        activeQuot = Quotation.fromJson(Map<String, dynamic>.from(freshRes));
+      }
+    } catch (_) {}
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final choice = await showDialog<String>(
@@ -3101,8 +3128,8 @@ class _LeadQuotationsSectionState
       try {
         // Detect product from Lead product name, quotation line items, and product ID
         final leadProd = widget.lead.productName.trim();
-        final lineDescs = quot.lineItems.map((e) => e.description).join(' ');
-        final combinedProduct = '$leadProd $lineDescs ${quot.productId}'.toLowerCase();
+        final lineDescs = activeQuot.lineItems.map((e) => e.description).join(' ');
+        final combinedProduct = '$leadProd $lineDescs ${activeQuot.productId}'.toLowerCase();
 
         final template = QgTemplateRegistry.findTemplateForProduct(leadProd.isNotEmpty ? leadProd : lineDescs);
         final isBoomBarrier = template is BoomBarrierTemplate ||
@@ -3110,7 +3137,7 @@ class _LeadQuotationsSectionState
             combinedProduct.contains('barrier');
 
         if (isBoomBarrier) {
-          final prodKey = quot.productId.isNotEmpty ? quot.productId : 'Boom Barrier';
+          final prodKey = activeQuot.productId.isNotEmpty ? activeQuot.productId : 'Boom Barrier';
           final company = ref.read(companyForProductProvider(prodKey));
           final profile = QgProductProfile.defaultBoomBarrier().withAppCompany(company).copyWith(
             logoPath: (company.logoUrl != null && !company.logoUrl!.contains('logo.png'))
@@ -3118,37 +3145,37 @@ class _LeadQuotationsSectionState
                 : 'assets/images/boom_barrier/sefdor_logo.png',
           );
 
-          BoomBarrierProposalDraft? bbDraft = await QgBoomBarrierDraftsService.loadDraft(quot.id);
+          BoomBarrierProposalDraft? bbDraft = await QgBoomBarrierDraftsService.loadDraft(activeQuot.id);
           if (bbDraft == null) {
             final dealItem = DealQuotationItem(
-              id: quot.id,
-              quotationNumber: quot.quotationNumber,
-              status: quot.status.displayName,
-              revision: quot.revision,
-              orderDate: quot.orderDate ?? quot.createdAt,
-              createdAt: quot.createdAt,
-              updatedAt: quot.updatedAt,
-              customerName: quot.customerName ?? widget.lead.prospectName ?? 'Valued Customer',
-              customerPhone: quot.customerPhone ?? widget.lead.contactPhone ?? '',
-              customerAddress: quot.billingAddress ?? '',
-              customerGst: quot.customerGstin,
-              salesmanName: quot.salesman ?? widget.lead.assignedByName ?? widget.lead.createdByName ?? 'Insiya Sales',
+              id: activeQuot.id,
+              quotationNumber: activeQuot.quotationNumber,
+              status: activeQuot.status.displayName,
+              revision: activeQuot.revision,
+              orderDate: activeQuot.orderDate ?? activeQuot.createdAt,
+              createdAt: activeQuot.createdAt,
+              updatedAt: activeQuot.updatedAt,
+              customerName: activeQuot.customerName ?? widget.lead.prospectName ?? 'Valued Customer',
+              customerPhone: activeQuot.customerPhone ?? widget.lead.contactPhone ?? '',
+              customerAddress: activeQuot.billingAddress ?? '',
+              customerGst: activeQuot.customerGstin,
+              salesmanName: activeQuot.salesman ?? widget.lead.assignedByName ?? widget.lead.createdByName ?? 'Insiya Sales',
               salesmanPhone: '',
-              subtotal: quot.subtotal,
-              supplementarySubtotal: quot.supplementarySubtotal,
-              cgstAmount: quot.cgstAmount,
-              sgstAmount: quot.sgstAmount,
-              igstAmount: quot.igstAmount,
-              grandTotal: quot.grandTotal,
-              cgstRate: quot.cgstRate,
-              sgstRate: quot.sgstRate,
+              subtotal: activeQuot.subtotal,
+              supplementarySubtotal: activeQuot.supplementarySubtotal,
+              cgstAmount: activeQuot.cgstAmount,
+              sgstAmount: activeQuot.sgstAmount,
+              igstAmount: activeQuot.igstAmount,
+              grandTotal: activeQuot.grandTotal,
+              cgstRate: activeQuot.cgstRate,
+              sgstRate: activeQuot.sgstRate,
               igstRate: 0.0,
-              lineItems: quot.lineItems.map((e) => e.toJson()).toList(),
-              supplementaryTerms: quot.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
-              paymentTerms: quot.paymentTerms ?? const [],
-              termsText: quot.termsText,
-              pipelineId: quot.pipelineId,
-              productId: quot.productId,
+              lineItems: activeQuot.lineItems.map((e) => e.toJson()).toList(),
+              supplementaryTerms: activeQuot.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
+              paymentTerms: activeQuot.paymentTerms ?? const [],
+              termsText: activeQuot.termsText,
+              pipelineId: activeQuot.pipelineId,
+              productId: activeQuot.productId,
               productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Boom Barrier',
             );
             bbDraft = BoomBarrierProposalDraft.fromDealQuotation(dealItem, profile);
@@ -3171,12 +3198,16 @@ class _LeadQuotationsSectionState
         }
 
         // ─── HEAT PUMP / ALL-IN-ONE / MULTI-PAGE PROPOSAL ───
-        final company = ref.read(companyForProductProvider(quot.productId));
+        await CatalogRepository.loadBundledModels();
+        await CatalogRepository.loadBundledPoolModels();
+        await CatalogRepository.loadBundledAllInOneModels();
+
+        final company = ref.read(companyForProductProvider(activeQuot.productId));
         var settings = GeneratorCompanySettings.fromAppCompany(company);
         final moduleSettings = ref.read(quotationSettingsProvider).valueOrNull;
-        if (moduleSettings != null) {
+        if (moduleSettings != null && moduleSettings.models.isNotEmpty) {
           settings = settings.copyWith(
-            models: moduleSettings.models.isNotEmpty ? moduleSettings.models : null,
+            models: moduleSettings.models,
             allInOneModels: moduleSettings.allInOneModels.isNotEmpty ? moduleSettings.allInOneModels : null,
             poolModels: moduleSettings.poolModels.isNotEmpty ? moduleSettings.poolModels : null,
             defaultCoverImagePath: moduleSettings.defaultCoverImagePath,
@@ -3205,48 +3236,65 @@ class _LeadQuotationsSectionState
           } catch (_) {}
         }
 
+        if (settings.models.isEmpty) {
+          final bundledHp = await CatalogRepository.loadBundledModels();
+          settings = settings.copyWith(models: bundledHp);
+        }
+
         final dealItem = DealQuotationItem(
-          id: quot.id,
-          quotationNumber: quot.quotationNumber,
-          status: quot.status.displayName,
-          revision: quot.revision,
-          orderDate: quot.orderDate ?? quot.createdAt,
-          createdAt: quot.createdAt,
-          updatedAt: quot.updatedAt,
-          customerName: quot.customerName ?? widget.lead.prospectName ?? 'Valued Customer',
-          customerPhone: quot.customerPhone ?? widget.lead.contactPhone ?? '',
-          customerAddress: quot.billingAddress ?? '',
-          customerGst: quot.customerGstin,
-          salesmanName: quot.salesman ?? widget.lead.assignedByName ?? widget.lead.createdByName ?? 'Insiya Sales',
+          id: activeQuot.id,
+          quotationNumber: activeQuot.quotationNumber,
+          status: activeQuot.status.displayName,
+          revision: activeQuot.revision,
+          orderDate: activeQuot.orderDate ?? activeQuot.createdAt,
+          createdAt: activeQuot.createdAt,
+          updatedAt: activeQuot.updatedAt,
+          customerName: activeQuot.customerName ?? widget.lead.prospectName ?? 'Valued Customer',
+          customerPhone: activeQuot.customerPhone ?? widget.lead.contactPhone ?? '',
+          customerAddress: activeQuot.billingAddress ?? '',
+          customerGst: activeQuot.customerGstin,
+          salesmanName: activeQuot.salesman ?? widget.lead.assignedByName ?? widget.lead.createdByName ?? 'Insiya Sales',
           salesmanPhone: '',
-          subtotal: quot.subtotal,
-          supplementarySubtotal: quot.supplementarySubtotal,
-          cgstAmount: quot.cgstAmount,
-          sgstAmount: quot.sgstAmount,
-          igstAmount: quot.igstAmount,
-          grandTotal: quot.grandTotal,
-          cgstRate: quot.cgstRate,
-          sgstRate: quot.sgstRate,
-          igstRate: quot.igstAmount > 0 ? (quot.cgstRate + quot.sgstRate) : 0.0,
-          lineItems: quot.lineItems.map((e) => e.toJson()).toList(),
-          supplementaryTerms: quot.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
-          paymentTerms: quot.paymentTerms ?? const [],
-          termsText: quot.termsText,
-          pipelineId: quot.pipelineId,
-          productId: quot.productId,
+          subtotal: activeQuot.subtotal,
+          supplementarySubtotal: activeQuot.supplementarySubtotal,
+          cgstAmount: activeQuot.cgstAmount,
+          sgstAmount: activeQuot.sgstAmount,
+          igstAmount: activeQuot.igstAmount,
+          grandTotal: activeQuot.grandTotal,
+          cgstRate: activeQuot.cgstRate,
+          sgstRate: activeQuot.sgstRate,
+          igstRate: activeQuot.igstAmount > 0 ? (activeQuot.cgstRate + activeQuot.sgstRate) : 0.0,
+          lineItems: activeQuot.lineItems.map((e) => e.toJson()).toList(),
+          supplementaryTerms: activeQuot.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
+          paymentTerms: activeQuot.paymentTerms ?? const [],
+          termsText: activeQuot.termsText,
+          pipelineId: activeQuot.pipelineId,
+          productId: activeQuot.productId,
           productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Heat Pump',
         );
 
-        QgProposalDraft draft = (await QgDraftsService.loadDraft(quot.id)) ??
-            QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
-
-        // Reconcile model with deal item in case a stale/corrupted draft was previously cached
         final freshDraft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
-        if (freshDraft.hpModel.isNotEmpty && draft.hpModel != freshDraft.hpModel) {
-          draft.hpModel = freshDraft.hpModel;
-          draft.hpKw = freshDraft.hpKw;
-          draft.hpSpecs = Map<String, String>.from(freshDraft.hpSpecs);
-          draft.specsCopiedFrom = freshDraft.specsCopiedFrom;
+        QgProposalDraft? loadedDraft = await QgDraftsService.loadDraft(activeQuot.id);
+
+        // Discard or reconcile stale local draft if model or specs mismatch fresh quotation
+        QgProposalDraft draft;
+        if (loadedDraft == null ||
+            loadedDraft.hpModel != freshDraft.hpModel ||
+            loadedDraft.hpKw != freshDraft.hpKw ||
+            loadedDraft.hpSpecs['Heat Pump Model'] != freshDraft.hpModel ||
+            (freshDraft.hpSpecs.isNotEmpty && loadedDraft.hpSpecs.isEmpty)) {
+          draft = freshDraft;
+        } else {
+          draft = loadedDraft;
+          draft.status = dealItem.status;
+          if (freshDraft.hpSpecs.isNotEmpty &&
+              (draft.hpSpecs['Heat Pump Model'] != freshDraft.hpModel ||
+               draft.hpSpecs['Rated Heating Capacity'] != freshDraft.hpSpecs['Rated Heating Capacity'])) {
+            draft.hpModel = freshDraft.hpModel;
+            draft.hpKw = freshDraft.hpKw;
+            draft.hpSpecs = Map<String, String>.from(freshDraft.hpSpecs);
+            draft.specsCopiedFrom = freshDraft.specsCopiedFrom;
+          }
         }
 
         // Ensure draft specs are in sync with Module Settings according to heat pump type
@@ -3347,19 +3395,19 @@ class _LeadQuotationsSectionState
       // Construct customer and product models so PdfService can render standard layout
       final customer = Customer(
         id: lead.convertedToCustomerId ?? lead.id,
-        companyName: quot.customerName ?? lead.prospectName ?? prospect?.company ?? prospect?.name ?? 'Valued Customer',
-        contactPerson: quot.partyContactPerson ?? prospect?.name ?? '',
-        phone: quot.customerPhone ?? lead.contactPhone ?? prospect?.phone ?? '',
+        companyName: activeQuot.customerName ?? lead.prospectName ?? prospect?.company ?? prospect?.name ?? 'Valued Customer',
+        contactPerson: activeQuot.partyContactPerson ?? prospect?.name ?? '',
+        phone: activeQuot.customerPhone ?? lead.contactPhone ?? prospect?.phone ?? '',
         email: prospect?.email ?? '',
-        address: quot.billingAddress ?? prospect?.address ?? '',
-        gstNumber: quot.customerGstin ?? prospect?.gst ?? '',
+        address: activeQuot.billingAddress ?? prospect?.address ?? '',
+        gstNumber: activeQuot.customerGstin ?? prospect?.gst ?? '',
         createdBy: lead.createdBy,
         createdAt: lead.createdAt,
         updatedAt: DateTime.now(),
       );
 
       final product = Product(
-        id: quot.productId.isNotEmpty ? quot.productId : 'general',
+        id: activeQuot.productId.isNotEmpty ? activeQuot.productId : 'general',
         name: lead.productName.isNotEmpty ? lead.productName : 'Solar Energy Solution',
         category: 'Solar',
         baseSpecs: const ProductBaseSpecs(
@@ -3380,9 +3428,9 @@ class _LeadQuotationsSectionState
       );
 
       if (mounted) {
-        final fileName = quot.revision > 0
-            ? '${quot.quotationNumber.replaceAll('/', '_')}_Rev${quot.revision}.pdf'
-            : '${quot.quotationNumber.replaceAll('/', '_')}.pdf';
+        final fileName = activeQuot.revision > 0
+            ? '${activeQuot.quotationNumber.replaceAll('/', '_')}_Rev${activeQuot.revision}.pdf'
+            : '${activeQuot.quotationNumber.replaceAll('/', '_')}.pdf';
         dismissLoading();
         GlobalClickGuard.setBusy(false);
         Navigator.push(
@@ -3435,17 +3483,27 @@ class _LeadQuotationsSectionState
 
     try {
       final supabase = ref.read(supabaseClientProvider);
+      final currentUserId = supabase.auth.currentUser?.id;
+      final nowStr = DateTime.now().toIso8601String();
       await supabase.from('quotations').update({
         'status': 'confirmed',
-        'confirmed_by': supabase.auth.currentUser?.id,
-        'confirmed_at': DateTime.now().toIso8601String(),
+        'confirmed_by': currentUserId,
+        'confirmed_at': nowStr,
+        'approved_by': currentUserId,
+        'approved_at': nowStr,
       }).eq('id', quot.id);
+
+      // Clear local drafts so they reload from fresh approved DB quotation
+      await QgDraftsService.deleteDraft(quot.id);
+      await QgBoomBarrierDraftsService.deleteDraft(quot.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✓ Quotation approved successfully!'), backgroundColor: AppColors.success),
         );
       }
+      ref.invalidate(leadsWithPendingQuotationApprovalProvider);
+      ref.invalidate(leadsWithApprovedQuotationProvider);
       _loadQuotations();
     } catch (e) {
       if (mounted) {
@@ -3552,6 +3610,8 @@ class _LeadQuotationsSectionState
           const SnackBar(content: Text('Quotation rejected.'), backgroundColor: AppColors.error),
         );
       }
+      ref.invalidate(leadsWithPendingQuotationApprovalProvider);
+      ref.invalidate(leadsWithApprovedQuotationProvider);
       _loadQuotations();
     } catch (e) {
       if (mounted) {
@@ -3868,6 +3928,106 @@ class _LeadQuotationsSectionState
                           ),
                         ],
                       ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Quotation Date', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                Text(
+                                  DateFormat('dd MMM yyyy').format(quot.orderDate ?? quot.createdAt),
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Text('Approval Date', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                Text(
+                                  quot.isApproved && quot.approvedAt != null
+                                      ? DateFormat('dd MMM yyyy').format(quot.approvedAt!)
+                                      : (quot.status == QuotationStatus.rejected ? 'Rejected' : 'Pending'),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: quot.isApproved
+                                        ? const Color(0xFF10B981)
+                                        : (quot.status == QuotationStatus.rejected
+                                            ? AppColors.error
+                                            : Colors.amber.shade800),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text('Approved By', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                Text(
+                                  quot.isApproved
+                                      ? (quot.approverName ?? 'Admin / Sales Head')
+                                      : '—',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (quot.status == QuotationStatus.rejected) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.cancel_outlined, size: 14, color: AppColors.error),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Rejection Reason:',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.error,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                quot.effectiveRejectionReason ?? 'No reason specified.',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF991B1B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       const SizedBox(height: 10),
                       Wrap(
                         alignment: WrapAlignment.end,

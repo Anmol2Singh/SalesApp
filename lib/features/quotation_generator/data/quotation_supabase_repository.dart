@@ -40,8 +40,15 @@ class QuotationSupabaseRepository {
         final settingsMap = Map<String, dynamic>.from(qgRes['value'] as Map);
         final settings = GeneratorCompanySettings.fromJson(settingsMap);
         if (settings.models.isNotEmpty) {
-          _cachedSettings = settings;
-          return settings;
+          // Merge in any bundled catalog models missing from remote settings (e.g. IZ-20C)
+          final bundledHp = await CatalogRepository.loadBundledModels();
+          final existingIds = settings.models.map((m) => m.id.trim().toLowerCase()).toSet();
+          final missing = bundledHp.where((b) => !existingIds.contains(b.id.trim().toLowerCase())).toList();
+          final effective = missing.isEmpty
+              ? settings
+              : settings.copyWith(models: [...settings.models, ...missing]);
+          _cachedSettings = effective;
+          return effective;
         }
       }
     } catch (e) {

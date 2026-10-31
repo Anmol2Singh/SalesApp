@@ -1,3 +1,6 @@
+import '../data/models/lead_model.dart';
+import '../../../core/models/crm_date_filter.dart';
+import '../../../core/widgets/crm_date_filter_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +24,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _selectedStatus = 'All';
+  CrmDateFilter _dateFilter = const CrmDateFilter();
 
   @override
   void dispose() {
@@ -97,6 +101,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
               ref.read(leadsProvider.notifier).load(refresh: true);
               ref.read(prospectsProvider.notifier).load(refresh: true);
               ref.invalidate(leadsWithPendingQuotationApprovalProvider);
+              ref.invalidate(leadsWithApprovedQuotationProvider);
             },
           ),
         ],
@@ -105,6 +110,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
         children: [
           _buildFilters(
             ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{},
+            ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{},
             canSeePendingApproval: canSeePendingApproval,
           ),
           Container(
@@ -141,18 +147,35 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
             ),
           ),
           const Divider(height: 1, color: AppColors.border),
+          CrmDateFilterBar(
+            filter: _dateFilter,
+            dateFieldName: 'created_at',
+            resultCount: leadsAsync.value?.length ?? 0,
+            onFilterChanged: (newFilter) {
+              final needsReload = _dateFilter.preset != newFilter.preset ||
+                  _dateFilter.customStart != newFilter.customStart ||
+                  _dateFilter.customEnd != newFilter.customEnd;
+              setState(() => _dateFilter = newFilter);
+              if (needsReload) {
+                ref.read(leadsProvider.notifier).load(dateFilter: newFilter);
+              }
+            },
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
                 ref.read(leadsProvider.notifier).load(refresh: true);
                 ref.read(prospectsProvider.notifier).load(refresh: true);
                 ref.invalidate(leadsWithPendingQuotationApprovalProvider);
+                ref.invalidate(leadsWithApprovedQuotationProvider);
               },
               child: leadsAsync.when(
                 data: (leads) {
                   final prospects = prospectsAsync.value ?? [];
                   final pendingApprovalLeads =
                       ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{};
+                  final approvedLeads =
+                      ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{};
 
                   // Apply filters
                   var filtered = leads.where((l) {
@@ -170,7 +193,9 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                     final matchesStatus = _selectedStatus == 'All' ||
                         (_selectedStatus == 'Pending Approval'
                             ? pendingApprovalLeads.contains(l.id)
-                            : l.status == _selectedStatus);
+                            : (_selectedStatus == 'Approved'
+                                ? approvedLeads.contains(l.id)
+                                : l.status == _selectedStatus));
                     return matchesSearch && matchesStatus;
                   }).toList();
 
@@ -201,36 +226,30 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                     );
                   }
 
-                  return ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, itemIndex) {
-                      final lead = filtered[itemIndex];
-                      final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
-                      final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
-                          ? lead.prospectName!
-                          : (prospect?.name ?? 'Lead #${lead.id.substring(0, 6)}');
-                      final displayPhone = (lead.contactPhone != null && lead.contactPhone!.isNotEmpty)
-                          ? lead.contactPhone!
-                          : (prospect?.phone ?? '');
+                                  Widget buildLeadCard(Lead lead) {
+                  final prospect = prospects.where((p) => p.id == lead.prospectId).firstOrNull;
+                  final displayName = (lead.prospectName != null && lead.prospectName!.isNotEmpty)
+                      ? lead.prospectName!
+                      : (prospect?.name ?? 'Lead #${lead.id.substring(0, 6)}');
+                  final displayPhone = (lead.contactPhone != null && lead.contactPhone!.isNotEmpty)
+                      ? lead.contactPhone!
+                      : (prospect?.phone ?? '');
 
-                      final isWon = lead.status == 'Won' || lead.convertedToCustomerId != null;
-                      final isLost = lead.status == 'Lost';
-                      final hasPendingApproval = pendingApprovalLeads.contains(lead.id);
+                  final isWon = lead.status == 'Won' || lead.convertedToCustomerId != null;
+                  final isLost = lead.status == 'Lost';
+                  final hasPendingApproval = pendingApprovalLeads.contains(lead.id);
+                  final hasApprovedQuotation = approvedLeads.contains(lead.id);
 
-                      Color statusColor = Colors.blue;
-                      if (isWon) statusColor = AppColors.success;
-                      if (isLost) statusColor = AppColors.error;
-                      if (lead.status == 'Negotiating') statusColor = Colors.purple;
-                      if (lead.status == 'In Progress') statusColor = Colors.orange;
+                  Color statusColor = Colors.blue;
+                  if (isWon) statusColor = AppColors.success;
+                  if (isLost) statusColor = AppColors.error;
+                  if (lead.status == 'Negotiating') statusColor = Colors.purple;
+                  if (lead.status == 'In Progress') statusColor = Colors.orange;
 
-                      final isAssignedToMe = !isWon && lead.assignedTo != null && lead.assignedTo == profile?.id;
+                  final isAssignedToMe = !isWon && lead.assignedTo != null && lead.assignedTo == profile?.id;
+                  final isReassignReq = !isWon && lead.reassignmentRequested;
 
-                      final isReassignReq = !isWon && lead.reassignmentRequested;
-
-                      return Card(
+                  return Card(
                         elevation: 0,
                         color: isReassignReq
                             ? const Color(0xFFFFFBEB)
@@ -295,6 +314,32 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else if (hasApprovedQuotation) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, size: 11, color: AppColors.success),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Quotation Approved',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.success,
                                         ),
                                       ),
                                     ],
@@ -406,10 +451,60 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                           ),
                         ),
                       );
-                    },
+                }
+
+                if (_dateFilter.isGrouped) {
+                  final Map<String, List<Lead>> grouped = {};
+                  for (final l in filtered) {
+                    final bucket = CrmDateFilter.getBucket(l.createdAt);
+                    grouped.putIfAbsent(bucket, () => []).add(l);
+                  }
+
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                    children: [
+                      for (final entry in grouped.entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${entry.key} (${entry.value.length})',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
+                            ],
+                          ),
+                        ),
+                        for (final lead in entry.value) ...[
+                          buildLeadCard(lead),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ],
                   );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
+                }
+
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, itemIndex) {
+                    return buildLeadCard(filtered[itemIndex]);
+                  },
+                );
+              },
+loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
               ),
             ),
@@ -431,10 +526,15 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     );
   }
 
-  Widget _buildFilters(Set<String> pendingApprovalLeads, {required bool canSeePendingApproval}) {
+  Widget _buildFilters(
+    Set<String> pendingApprovalLeads,
+    Set<String> approvedLeads, {
+    required bool canSeePendingApproval,
+  }) {
     final filterOptions = [
       'All',
       if (canSeePendingApproval) 'Pending Approval',
+      'Approved',
       'New',
       'In Progress',
       'Negotiating',
@@ -488,7 +588,10 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
               children: filterOptions.map((status) {
                 final isSelected = _selectedStatus == status;
                 final isPendingChip = status == 'Pending Approval';
-                final count = isPendingChip ? pendingApprovalLeads.length : 0;
+                final isApprovedChip = status == 'Approved';
+                final count = isPendingChip
+                    ? pendingApprovalLeads.length
+                    : (isApprovedChip ? approvedLeads.length : 0);
 
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -502,16 +605,31 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                               shape: BoxShape.circle,
                             ),
                           )
-                        : null,
+                        : (isApprovedChip
+                            ? Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.success,
+                                  shape: BoxShape.circle,
+                                ),
+                              )
+                            : null),
                     label: Text(
-                      isPendingChip && count > 0
+                      (isPendingChip && count > 0)
                           ? 'Pending Approval ($count)'
-                          : status,
+                          : ((isApprovedChip && count > 0)
+                              ? 'Approved ($count)'
+                              : status),
                       style: TextStyle(
                         color: isSelected
-                            ? (isPendingChip ? const Color(0xFFB45309) : AppColors.primary)
-                            : (isPendingChip ? const Color(0xFFD97706) : AppColors.textPrimary),
-                        fontWeight: (isSelected || isPendingChip) ? FontWeight.bold : FontWeight.normal,
+                            ? (isPendingChip
+                                ? const Color(0xFFB45309)
+                                : (isApprovedChip ? AppColors.success : AppColors.primary))
+                            : (isPendingChip
+                                ? const Color(0xFFD97706)
+                                : (isApprovedChip ? AppColors.success : AppColors.textPrimary)),
+                        fontWeight: (isSelected || isPendingChip || isApprovedChip) ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     selected: isSelected,
@@ -520,12 +638,20 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                     },
                     selectedColor: isPendingChip
                         ? const Color(0xFFFEF3C7)
-                        : AppColors.primary.withOpacity(0.15),
-                    checkmarkColor: isPendingChip ? const Color(0xFFB45309) : AppColors.primary,
-                    backgroundColor: isPendingChip ? const Color(0xFFFFFBEB) : AppColors.background,
+                        : (isApprovedChip
+                            ? AppColors.success.withOpacity(0.15)
+                            : AppColors.primary.withOpacity(0.15)),
+                    checkmarkColor: isPendingChip
+                        ? const Color(0xFFB45309)
+                        : (isApprovedChip ? AppColors.success : AppColors.primary),
+                    backgroundColor: isPendingChip
+                        ? const Color(0xFFFFFBEB)
+                        : (isApprovedChip ? AppColors.success.withOpacity(0.05) : AppColors.background),
                     side: isPendingChip
                         ? BorderSide(color: isSelected ? const Color(0xFFF59E0B) : const Color(0xFFFDE68A))
-                        : null,
+                        : (isApprovedChip
+                            ? BorderSide(color: isSelected ? AppColors.success : AppColors.success.withOpacity(0.4))
+                            : null),
                   ),
                 );
               }).toList(),

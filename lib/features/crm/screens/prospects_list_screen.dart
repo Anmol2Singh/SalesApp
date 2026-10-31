@@ -1,3 +1,5 @@
+import '../../../core/models/crm_date_filter.dart';
+import '../../../core/widgets/crm_date_filter_bar.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +24,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _selectedSource = 'All';
+  CrmDateFilter _dateFilter = const CrmDateFilter();
 
   @override
   void dispose() {
@@ -135,6 +138,20 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
             ),
           ),
           const Divider(height: 1, color: AppColors.border),
+          CrmDateFilterBar(
+            filter: _dateFilter,
+            dateFieldName: 'created_at',
+            resultCount: prospectsAsync.value?.length ?? 0,
+            onFilterChanged: (newFilter) {
+              final needsReload = _dateFilter.preset != newFilter.preset ||
+                  _dateFilter.customStart != newFilter.customStart ||
+                  _dateFilter.customEnd != newFilter.customEnd;
+              setState(() => _dateFilter = newFilter);
+              if (needsReload) {
+                ref.read(prospectsProvider.notifier).load(dateFilter: newFilter);
+              }
+            },
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(prospectsProvider.notifier).load(refresh: true),
@@ -178,22 +195,15 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                   );
                 }
 
-                return ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, itemIndex) {
-                    final prospect = filtered[itemIndex];
-                      final isConverted = checkConverted(prospect);
-                      final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
-                      final isCreatedByMe = prospect.createdBy == profile?.id;
-                      final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
-                      final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || profile?.roles.contains(UserRole.admin) == true;
+                                Widget buildProspectCard(Prospect prospect) {
+                  final isConverted = checkConverted(prospect);
+                  final isAssignedToMe = prospect.assignedTo != null && prospect.assignedTo == profile?.id;
+                  final isCreatedByMe = prospect.createdBy == profile?.id;
+                  final isTransferredAway = isCreatedByMe && prospect.assignedTo != null && prospect.assignedTo != profile?.id;
+                  final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || profile?.roles.contains(UserRole.admin) == true;
+                  final isReassignReq = prospect.reassignmentRequested;
 
-                      final isReassignReq = prospect.reassignmentRequested;
-
-                      return Card(
+                  return Card(
                         elevation: 0,
                         color: isReassignReq
                             ? const Color(0xFFFFFBEB)
@@ -423,10 +433,60 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                 ),
                               ),
                             );
-                          },
-                        );
-                      },
-            loading: () => const Center(child: CircularProgressIndicator()),
+                }
+
+                if (_dateFilter.isGrouped) {
+                  final Map<String, List<Prospect>> grouped = {};
+                  for (final p in filtered) {
+                    final bucket = CrmDateFilter.getBucket(p.createdAt);
+                    grouped.putIfAbsent(bucket, () => []).add(p);
+                  }
+
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                    children: [
+                      for (final entry in grouped.entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '\ (\)',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
+                            ],
+                          ),
+                        ),
+                        for (final prospect in entry.value) ...[
+                          buildProspectCard(prospect),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ],
+                  );
+                }
+
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, itemIndex) {
+                    return buildProspectCard(filtered[itemIndex]);
+                  },
+                );
+              },
+loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: AppColors.error))),
           ),
         ),
@@ -921,13 +981,14 @@ class _AssignProspectSheetState extends ConsumerState<_AssignProspectSheet> {
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email, is_active, deleted_at').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
+        if (r['is_active'] == false || r['deleted_at'] != null) continue;
         final role = (r['role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List)
             ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()

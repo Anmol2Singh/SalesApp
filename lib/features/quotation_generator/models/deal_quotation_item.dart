@@ -51,6 +51,9 @@ class DealQuotationItem {
   final String? finalizedPdfPath;
   final String? finalizedRefNo;
   final DateTime? finalizedAt;
+  final String? approvedBy;
+  final DateTime? approvedAt;
+  final String? approverName;
 
   const DealQuotationItem({
     required this.id,
@@ -86,9 +89,15 @@ class DealQuotationItem {
     this.finalizedPdfPath,
     this.finalizedRefNo,
     this.finalizedAt,
+    this.approvedBy,
+    this.approvedAt,
+    this.approverName,
   });
 
-  bool get isConfirmed => status.trim().toLowerCase() == 'confirmed';
+  bool get isConfirmed {
+    final s = status.trim().toLowerCase();
+    return s == 'confirmed' || s == 'approved';
+  }
 
   String get formattedDate {
     return DateFormat('dd/MM/yyyy').format(orderDate);
@@ -162,6 +171,20 @@ class DealQuotationItem {
     }
 
     final cGst = customer != null ? (customer['gst_number'] as String?) : null;
+
+    final approverObj = row['approver'];
+    String? appName;
+    if (approverObj is Map) {
+      appName = approverObj['full_name'] as String?;
+    } else if (approverObj is List && approverObj.isNotEmpty && approverObj.first is Map) {
+      appName = approverObj.first['full_name'] as String?;
+    }
+    appName ??= (row['approver_name'] as String?);
+
+    final appAt = row['approved_at'] != null
+        ? DateTime.tryParse(row['approved_at'].toString())
+        : (row['confirmed_at'] != null ? DateTime.tryParse(row['confirmed_at'].toString()) : null);
+    final appBy = (row['approved_by'] as String?) ?? (row['confirmed_by'] as String?);
 
     // Salesperson resolution
     String sName = (row['salesman'] as String?)?.trim() ?? '';
@@ -267,6 +290,9 @@ class DealQuotationItem {
       finalizedAt: proposalRecord?['finalized_at'] != null
           ? DateTime.tryParse(proposalRecord!['finalized_at'] as String)
           : null,
+      approvedBy: appBy,
+      approvedAt: appAt,
+      approverName: appName,
     );
   }
 

@@ -347,6 +347,10 @@ class PdfService {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         _metaItem(isInvoice ? 'Invoice Date' : 'Quotation Date', quotation.orderDate != null ? DateFormat('dd/MM/yyyy').format(quotation.orderDate!) : DateFormat('dd/MM/yyyy').format(quotation.createdAt)),
+                        if (!isInvoice) ...[
+                          _metaItem('Approval Date', quotation.isApproved && quotation.approvedAt != null ? DateFormat('dd/MM/yyyy').format(quotation.approvedAt!) : 'Pending'),
+                          _metaItem('Approved By', quotation.isApproved ? (quotation.approverName ?? 'Admin / Sales Head') : '—'),
+                        ],
                         _metaItem('Vehicle No', ''),
                         _metaItem('Distance', quotation.distance != null ? '${quotation.distance!.toStringAsFixed(0)} KM' : null),
                         _metaItem('GR/LR No.', quotation.grLrNo),
@@ -1191,19 +1195,17 @@ class PdfService {
                   padding:
                       const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: pw.BoxDecoration(
-                    color:
-                        cleanStatus == 'Confirmed' || cleanStatus == 'Submitted'
+                    color: cleanStatus.toLowerCase() == 'confirmed' || cleanStatus.toLowerCase() == 'approved' || cleanStatus == 'Submitted'
                             ? PdfColors.green100
                             : PdfColors.orange100,
                     borderRadius:
                         const pw.BorderRadius.all(pw.Radius.circular(3)),
                   ),
                   child: pw.Text(
-                    cleanStatus,
+                    cleanStatus.toLowerCase() == 'confirmed' ? 'Approved' : cleanStatus,
                     style: pw.TextStyle(
                       fontSize: 9,
-                      color: cleanStatus == 'Confirmed' ||
-                              cleanStatus == 'Submitted'
+                      color: cleanStatus.toLowerCase() == 'confirmed' || cleanStatus.toLowerCase() == 'approved' || cleanStatus == 'Submitted'
                           ? PdfColors.green800
                           : PdfColors.orange800,
                     ),

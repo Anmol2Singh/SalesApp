@@ -3400,13 +3400,14 @@ class _AssignCustomerSheetState extends ConsumerState<_AssignCustomerSheet> {
       final db = ref.read(supabaseClientProvider);
       dynamic res;
       try {
-        res = await db.from('profiles').select('id, full_name, role, roles, email').order('full_name');
+        res = await db.from('profiles').select('id, full_name, role, roles, email, is_active, deleted_at').order('full_name');
       } catch (_) {
         res = await db.from('profiles').select().order('created_at', ascending: false);
       }
 
       final list = <Map<String, dynamic>>[];
       for (final r in (res as List? ?? [])) {
+        if (r['is_active'] == false || r['deleted_at'] != null) continue;
         final role = (r['role'] as String? ?? '').toLowerCase();
         final rolesList = (r['roles'] is List)
             ? (r['roles'] as List).map((e) => e.toString().toLowerCase()).toList()

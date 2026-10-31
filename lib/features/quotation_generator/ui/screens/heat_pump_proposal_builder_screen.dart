@@ -107,8 +107,17 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       final savedDraft = await QgDraftsService.loadDraft(widget.quotationId);
 
       if (savedDraft != null) {
-        _draft = savedDraft;
-        _isRestoredFromDraft = true;
+        final settings = ref.read(quotationSettingsProvider).valueOrNull ?? await ref.read(quotationRepositoryProvider).getSettings();
+        final freshDraft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
+        if (savedDraft.hpModel != freshDraft.hpModel ||
+            savedDraft.hpKw != freshDraft.hpKw ||
+            savedDraft.hpSpecs['Heat Pump Model'] != freshDraft.hpModel) {
+          _draft = freshDraft;
+          _isRestoredFromDraft = false;
+        } else {
+          _draft = savedDraft;
+          _isRestoredFromDraft = true;
+        }
 
         // Check if source quotation in CRM has been updated since the draft was created
         if (dealItem.updatedAt.isAfter(savedDraft.quotationUpdatedAt)) {

@@ -14,6 +14,7 @@ import '../data/repositories/pm_projects_repository.dart';
 import '../data/repositories/pm_purchases_repository.dart';
 import '../data/repositories/pm_ledger_repository.dart';
 import '../data/repositories/pm_daily_transactions_repository.dart';
+import '../data/models/pm_transaction_purpose.dart';
 import 'pm_company_provider.dart';
 
 // -----------------------------------------------------------------------------
@@ -241,6 +242,11 @@ final pmDailyTransactionsListProvider = FutureProvider.autoDispose<List<PmDailyT
         t.paymentMode.toLowerCase().contains(q) ||
         (t.remark?.toLowerCase().contains(q) ?? false);
   }).toList();
+});
+
+final pmTransactionPurposesProvider = FutureProvider.autoDispose<List<PmTransactionPurpose>>((ref) async {
+  final repo = ref.watch(pmDailyTransactionsRepositoryProvider);
+  return repo.getTransactionPurposes();
 });
 
 // -----------------------------------------------------------------------------

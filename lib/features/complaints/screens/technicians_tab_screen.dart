@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import '../../admin/screens/user_management_screen.dart' show usersListProvider;
+import '../../reports/screens/user_activity_report_screen.dart' show allUsersProvider;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/complaints_provider.dart';
@@ -544,6 +548,22 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
         }
 
         ref.invalidate(availableTechniciansProvider);
+        ref.invalidate(allUsersProvider);
+        ref.invalidate(usersListProvider);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cached = prefs.getString('cached_staff_profiles_v1');
+          if (cached != null && cached.isNotEmpty) {
+            final decoded = jsonDecode(cached) as List<dynamic>;
+            final updated = decoded.where((item) {
+              if (item is! Map) return true;
+              if (tech.id.isNotEmpty && item['id'] == tech.id) return false;
+              if (tech.email != null && tech.email!.isNotEmpty && item['email'] == tech.email) return false;
+              return true;
+            }).toList();
+            await prefs.setString('cached_staff_profiles_v1', jsonEncode(updated));
+          }
+        } catch (_) {}
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Technician deleted successfully.')),

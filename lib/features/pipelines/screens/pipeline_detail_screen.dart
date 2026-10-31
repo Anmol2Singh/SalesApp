@@ -1,3 +1,5 @@
+import '../../quotation_generator/services/qg_drafts_service.dart';
+import '../../quotation_generator/services/qg_boom_barrier_drafts_service.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -2606,6 +2608,10 @@ Future<void> _executeApprovalFlow(
         'status': 'in_progress',
         'notes': 'Quotation approved by ${profile?.fullName ?? "Sales Head / Admin"}.',
       }).eq('id', pipeline.id);
+      await QgDraftsService.deleteDraft(quotationId);
+      await QgBoomBarrierDraftsService.deleteDraft(quotationId);
+      await QgDraftsService.deleteDraft(quotationId);
+      await QgBoomBarrierDraftsService.deleteDraft(quotationId);
     } else {
       await supabase.from('quotations').update({
         'status': 'rejected',

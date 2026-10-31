@@ -12,7 +12,7 @@ import '../../../core/utils/financial_year_helper.dart';
 class BoomBarrierProposalDraft {
   final String quotationId;
   final String quotationNumber;
-  final String status;
+  String status;
   final int revision;
   final DateTime quotationUpdatedAt;
   DateTime draftUpdatedAt;
@@ -37,6 +37,8 @@ class BoomBarrierProposalDraft {
   // Table Line Items
   List<BoomBarrierLineItem> items;
   List<BoomBarrierAtActualLine> atActualCharges;
+  List<Map<String, dynamic>> supplementaryItems;
+  double supplementarySubtotal;
 
   // Financial Totals
   double subtotal;
@@ -94,6 +96,8 @@ class BoomBarrierProposalDraft {
     this.optionTitle = 'Option 1',
     required this.items,
     required this.atActualCharges,
+    this.supplementaryItems = const [],
+    this.supplementarySubtotal = 0.0,
     required this.subtotal,
     this.gstPercent = 18.0,
     required this.gstAmount,
@@ -212,6 +216,7 @@ class BoomBarrierProposalDraft {
 
     final mathResult = BoomBarrierMath.calculate(
       items: parseResult.lineItems,
+      supplementarySubtotal: deal.supplementarySubtotal,
       gstPercent: 18.0,
     );
 
@@ -276,6 +281,8 @@ class BoomBarrierProposalDraft {
       optionTitle: 'Option 1',
       items: parseResult.lineItems,
       atActualCharges: atActual,
+      supplementaryItems: List<Map<String, dynamic>>.from(deal.supplementaryTerms),
+      supplementarySubtotal: deal.supplementarySubtotal,
       subtotal: mathResult.subtotal,
       gstPercent: mathResult.gstPercent,
       gstAmount: mathResult.gstAmount,
@@ -309,6 +316,7 @@ class BoomBarrierProposalDraft {
   void recalculateTotals() {
     final result = BoomBarrierMath.calculate(
       items: items,
+      supplementarySubtotal: supplementarySubtotal,
       gstPercent: gstPercent,
     );
     subtotal = result.subtotal;
@@ -343,6 +351,11 @@ class BoomBarrierProposalDraft {
           .whereType<Map>()
           .map((m) => BoomBarrierAtActualLine.fromJson(Map<String, dynamic>.from(m)))
           .toList(),
+      supplementaryItems: ((json['supplementary_items'] ?? json['supplementaryItems'] as List?) ?? [])
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList(),
+      supplementarySubtotal: (json['supplementary_subtotal'] ?? json['supplementarySubtotal'] as num?)?.toDouble() ?? 0.0,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
       gstPercent: (json['gst_percent'] as num?)?.toDouble() ?? 18.0,
       gstAmount: (json['gst_amount'] as num?)?.toDouble() ?? 0.0,
@@ -399,6 +412,10 @@ class BoomBarrierProposalDraft {
       'option_title': optionTitle,
       'items': items.map((i) => i.toJson()).toList(),
       'at_actual_charges': atActualCharges.map((a) => a.toJson()).toList(),
+      'supplementary_items': supplementaryItems,
+      'supplementary_subtotal': supplementarySubtotal,
+      'supplementary_items': supplementaryItems,
+      'supplementary_subtotal': supplementarySubtotal,
       'subtotal': subtotal,
       'gst_percent': gstPercent,
       'gst_amount': gstAmount,
