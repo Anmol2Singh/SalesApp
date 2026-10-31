@@ -2,7 +2,7 @@
   {
     "id": "IZ-4C",
     "modelName": "IZ-4C",
-    "displayCapacityKw": 4.0,
+    "displayCapacityKw": 4,
     "ratedHeatingCapacity": "4KW (rated 3.6KW; TODO_CONFIRM)",
     "descriptionLine": "Air Source Heat pump 3.6kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-4C 3.6kw",
@@ -26,7 +26,7 @@
   {
     "id": "IZ-12C",
     "modelName": "IZ-12C",
-    "displayCapacityKw": 12.0,
+    "displayCapacityKw": 12,
     "ratedHeatingCapacity": "12kw",
     "descriptionLine": "Air Source Heat pump 12kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-12C 12kw",
@@ -50,7 +50,7 @@
   {
     "id": "IZ-18C",
     "modelName": "IZ-18C",
-    "displayCapacityKw": 18.0,
+    "displayCapacityKw": 18,
     "ratedHeatingCapacity": "18kw",
     "descriptionLine": "Air Source Heat pump 18kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-18C 18kw",
@@ -72,9 +72,34 @@
     }
   },
   {
+    "id": "IZ-20C",
+    "modelName": "IZ-20C",
+    "displayCapacityKw": 20,
+    "ratedHeatingCapacity": "20kw",
+    "descriptionLine": "Air Source Heat pump 20kw",
+    "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-20C 20kw",
+    "powerInputText": "Power Input 4.60kw, output 20kw, 380-440V - 3Phase, 50Hz With Auto Defrost.",
+    "defaultImagePath": "assets/images/model_iz_4c.png",
+    "specs": {
+      "Condenser": "Shell and tube heat exchanger",
+      "Rated COP": "4.18",
+      "Compressor": "Single",
+      "Refrigerant": "R134A/410A",
+      "Power Supply": "380-440V - 3Phase",
+      "Size (W x D x H)": "936x385x550mm",
+      "Water Flow Noise": "<=47dB(A)",
+      "Rated Input Power": "4.60kw",
+      "Rated Water Yield": "430 L/h",
+      "Operating ambient Temp": "-15~43°C",
+      "Rated Heating Capacity": "20kw",
+      "Max Outlet Water Temperature": "60°C",
+      "Heat Pump Model": "IZ-20C"
+    }
+  },
+  {
     "id": "IZ-24C",
     "modelName": "IZ-24C",
-    "displayCapacityKw": 24.0,
+    "displayCapacityKw": 24,
     "ratedHeatingCapacity": "24kw",
     "descriptionLine": "Air Source Heat pump 24kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-24C 24kw",
@@ -98,7 +123,7 @@
   {
     "id": "IZ-38C",
     "modelName": "IZ-38C",
-    "displayCapacityKw": 38.0,
+    "displayCapacityKw": 38,
     "ratedHeatingCapacity": "38kw",
     "descriptionLine": "Air Source Heat pump 38kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-38C 38kw",
@@ -122,7 +147,7 @@
   {
     "id": "IZ-50C",
     "modelName": "IZ-50C",
-    "displayCapacityKw": 50.0,
+    "displayCapacityKw": 50,
     "ratedHeatingCapacity": "50kw",
     "descriptionLine": "Air Source Heat pump 50kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-50C 50kw",
@@ -146,7 +171,7 @@
   {
     "id": "IZ-84C",
     "modelName": "IZ-84C",
-    "displayCapacityKw": 84.0,
+    "displayCapacityKw": 84,
     "ratedHeatingCapacity": "84kw",
     "descriptionLine": "Air Source Heat pump 84kw",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-84C 84kw",
@@ -170,7 +195,7 @@
   {
     "id": "IZ-150C",
     "modelName": "IZ-150C (EVI)",
-    "displayCapacityKw": 150.0,
+    "displayCapacityKw": 150,
     "ratedHeatingCapacity": "150kw",
     "descriptionLine": "Air Source Heat pump 150kw EVI technology",
     "makeModelLine": "Make: IZYHEAT Heat Pump Model: IZ-150C 150kw EVI technology",
