@@ -291,6 +291,70 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     await load();
   }
 
+  static String normalizePhone(String? phone) {
+    if (phone == null) return '';
+    String digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 12 && digits.startsWith('91')) {
+      digits = digits.substring(2);
+    } else if (digits.length == 11 && digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+    return digits;
+  }
+
+  static String normalizeName(String? name) {
+    if (name == null) return '';
+    return name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  Future<Map<String, dynamic>> checkDuplicate({
+    required String name,
+    required String phone,
+    String? excludeId,
+  }) async {
+    try {
+      final res = await _supabase.rpc('check_duplicate_prospect', params: {
+        'p_name': name.trim(),
+        'p_mobile': phone.trim(),
+        if (excludeId != null && excludeId.isNotEmpty) 'p_exclude_id': excludeId,
+      });
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+      return {'is_duplicate': false};
+    } catch (e) {
+      debugPrint('check_duplicate_prospect RPC error: $e');
+      final normPhone = normalizePhone(phone);
+      final normName = normalizeName(name);
+
+      final localProspects = state.value ?? [];
+      for (final p in localProspects) {
+        if (excludeId != null && p.id == excludeId) continue;
+        if (normPhone.isNotEmpty && normalizePhone(p.phone) == normPhone) {
+          final owner = p.assignedByName ?? p.createdByName ?? 'Sales Staff';
+          return {
+            'is_duplicate': true,
+            'duplicate_field': 'mobile',
+            'existing_name': p.name,
+            'existing_owner_name': owner,
+            'message': 'A prospect with this mobile number already exists ("${p.name}", owned by $owner)',
+          };
+        }
+        if (normName.isNotEmpty && normalizeName(p.name) == normName) {
+          final owner = p.assignedByName ?? p.createdByName ?? 'Sales Staff';
+          return {
+            'is_duplicate': true,
+            'duplicate_field': 'name',
+            'existing_name': p.name,
+            'existing_owner_name': owner,
+            'message': 'A prospect with this name already exists ("${p.name}", owned by $owner)',
+          };
+        }
+      }
+      return {'is_duplicate': false};
+    }
+  }
+
   Future<Prospect?> addProspect({
     required String name,
     required String phone,
@@ -303,6 +367,11 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
   }) async {
     if (_userId == null) return null;
     try {
+      // Pre-check for duplicate prospect across company
+      final dupCheck = await checkDuplicate(name: name, phone: phone);
+      if (dupCheck['is_duplicate'] == true) {
+        throw Exception(dupCheck['message'] ?? 'A duplicate prospect already exists.');
+      }
       bool isSalesOrSalesHead = _profile?.primaryRole == UserRole.sales ||
           _profile?.primaryRole == UserRole.salesHead ||
           (_profile?.roles.contains(UserRole.sales) ?? false) ||
@@ -343,6 +412,14 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
       await load();
       return newProspect;
     } catch (e) {
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('23505') || errStr.contains('unique') || errStr.contains('normalized_mobile') || errStr.contains('unique_name')) {
+        if (errStr.contains('mobile') || errStr.contains('phone')) {
+          throw Exception('A prospect with this mobile number already exists.');
+        } else {
+          throw Exception('A prospect with this name already exists.');
+        }
+      }
       rethrow;
     }
   }
@@ -358,19 +435,46 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
     String? source,
     String? notes,
   }) async {
-    final data = <String, dynamic>{
-      if (name != null) 'name': name.trim(),
-      if (phone != null) 'phone': phone.trim(),
-      if (email != null) 'email': email.trim(),
-      if (address != null) 'address': address.trim(),
-      if (gst != null) 'gst': gst.trim(),
-      if (company != null) 'company': company.trim(),
-      if (source != null) 'source': source,
-      if (notes != null) 'notes': notes.trim(),
-      'updated_at': DateTime.now().toIso8601String(),
-    };
-    await _supabase.from('crm_prospects').update(data).eq('id', prospectId);
-    await load();
+    try {
+      if (name != null || phone != null) {
+        final current = state.value?.where((p) => p.id == prospectId).firstOrNull;
+        final checkName = name ?? current?.name ?? '';
+        final checkPhone = phone ?? current?.phone ?? '';
+
+        final dupCheck = await checkDuplicate(
+          name: checkName,
+          phone: checkPhone,
+          excludeId: prospectId,
+        );
+        if (dupCheck['is_duplicate'] == true) {
+          throw Exception(dupCheck['message'] ?? 'A duplicate prospect already exists.');
+        }
+      }
+
+      final data = <String, dynamic>{
+        if (name != null) 'name': name.trim(),
+        if (phone != null) 'phone': phone.trim(),
+        if (email != null) 'email': email.trim(),
+        if (address != null) 'address': address.trim(),
+        if (gst != null) 'gst': gst.trim(),
+        if (company != null) 'company': company.trim(),
+        if (source != null) 'source': source,
+        if (notes != null) 'notes': notes.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await _supabase.from('crm_prospects').update(data).eq('id', prospectId);
+      await load();
+    } catch (e) {
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('23505') || errStr.contains('unique') || errStr.contains('normalized_mobile') || errStr.contains('unique_name')) {
+        if (errStr.contains('mobile') || errStr.contains('phone')) {
+          throw Exception('A prospect with this mobile number already exists.');
+        } else {
+          throw Exception('A prospect with this name already exists.');
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<void> deleteProspect({
@@ -595,27 +699,62 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         } catch (_) {}
       } else if (contactPhone != null && contactPhone.trim().isNotEmpty) {
         try {
-          // Check if prospect exists with this phone first
+          final normContactPhone = ProspectsNotifier.normalizePhone(contactPhone);
+
           final existingP = await _supabase
               .from('crm_prospects')
-              .select('id, assigned_to')
-              .eq('phone', contactPhone.trim())
+              .select('id, assigned_to, name, phone')
+              .or('normalized_mobile.eq.' + normContactPhone + ',phone.eq.' + contactPhone.trim())
               .limit(1);
+
           if (existingP.isNotEmpty) {
             finalProspectId = existingP.first['id'] as String;
             assignedSalesperson = existingP.first['assigned_to'] as String?;
           } else {
-            final prospectRes = await _supabase.from('crm_prospects').insert({
-              'name': prospectName.trim(),
-              'phone': contactPhone.trim(),
-              'source': 'Manual',
-              'created_by': _userId,
-              'created_at': DateTime.now().toIso8601String(),
-              'updated_at': DateTime.now().toIso8601String(),
-            }).select().single();
-            finalProspectId = prospectRes['id'] as String;
+            // Check duplicate by name or mobile via RPC
+            final dupCheck = await _supabase.rpc('check_duplicate_prospect', params: {
+              'p_name': prospectName.trim(),
+              'p_mobile': contactPhone.trim(),
+            });
+
+            if (dupCheck is Map && dupCheck['is_duplicate'] == true) {
+              if (dupCheck['duplicate_field'] == 'mobile') {
+                final pRow = await _supabase.from('crm_prospects')
+                    .select('id, assigned_to')
+                    .eq('normalized_mobile', normContactPhone)
+                    .maybeSingle();
+                if (pRow != null) {
+                  finalProspectId = pRow['id'] as String;
+                  assignedSalesperson = pRow['assigned_to'] as String?;
+                }
+              } else {
+                throw Exception(dupCheck['message'] ?? 'A prospect with this name already exists.');
+              }
+            }
+
+            if (finalProspectId == null) {
+              final prospectRes = await _supabase.from('crm_prospects').insert({
+                'name': prospectName.trim(),
+                'phone': contactPhone.trim(),
+                'source': 'Manual',
+                'created_by': _userId,
+                'created_at': DateTime.now().toIso8601String(),
+                'updated_at': DateTime.now().toIso8601String(),
+              }).select().single();
+              finalProspectId = prospectRes['id'] as String;
+            }
           }
-        } catch (_) {}
+        } catch (e) {
+          final errStr = e.toString().toLowerCase();
+          if (errStr.contains('23505') || errStr.contains('unique') || errStr.contains('normalized_mobile') || errStr.contains('unique_name')) {
+            if (errStr.contains('mobile') || errStr.contains('phone')) {
+              throw Exception('A prospect with this mobile number already exists.');
+            } else {
+              throw Exception('A prospect with this name already exists.');
+            }
+          }
+          rethrow;
+        }
       }
 
       final leadData = {

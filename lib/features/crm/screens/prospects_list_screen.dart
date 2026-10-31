@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -603,9 +604,68 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
   final _notesCtrl = TextEditingController();
   String _source = 'Manual';
   bool _isSaving = false;
+  String? _nameError;
+  String? _phoneError;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl.addListener(_onFieldChanged);
+    _phoneCtrl.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      _checkLiveDuplicate();
+    });
+  }
+
+  Future<void> _checkLiveDuplicate() async {
+    final name = _nameCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    if (name.isEmpty && phone.isEmpty) {
+      if (_nameError != null || _phoneError != null) {
+        setState(() {
+          _nameError = null;
+          _phoneError = null;
+        });
+      }
+      return;
+    }
+
+    final res = await ref.read(prospectsProvider.notifier).checkDuplicate(
+      name: name,
+      phone: phone,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      if (res['is_duplicate'] == true) {
+        final field = res['duplicate_field'] as String?;
+        final msg = res['message'] as String? ?? 'Duplicate prospect found';
+        if (field == 'mobile') {
+          _phoneError = msg;
+          _nameError = null;
+        } else if (field == 'name') {
+          _nameError = msg;
+          _phoneError = null;
+        } else {
+          _phoneError = msg;
+          _nameError = msg;
+        }
+      } else {
+        _nameError = null;
+        _phoneError = null;
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
@@ -618,9 +678,30 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
 
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_nameError != null || _phoneError != null) return;
 
     setState(() => _isSaving = true);
     try {
+      final dup = await ref.read(prospectsProvider.notifier).checkDuplicate(
+        name: _nameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+      );
+      if (dup['is_duplicate'] == true) {
+        final field = dup['duplicate_field'] as String?;
+        final msg = dup['message'] as String? ?? 'Duplicate prospect found';
+        setState(() {
+          if (field == 'mobile') {
+            _phoneError = msg;
+          } else {
+            _nameError = msg;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+        );
+        return;
+      }
+
       await ref.read(prospectsProvider.notifier).addProspect(
             name: _nameCtrl.text,
             phone: _phoneCtrl.text,
@@ -639,8 +720,15 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
       }
     } catch (e) {
       if (mounted) {
+        final cleanMsg = e.toString().replaceFirst(RegExp(r'^Exception:s*'), '');
+        final lower = cleanMsg.toLowerCase();
+        if (lower.contains('mobile') || lower.contains('phone')) {
+          setState(() => _phoneError = cleanMsg);
+        } else if (lower.contains('name')) {
+          setState(() => _nameError = cleanMsg);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding prospect: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(cleanMsg), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -675,20 +763,22 @@ class _AddProspectFormState extends ConsumerState<AddProspectForm> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Customer/Business name *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.person),
+                  errorText: _nameError,
                 ),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a name' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _phoneCtrl,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Phone Number *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.phone),
+                  errorText: _phoneError,
                 ),
                 keyboardType: TextInputType.phone,
                 validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a phone number' : null,

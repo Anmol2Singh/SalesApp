@@ -183,23 +183,24 @@ class QgCatalogService {
 
     // 2. Local bundled models fallback
     final bundled = await CatalogRepository.loadBundledModels();
-    final bundledMatch = bundled.firstWhere(
-      (m) => m.displayCapacityKw.toInt() == targetKw,
-      orElse: () => bundled.first,
+    final matchedIndex = bundled.indexWhere(
+      (m) => m.displayCapacityKw.toInt() == targetKw ||
+             m.id.trim().toLowerCase() == derivedModel.toLowerCase() ||
+             m.modelName.trim().toLowerCase() == derivedModel.toLowerCase(),
     );
 
-    final isFallback = bundledMatch.displayCapacityKw.toInt() != targetKw;
-    final fallbackNote = isFallback
-        ? 'Specs copied from ${bundledMatch.modelName} (${bundledMatch.displayCapacityKw.toInt()}kW)'
-        : null;
+    if (matchedIndex != -1) {
+      final bundledMatch = bundled[matchedIndex];
+      return QgSpecMatchResult(
+        modelNo: derivedModel,
+        kw: targetKw,
+        specs: _normalize13Specs(targetKw, derivedModel, bundledMatch.specs),
+        specsCopiedFrom: null,
+        isFallback: false,
+      );
+    }
 
-    return QgSpecMatchResult(
-      modelNo: derivedModel,
-      kw: targetKw,
-      specs: _normalize13Specs(targetKw, derivedModel, bundledMatch.specs),
-      specsCopiedFrom: fallbackNote,
-      isFallback: isFallback,
-    );
+    throw StateError('Product model "$derivedModel" (${targetKw}kW) not found in product catalog or bundled specifications.');
   }
 
   /// Normalizes specs map into the standard 13-row Annexure II Technical Specification format

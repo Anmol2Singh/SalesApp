@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'deal_quotation_item.dart';
 import 'generator_quotation.dart';
 import 'heat_pump_model.dart';
@@ -575,7 +574,7 @@ class QgProposalDraft {
     if (isAllInOne || isWallMounted) {
       final aioItem = items.firstWhere(
         (it) => it.type == ParsedItemType.allInOne || it.type == ParsedItemType.wallMounted,
-        orElse: () => items.isNotEmpty ? items.first : ParsedItemResult(rawDescription: 'All in one 200Ltr', type: ParsedItemType.allInOne, status: ItemResolveStatus.resolved, aioCapacityLitres: 200),
+        orElse: () => ParsedItemResult(rawDescription: isWallMounted ? 'All in one Wall Mounted 100Ltr' : 'All in one 200Ltr', type: isWallMounted ? ParsedItemType.wallMounted : ParsedItemType.allInOne, status: ItemResolveStatus.resolved, aioCapacityLitres: isWallMounted ? 100 : 200),
       );
       final cap = aioItem.aioCapacityLitres ?? 200;
 

@@ -8,6 +8,7 @@ import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/notification_service.dart';
+import '../../quotation_generator/data/catalog_repository.dart';
 
 // Current auth user (Supabase User)
 final authUserProvider = StreamProvider<User?>((ref) {
@@ -475,6 +476,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       await NotificationService.unregisterDeviceToken(_supabase);
+      CatalogRepository.clearCache();
       await _clearLocalSessions();
       await _supabase.auth.signOut();
       state = const AsyncValue.data(null);

@@ -82,7 +82,7 @@ class PdfQuotationBuilder {
     if (quotation.quoteType == QuoteType.swimmingPool || resolvedPool != null) {
       final matchedPool = effectiveSettings.poolModels.cast<PoolHeatPumpModel?>().firstWhere(
         (m) => m != null && (m.id == resolvedPool?.id || m.modelName.toLowerCase() == resolvedPool?.modelName.toLowerCase()),
-        orElse: () => effectiveSettings.poolModels.isNotEmpty ? effectiveSettings.poolModels.first : null,
+        orElse: () => null,
       );
       if (matchedPool != null) {
         resolvedPool = matchedPool;

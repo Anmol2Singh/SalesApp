@@ -6,6 +6,7 @@ import '../models/heat_pump_model.dart';
 import '../models/all_in_one_model.dart';
 import '../models/pool_heat_pump_model.dart';
 import 'qg_item_parser.dart';
+import '../data/catalog_repository.dart';
 
 /// Distinct categories of Heat Pump units supported in the quotation system.
 enum HeatPumpType {
@@ -233,14 +234,14 @@ class QgModelSpecsResolver {
       final borrowed = Map<String, String>.from(higher.specs);
       borrowed['Tank Volume'] = '$vol Ltr';
       return ResolvedModelSpecs(
-        modelId: higher.id,
+        modelId: cleanId.isNotEmpty ? cleanId : derivedName,
         modelName: derivedName,
         kw: 0,
         litres: vol,
         specs: borrowed,
         specsCopiedFrom: 'Higher Model Fallback (${higher.modelName})',
         heatPumpType: HeatPumpType.allInOne,
-        matchedAioModel: higher,
+        matchedAioModel: higher.copyWith(id: cleanId.isNotEmpty ? cleanId : derivedName, modelName: derivedName),
         isHigherModelFallback: true,
       );
     }
@@ -360,13 +361,13 @@ class QgModelSpecsResolver {
       borrowed['Model'] = derivedName;
       borrowed['Heating Capacity'] = '${resolvedKw.toInt()}kW';
       return ResolvedModelSpecs(
-        modelId: higher.id,
+        modelId: cleanId.isNotEmpty ? cleanId : derivedName,
         modelName: derivedName,
         kw: resolvedKw,
         specs: borrowed,
         specsCopiedFrom: 'Higher Model Fallback (${higher.modelName})',
         heatPumpType: HeatPumpType.swimmingPool,
-        matchedPoolModel: higher,
+        matchedPoolModel: higher.copyWith(id: cleanId.isNotEmpty ? cleanId : derivedName, modelName: derivedName),
         isHigherModelFallback: true,
       );
     }
@@ -479,7 +480,36 @@ class QgModelSpecsResolver {
       );
     }
 
-    // 4. Higher Model Fallback Rule in standard models
+    // 3.5 Check cached bundled models before fallback
+    final bundledList = CatalogRepository.cachedBundledModels;
+    if (bundledList != null && bundledList.isNotEmpty) {
+      if (cleanId.isNotEmpty) {
+        final bMatch = bundledList.where((m) => m.id.trim().toLowerCase() == cleanId).firstOrNull;
+        if (bMatch != null) {
+          return _buildResolved(
+            matched: bMatch,
+            targetModelName: derivedModelName,
+            targetKw: resolvedKw,
+            source: 'Bundled Catalog: ${bMatch.modelName}',
+          );
+        }
+      }
+      final bMatchByName = bundledList.where(
+        (m) => m.modelName.trim().toLowerCase() == cleanModelName ||
+               m.id.trim().toLowerCase() == cleanModelName ||
+               (resolvedKw != null && (m.displayCapacityKw - resolvedKw).abs() < 0.05),
+      ).firstOrNull;
+      if (bMatchByName != null) {
+        return _buildResolved(
+          matched: bMatchByName,
+          targetModelName: derivedModelName,
+          targetKw: resolvedKw,
+          source: 'Bundled Catalog: ${bMatchByName.modelName}',
+        );
+      }
+    }
+
+    // 4. Higher Model Fallback Rule in standard models (preserve requested model ID)
     if (models.isNotEmpty) {
       final higherModels = models.where(
         (m) => m.displayCapacityKw > resolvedKw! && m.specs.isNotEmpty,
@@ -497,14 +527,20 @@ class QgModelSpecsResolver {
 
         debugPrint('[QgModelSpecsResolver] Exact model "$derivedModelName" (${resolvedKw}kW) not found in Module Settings. Borrowing specs from higher model ${higherModel.modelName} (${higherModel.displayCapacityKw}kW) with model number & kW preserved.');
 
+        final stableId = cleanId.isNotEmpty ? cleanId : derivedModelName;
         return ResolvedModelSpecs(
-          modelId: higherModel.id,
+          modelId: stableId,
           modelName: derivedModelName,
           kw: resolvedKw,
           specs: borrowedSpecs,
           specsCopiedFrom: 'Higher Model Fallback (${higherModel.modelName})',
           heatPumpType: HeatPumpType.domesticCommercial,
-          matchedModel: higherModel,
+          matchedModel: higherModel.copyWith(
+            id: stableId,
+            modelName: derivedModelName,
+            displayCapacityKw: resolvedKw,
+            specs: borrowedSpecs,
+          ),
           isHigherModelFallback: true,
         );
       }

@@ -14,6 +14,10 @@ import 'core/services/offline_queue_service.dart';
 import 'core/services/adaptive_notification_manager.dart';
 import 'core/services/notification_service.dart';
 import 'core/utils/global_click_guard.dart';
+import 'core/models/profile.dart';
+import 'features/quotation_generator/data/catalog_repository.dart';
+import 'features/quotation_generator/providers/quotation_generator_providers.dart';
+import 'features/crm/providers/crm_providers.dart';
 
 class IzyheatApp extends ConsumerWidget {
   const IzyheatApp({super.key});
@@ -34,6 +38,20 @@ class IzyheatApp extends ConsumerWidget {
     ref.listen<bool>(isOnlineProvider, (previous, next) {
       if (next == true) {
         ref.read(offlineQueueProvider).processQueue(ref);
+      }
+    });
+
+    // Reset and invalidate cached catalog settings & CRM providers on login / logout / role change
+    ref.listen<Profile?>(currentProfileProvider, (previous, next) {
+      if (previous?.id != next?.id || previous?.primaryRole != next?.primaryRole) {
+        CatalogRepository.clearCache();
+        try {
+          ref.read(quotationRepositoryProvider).clearCache();
+        } catch (_) {}
+        ref.invalidate(quotationRepositoryProvider);
+        ref.invalidate(quotationSettingsProvider);
+        ref.invalidate(prospectsProvider);
+        ref.invalidate(leadsProvider);
       }
     });
 

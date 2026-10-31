@@ -3237,8 +3237,17 @@ class _LeadQuotationsSectionState
           productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Heat Pump',
         );
 
-        final QgProposalDraft draft = (await QgDraftsService.loadDraft(quot.id)) ??
+        QgProposalDraft draft = (await QgDraftsService.loadDraft(quot.id)) ??
             QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
+
+        // Reconcile model with deal item in case a stale/corrupted draft was previously cached
+        final freshDraft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
+        if (freshDraft.hpModel.isNotEmpty && draft.hpModel != freshDraft.hpModel) {
+          draft.hpModel = freshDraft.hpModel;
+          draft.hpKw = freshDraft.hpKw;
+          draft.hpSpecs = Map<String, String>.from(freshDraft.hpSpecs);
+          draft.specsCopiedFrom = freshDraft.specsCopiedFrom;
+        }
 
         // Ensure draft specs are in sync with Module Settings according to heat pump type
         HeatPumpType hpType = HeatPumpType.domesticCommercial;

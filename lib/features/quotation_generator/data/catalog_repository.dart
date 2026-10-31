@@ -12,6 +12,17 @@ class CatalogRepository {
   static List<AllInOneModel>? _cachedAllInOneModels;
   static Map<String, dynamic>? _cachedTankPresets;
 
+  static List<HeatPumpModel>? get cachedBundledModels => _cachedBundledModels;
+  static List<PoolHeatPumpModel>? get cachedPoolModels => _cachedPoolModels;
+  static List<AllInOneModel>? get cachedAllInOneModels => _cachedAllInOneModels;
+
+  static void clearCache() {
+    _cachedBundledModels = null;
+    _cachedPoolModels = null;
+    _cachedAllInOneModels = null;
+    _cachedTankPresets = null;
+  }
+
   static Future<List<HeatPumpModel>> loadBundledModels() async {
     if (_cachedBundledModels != null) return _cachedBundledModels!;
     try {

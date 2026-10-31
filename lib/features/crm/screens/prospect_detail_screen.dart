@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1228,6 +1229,9 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
   late final TextEditingController _notesCtrl;
   late String _source;
   bool _isSaving = false;
+  String? _nameError;
+  String? _phoneError;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -1240,10 +1244,62 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
     _companyCtrl = TextEditingController(text: widget.prospect.company ?? '');
     _notesCtrl = TextEditingController(text: widget.prospect.notes ?? '');
     _source = widget.prospect.source;
+    _nameCtrl.addListener(_onFieldChanged);
+    _phoneCtrl.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      _checkLiveDuplicate();
+    });
+  }
+
+  Future<void> _checkLiveDuplicate() async {
+    final name = _nameCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    if (name.isEmpty && phone.isEmpty) {
+      if (_nameError != null || _phoneError != null) {
+        setState(() {
+          _nameError = null;
+          _phoneError = null;
+        });
+      }
+      return;
+    }
+
+    final res = await ref.read(prospectsProvider.notifier).checkDuplicate(
+      name: name,
+      phone: phone,
+      excludeId: widget.prospect.id,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      if (res['is_duplicate'] == true) {
+        final field = res['duplicate_field'] as String?;
+        final msg = res['message'] as String? ?? 'Duplicate prospect found';
+        if (field == 'mobile') {
+          _phoneError = msg;
+          _nameError = null;
+        } else if (field == 'name') {
+          _nameError = msg;
+          _phoneError = null;
+        } else {
+          _phoneError = msg;
+          _nameError = msg;
+        }
+      } else {
+        _nameError = null;
+        _phoneError = null;
+      }
+    });
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
@@ -1256,8 +1312,31 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
 
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_nameError != null || _phoneError != null) return;
+
     setState(() => _isSaving = true);
     try {
+      final dup = await ref.read(prospectsProvider.notifier).checkDuplicate(
+        name: _nameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        excludeId: widget.prospect.id,
+      );
+      if (dup['is_duplicate'] == true) {
+        final field = dup['duplicate_field'] as String?;
+        final msg = dup['message'] as String? ?? 'Duplicate prospect found';
+        setState(() {
+          if (field == 'mobile') {
+            _phoneError = msg;
+          } else {
+            _nameError = msg;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+        );
+        return;
+      }
+
       await ref.read(prospectsProvider.notifier).updateProspect(
             prospectId: widget.prospect.id,
             name: _nameCtrl.text,
@@ -1280,9 +1359,16 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
       }
     } catch (e) {
       if (mounted) {
+        final cleanMsg = e.toString().replaceFirst(RegExp(r'^Exception:s*'), '');
+        final lower = cleanMsg.toLowerCase();
+        if (lower.contains('mobile') || lower.contains('phone')) {
+          setState(() => _phoneError = cleanMsg);
+        } else if (lower.contains('name')) {
+          setState(() => _nameError = cleanMsg);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating prospect: $e'),
+            content: Text(cleanMsg),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1355,6 +1441,7 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
                   labelText: 'Customer/Business name *',
                   prefixIcon: const Icon(Icons.person_outline),
                   border: const OutlineInputBorder(),
+                  errorText: _nameError,
                   helperText: canEditName ? null : 'Only creator or admin can edit name',
                 ),
                 validator: (val) =>
@@ -1368,6 +1455,7 @@ class _EditProspectSheetState extends ConsumerState<_EditProspectSheet> {
                   labelText: 'Phone Number *',
                   prefixIcon: const Icon(Icons.phone_outlined),
                   border: const OutlineInputBorder(),
+                  errorText: _phoneError,
                   helperText: canEditPhone ? null : 'Only creator or admin can edit phone number',
                 ),
                 keyboardType: TextInputType.phone,

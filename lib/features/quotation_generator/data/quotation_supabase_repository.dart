@@ -19,6 +19,10 @@ class QuotationSupabaseRepository {
   // In-memory cache for offline resilience and fast loads
   GeneratorCompanySettings? _cachedSettings;
 
+  void clearCache() {
+    _cachedSettings = null;
+  }
+
   QuotationSupabaseRepository(this._supabase);
 
   // ─── SETTINGS & CATALOG OVER SUPABASE ──────────────────────────────────────
