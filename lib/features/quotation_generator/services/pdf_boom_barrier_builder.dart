@@ -461,11 +461,37 @@ class PdfBoomBarrierBuilder {
           .toString()
           .trim();
       final desc = rawDesc.isNotEmpty ? rawDesc : 'Supplementary Item';
-      final qty = (item['qty'] ?? item['quantity'] as num?)?.toInt() ?? 1;
-      final rate = (item['rate'] ?? item['unit_price'] as num?)?.toDouble() ?? 0.0;
-      final total = (item['amount'] ?? item['total'] as num?)?.toDouble() ?? (qty * rate);
-      final type = item['type']?.toString().toLowerCase();
-      final isIncluded = type == 'included' || (total <= 0 && rate <= 0);
+      final qty = (item['qty'] is num)
+          ? (item['qty'] as num).toInt()
+          : (int.tryParse(item['qty']?.toString() ?? '') ?? (item['quantity'] is num ? (item['quantity'] as num).toInt() : (int.tryParse(item['quantity']?.toString() ?? '') ?? 1)));
+      final rate = (item['rate'] is num)
+          ? (item['rate'] as num).toDouble()
+          : (double.tryParse(item['rate']?.toString() ?? '') ?? (item['unit_price'] is num ? (item['unit_price'] as num).toDouble() : (double.tryParse(item['unit_price']?.toString() ?? '') ?? 0.0)));
+      final total = (item['amount'] is num)
+          ? (item['amount'] as num).toDouble()
+          : (double.tryParse(item['amount']?.toString() ?? '') ?? (item['total'] is num ? (item['total'] as num).toDouble() : (double.tryParse(item['total']?.toString() ?? '') ?? (qty * rate))));
+      final rawType = (item['type'] ?? '').toString().trim();
+      final typeLower = rawType.toLowerCase();
+
+      final bool isExplicitExtra = typeLower == 'extra';
+      final bool isExplicitIncluded = typeLower == 'included';
+
+      // Fix: An item is only 'Included' if explicitly chosen as 'included' OR if type is not extra and rate/total is 0
+      final bool isIncluded = isExplicitIncluded || (!isExplicitExtra && total <= 0 && rate <= 0);
+
+      final String rateStr;
+      final String priceStr;
+
+      if (isIncluded) {
+        rateStr = 'Included';
+        priceStr = 'Included';
+      } else if (isExplicitExtra && rate <= 0 && total <= 0) {
+        rateStr = 'Extra';
+        priceStr = 'Extra';
+      } else {
+        rateStr = BoomBarrierMath.formatRawOrIndian(rate);
+        priceStr = BoomBarrierMath.formatRawOrIndian(total);
+      }
 
       tableRows.add(
         pw.TableRow(
@@ -478,11 +504,11 @@ class PdfBoomBarrierBuilder {
                 style: const pw.TextStyle(fontSize: 8),
               ),
             ),
-            _td('$qty', align: pw.TextAlign.center),
-            _td(isIncluded ? 'Included' : BoomBarrierMath.formatRawOrIndian(rate), align: pw.TextAlign.right),
+            _td(qty > 0 ? '' : '', align: pw.TextAlign.center),
+            _td(rateStr, align: pw.TextAlign.right),
             _td('', align: pw.TextAlign.center),
             _td(
-              isIncluded ? 'Included' : BoomBarrierMath.formatRawOrIndian(total),
+              priceStr,
               align: pw.TextAlign.right,
               bold: !isIncluded,
             ),
@@ -490,7 +516,6 @@ class PdfBoomBarrierBuilder {
         ),
       );
     }
-
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [

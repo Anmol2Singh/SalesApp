@@ -312,8 +312,23 @@ class BoomBarrierProposalDraft {
     );
   }
 
-  /// Recalculates financial totals using current line items.
+  /// Recalculates financial totals using current line items and supplementary items.
   void recalculateTotals() {
+    double suppSub = 0.0;
+    for (final s in supplementaryItems) {
+      final type = (s['type'] ?? '').toString().toLowerCase();
+      if (type != 'included') {
+        final q = (s['qty'] is num)
+            ? (s['qty'] as num).toInt()
+            : (int.tryParse(s['qty']?.toString() ?? '') ?? 1);
+        final r = (s['rate'] is num)
+            ? (s['rate'] as num).toDouble()
+            : (double.tryParse(s['rate']?.toString() ?? '') ?? 0.0);
+        suppSub += q * r;
+      }
+    }
+    supplementarySubtotal = suppSub;
+
     final result = BoomBarrierMath.calculate(
       items: items,
       supplementarySubtotal: supplementarySubtotal,
@@ -412,8 +427,6 @@ class BoomBarrierProposalDraft {
       'option_title': optionTitle,
       'items': items.map((i) => i.toJson()).toList(),
       'at_actual_charges': atActualCharges.map((a) => a.toJson()).toList(),
-      'supplementary_items': supplementaryItems,
-      'supplementary_subtotal': supplementarySubtotal,
       'supplementary_items': supplementaryItems,
       'supplementary_subtotal': supplementarySubtotal,
       'subtotal': subtotal,

@@ -4,6 +4,7 @@ import '../../../core/widgets/crm_date_filter_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/excel_service.dart';
 import '../data/models/prospect_model.dart';
@@ -32,12 +33,44 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     super.dispose();
   }
 
+  static Widget _buildLeadBadge({
+    required IconData icon,
+    required String text,
+    required Color bg,
+    required Color border,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: border, width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 9.5,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final leadsAsync = ref.watch(leadsProvider);
     final prospectsAsync = ref.watch(prospectsProvider);
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.manager || profile?.primaryRole == UserRole.salesHead || (profile?.roles.contains(UserRole.admin) ?? false);
     final canSeePendingApproval = (profile?.primaryRole.canApproveQuotations ?? false) ||
         (profile?.roles.any((r) => r.canApproveQuotations) ?? false) ||
         profile?.primaryRole == UserRole.manager ||
@@ -102,6 +135,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
               ref.read(prospectsProvider.notifier).load(refresh: true);
               ref.invalidate(leadsWithPendingQuotationApprovalProvider);
               ref.invalidate(leadsWithApprovedQuotationProvider);
+              ref.invalidate(leadQuotationsMetaMapProvider);
             },
           ),
         ],
@@ -168,6 +202,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                 ref.read(prospectsProvider.notifier).load(refresh: true);
                 ref.invalidate(leadsWithPendingQuotationApprovalProvider);
                 ref.invalidate(leadsWithApprovedQuotationProvider);
+                ref.invalidate(leadQuotationsMetaMapProvider);
               },
               child: leadsAsync.when(
                 data: (leads) {
@@ -176,6 +211,8 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                       ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{};
                   final approvedLeads =
                       ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{};
+                  final quotMetaMap =
+                      ref.watch(leadQuotationsMetaMapProvider).value ?? const <String, LeadQuotationMeta>{};
 
                   // Apply filters
                   var filtered = leads.where((l) {
@@ -237,8 +274,9 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
 
                   final isWon = lead.status == 'Won' || lead.convertedToCustomerId != null;
                   final isLost = lead.status == 'Lost';
-                  final hasPendingApproval = pendingApprovalLeads.contains(lead.id);
-                  final hasApprovedQuotation = approvedLeads.contains(lead.id);
+                  final quotMeta = quotMetaMap[lead.id];
+                  final hasPendingApproval = pendingApprovalLeads.contains(lead.id) || (quotMeta?.isPendingApproval ?? false);
+                  final hasApprovedQuotation = approvedLeads.contains(lead.id) || (quotMeta?.isApproved ?? false);
 
                   Color statusColor = Colors.blue;
                   if (isWon) statusColor = AppColors.success;
@@ -249,208 +287,206 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                   final isAssignedToMe = !isWon && lead.assignedTo != null && lead.assignedTo == profile?.id;
                   final isReassignReq = !isWon && lead.reassignmentRequested;
 
+                  final currencyFmt = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
+                  final formattedAmount = currencyFmt.format(lead.estimatedValue);
+
                   return Card(
-                        elevation: 0,
-                        color: isReassignReq
-                            ? const Color(0xFFFFFBEB)
-                            : (hasPendingApproval
-                                ? const Color(0xFFFFFDF5)
-                                : (isAssignedToMe ? const Color(0xFFFFFDF5) : AppColors.surface)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                            color: isReassignReq
-                                ? const Color(0xFFF59E0B)
-                                : (hasPendingApproval
-                                    ? const Color(0xFFF59E0B)
-                                    : (isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withOpacity(0.5))),
-                            width: (isReassignReq || hasPendingApproval) ? 1.6 : (isAssignedToMe ? 1.2 : 1),
-                          ),
-                        ),
-                        child: ListTile(
-                          onTap: () {
-                            context.push('/crm/leads/${lead.id}');
-                          },
-                          leading: CircleAvatar(
-                            backgroundColor: hasPendingApproval
-                                ? const Color(0xFFFEF3C7)
-                                : statusColor.withOpacity(0.1),
-                            child: Icon(
-                              hasPendingApproval
-                                  ? Icons.hourglass_top_rounded
-                                  : (isWon ? Icons.check_circle : (isLost ? Icons.cancel : Icons.trending_up)),
-                              color: hasPendingApproval ? const Color(0xFFD97706) : statusColor,
-                            ),
-                          ),
-                          title: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                displayName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              if (hasPendingApproval) ...[
-                                const SizedBox(height: 4),
+                    elevation: 0,
+                    margin: EdgeInsets.zero,
+                    color: isReassignReq
+                        ? const Color(0xFFFFFBEB)
+                        : (hasPendingApproval
+                            ? const Color(0xFFFFFDF5)
+                            : (isAssignedToMe ? const Color(0xFFFFFDF5) : AppColors.surface)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: isReassignReq || hasPendingApproval
+                            ? const Color(0xFFF59E0B)
+                            : (isAssignedToMe ? const Color(0xFFF59E0B) : AppColors.border.withValues(alpha: 0.5)),
+                        width: (isReassignReq || hasPendingApproval) ? 1.5 : (isAssignedToMe ? 1.2 : 1),
+                      ),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        context.push('/crm/leads/${lead.id}');
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Row 1: Icon Avatar + Name + Phone + Status Pill
+                            Row(
+                              children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  width: 24,
+                                  height: 24,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.6)),
+                                    shape: BoxShape.circle,
+                                    color: hasPendingApproval
+                                        ? const Color(0xFFFEF3C7)
+                                        : statusColor.withValues(alpha: 0.12),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    hasPendingApproval
+                                        ? Icons.hourglass_top_rounded
+                                        : (isWon ? Icons.check_circle : (isLost ? Icons.cancel : Icons.trending_up)),
+                                    size: 13,
+                                    color: hasPendingApproval ? const Color(0xFFD97706) : statusColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Row(
                                     children: [
-                                      Icon(Icons.hourglass_top_rounded, size: 11, color: Color(0xFFB45309)),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Quotation Approval Pending',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFB45309),
+                                      Flexible(
+                                        child: Text(
+                                          displayName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.textPrimary,
+                                            fontSize: 13.5,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
+                                      if (displayPhone.isNotEmpty) ...[
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '• $displayPhone',
+                                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                              ] else if (hasApprovedQuotation) ...[
-                                const SizedBox(height: 4),
+                                const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                   decoration: BoxDecoration(
-                                    color: AppColors.success.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: AppColors.success.withValues(alpha: 0.5)),
+                                    color: statusColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: statusColor.withValues(alpha: 0.4), width: 0.8),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.check_circle_rounded, size: 11, color: AppColors.success),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Quotation Approved',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.success,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ] else if (isAssignedToMe) ...[
-                                const SizedBox(height: 3),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.6)),
-                                  ),
-                                  child: const Text(
-                                    'Assigned to You',
+                                  child: Text(
+                                    lead.status,
                                     style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 10,
+                                      fontSize: 9.5,
+                                      color: statusColor,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFFB45309),
                                     ),
                                   ),
                                 ),
                               ],
-                            ],
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (displayPhone.isNotEmpty)
-                                Text(displayPhone, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                              Text(
-                                lead.productName,
-                                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                              Text('₹${lead.estimatedValue.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 12)),
-                              if (!isWon && (lead.assignedByName != null || lead.assignedTo != null)) ...[
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: isAssignedToMe ? Colors.green.withOpacity(0.08) : const Color(0xFF2563EB).withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(4),
+                            ),
+
+                            const SizedBox(height: 5),
+
+                            // Row 2: Product Name (left) & Formatted Amount in Indian format (right)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    lead.productName,
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.person_outline, size: 11, color: isAssignedToMe ? Colors.green : const Color(0xFF2563EB)),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        isAssignedToMe
-                                            ? 'Assigned to: You'
-                                            : 'Assigned to: ${lead.assignedByName ?? 'Assigned'}',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 11,
-                                          color: isAssignedToMe ? Colors.green : const Color(0xFF2563EB),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  formattedAmount,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
-                              if (!isWon && lead.reassignmentRequested) ...[
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: const Color(0xFFF59E0B)),
+                            ),
+
+                            const SizedBox(height: 5),
+
+                            // Row 3: Metadata Badges (Quote date, Approval status/date, Assigned Rep)
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 3,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (hasPendingApproval)
+                                  _buildLeadBadge(
+                                    icon: Icons.hourglass_top_rounded,
+                                    text: 'Pending Approval',
+                                    bg: const Color(0xFFFEF3C7),
+                                    border: const Color(0xFFFDE68A),
+                                    color: const Color(0xFFB45309),
+                                  )
+                                else if (hasApprovedQuotation)
+                                  _buildLeadBadge(
+                                    icon: Icons.check_circle_rounded,
+                                    text: 'Approved',
+                                    bg: AppColors.success.withValues(alpha: 0.1),
+                                    border: AppColors.success.withValues(alpha: 0.4),
+                                    color: AppColors.success,
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFB45309)),
-                                      SizedBox(width: 3),
-                                      Text(
-                                        'Reassign Requested',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFB45309),
-                                        ),
-                                      ),
-                                    ],
+
+                                if (quotMeta?.quotationDate != null)
+                                  _buildLeadBadge(
+                                    icon: Icons.request_quote_outlined,
+                                    text: 'Quote: ${DateFormat('dd/MM/yy').format(quotMeta!.quotationDate!)}',
+                                    bg: const Color(0xFFF1F5F9),
+                                    border: const Color(0xFFCBD5E1),
+                                    color: const Color(0xFF334155),
                                   ),
-                                ),
+
+                                if (quotMeta?.approvalDate != null)
+                                  _buildLeadBadge(
+                                    icon: Icons.verified_outlined,
+                                    text: 'Approved: ${DateFormat('dd MMM yy').format(quotMeta!.approvalDate!)}',
+                                    bg: const Color(0xFFECFDF5),
+                                    border: const Color(0xFFA7F3D0),
+                                    color: const Color(0xFF059669),
+                                  ),
+
+                                if (!isWon && (lead.assignedByName != null || lead.assignedTo != null))
+                                  _buildLeadBadge(
+                                    icon: Icons.person_outline,
+                                    text: isAssignedToMe ? 'Assigned: You' : (lead.assignedByName ?? 'Assigned'),
+                                    bg: isAssignedToMe
+                                        ? Colors.green.withValues(alpha: 0.08)
+                                        : const Color(0xFF2563EB).withValues(alpha: 0.08),
+                                    border: isAssignedToMe
+                                        ? Colors.green.withValues(alpha: 0.3)
+                                        : const Color(0xFF2563EB).withValues(alpha: 0.3),
+                                    color: isAssignedToMe ? Colors.green.shade800 : const Color(0xFF1D4ED8),
+                                  ),
+
+                                if (!isWon && lead.reassignmentRequested)
+                                  _buildLeadBadge(
+                                    icon: Icons.warning_amber_rounded,
+                                    text: 'Reassign Req',
+                                    bg: const Color(0xFFFEF3C7),
+                                    border: const Color(0xFFF59E0B),
+                                    color: const Color(0xFFB45309),
+                                  ),
                               ],
-                            ],
-                          ),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: statusColor.withOpacity(0.5)),
                             ),
-                            child: Text(
-                              lead.status,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                          ],
                         ),
-                      );
+                      ),
+                    ),
+                  );
                 }
 
                 if (_dateFilter.isGrouped) {
@@ -487,7 +523,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                         ),
                         for (final lead in entry.value) ...[
                           buildLeadCard(lead),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 6),
                         ],
                       ],
                     ],
@@ -498,7 +534,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
                   itemBuilder: (context, itemIndex) {
                     return buildLeadCard(filtered[itemIndex]);
                   },
@@ -903,7 +939,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                           ),
                   ),
                 ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
 
               // 2. Auto-filled Phone Number
               TextFormField(
@@ -915,7 +951,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                 ),
                 keyboardType: TextInputType.phone,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
 
               // 3. Multi-Product Selector (Combines all inventory items & capacities)
               MultiProductSelectorField(
@@ -924,7 +960,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                 onChanged: _onProductsChanged,
                 errorText: _productError,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
 
               // 4. Estimated Deal Value (Read-only on lead creation)
               TextFormField(
@@ -939,7 +975,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                 ),
                 keyboardType: TextInputType.number,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
 
               // 5. Expected Closing Date
               InkWell(
@@ -970,7 +1006,7 @@ class _AddDirectLeadFormState extends ConsumerState<AddDirectLeadForm> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
 
               // 6. Notes
               TextFormField(

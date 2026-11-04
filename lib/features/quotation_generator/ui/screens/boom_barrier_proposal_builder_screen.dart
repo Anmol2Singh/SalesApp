@@ -429,6 +429,10 @@ class _BoomBarrierProposalBuilderScreenState
           _buildLineItemsSection(draft),
           const SizedBox(height: 16),
 
+          // Section 4B: Supplementary Items & Terms
+          _buildSupplementarySection(draft),
+          const SizedBox(height: 16),
+
           // Section 5: At-Actual Lines
           _buildAtActualSection(draft),
           const SizedBox(height: 16),
@@ -1639,6 +1643,209 @@ class _BoomBarrierProposalBuilderScreenState
               Navigator.of(ctx).pop();
             },
             child: const Text('Add Item'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildSupplementarySection(BoomBarrierProposalDraft draft) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.add_shopping_cart, color: Color(0xFF1E3A5F)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Supplementary Terms & Charges (${draft.supplementaryItems.length})',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Term'),
+                  onPressed: () {
+                    setState(() {
+                      draft.supplementaryItems.add({
+                        'name': 'New Item',
+                        'type': 'Extra',
+                        'qty': 1,
+                        'rate': 0.0,
+                        'amount': 0.0,
+                        'gst_percent': 18.0,
+                      });
+                      draft.recalculateTotals();
+                      _recalculateTotals();
+                    });
+                    _markChanged();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Items configured as "Extra" with a rate appear in the quotation with their amount added to taxable value. Items with "Extra" and rate 0 display as "Extra".',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 12),
+            if (draft.supplementaryItems.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text('No supplementary charges attached.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              )
+            else
+              for (int i = 0; i < draft.supplementaryItems.length; i++) ...[
+                _buildSupplementaryRow(draft, i),
+                if (i < draft.supplementaryItems.length - 1) const Divider(height: 16),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupplementaryRow(BoomBarrierProposalDraft draft, int index) {
+    final item = draft.supplementaryItems[index];
+    final rawType = (item['type'] ?? '').toString().trim().toLowerCase();
+    final bool isIncluded = rawType == 'included';
+    final name = (item['name'] ?? item['term'] ?? item['item_name'] ?? '').toString();
+    final rate = (item['rate'] is num)
+        ? (item['rate'] as num).toDouble()
+        : (double.tryParse(item['rate']?.toString() ?? '') ?? 0.0);
+    final qty = (item['qty'] is num)
+        ? (item['qty'] as num).toInt()
+        : (int.tryParse(item['qty']?.toString() ?? '') ?? 1);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  initialValue: name,
+                  decoration: const InputDecoration(
+                    labelText: 'Item / Service Name',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  onChanged: (val) {
+                    draft.supplementaryItems[index]['name'] = val;
+                    _markChanged();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                onPressed: () {
+                  setState(() {
+                    draft.supplementaryItems.removeAt(index);
+                    draft.recalculateTotals();
+                    _recalculateTotals();
+                  });
+                  _markChanged();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              SizedBox(
+                height: 36,
+                child: SegmentedButton<String>(
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  segments: const [
+                    ButtonSegment(value: 'Included', label: Text('Included', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(value: 'Extra', label: Text('Extra', style: TextStyle(fontSize: 11))),
+                  ],
+                  selected: {isIncluded ? 'Included' : 'Extra'},
+                  onSelectionChanged: (set) {
+                    setState(() {
+                      final chosen = set.first;
+                      draft.supplementaryItems[index]['type'] = chosen;
+                      if (chosen == 'Included') {
+                        draft.supplementaryItems[index]['rate'] = 0.0;
+                        draft.supplementaryItems[index]['amount'] = 0.0;
+                      }
+                      draft.recalculateTotals();
+                      _recalculateTotals();
+                    });
+                    _markChanged();
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (!isIncluded) ...[
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    initialValue: qty.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Qty',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    ),
+                    onChanged: (val) {
+                      final q = int.tryParse(val) ?? 1;
+                      draft.supplementaryItems[index]['qty'] = q;
+                      draft.supplementaryItems[index]['amount'] = q * rate;
+                      draft.recalculateTotals();
+                      _recalculateTotals();
+                      _markChanged();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    initialValue: rate > 0 ? rate.toStringAsFixed(0) : '',
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Rate (₹)',
+                      hintText: '0 for Extra',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    ),
+                    onChanged: (val) {
+                      final r = double.tryParse(val) ?? 0.0;
+                      draft.supplementaryItems[index]['rate'] = r;
+                      draft.supplementaryItems[index]['amount'] = qty * r;
+                      draft.recalculateTotals();
+                      _recalculateTotals();
+                      _markChanged();
+                    },
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),

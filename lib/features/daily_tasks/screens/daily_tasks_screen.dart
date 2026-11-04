@@ -868,15 +868,39 @@ class _DailyTasksScreenState extends ConsumerState<DailyTasksScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Customer Icon
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1B4B).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.business_rounded, color: Color(0xFF1E1B4B), size: 20),
-                ),
+                // Customer or Category Icon
+                () {
+                  final name = task.customerName.toLowerCase();
+                  final bool isFactory = name.contains('factory');
+                  final bool isOffice = name.contains('office');
+                  final bool isProspect = task.customerName.startsWith('[Prospect]');
+                  final bool isLead = task.customerName.startsWith('[Lead]');
+
+                  final IconData catIcon = isFactory
+                      ? Icons.factory_rounded
+                      : (isOffice
+                          ? Icons.apartment_rounded
+                          : (isProspect
+                              ? Icons.person_search_rounded
+                              : (isLead ? Icons.trending_up_rounded : Icons.business_rounded)));
+
+                  final Color catColor = isFactory
+                      ? const Color(0xFFB45309)
+                      : (isOffice
+                          ? const Color(0xFF0F766E)
+                          : (isProspect
+                              ? const Color(0xFF2563EB)
+                              : (isLead ? const Color(0xFF7C3AED) : const Color(0xFF1E1B4B))));
+
+                  return Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: catColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(catIcon, color: catColor, size: 20),
+                  );
+                }(),
                 const SizedBox(width: 12),
 
                 // Customer info & Timestamp
@@ -898,6 +922,83 @@ class _DailyTasksScreenState extends ConsumerState<DailyTasksScreen> {
                               ),
                             ),
                           ),
+                          // Category Badges
+                          if (task.customerName.startsWith('[Prospect]'))
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF93C5FD)),
+                              ),
+                              child: const Text(
+                                'PROSPECT',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            )
+                          else if (task.customerName.startsWith('[Lead]'))
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F3FF),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFC4B5FD)),
+                              ),
+                              child: const Text(
+                                'LEAD',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF7C3AED),
+                                ),
+                              ),
+                            )
+                          else if (task.customerName.toLowerCase().contains('factory'))
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFFDE68A)),
+                              ),
+                              child: const Text(
+                                'FACTORY',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                            )
+                          else if (task.customerName.toLowerCase().contains('office'))
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFCCFBF1),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF99F6E4)),
+                              ),
+                              child: const Text(
+                                'OFFICE',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F766E),
+                                ),
+                              ),
+                            ),
                           // Badges
                           if (task.isDeleted)
                             Container(

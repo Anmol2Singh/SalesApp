@@ -1,3 +1,4 @@
+import '../services/boom_barrier_math.dart';
 // lib/features/quotation_generator/models/boom_barrier_line_item.dart
 
 /// Represents a single priced or scope row in the Boom Barrier quotation Option 1 table.
@@ -29,20 +30,22 @@ class BoomBarrierLineItem {
   });
 
   /// True if this row contributes to the subtotal amount.
-  bool get hasMonetaryValue => !isExtra && !isIncluded && price > 0;
+  bool get hasMonetaryValue => !isIncluded && price > 0;
 
   /// String formatted representation for the price column.
   String get formattedPriceText {
-    if (isExtra) return 'Extra';
     if (isIncluded) return 'Included';
+    if (isExtra && price <= 0) return 'Extra';
     if (price == 0 && rate == 0) return 'Extra';
-    return price.toStringAsFixed(0);
+    return BoomBarrierMath.formatIndianNumber(price);
   }
 
   /// String formatted representation for the rate column.
   String get formattedRateText {
-    if (isExtra || isIncluded) return '';
-    return rate.toStringAsFixed(0);
+    if (isIncluded) return '';
+    if (isExtra && rate <= 0) return 'Extra';
+    if (rate == 0) return '';
+    return BoomBarrierMath.formatIndianNumber(rate);
   }
 
   factory BoomBarrierLineItem.fromJson(Map<String, dynamic> json) {

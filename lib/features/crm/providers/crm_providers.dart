@@ -1677,6 +1677,85 @@ class CrmInteractionTypesNotifier extends StateNotifier<AsyncValue<List<String>>
   }
 }
 
+/// Metadata for quotations linked to CRM leads
+class LeadQuotationMeta {
+  final String quotationId;
+  final String quotationNumber;
+  final DateTime? quotationDate;
+  final DateTime? approvalDate;
+  final String status;
+  final String? approverName;
+  final double grandTotal;
+
+  const LeadQuotationMeta({
+    required this.quotationId,
+    required this.quotationNumber,
+    this.quotationDate,
+    this.approvalDate,
+    this.status = 'draft',
+    this.approverName,
+    this.grandTotal = 0.0,
+  });
+
+  bool get isApproved => status == 'confirmed' || approvalDate != null;
+  bool get isPendingApproval => status == 'pending_approval';
+  bool get isRejected => status == 'rejected';
+}
+
+/// Provider to get a map of lead ID -> latest quotation metadata (dates, approval, number, status)
+final leadQuotationsMetaMapProvider = FutureProvider<Map<String, LeadQuotationMeta>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    dynamic res;
+    try {
+      res = await supabase
+          .from('quotations')
+          .select('id, lead_id, quotation_number, order_date, created_at, approved_at, confirmed_at, status, grand_total, revision, approver:profiles!quotations_approved_by_fkey(full_name)')
+          .not('lead_id', 'is', null)
+          .order('revision', ascending: false)
+          .order('created_at', ascending: false);
+    } catch (_) {
+      res = await supabase
+          .from('quotations')
+          .select('id, lead_id, quotation_number, order_date, created_at, approved_at, confirmed_at, status, grand_total, revision')
+          .not('lead_id', 'is', null)
+          .order('revision', ascending: false)
+          .order('created_at', ascending: false);
+    }
+
+    final map = <String, LeadQuotationMeta>{};
+    for (final row in (res as List)) {
+      final leadId = row['lead_id'] as String?;
+      if (leadId == null || leadId.isEmpty) continue;
+      if (!map.containsKey(leadId)) {
+        final qDate = row['order_date'] != null
+            ? DateTime.tryParse(row['order_date'].toString())?.toLocal()
+            : DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal();
+        final aDate = row['approved_at'] != null
+            ? DateTime.tryParse(row['approved_at'].toString())?.toLocal()
+            : (row['confirmed_at'] != null
+                ? DateTime.tryParse(row['confirmed_at'].toString())?.toLocal()
+                : null);
+        final approverMap = row['approver'] as Map<String, dynamic>?;
+
+        map[leadId] = LeadQuotationMeta(
+          quotationId: row['id'] as String? ?? '',
+          quotationNumber: row['quotation_number'] as String? ?? '',
+          quotationDate: qDate,
+          approvalDate: aDate,
+          status: row['status'] as String? ?? 'draft',
+          approverName: approverMap?['full_name'] as String?,
+          grandTotal: (row['grand_total'] is num) ? (row['grand_total'] as num).toDouble() : 0.0,
+        );
+      }
+    }
+    return map;
+  } catch (e) {
+    debugPrint('Error fetching lead quotations meta: $e');
+    return <String, LeadQuotationMeta>{};
+  }
+});
+
 /// Provider to get the set of lead IDs that currently have quotations awaiting approval.
 final leadsWithPendingQuotationApprovalProvider =
     FutureProvider<Set<String>>((ref) async {

@@ -74,12 +74,9 @@ class BoomBarrierMath {
     return '₹ $numStr';
   }
 
-  /// Raw integer format as displayed in template price rows (e.g. 45000, 60000).
+  /// Formats with Indian comma grouping (e.g. 45,000, 60,000).
   static String formatRawOrIndian(double amount) {
-    if (amount % 1 == 0) {
-      return amount.toInt().toString();
-    }
-    return amount.toStringAsFixed(2);
+    return formatIndianNumber(amount, decimal: amount % 1 != 0);
   }
 
   /// Converts a numeric amount to Indian currency words.
