@@ -39,7 +39,7 @@ class CrmDateFilter {
     this.preset = CrmDatePreset.all,
     this.customStart,
     this.customEnd,
-    this.isGrouped = false,
+    this.isGrouped = true,
   });
 
   bool get isActive => preset != CrmDatePreset.all;

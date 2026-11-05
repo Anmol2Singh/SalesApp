@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/excel_service.dart';
+import '../../../core/router/navigation_memory.dart';
 import '../data/models/prospect_model.dart';
 import '../providers/crm_providers.dart';
 import '../../../core/models/user_role.dart';
@@ -22,13 +23,60 @@ class LeadsListScreen extends ConsumerStatefulWidget {
 }
 
 class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
+  static const String _routeKey = '/crm/leads';
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
   String _selectedStatus = 'All';
-  CrmDateFilter _dateFilter = const CrmDateFilter();
+  late CrmDateFilter _dateFilter;
+  bool _scrollRestored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final saved = NavigationMemory.getState(_routeKey);
+    _searchQuery = saved.searchQuery;
+    _searchController.text = _searchQuery;
+    _selectedStatus = saved.selectedStatus;
+    _dateFilter = saved.dateFilter ?? CrmDateFilter(isGrouped: saved.isDateGrouped);
+
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      NavigationMemory.saveScroll(_routeKey, _scrollController.offset);
+    }
+  }
+
+  void _persistState() {
+    NavigationMemory.saveState(
+      _routeKey,
+      ScreenUiState(
+        scrollOffset: _scrollController.hasClients ? _scrollController.offset : 0.0,
+        searchQuery: _searchQuery,
+        selectedStatus: _selectedStatus,
+        isDateGrouped: _dateFilter.isGrouped,
+        dateFilter: _dateFilter,
+      ),
+    );
+  }
+
+  void _restoreScrollPosition(double targetOffset) {
+    if (_scrollRestored || targetOffset <= 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      final offset = targetOffset.clamp(0.0, max);
+      _scrollController.jumpTo(offset);
+      _scrollRestored = true;
+    });
+  }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -77,76 +125,91 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
         (profile?.roles.contains(UserRole.manager) ?? false);
     final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/crm/dashboard');
-            }
-          },
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Leads & Deals'),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${leadsAsync.value?.length ?? 0}',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+    final rejectedQuotationLeads =
+        ref.watch(leadsWithRejectedQuotationProvider).value ?? const <String>{};
+    final quotMetaMap =
+        ref.watch(leadQuotationsMetaMapProvider).value ?? const <String, LeadQuotationMeta>{};
+    final allLeads = leadsAsync.value ?? [];
+    final rejectedCount = allLeads.where((l) =>
+        l.status.toLowerCase() == 'rejected' ||
+        rejectedQuotationLeads.contains(l.id) ||
+        quotMetaMap[l.id]?.isRejected == true).length;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        NavigationMemory.safeBack(context, fallbackRoute: '/crm/dashboard');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              NavigationMemory.safeBack(context, fallbackRoute: '/crm/dashboard');
+            },
+          ),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Leads & Deals'),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${leadsAsync.value?.length ?? 0}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'Export Leads',
+              onPressed: () {
+                final leads = ref.read(leadsProvider).value;
+                final prospects = ref.read(prospectsProvider).value ?? [];
+                if (leads != null && leads.isNotEmpty) {
+                  ExcelService.exportLeads(context, leads, prospects);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No leads to export')));
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+              onPressed: () {
+                ref.read(leadsProvider.notifier).load(refresh: true);
+                ref.read(prospectsProvider.notifier).load(refresh: true);
+                ref.invalidate(leadsWithPendingQuotationApprovalProvider);
+                ref.invalidate(leadsWithApprovedQuotationProvider);
+                ref.invalidate(leadsWithRejectedQuotationProvider);
+                ref.invalidate(leadQuotationsMetaMapProvider);
+              },
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: 'Export Leads',
-            onPressed: () {
-              final leads = ref.read(leadsProvider).value;
-              final prospects = ref.read(prospectsProvider).value ?? [];
-              if (leads != null && leads.isNotEmpty) {
-                ExcelService.exportLeads(context, leads, prospects);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No leads to export')));
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-            onPressed: () {
-              ref.read(leadsProvider.notifier).load(refresh: true);
-              ref.read(prospectsProvider.notifier).load(refresh: true);
-              ref.invalidate(leadsWithPendingQuotationApprovalProvider);
-              ref.invalidate(leadsWithApprovedQuotationProvider);
-              ref.invalidate(leadQuotationsMetaMapProvider);
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilters(
-            ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{},
-            ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{},
-            canSeePendingApproval: canSeePendingApproval,
-          ),
+        body: Column(
+          children: [
+            _buildFilters(
+              ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{},
+              ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{},
+              rejectedQuotationLeads,
+              canSeePendingApproval: canSeePendingApproval,
+              rejectedCount: rejectedCount,
+            ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: AppColors.surface,
@@ -190,6 +253,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                   _dateFilter.customStart != newFilter.customStart ||
                   _dateFilter.customEnd != newFilter.customEnd;
               setState(() => _dateFilter = newFilter);
+              _persistState();
               if (needsReload) {
                 ref.read(leadsProvider.notifier).load(dateFilter: newFilter);
               }
@@ -202,6 +266,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                 ref.read(prospectsProvider.notifier).load(refresh: true);
                 ref.invalidate(leadsWithPendingQuotationApprovalProvider);
                 ref.invalidate(leadsWithApprovedQuotationProvider);
+                ref.invalidate(leadsWithRejectedQuotationProvider);
                 ref.invalidate(leadQuotationsMetaMapProvider);
               },
               child: leadsAsync.when(
@@ -213,6 +278,8 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                       ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{};
                   final quotMetaMap =
                       ref.watch(leadQuotationsMetaMapProvider).value ?? const <String, LeadQuotationMeta>{};
+
+                  _restoreScrollPosition(NavigationMemory.getState(_routeKey).scrollOffset);
 
                   // Apply filters
                   var filtered = leads.where((l) {
@@ -227,12 +294,17 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                     final matchesSearch = displayName.toLowerCase().contains(_searchQuery.toLowerCase()) || 
                                           phone.contains(_searchQuery) ||
                                           l.productName.toLowerCase().contains(_searchQuery.toLowerCase());
+                    final isLeadRejected = l.status.toLowerCase() == 'rejected' ||
+                        rejectedQuotationLeads.contains(l.id) ||
+                        quotMetaMap[l.id]?.isRejected == true;
                     final matchesStatus = _selectedStatus == 'All' ||
                         (_selectedStatus == 'Pending Approval'
                             ? pendingApprovalLeads.contains(l.id)
                             : (_selectedStatus == 'Approved'
                                 ? approvedLeads.contains(l.id)
-                                : l.status == _selectedStatus));
+                                : (_selectedStatus == 'Rejected'
+                                    ? isLeadRejected
+                                    : l.status == _selectedStatus)));
                     return matchesSearch && matchesStatus;
                   }).toList();
 
@@ -441,6 +513,15 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                                     color: AppColors.success,
                                   ),
 
+                                if (quotMeta?.isRejected == true)
+                                  _buildLeadBadge(
+                                    icon: Icons.cancel_outlined,
+                                    text: 'Quote Rejected',
+                                    bg: const Color(0xFFFEF2F2),
+                                    border: const Color(0xFFFECACA),
+                                    color: AppColors.error,
+                                  ),
+
                                 if (quotMeta?.quotationDate != null)
                                   _buildLeadBadge(
                                     icon: Icons.request_quote_outlined,
@@ -497,6 +578,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                   }
 
                   return ListView(
+                    controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                     children: [
@@ -531,6 +613,7 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
                 }
 
                 return ListView.separated(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                   itemCount: filtered.length,
@@ -559,18 +642,22 @@ loading: () => const Center(child: CircularProgressIndicator()),
                 backgroundColor: AppColors.primary,
               ),
             ),
+      ),
     );
   }
 
   Widget _buildFilters(
     Set<String> pendingApprovalLeads,
-    Set<String> approvedLeads, {
+    Set<String> approvedLeads,
+    Set<String> rejectedQuotationLeads, {
     required bool canSeePendingApproval,
+    int rejectedCount = 0,
   }) {
     final filterOptions = [
       'All',
       if (canSeePendingApproval) 'Pending Approval',
       'Approved',
+      'Rejected',
       'New',
       'In Progress',
       'Negotiating',
@@ -596,6 +683,7 @@ loading: () => const Center(child: CircularProgressIndicator()),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
+                        _persistState();
                       },
                     )
                   : null,
@@ -615,7 +703,10 @@ loading: () => const Center(child: CircularProgressIndicator()),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             ),
-            onChanged: (val) => setState(() => _searchQuery = val),
+            onChanged: (val) {
+              setState(() => _searchQuery = val);
+              _persistState();
+            },
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -625,9 +716,12 @@ loading: () => const Center(child: CircularProgressIndicator()),
                 final isSelected = _selectedStatus == status;
                 final isPendingChip = status == 'Pending Approval';
                 final isApprovedChip = status == 'Approved';
+                final isRejectedChip = status == 'Rejected';
                 final count = isPendingChip
                     ? pendingApprovalLeads.length
-                    : (isApprovedChip ? approvedLeads.length : 0);
+                    : (isApprovedChip
+                        ? approvedLeads.length
+                        : (isRejectedChip ? rejectedCount : 0));
 
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -650,44 +744,70 @@ loading: () => const Center(child: CircularProgressIndicator()),
                                   shape: BoxShape.circle,
                                 ),
                               )
-                            : null),
+                            : (isRejectedChip
+                                ? Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.error,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  )
+                                : null)),
                     label: Text(
                       (isPendingChip && count > 0)
                           ? 'Pending Approval ($count)'
                           : ((isApprovedChip && count > 0)
                               ? 'Approved ($count)'
-                              : status),
+                              : ((isRejectedChip && count > 0)
+                                  ? 'Rejected ($count)'
+                                  : status)),
                       style: TextStyle(
                         color: isSelected
                             ? (isPendingChip
                                 ? const Color(0xFFB45309)
-                                : (isApprovedChip ? AppColors.success : AppColors.primary))
+                                : (isApprovedChip
+                                    ? AppColors.success
+                                    : (isRejectedChip ? AppColors.error : AppColors.primary)))
                             : (isPendingChip
                                 ? const Color(0xFFD97706)
-                                : (isApprovedChip ? AppColors.success : AppColors.textPrimary)),
-                        fontWeight: (isSelected || isPendingChip || isApprovedChip) ? FontWeight.bold : FontWeight.normal,
+                                : (isApprovedChip
+                                    ? AppColors.success
+                                    : (isRejectedChip ? AppColors.error : AppColors.textPrimary))),
+                        fontWeight: (isSelected || isPendingChip || isApprovedChip || isRejectedChip) ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     selected: isSelected,
                     onSelected: (val) {
                       setState(() => _selectedStatus = status);
+                      _persistState();
                     },
                     selectedColor: isPendingChip
                         ? const Color(0xFFFEF3C7)
                         : (isApprovedChip
-                            ? AppColors.success.withOpacity(0.15)
-                            : AppColors.primary.withOpacity(0.15)),
+                            ? AppColors.success.withValues(alpha: 0.15)
+                            : (isRejectedChip
+                                ? AppColors.error.withValues(alpha: 0.15)
+                                : AppColors.primary.withValues(alpha: 0.15))),
                     checkmarkColor: isPendingChip
                         ? const Color(0xFFB45309)
-                        : (isApprovedChip ? AppColors.success : AppColors.primary),
+                        : (isApprovedChip
+                            ? AppColors.success
+                            : (isRejectedChip ? AppColors.error : AppColors.primary)),
                     backgroundColor: isPendingChip
                         ? const Color(0xFFFFFBEB)
-                        : (isApprovedChip ? AppColors.success.withOpacity(0.05) : AppColors.background),
+                        : (isApprovedChip
+                            ? AppColors.success.withValues(alpha: 0.05)
+                            : (isRejectedChip
+                                ? AppColors.error.withValues(alpha: 0.05)
+                                : AppColors.background)),
                     side: isPendingChip
                         ? BorderSide(color: isSelected ? const Color(0xFFF59E0B) : const Color(0xFFFDE68A))
                         : (isApprovedChip
-                            ? BorderSide(color: isSelected ? AppColors.success : AppColors.success.withOpacity(0.4))
-                            : null),
+                            ? BorderSide(color: isSelected ? AppColors.success : AppColors.success.withValues(alpha: 0.4))
+                            : (isRejectedChip
+                                ? BorderSide(color: isSelected ? AppColors.error : AppColors.error.withValues(alpha: 0.4))
+                                : null)),
                   ),
                 );
               }).toList(),

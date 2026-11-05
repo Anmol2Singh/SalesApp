@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/profile.dart';
 import '../theme/app_theme.dart';
+import 'navigation_memory.dart';
 
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
@@ -84,6 +85,9 @@ import '../../features/dashboard/screens/product_interests_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_quick_call_remark_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
 import '../../features/assigned_work/presentation/screens/assigned_work_screen.dart';
+import '../auth/role_access.dart';
+import '../widgets/app_not_found_screen.dart';
+import '../../features/sales_order/screens/sales_order_resolver_screen.dart';
 
 // Customer app imports
 import '../../features/customer_app/features/auth/screens/otp_screen.dart';
@@ -131,6 +135,7 @@ class AppRoutes {
   static const String amcDetail = '/amc/details/:id';
   static const String amcSetup = '/amc/setup';
   static const String complaintsDashboard = '/complaints/dashboard';
+  static const String coordinatorDashboard = complaintsDashboard;
   static const String technicianDashboard = '/technician/dashboard';
   static const String technicianTasks = '/technician/tasks';
   static const String bookComplaint = '/complaints/book';
@@ -165,6 +170,39 @@ class AppRoutes {
   static const String customerReport = '/reports/customer';
   static const String products = '/products';
   static const String assignedWork = '/assigned-work';
+
+  // Helper path generators to eliminate hardcoded string concatenation bugs
+  static String quotationFormPath(String pipelineId) =>
+      '/pipelines/$pipelineId/quotation';
+  static String salesOrderFormPath(String pipelineId) =>
+      '/pipelines/$pipelineId/sales-order';
+  static String boqFormPath(String pipelineId) => '/pipelines/$pipelineId/boq';
+  static String factoryOrderFormPath(String pipelineId) =>
+      '/pipelines/$pipelineId/factory-order';
+  static String purchaseOrderFormPath(String pipelineId) =>
+      '/pipelines/$pipelineId/purchase-order';
+  static String pipelineDetailPath(String pipelineId) =>
+      '/pipelines/$pipelineId';
+  static String customerDetailPath(String customerId) =>
+      '/customers/$customerId';
+  static String crmLeadDetailPath(String leadId) => '/crm/leads/$leadId';
+  static String crmProspectDetailPath(String prospectId) =>
+      '/crm/prospects/$prospectId';
+  static String crmCustomerDetailPath(String leadId) =>
+      '/crm/customers/$leadId';
+
+  /// Checks whether a given route path is any primary home/dashboard
+  static bool isDashboard(String path) {
+    return path == adminDashboard ||
+        path == salesDashboard ||
+        path == accountsDashboard ||
+        path == complaintsDashboard ||
+        path == coordinatorDashboard ||
+        path == installationsDashboard ||
+        path == boqDashboard ||
+        path == technicianDashboard ||
+        path == '/crm/dashboard';
+  }
 }
 
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -223,11 +261,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           final bool isAdmin = profile.roles.contains(UserRole.admin);
           final bool isManager = profile.roles.contains(UserRole.manager);
           final bool isSalesHead = profile.roles.contains(UserRole.salesHead);
+          final bool isServiceHead =
+              profile.roles.contains(UserRole.serviceHead);
           final bool isAdminOrManager = isAdmin || isManager;
 
-          // Guard Admin screens: strictly admin (Manager cannot access Admin Panel or /admin routes)
-          if (location.startsWith('/admin') && !isAdmin) {
-            return _getRoleHome(profile.primaryRole);
+          // Guard Admin screens: strictly admin (Manager & Service Head cannot access Admin Panel or /admin routes, except pdfList)
+          if (location.startsWith('/admin')) {
+            if (location == AppRoutes.pdfList &&
+                (isAdminOrManager || isServiceHead)) {
+              // Allowed for viewing pdf list
+            } else if (!isAdmin) {
+              return _getRoleHome(profile.primaryRole);
+            }
           }
 
           // Guard Product Interests: strictly Admin & Sales Head (Item 4)
@@ -238,16 +283,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             return _getRoleHome(profile.primaryRole);
           }
 
-          // Guard PDF Library (Item 5):
-          // List PDFs: strictly admin or manager
-          if (location == AppRoutes.pdfList && !isAdminOrManager) {
+          // Guard PDF Library:
+          // List PDFs: strictly admin, manager, or serviceHead
+          if (location == AppRoutes.pdfList &&
+              !isAdminOrManager &&
+              !isServiceHead) {
             return _getRoleHome(profile.primaryRole);
           }
-          // Search PDF: strictly admin, manager, or salesHead
+          // Search PDF: strictly admin, manager, salesHead, or serviceHead
           if ((location == AppRoutes.searchPdf ||
                   location.startsWith('/search-pdf')) &&
               !isAdminOrManager &&
-              !isSalesHead) {
+              !isSalesHead &&
+              !isServiceHead) {
             return _getRoleHome(profile.primaryRole);
           }
 
@@ -379,8 +427,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         builder: (context, state, child) {
+          final path = state.uri.path;
+          if (AppRoutes.isDashboard(path)) {
+            NavigationMemory.onDashboardEntered(path);
+          } else {
+            NavigationMemory.onNavigateAwayFromDashboard();
+          }
           return AppShell(
-            currentRoute: state.uri.path,
+            currentRoute: path,
             child: child,
           );
         },
@@ -827,24 +881,48 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/customer/dashboard',
         builder: (context, state) => const CustomerDashboardScreen(),
       ),
-    ],
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text('Page not found: ${state.error?.message ?? 'Unknown error'}'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => context.go(AppRoutes.splash),
-              child: const Text('Go Home'),
-            ),
-          ],
-        ),
+      // --- Aliases and Deep-link Resolvers to prevent 404s ---
+      GoRoute(
+        path: '/sales-orders/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return SalesOrderResolverScreen(orderOrPipelineId: id);
+        },
       ),
-    ),
+      GoRoute(
+        path: '/boq/:id',
+        redirect: (context, state) {
+          final id = state.pathParameters['id']!;
+          return '/pipelines/$id/boq';
+        },
+      ),
+      GoRoute(
+        path: '/factory-orders/:id',
+        redirect: (context, state) {
+          final id = state.pathParameters['id']!;
+          return '/pipelines/$id/factory-order';
+        },
+      ),
+      GoRoute(
+        path: '/purchase-orders/:id',
+        redirect: (context, state) {
+          final id = state.pathParameters['id']!;
+          return '/pipelines/$id/purchase-order';
+        },
+      ),
+      GoRoute(
+        path: '/quotations/:id',
+        redirect: (context, state) {
+          final id = state.pathParameters['id']!;
+          return '/pipelines/$id/quotation';
+        },
+      ),
+      GoRoute(
+        path: '/deals',
+        redirect: (context, state) => AppRoutes.pipelines,
+      ),
+    ],
+    errorBuilder: (context, state) => AppNotFoundScreen(state: state),
   );
 });
 
@@ -861,6 +939,7 @@ String getRoleHome(UserRole role) {
     case UserRole.boq:
       return AppRoutes.boqDashboard;
     case UserRole.serviceHead:
+    case UserRole.complaints:
       return AppRoutes.complaintsDashboard;
     case UserRole.installation:
       return AppRoutes.installationsDashboard;

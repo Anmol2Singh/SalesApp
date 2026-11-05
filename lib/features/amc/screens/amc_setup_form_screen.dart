@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/router/navigation_memory.dart';
 import '../../../core/models/amc_contract.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -207,11 +208,7 @@ class _AmcSetupFormScreenState extends ConsumerState<AmcSetupFormScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go('/deals');
-        }
+        NavigationMemory.safeBack(context, fallbackRoute: AppRoutes.pipelines);
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -221,11 +218,7 @@ class _AmcSetupFormScreenState extends ConsumerState<AmcSetupFormScreen> {
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/deals');
-              }
+              NavigationMemory.safeBack(context, fallbackRoute: AppRoutes.pipelines);
             },
           ),
           title: Text(

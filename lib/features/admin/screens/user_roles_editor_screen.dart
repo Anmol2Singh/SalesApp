@@ -99,6 +99,7 @@ class _UserRolesEditorScreenState extends ConsumerState<UserRolesEditorScreen> {
                 final hasAdmin = _selectedRoles.contains(UserRole.admin);
                 final hasManager = _selectedRoles.contains(UserRole.manager);
                 final hasSalesHead = _selectedRoles.contains(UserRole.salesHead);
+                final hasServiceHead = _selectedRoles.contains(UserRole.serviceHead);
 
                 bool isDisabled = false;
                 String subtitleText = 'ID: ${role.name}';
@@ -112,6 +113,13 @@ class _UserRolesEditorScreenState extends ConsumerState<UserRolesEditorScreen> {
                 } else if (hasSalesHead && (role == UserRole.sales || role == UserRole.crmStaff)) {
                   isDisabled = true;
                   subtitleText = 'Disabled (Superseded by Sales Head)';
+                } else if (hasServiceHead &&
+                    (role == UserRole.installation ||
+                        role == UserRole.complaints ||
+                        role == UserRole.boq ||
+                        role == UserRole.crmStaff)) {
+                  isDisabled = true;
+                  subtitleText = 'Disabled (Superseded by Service Head)';
                 }
 
                 return CheckboxListTile(
@@ -149,6 +157,13 @@ class _UserRolesEditorScreenState extends ConsumerState<UserRolesEditorScreen> {
                                 _selectedRoles.remove(UserRole.sales);
                                 _selectedRoles.remove(UserRole.crmStaff);
                                 _selectedRoles.add(UserRole.salesHead);
+                              } else if (role == UserRole.serviceHead) {
+                                // iv) Service Head role: disable & uncheck rest roles included in this (installation, complaints, boq, crmStaff)
+                                _selectedRoles.remove(UserRole.installation);
+                                _selectedRoles.remove(UserRole.complaints);
+                                _selectedRoles.remove(UserRole.boq);
+                                _selectedRoles.remove(UserRole.crmStaff);
+                                _selectedRoles.add(UserRole.serviceHead);
                               } else {
                                 // If promoting to admin from anything, handled above
                                 _selectedRoles.remove(UserRole.manager);

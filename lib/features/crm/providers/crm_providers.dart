@@ -21,8 +21,10 @@ final prospectsProvider = StateNotifierProvider<ProspectsNotifier, AsyncValue<Li
   final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
       profile?.primaryRole == UserRole.manager ||
       profile?.primaryRole == UserRole.salesHead ||
+      profile?.primaryRole == UserRole.serviceHead ||
       (profile?.roles.contains(UserRole.admin) ?? false) ||
-      (profile?.roles.contains(UserRole.salesHead) ?? false);
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      (profile?.roles.contains(UserRole.serviceHead) ?? false);
   return ProspectsNotifier(supabase, profile?.id, isAdminOrSalesHead, profile);
 });
 
@@ -585,8 +587,10 @@ final leadsProvider = StateNotifierProvider<LeadsNotifier, AsyncValue<List<Lead>
   final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
       profile?.primaryRole == UserRole.manager ||
       profile?.primaryRole == UserRole.salesHead ||
+      profile?.primaryRole == UserRole.serviceHead ||
       (profile?.roles.contains(UserRole.admin) ?? false) ||
-      (profile?.roles.contains(UserRole.salesHead) ?? false);
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      (profile?.roles.contains(UserRole.serviceHead) ?? false);
   return LeadsNotifier(supabase, profile?.id, isAdminOrSalesHead);
 });
 
@@ -1803,6 +1807,29 @@ final leadsWithApprovedQuotationProvider =
   }
 });
 
+/// Provider to get the set of lead IDs that currently have rejected quotations.
+final leadsWithRejectedQuotationProvider =
+    FutureProvider<Set<String>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    final res = await supabase
+        .from('quotations')
+        .select('lead_id')
+        .eq('status', 'rejected');
+    final set = <String>{};
+    for (final row in (res as List)) {
+      final leadId = row['lead_id'] as String?;
+      if (leadId != null && leadId.isNotEmpty) {
+        set.add(leadId);
+      }
+    }
+    return set;
+  } catch (e) {
+    debugPrint('Error fetching rejected quotation leads: $e');
+    return <String>{};
+  }
+});
+
 
 // --- CRM WON CUSTOMERS PROVIDER ---
 
@@ -1812,8 +1839,10 @@ final crmWonCustomersProvider = StateNotifierProvider<CrmWonCustomersNotifier, A
   final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
       profile?.primaryRole == UserRole.manager ||
       profile?.primaryRole == UserRole.salesHead ||
+      profile?.primaryRole == UserRole.serviceHead ||
       (profile?.roles.contains(UserRole.admin) ?? false) ||
-      (profile?.roles.contains(UserRole.salesHead) ?? false);
+      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
+      (profile?.roles.contains(UserRole.serviceHead) ?? false);
   return CrmWonCustomersNotifier(supabase, profile?.id, isAdminOrSalesHead);
 });
 

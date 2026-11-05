@@ -618,7 +618,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
               padding: const EdgeInsets.only(bottom: 12.0),
               child: FloatingActionButton.extended(
                 heroTag: 'new_deal_fab',
-                onPressed: () => context.push(AppRoutes.customers),
+                onPressed: () => context.go(AppRoutes.customers),
                 icon: const Icon(Icons.add),
                 label: const Text(
                   'New Deal',

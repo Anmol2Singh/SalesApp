@@ -11,6 +11,7 @@ enum UserRole {
   purchase,
   boq,
   serviceHead,
+  complaints,
   installation,
   technician,
   customer,
@@ -24,6 +25,7 @@ enum UserRole {
       case 'sales': return UserRole.sales;
       case 'sales_head': return UserRole.salesHead;
       case 'service_head': return UserRole.serviceHead;
+      case 'complaints': return UserRole.complaints;
       case 'installation': return UserRole.installation;
       case 'factory': return UserRole.factory;
       case 'purchase': return UserRole.purchase;
@@ -43,6 +45,7 @@ enum UserRole {
       case UserRole.sales: return 'sales';
       case UserRole.salesHead: return 'sales_head';
       case UserRole.serviceHead: return 'service_head';
+      case UserRole.complaints: return 'complaints';
       case UserRole.installation: return 'installation';
       case UserRole.factory: return 'factory';
       case UserRole.purchase: return 'purchase';
@@ -65,6 +68,8 @@ enum UserRole {
       case UserRole.salesHead:
         return 'Sales Head';
       case UserRole.serviceHead:
+        return 'Service Head';
+      case UserRole.complaints:
         return 'Complaints Staff';
       case UserRole.installation:
         return 'Installation Staff';
@@ -89,6 +94,7 @@ enum UserRole {
       this == UserRole.admin ||
       this == UserRole.manager ||
       this == UserRole.salesHead ||
+      this == UserRole.serviceHead ||
       this == UserRole.accounts;
 
   bool get canViewAllPipelines =>
@@ -100,6 +106,7 @@ enum UserRole {
       this == UserRole.factory ||
       this == UserRole.purchase ||
       this == UserRole.boq;
+
   bool get canCreateCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.salesHead;
   bool get canEditCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.salesHead;
   bool get canCreateQuotation =>
@@ -112,7 +119,7 @@ enum UserRole {
   bool get canManageCatalog => this == UserRole.admin;
   bool get canViewFactoryQueue => this == UserRole.factory || this == UserRole.admin || this == UserRole.manager;
   bool get canViewPurchaseQueue => this == UserRole.purchase || this == UserRole.admin || this == UserRole.manager;
-  bool get canExportAll => this == UserRole.admin || this == UserRole.manager;
+  bool get canExportAll => this == UserRole.admin || this == UserRole.manager || this == UserRole.serviceHead || this == UserRole.salesHead;
   bool get canViewCustomerPersonalData =>
       this == UserRole.admin ||
       this == UserRole.manager ||
@@ -134,10 +141,42 @@ enum UserRole {
       this == UserRole.manager ||
       this == UserRole.sales ||
       this == UserRole.salesHead ||
+      this == UserRole.serviceHead ||
       this == UserRole.crmStaff ||
       this == UserRole.boq ||
       this == UserRole.factory ||
       this == UserRole.purchase;
+
+  bool get canAccessInstallation =>
+      this == UserRole.admin ||
+      this == UserRole.manager ||
+      this == UserRole.serviceHead ||
+      this == UserRole.installation ||
+      this == UserRole.salesHead ||
+      this == UserRole.technician;
+
+  bool get canAccessComplaints =>
+      this == UserRole.admin ||
+      this == UserRole.manager ||
+      this == UserRole.serviceHead ||
+      this == UserRole.complaints ||
+      this == UserRole.technician;
+
+  bool get canAccessBoq =>
+      this == UserRole.admin ||
+      this == UserRole.manager ||
+      this == UserRole.serviceHead ||
+      this == UserRole.boq ||
+      this == UserRole.salesHead ||
+      this == UserRole.sales ||
+      this == UserRole.factory;
+
+  bool get canViewAllReports =>
+      this == UserRole.admin ||
+      this == UserRole.manager ||
+      this == UserRole.serviceHead ||
+      this == UserRole.salesHead ||
+      this == UserRole.accounts;
 
   bool get isSalesOrAdmin =>
       this == UserRole.admin ||
@@ -155,6 +194,8 @@ enum UserRole {
       case UserRole.salesHead:
         return const Color(0xFF0EA5E9); // Sky Blue
       case UserRole.serviceHead:
+        return const Color(0xFF1D4ED8); // Strong Blue
+      case UserRole.complaints:
         return const Color(0xFF3B82F6); // Blue
       case UserRole.installation:
         return const Color(0xFF0284C7); // Sky Blue / Cyan
@@ -191,6 +232,8 @@ enum UserRole {
       case UserRole.salesHead:
         return const [Color(0xFF0369A1), Color(0xFF0EA5E9)];
       case UserRole.serviceHead:
+        return const [Color(0xFF1E40AF), Color(0xFF2563EB)];
+      case UserRole.complaints:
         return const [Color(0xFF1D4ED8), Color(0xFF3B82F6)];
       case UserRole.installation:
         return const [Color(0xFF0284C7), Color(0xFF38BDF8)];

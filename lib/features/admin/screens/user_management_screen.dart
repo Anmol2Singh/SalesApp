@@ -245,6 +245,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         return Colors.blueGrey;
       case UserRole.installation:
         return const Color(0xFF0284C7);
+      case UserRole.complaints:
+        return const Color(0xFFE11D48);
       case UserRole.accounts:
         return const Color(0xFF005CE6);
     }
@@ -262,6 +264,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         return Icons.leaderboard_outlined;
       case UserRole.serviceHead:
         return Icons.headset_mic_outlined;
+      case UserRole.complaints:
+        return Icons.support_agent_outlined;
       case UserRole.factory:
         return Icons.precision_manufacturing_outlined;
       case UserRole.purchase:
@@ -1424,6 +1428,8 @@ class _UserTile extends StatelessWidget {
         return Colors.blueGrey;
       case UserRole.installation:
         return const Color(0xFF0284C7);
+      case UserRole.complaints:
+        return const Color(0xFFE11D48);
       case UserRole.accounts:
         return const Color(0xFF005CE6);
     }

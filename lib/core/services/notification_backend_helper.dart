@@ -12,15 +12,34 @@ class NotificationBackendHelper {
     String? relatedAmcId,
   }) async {
     try {
+      // Include service_head for installation, complaints, and boq targeted alerts
+      final targetRoles = Set<String>.from(roles);
+      if (targetRoles.contains('installation') ||
+          targetRoles.contains('complaints') ||
+          targetRoles.contains('boq')) {
+        targetRoles.add('service_head');
+      }
+
       final res = await supabase
           .from('profiles')
-          .select('id')
-          .inFilter('role', roles);
-          
+          .select('id, role, roles')
+          .eq('is_active', true);
+
       final Set<String> recipientIds = {};
       for (final user in res) {
         final id = user['id']?.toString();
-        if (id != null && id.isNotEmpty) {
+        if (id == null || id.isEmpty) continue;
+
+        final userRole = user['role']?.toString();
+        final userRolesList = (user['roles'] is List)
+            ? (user['roles'] as List).map((e) => e.toString()).toList()
+            : <String>[];
+
+        final matchesRole =
+            (userRole != null && targetRoles.contains(userRole)) ||
+                userRolesList.any((r) => targetRoles.contains(r));
+
+        if (matchesRole) {
           recipientIds.add(id);
         }
       }

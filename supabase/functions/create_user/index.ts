@@ -15,7 +15,20 @@ interface CreateUserRequest {
   password: string;
   full_name: string;
   phone?: string;
-  role: "admin" | "sales" | "factory" | "purchase";
+  role:
+    | "admin"
+    | "sales"
+    | "factory"
+    | "purchase"
+    | "sales_head"
+    | "manager"
+    | "service_head"
+    | "complaints"
+    | "installation"
+    | "boq"
+    | "crm_staff"
+    | "accounts"
+    | "technician";
 }
 
 serve(async (req) => {
@@ -79,7 +92,22 @@ serve(async (req) => {
       );
     }
 
-    if (!["admin", "sales", "factory", "purchase"].includes(role)) {
+    const validRoles = [
+      "admin",
+      "sales",
+      "factory",
+      "purchase",
+      "sales_head",
+      "manager",
+      "service_head",
+      "complaints",
+      "installation",
+      "boq",
+      "crm_staff",
+      "accounts",
+      "technician",
+    ];
+    if (!validRoles.includes(role)) {
       return new Response(
         JSON.stringify({ error: "Invalid role" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

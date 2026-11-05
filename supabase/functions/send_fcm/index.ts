@@ -228,6 +228,12 @@ serve(async (req) => {
           const matchingUsers = roleProfiles.filter((p: any) => {
             if (p.role === role) return true;
             if (Array.isArray(p.roles) && p.roles.includes(role)) return true;
+            // Service Head also receives notifications targeted to installation, complaints, or boq
+            if (["installation", "complaints", "service_head", "boq"].includes(role)) {
+              if (p.role === "service_head" || (Array.isArray(p.roles) && p.roles.includes("service_head"))) {
+                return true;
+              }
+            }
             return false;
           });
           const ids = matchingUsers.map((p: any) => p.id);

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../models/user_role.dart';
+import '../auth/role_access.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/notifications/providers/notifications_provider.dart';
 import '../router/app_router.dart';
@@ -372,34 +373,23 @@ class _AppShellState extends ConsumerState<AppShell> {
     final isManager = roles.any((r) => r == UserRole.manager);
     final hasAdminOrManager =
         roles.any((r) => r == UserRole.admin || r == UserRole.manager);
+    final isServiceHead = RoleAccess.isServiceHead(roles);
     final hasSales =
         roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
     final hasSalesHead = roles.any((r) => r == UserRole.salesHead);
-    final hasCrm = roles.any((r) =>
-        r == UserRole.crmStaff ||
-        r == UserRole.admin ||
-        r == UserRole.manager ||
-        r == UserRole.sales ||
-        r == UserRole.salesHead);
-    final hasComplaints = roles.any((r) =>
-        r == UserRole.admin ||
-        r == UserRole.manager ||
-        r == UserRole.serviceHead);
-    final hasInstallations = roles.any((r) =>
-        r == UserRole.admin ||
-        r == UserRole.manager ||
-        r == UserRole.serviceHead ||
-        r == UserRole.salesHead);
+    final hasCrm = RoleAccess.canAccessCrm(roles);
+    final hasComplaints = RoleAccess.canAccessComplaints(roles);
+    final hasInstallations = RoleAccess.canAccessInstallation(roles);
     final isTechnician = roles.any((r) => r == UserRole.technician);
-    final isBoq = roles.any((r) => r == UserRole.boq);
+    final isBoq = RoleAccess.canAccessBoq(roles);
     final isFactory = roles.any((r) => r == UserRole.factory);
     final isPurchase = roles.any((r) => r == UserRole.purchase);
     final hasAccounts = roles.any((r) => r == UserRole.accounts);
 
     final canAccessProductInterests = hasAdminOrManager || hasSalesHead;
-    final canAccessPdfList = hasAdminOrManager;
-    final canAccessSearchPdf = hasAdminOrManager || hasSalesHead;
-    final canAccessPdfLibrary = canAccessPdfList || canAccessSearchPdf;
+    final canAccessPdfList = RoleAccess.canAccessPdfList(roles);
+    final canAccessSearchPdf = RoleAccess.canSearchPdf(roles);
+    final canAccessPdfLibrary = RoleAccess.canAccessPdfLibrary(roles);
 
     // Expansion status & active flags
     final isCrmActive = widget.currentRoute.startsWith('/crm');
@@ -517,17 +507,19 @@ class _AppShellState extends ConsumerState<AppShell> {
                       ? AppRoutes.adminDashboard
                       : (hasAccounts
                           ? AppRoutes.accountsDashboard
-                          : (hasSales || isManager
-                              ? AppRoutes.salesDashboard
-                              : (isBoq
-                                  ? AppRoutes.boqDashboard
-                                  : (isFactory
-                                      ? AppRoutes.factoryQueue
-                                      : (isPurchase
-                                          ? AppRoutes.purchaseQueue
-                                          : (isTechnician
-                                              ? AppRoutes.technicianDashboard
-                                              : '/crm/dashboard')))))),
+                          : (isServiceHead
+                              ? AppRoutes.installationsDashboard
+                              : (hasSales || isManager
+                                  ? AppRoutes.salesDashboard
+                                  : (isBoq
+                                      ? AppRoutes.boqDashboard
+                                      : (isFactory
+                                          ? AppRoutes.factoryQueue
+                                          : (isPurchase
+                                              ? AppRoutes.purchaseQueue
+                                              : (isTechnician
+                                                  ? AppRoutes.technicianDashboard
+                                                  : '/crm/dashboard'))))))),
                   label: 'Dashboard',
                   icon: const Icon(Icons.dashboard_outlined),
                   selectedIcon: const Icon(Icons.dashboard),
@@ -579,7 +571,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                           unselectedTextColor: unselectedTextColor,
                           selectedBgColor: selectedBgColor,
                         ),
-                        if (hasAdminOrManager || hasSales)
+                        if (hasAdminOrManager || hasSales || isServiceHead)
                           _buildChildTile(
                             label: 'Customers',
                             route: '/crm/customers',
@@ -856,7 +848,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ],
 
                 // 6. Reports & Analytics Group (Expandable)
-                if ((hasAdminOrManager || hasSales) && !hasAccounts) ...[
+                if ((hasAdminOrManager || hasSales || isServiceHead) && !hasAccounts) ...[
                   _buildGroupHeader(
                     label: 'Reports & Analytics',
                     icon: isReportsActive
@@ -1050,7 +1042,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
                   ),
-                if (isBoq && !hasAdminOrManager) ...[
+                if ((isBoq || isServiceHead) && !hasAdminOrManager) ...[
                   _buildNavItemTile(
                     route: AppRoutes.boqDashboard,
                     label: 'BOQ',
@@ -1872,20 +1864,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool hasAdmin = roles.any((r) => r == UserRole.admin);
     final bool isManager = roles.any((r) => r == UserRole.manager);
     final bool hasAdminOrManager = hasAdmin || isManager;
+    final bool isServiceHead = RoleAccess.isServiceHead(roles);
     final bool hasSales =
         roles.any((r) => r == UserRole.sales || r == UserRole.salesHead);
-    final bool hasCrm = roles.any((r) =>
-        r == UserRole.crmStaff ||
-        r == UserRole.admin ||
-        r == UserRole.manager ||
-        r == UserRole.salesHead);
-    final bool hasComplaints = roles.any((r) => r == UserRole.serviceHead);
-    final bool hasInstallations = roles.any((r) =>
-        r == UserRole.admin ||
-        r == UserRole.manager ||
-        r == UserRole.serviceHead ||
-        r == UserRole.salesHead);
-    final bool isBoq = roles.any((r) => r == UserRole.boq);
+    final bool hasCrm = RoleAccess.canAccessCrm(roles);
+    final bool hasComplaints = RoleAccess.canAccessComplaints(roles);
+    final bool hasInstallations = RoleAccess.canAccessInstallation(roles);
+    final bool isBoq = RoleAccess.canAccessBoq(roles);
     final bool isFactory = roles.any((r) => r == UserRole.factory);
     final bool isPurchase = roles.any((r) => r == UserRole.purchase);
     final bool isTechnician = roles.any((r) => r == UserRole.technician);
@@ -2179,8 +2164,38 @@ class _AppShellState extends ConsumerState<AppShell> {
       return uniqueItems.values.toList();
     }
 
-    // 5. Service Head (when not on complaints route)
-    if (hasComplaints) {
+    // 5. Service Head
+    if (isServiceHead) {
+      addItem(const _NavItem(
+          route: AppRoutes.installationsDashboard,
+          label: 'Installations',
+          icon: Icon(Icons.build_outlined),
+          selectedIcon: Icon(Icons.build)));
+      addItem(const _NavItem(
+          route: AppRoutes.complaintsDashboard,
+          label: 'Complaints',
+          icon: Icon(Icons.support_agent_outlined),
+          selectedIcon: Icon(Icons.support_agent)));
+      addItem(const _NavItem(
+          route: AppRoutes.boqDashboard,
+          label: 'BOQ',
+          icon: Icon(Icons.calculate_outlined),
+          selectedIcon: Icon(Icons.calculate)));
+      addItem(const _NavItem(
+          route: '/crm/dashboard',
+          label: 'CRM',
+          icon: Icon(Icons.people_alt_outlined),
+          selectedIcon: Icon(Icons.people_alt)));
+      addItem(const _NavItem(
+          route: AppRoutes.userActivityReport,
+          label: 'Reports',
+          icon: Icon(Icons.assessment_outlined),
+          selectedIcon: Icon(Icons.assessment)));
+      return uniqueItems.values.toList();
+    }
+
+    // 5.5 Standalone Complaints Staff (when not on complaints route)
+    if (roles.contains(UserRole.complaints)) {
       addItem(const _NavItem(
           route: AppRoutes.complaintsDashboard,
           label: 'Dashboard',

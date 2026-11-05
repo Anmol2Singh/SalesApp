@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/user_role.dart';
 import '../../../core/models/pipeline.dart';
+import '../../../core/auth/role_access.dart';
+import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
@@ -1127,7 +1129,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              context.push('/installations');
+              context.go(AppRoutes.installationsList);
             },
             child: const Text('Go to Installations'),
           ),
@@ -1164,7 +1166,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                context.push('/installations');
+                context.go(AppRoutes.installationsList);
               },
               child: const Text('View Installations'),
             ),
@@ -1469,14 +1471,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
     final isAdminOrManager = userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.manager);
     final isSales = userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead);
-    final isBoq = userRoles.contains(UserRole.boq);
+    final isBoq = RoleAccess.canAccessBoq(userRoles);
+    final isServiceHead = RoleAccess.isServiceHead(userRoles);
+    final isCrm = RoleAccess.canAccessCrm(userRoles);
     final isFactory = userRoles.contains(UserRole.factory);
     final isPurchase = userRoles.contains(UserRole.purchase);
 
     switch (stepIndex) {
       case 1: // Quotation
         if (isDone) {
-          if (!isAdminOrManager && !isSales) {
+          if (!isAdminOrManager && !isSales && !isServiceHead && !isCrm) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('You do not have permission to view Quotation PDF.'),
@@ -1496,12 +1500,12 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             );
             return;
           }
-          context.push('/quotations/create?pipelineId=${widget.pipeline.id}&productId=${widget.pipeline.productId}&customerId=${widget.pipeline.customerId}');
+          context.push(AppRoutes.quotationFormPath(widget.pipeline.id));
         }
         break;
       case 2: // Sales Order
         if (isDone) {
-          if (!isAdminOrManager && !isSales && !isBoq) {
+          if (!isAdminOrManager && !isSales && !isBoq && !isServiceHead && !isCrm) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('You do not have permission to view Sales Order documents.'),
@@ -1521,12 +1525,12 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             );
             return;
           }
-          context.push('/sales-orders/create?pipelineId=${widget.pipeline.id}');
+          context.push(AppRoutes.salesOrderFormPath(widget.pipeline.id));
         }
         break;
       case 5: // Factory BOQ
       case 6: // Site BOQ
-        if (!isAdminOrManager && !isBoq && !isSales) {
+        if (!isAdminOrManager && !isBoq && !isSales && !isServiceHead) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('You do not have permission to view BOQ documents.'),
@@ -1535,7 +1539,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           );
           return;
         }
-        context.push('/boq/${widget.pipeline.id}');
+        context.push(AppRoutes.boqFormPath(widget.pipeline.id));
         break;
       case 7: // Factory Manufacture
         if (!isAdminOrManager && !isFactory) {
@@ -1547,7 +1551,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           );
           return;
         }
-        context.push('/factory-orders/${widget.pipeline.id}');
+        context.push(AppRoutes.factoryOrderFormPath(widget.pipeline.id));
         break;
       case 8: // Purchase Order
         if (!isAdminOrManager && !isPurchase) {
@@ -1559,7 +1563,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           );
           return;
         }
-        context.push('/purchase-orders/${widget.pipeline.id}');
+        context.push(AppRoutes.purchaseOrderFormPath(widget.pipeline.id));
         break;
     }
   }
@@ -1646,7 +1650,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.push('/sales-orders/${widget.pipeline.salesOrder?.id}');
+              context.push(AppRoutes.salesOrderFormPath(widget.pipeline.id));
             },
             child: const Text('View Sales Order'),
           ),
