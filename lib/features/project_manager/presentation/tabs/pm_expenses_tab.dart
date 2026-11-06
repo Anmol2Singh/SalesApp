@@ -40,14 +40,27 @@ class PmExpensesTab extends ConsumerWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text('Direct Project Expenses', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
-                    const SizedBox(width: 8),
-                    PmBadge(label: 'Total: ₹${currency.format(totalExpense)}', variant: PmBadgeVariant.warning),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Direct Project Expenses',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: pm.foreground),
+                      ),
+                      const SizedBox(height: 4),
+                      PmBadge(
+                          label: 'Total: ₹${currency.format(totalExpense)}',
+                          variant: PmBadgeVariant.warning),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 PmButton(
                   size: PmButtonSize.sm,
                   onPressed: () => _showAddEditModal(context, ref),

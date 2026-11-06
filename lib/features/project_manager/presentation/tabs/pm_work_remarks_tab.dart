@@ -34,14 +34,27 @@ class PmWorkRemarksTab extends ConsumerWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text('Site Work Remarks & Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
-                    const SizedBox(width: 8),
-                    PmBadge(label: '${remarks.length} Remarks', variant: PmBadgeVariant.secondary),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Site Work Remarks & Notes',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: pm.foreground),
+                      ),
+                      const SizedBox(height: 4),
+                      PmBadge(
+                          label: '${remarks.length} Remarks',
+                          variant: PmBadgeVariant.secondary),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 PmButton(
                   size: PmButtonSize.sm,
                   onPressed: () => _showAddEditModal(context, ref),

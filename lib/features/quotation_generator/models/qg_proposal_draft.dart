@@ -14,6 +14,7 @@ import '../services/qg_item_parser.dart';
 import '../services/price_calculator.dart';
 import '../services/qg_payment_sentence_builder.dart';
 import '../services/qg_model_specs_resolver.dart';
+import '../services/tank_item_parser.dart';
 
 /// Represents the in-memory and locally persisted draft of a Heat Pump Proposal.
 /// Encapsulates all salesperson edits, item resolutions, specifications,
@@ -285,10 +286,11 @@ class QgProposalDraft {
       for (final it in parsedItems) {
         if (it.type == ParsedItemType.tank) {
           hasTankLine = true;
-          tankLitres = it.tankCapacityLitres ?? 500;
+          final parsed = TankItemParser.parse(it.rawDescription);
+          tankLitres = parsed.capacityLitres;
           tankQty = it.qty;
-          tankMat = it.tankMaterial ?? 'GI';
-          isPressurized = it.isPressurized;
+          tankMat = parsed.material;
+          isPressurized = parsed.isPressurized;
           tankRate = it.rate;
           break;
         }
@@ -298,13 +300,15 @@ class QgProposalDraft {
     // Check if tank specs exist in q.productSpecs['tank_spec']
     if (q.productSpecs.containsKey('tank_spec') && q.productSpecs['tank_spec'] is Map) {
       final ts = Map<String, dynamic>.from(q.productSpecs['tank_spec'] as Map);
-      tankMat = ts['material']?.toString() ?? tankMat;
-      tankLitres = (ts['capacity'] as num?)?.toInt() ?? tankLitres;
       shellThick = ts['shell_thickness']?.toString() ?? '3mm';
       dishThick = ts['dish_thickness']?.toString() ?? '3mm';
       tankIns = ts['insulation']?.toString() ?? 'Puff';
-      isPressurized = ts['is_pressurized'] as bool? ?? isPressurized;
-      hasTankLine = true;
+      if (!hasTankLine) {
+        tankMat = ts['material']?.toString() ?? tankMat;
+        tankLitres = (ts['capacity'] as num?)?.toInt() ?? tankLitres;
+        isPressurized = ts['is_pressurized'] as bool? ?? isPressurized;
+        hasTankLine = true;
+      }
     }
 
     // 5. HP specs from centralized resolver
@@ -728,9 +732,10 @@ class QgProposalDraft {
     if (!isAllInOne && !isWallMounted) {
       for (final it in items) {
         if (it.type == ParsedItemType.tank) {
-          final cap = it.tankCapacityLitres ?? tankCapacityLitres;
-          final mat = it.tankMaterial ?? tankMaterial;
-          final isPress = it.isPressurized;
+          final parsed = TankItemParser.parse(it.rawDescription);
+          final cap = parsed.capacityLitres;
+          final mat = parsed.material;
+          final isPress = parsed.isPressurized;
           tankLinesList.add(TankLineItem(
             id: 'tank_${tankIdx++}',
             capacityLitres: cap,
@@ -743,7 +748,7 @@ class QgProposalDraft {
             innerTankThickness: tankShellThickness,
             outerCladdingThickness: tankDishThickness,
             outerCladdingMaterial: 'Galvanized Painted',
-            insulationMaterial: it.insulationType ?? effectiveIns,
+            insulationMaterial: effectiveIns,
           ));
         }
       }
@@ -768,10 +773,28 @@ class QgProposalDraft {
     final mappedPriceRows = <PriceRow>[];
     for (int i = 0; i < items.length; i++) {
       final it = items[i];
+      String rowDesc = it.rawDescription;
+      if (it.type == ParsedItemType.tank) {
+        final parsed = TankItemParser.parse(it.rawDescription);
+        final cap = parsed.capacityLitres;
+        final mat = parsed.material;
+        final isPress = parsed.isPressurized;
+        final pressStr = isPress ? 'Pressurized' : 'Non-Pressurized';
+        final insName = (tankInsulation.toLowerCase().contains('puff') || tankInsulation.toLowerCase().contains('puf'))
+            ? 'PUF'
+            : tankInsulation;
+        final insText = (insName == 'PUF')
+            ? '50 mm with PUF Insulation'
+            : (insName.toLowerCase().contains('insulation') ? insName : '50 mm with $insName Insulation');
+        rowDesc = '$cap LTR Capacity, $mat $pressStr Tank, $tankShellThickness Shell, and $tankDishThickness Dish, $insText.';
+      }
+
+      final parsedTank = it.type == ParsedItemType.tank ? TankItemParser.parse(it.rawDescription) : null;
+
       mappedPriceRows.add(PriceRow(
         id: 'item_$i',
         serialNo: (i + 1).toString().padLeft(2, '0'),
-        description: it.rawDescription,
+        description: rowDesc,
         qty: it.qty,
         status: it.rate > 0 ? PriceRowStatus.priced : PriceRowStatus.included,
         rate: it.rate.round(),
@@ -781,9 +804,10 @@ class QgProposalDraft {
         metadata: {
           'type': it.type.name,
           'hpModel': it.hpModel,
-          'tankMaterial': it.tankMaterial,
-          'isPressurized': it.isPressurized,
-          'insulationType': it.insulationType,
+          'tankMaterial': it.type == ParsedItemType.tank ? (parsedTank?.material ?? tankMaterial) : it.tankMaterial,
+          'isPressurized': it.type == ParsedItemType.tank ? (parsedTank?.isPressurized ?? isTankPressurized) : it.isPressurized,
+          'capacityLitres': it.type == ParsedItemType.tank ? (parsedTank?.capacityLitres ?? it.tankCapacityLitres ?? tankCapacityLitres) : null,
+          'insulationType': it.type == ParsedItemType.tank ? tankInsulation : it.insulationType,
         },
       ));
     }
@@ -874,17 +898,24 @@ class QgProposalDraft {
       tankSpec: (isAllInOne || isWallMounted)
           ? const TankSpec(capacityLitres: 0, isPressurized: false)
           : TankSpec(
-              capacityLitres: hasTank ? tankCapacityLitres : 0,
-              isPressurized: hasTank ? isTankPressurized : false,
-              innerAndOuterTank: hasTank ? tankMaterial : 'GI',
+              capacityLitres: hasTank ? (tankLinesList.isNotEmpty ? tankLinesList.first.capacityLitres : tankCapacityLitres) : 0,
+              isPressurized: hasTank ? (tankLinesList.isNotEmpty ? tankLinesList.first.isPressurized : isTankPressurized) : false,
+              innerAndOuterTank: hasTank ? (tankLinesList.isNotEmpty ? tankLinesList.first.innerTankMaterial : tankMaterial) : 'GI',
               shellThicknessMm: shellMm,
               dishThicknessMm: dishMm,
-              capacityAndThickness: '$tankCapacityLitres ltr, $tankShellThickness Shell, $tankDishThickness Dish.',
+              capacityAndThickness: '${hasTank ? (tankLinesList.isNotEmpty ? tankLinesList.first.capacityLitres : tankCapacityLitres) : 0} ltr, $tankShellThickness Shell, $tankDishThickness Dish.',
               outerTankInsulation: effectiveIns,
             ),
       extraPriceRows: mappedExtraRows,
       tankCapacityLitres: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankCapacityLitres : 0),
       tankQty: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankQty : 0),
+      isTankPressurized: (isAllInOne || isWallMounted)
+          ? false
+          : (hasTank
+              ? (tankLinesList.isNotEmpty
+                  ? tankLinesList.first.isPressurized
+                  : isTankPressurized)
+              : false),
       tankRate: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankRate.round() : 0),
       priceRows: mappedPriceRows,
       subtotal: subtotal.round(),

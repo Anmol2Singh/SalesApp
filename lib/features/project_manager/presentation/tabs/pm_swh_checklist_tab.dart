@@ -57,73 +57,84 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text('SWH & Heat Pump Technical Checklist', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
-                    const SizedBox(width: 8),
-                    PmBadge(label: '${filteredItems.length} Items', variant: PmBadgeVariant.secondary),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (items.isNotEmpty) ...[
-                      SizedBox(
-                        width: 220,
-                        height: 36,
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (val) => setState(() => _searchQuery = val),
-                          style: TextStyle(fontSize: 13, color: pm.foreground),
-                          decoration: InputDecoration(
-                            hintText: 'Search checklist...',
-                            hintStyle: TextStyle(fontSize: 13, color: pm.mutedForeground),
-                            prefixIcon: Icon(LucideIcons.search, size: 14, color: pm.mutedForeground),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: Icon(LucideIcons.x, size: 14, color: pm.mutedForeground),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _searchQuery = '');
-                                    },
-                                  )
-                                : null,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                            isDense: true,
-                            filled: true,
-                            fillColor: pm.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(pm.radiusMd),
-                              borderSide: BorderSide(color: pm.border),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(pm.radiusMd),
-                              borderSide: BorderSide(color: pm.border),
-                            ),
-                          ),
-                        ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SWH & Heat Pump Technical Checklist',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: pm.foreground),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 4),
+                      PmBadge(
+                          label: '${filteredItems.length} Items',
+                          variant: PmBadgeVariant.secondary),
                     ],
-                    PmButton(
-                      size: PmButtonSize.sm,
-                      onPressed: () => _showAddEditModal(context, ref),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.plus, size: 14),
-                          SizedBox(width: 6),
-                          Text('Add Item'),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                PmButton(
+                  size: PmButtonSize.sm,
+                  onPressed: () => _showAddEditModal(context, ref),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.plus, size: 14),
+                      SizedBox(width: 6),
+                      Text('Add Item'),
+                    ],
+                  ),
                 ),
               ],
             ),
+            if (items.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 36,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  style: TextStyle(fontSize: 13, color: pm.foreground),
+                  decoration: InputDecoration(
+                    hintText: 'Search checklist...',
+                    hintStyle:
+                        TextStyle(fontSize: 13, color: pm.mutedForeground),
+                    prefixIcon: Icon(LucideIcons.search,
+                        size: 14, color: pm.mutedForeground),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(LucideIcons.x,
+                                size: 14, color: pm.mutedForeground),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 0),
+                    isDense: true,
+                    filled: true,
+                    fillColor: pm.background,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(pm.radiusMd),
+                      borderSide: BorderSide(color: pm.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(pm.radiusMd),
+                      borderSide: BorderSide(color: pm.border),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             if (items.isEmpty)
               PmCard(

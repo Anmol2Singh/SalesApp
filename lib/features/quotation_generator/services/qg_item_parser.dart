@@ -274,7 +274,18 @@ class QgItemParser {
         }
 
         // Pressurization
-        final isPressurized = lower.contains('pressuri') || lower.contains('pressurised') || lower.contains('pressurized');
+        bool isPressurized = true;
+        if (lower.contains('non-pressuri') ||
+            lower.contains('non pressuri') ||
+            lower.contains('nonpressuri') ||
+            lower.contains('unpressuri') ||
+            lower.contains('un-pressuri') ||
+            lower.contains('atmospheric') ||
+            lower.contains('gravity')) {
+          isPressurized = false;
+        } else if (lower.contains('pressuri') || lower.contains('pressurised') || lower.contains('pressurized')) {
+          isPressurized = true;
+        }
 
         // Capacity in Litres
         final litreMatch = RegExp(r'(\d+)\s*(?:ltr|lpd|l\b|liter|litre)', caseSensitive: false).firstMatch(lower);

@@ -37,13 +37,30 @@ class TankSpec {
   String get innerTankThickness => '${shellThicknessMm}mm';
   String get outerCladdingMaterial => innerAndOuterTank.isNotEmpty ? innerAndOuterTank : 'GI';
   String get outerCladdingThickness => '${dishThicknessMm}mm';
-  String get insulationMaterial => outerTankInsulation.contains('Puff') || outerTankInsulation.contains('PUF') ? 'PUF' : 'Rockwool';
+  String get insulationMaterial {
+    final lower = outerTankInsulation.toLowerCase();
+    if (lower.contains('puff') || lower.contains('puf')) return 'PUF';
+    if (lower.contains('rockwool')) return 'Rockwool';
+    final cleaned = outerTankInsulation
+        .replaceAll(RegExp(r'^\s*50\s*mm\s*with\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*Insulation\s*$', caseSensitive: false), '')
+        .trim();
+    return cleaned.isNotEmpty ? cleaned : 'PUF';
+  }
 
   String get tankTitle =>
       '$capacityLitres Ltr HOT WATER STORAGE $innerTankMaterial ${isPressurized ? "Pressurized" : "Non-Pressurized"} TANK';
 
-  String get priceRowDescription =>
-      '$capacityLitres LTR Capacity, $innerTankMaterial ${isPressurized ? "Pressurized" : "Non-Pressurized"} Tank, ${shellThicknessMm}mm Shell, and ${dishThicknessMm}mm Dish Thickness, 50 mm with Puff Insulation.';
+  String get priceRowDescription {
+    final shell = innerTankThickness.isNotEmpty ? innerTankThickness : '${shellThicknessMm}mm';
+    final dish = outerCladdingThickness.isNotEmpty ? outerCladdingThickness : '${dishThicknessMm}mm';
+    final ins = (outerTankInsulation.toLowerCase().contains('puff') || outerTankInsulation.toLowerCase().contains('puf'))
+        ? '50 mm with PUF Insulation'
+        : (outerTankInsulation.toLowerCase().contains('insulation')
+            ? outerTankInsulation
+            : '50 mm with $outerTankInsulation Insulation');
+    return '$capacityLitres LTR Capacity, $innerTankMaterial ${isPressurized ? "Pressurized" : "Non-Pressurized"} Tank, $shell Shell, and $dish Dish, $ins.';
+  }
 
   static String generateSubjectLine({
     double? hpKw,

@@ -39,26 +39,48 @@ class PmPaymentTermsTab extends ConsumerWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text('Payment Terms Breakdown', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
-                    const SizedBox(width: 8),
-                    PmBadge(
-                      label: '${terms.length} Terms (${totalPercentage.toStringAsFixed(0)}%)',
-                      variant: is100PercentReached ? PmBadgeVariant.defaultVariant : PmBadgeVariant.secondary,
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Payment Terms Breakdown',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: pm.foreground),
+                      ),
+                      const SizedBox(height: 4),
+                      PmBadge(
+                        label:
+                            '${terms.length} Terms (${totalPercentage.toStringAsFixed(0)}%)',
+                        variant: is100PercentReached
+                            ? PmBadgeVariant.defaultVariant
+                            : PmBadgeVariant.secondary,
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 PmButton(
                   size: PmButtonSize.sm,
-                  onPressed: is100PercentReached ? null : () => _showAddEditModal(context, ref, terms),
+                  onPressed: is100PercentReached
+                      ? null
+                      : () => _showAddEditModal(context, ref, terms),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(is100PercentReached ? LucideIcons.lock : LucideIcons.plus, size: 14),
+                      Icon(
+                          is100PercentReached
+                              ? LucideIcons.lock
+                              : LucideIcons.plus,
+                          size: 14),
                       const SizedBox(width: 6),
-                      Text(is100PercentReached ? '100% Reached (Locked)' : 'Add Term'),
+                      Text(is100PercentReached
+                          ? '100% Reached'
+                          : 'Add Term'),
                     ],
                   ),
                 ),

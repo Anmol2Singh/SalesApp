@@ -3177,6 +3177,7 @@ class _LeadQuotationsSectionState
               pipelineId: activeQuot.pipelineId,
               productId: activeQuot.productId,
               productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Boom Barrier',
+              productSpecs: activeQuot.productSpecs,
             );
             bbDraft = BoomBarrierProposalDraft.fromDealQuotation(dealItem, profile);
           }
@@ -3271,6 +3272,7 @@ class _LeadQuotationsSectionState
           pipelineId: activeQuot.pipelineId,
           productId: activeQuot.productId,
           productName: widget.lead.productName.isNotEmpty ? widget.lead.productName : 'Heat Pump',
+          productSpecs: activeQuot.productSpecs,
         );
 
         final freshDraft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
@@ -3282,7 +3284,13 @@ class _LeadQuotationsSectionState
             loadedDraft.hpModel != freshDraft.hpModel ||
             loadedDraft.hpKw != freshDraft.hpKw ||
             loadedDraft.hpSpecs['Heat Pump Model'] != freshDraft.hpModel ||
-            (freshDraft.hpSpecs.isNotEmpty && loadedDraft.hpSpecs.isEmpty)) {
+            (freshDraft.hpSpecs.isNotEmpty && loadedDraft.hpSpecs.isEmpty) ||
+            loadedDraft.tankMaterial != freshDraft.tankMaterial ||
+            loadedDraft.tankShellThickness != freshDraft.tankShellThickness ||
+            loadedDraft.tankDishThickness != freshDraft.tankDishThickness ||
+            loadedDraft.tankInsulation != freshDraft.tankInsulation ||
+            loadedDraft.tankCapacityLitres != freshDraft.tankCapacityLitres ||
+            loadedDraft.isTankPressurized != freshDraft.isTankPressurized) {
           draft = freshDraft;
         } else {
           draft = loadedDraft;
@@ -3295,6 +3303,15 @@ class _LeadQuotationsSectionState
             draft.hpSpecs = Map<String, String>.from(freshDraft.hpSpecs);
             draft.specsCopiedFrom = freshDraft.specsCopiedFrom;
           }
+          // Always ensure latest tank specs are in sync
+          draft.tankMaterial = freshDraft.tankMaterial;
+          draft.tankShellThickness = freshDraft.tankShellThickness;
+          draft.tankDishThickness = freshDraft.tankDishThickness;
+          draft.tankInsulation = freshDraft.tankInsulation;
+          draft.tankCapacityLitres = freshDraft.tankCapacityLitres;
+          draft.isTankPressurized = freshDraft.isTankPressurized;
+          draft.hasTank = freshDraft.hasTank;
+          draft.tankSpecs = Map<String, String>.from(freshDraft.tankSpecs);
         }
 
         // Ensure draft specs are in sync with Module Settings according to heat pump type

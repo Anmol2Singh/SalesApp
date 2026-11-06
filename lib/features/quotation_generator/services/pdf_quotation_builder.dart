@@ -1528,15 +1528,29 @@ class PdfQuotationBuilder {
           final isPress =
               r.metadata?['isPressurized'] as bool? ?? q.isTankPressurized;
           final pressStr = isPress ? 'Pressurized' : 'Non-Pressurized';
-          final shellThick = '${q.tankSpec.shellThicknessMm}mm';
-          final dishThick = '${q.tankSpec.dishThicknessMm}mm';
-          final insName = (q.tankSpec.insulationMaterial.toLowerCase().contains('puff') || q.tankSpec.insulationMaterial.toLowerCase().contains('puf')) ? 'PUF' : q.tankSpec.insulationMaterial;
+          final shellThick = (q.tankLines.isNotEmpty && q.tankLines.first.innerTankThickness.isNotEmpty)
+              ? q.tankLines.first.innerTankThickness
+              : (q.tankSpec.innerTankThickness.isNotEmpty ? q.tankSpec.innerTankThickness : '${q.tankSpec.shellThicknessMm}mm');
+          final dishThick = (q.tankLines.isNotEmpty && q.tankLines.first.outerCladdingThickness.isNotEmpty)
+              ? q.tankLines.first.outerCladdingThickness
+              : (q.tankSpec.outerCladdingThickness.isNotEmpty ? q.tankSpec.outerCladdingThickness : '${q.tankSpec.dishThicknessMm}mm');
+          final rawIns = (r.metadata?['insulationType'] != null && r.metadata!['insulationType'].toString().isNotEmpty)
+              ? r.metadata!['insulationType'].toString()
+              : ((q.tankLines.isNotEmpty && q.tankLines.first.insulationMaterial.isNotEmpty)
+                  ? q.tankLines.first.insulationMaterial
+                  : q.tankSpec.outerTankInsulation);
+          final insName = (rawIns.toLowerCase().contains('puff') || rawIns.toLowerCase().contains('puf'))
+              ? 'PUF'
+              : rawIns;
+          final insText = (insName == 'PUF')
+              ? '50 mm with PUF Insulation'
+              : (insName.toLowerCase().contains('insulation') ? insName : '50 mm with $insName Insulation');
 
           descWidget = pw.Padding(
             padding:
                 const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
             child: pw.Text(
-              '$tankCap LTR Capacity, $mat $pressStr Tank, $shellThick Shell, and $dishThick Dish, 50 mm with $insName Insulation.',
+              '$tankCap LTR Capacity, $mat $pressStr Tank, $shellThick Shell, and $dishThick Dish, $insText.',
               style: const pw.TextStyle(fontSize: 7.5),
             ),
           );
@@ -1911,27 +1925,21 @@ class PdfQuotationBuilder {
     final pressStr = tank.isPressurized ? 'Pressurized' : 'Non-Pressurized';
     final mat =
         tank.innerTankMaterial.isNotEmpty ? tank.innerTankMaterial : 'GI';
-    final shellThick = tank.shellThicknessMm > 0
-        ? '${tank.shellThicknessMm}mm'
-        : (RegExp(r'\d+\s*mm', caseSensitive: false)
-                .firstMatch(tank.innerTankThickness)
-                ?.group(0) ??
-            '3mm');
-    final dishThick = tank.dishThicknessMm > 0
-        ? '${tank.dishThicknessMm}mm'
-        : (RegExp(r'\d+\s*mm', caseSensitive: false)
-                .firstMatch(tank.outerCladdingThickness)
-                ?.group(0) ??
-            '3mm');
+    final shellThick = tank.innerTankThickness.isNotEmpty
+        ? tank.innerTankThickness
+        : (tank.shellThicknessMm > 0 ? '${tank.shellThicknessMm}mm' : '3mm');
+    final dishThick = tank.outerCladdingThickness.isNotEmpty
+        ? tank.outerCladdingThickness
+        : (tank.dishThicknessMm > 0 ? '${tank.dishThicknessMm}mm' : '3mm');
     final cap = tank.capacityLitres;
 
-    final insMat = tank.insulationMaterial.isNotEmpty &&
-            tank.insulationMaterial.toLowerCase() != '19mm ic clad insulation'
-        ? (tank.insulationMaterial.toLowerCase().contains('puff') ||
-                tank.insulationMaterial.toLowerCase().contains('puf')
-            ? 'PUF'
-            : tank.insulationMaterial)
+    final rawIns = tank.insulationMaterial.isNotEmpty
+        ? tank.insulationMaterial
         : 'PUF';
+    final insMat = (rawIns.toLowerCase().contains('puff') ||
+            rawIns.toLowerCase().contains('puf'))
+        ? 'PUF'
+        : rawIns;
 
     final all10Rows = [
       ('01', 'Capacity and Thickness', '$cap ltr, $shellThick Shell, $dishThick Dish.'),
@@ -1953,6 +1961,23 @@ class PdfQuotationBuilder {
       ('09', 'Tank direction', 'Horizontal / Vertical'),
       ('10', 'Other', 'Solar Provision Additional Heat Pump Provision'),
     ];
+
+    // Dynamically calculate row heights to prevent multi-line text (e.g. insulation)
+    // from overlapping the bottom border.
+    final rowHeights = all10Rows.map((r) {
+      final specText = r.$3;
+      final len = specText.length;
+      if (len > 120) {
+        return 38.0;
+      } else if (len > 80) {
+        return 30.0;
+      } else if (len > 44) {
+        return 26.0;
+      }
+      return rowH;
+    }).toList();
+
+    final totalHeight = rowHeights.reduce((a, b) => a + b);
 
     return pw.Container(
       decoration: pw.BoxDecoration(
@@ -2025,9 +2050,10 @@ class PdfQuotationBuilder {
               pw.Column(
                 children: all10Rows.asMap().entries.map((e) {
                   final isLast = e.key == all10Rows.length - 1;
+                  final rH = rowHeights[e.key];
                   return pw.Container(
                     width: col0W,
-                    height: rowH,
+                    height: rH,
                     alignment: pw.Alignment.center,
                     decoration: pw.BoxDecoration(
                       border: pw.Border(
@@ -2049,7 +2075,7 @@ class PdfQuotationBuilder {
               // Col 1: Big merged centered block spanning all 10 rows
               pw.Container(
                 width: col1W,
-                height: all10Rows.length * rowH,
+                height: totalHeight,
                 alignment: pw.Alignment.center,
                 decoration: const pw.BoxDecoration(
                   border: pw.Border(
@@ -2078,7 +2104,8 @@ class PdfQuotationBuilder {
                         textAlign: pw.TextAlign.center),
                     pw.SizedBox(height: 1.5),
                     pw.Text(pressStr,
-                        style: const pw.TextStyle(fontSize: 7.5),
+                        style: pw.TextStyle(
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                         textAlign: pw.TextAlign.center),
                     pw.SizedBox(height: 1.5),
                     pw.Text('TANK',
@@ -2093,9 +2120,10 @@ class PdfQuotationBuilder {
               pw.Column(
                 children: all10Rows.asMap().entries.map((e) {
                   final isLast = e.key == all10Rows.length - 1;
+                  final rH = rowHeights[e.key];
                   return pw.Container(
                     width: col2W,
-                    height: rowH,
+                    height: rH,
                     alignment: pw.Alignment.centerLeft,
                     padding: const pw.EdgeInsets.symmetric(
                         horizontal: 5, vertical: 2.5),
@@ -2119,9 +2147,11 @@ class PdfQuotationBuilder {
               pw.Column(
                 children: all10Rows.asMap().entries.map((e) {
                   final isLast = e.key == all10Rows.length - 1;
+                  final rH = rowHeights[e.key];
+                  final text = e.value.$3;
                   return pw.Container(
                     width: specW,
-                    height: rowH,
+                    height: rH,
                     alignment: pw.Alignment.centerLeft,
                     padding: const pw.EdgeInsets.symmetric(
                         horizontal: 5, vertical: 2.5),
@@ -2133,8 +2163,13 @@ class PdfQuotationBuilder {
                                 color: PdfColors.black, width: 0.6),
                       ),
                     ),
-                    child: pw.Text(e.value.$3,
-                        style: const pw.TextStyle(fontSize: 7.5)),
+                    child: pw.Text(
+                      text,
+                      style: pw.TextStyle(
+                        fontSize: text.length > 80 ? 6.8 : (text.length > 44 ? 7.2 : 7.5),
+                        lineSpacing: 1.15,
+                      ),
+                    ),
                   );
                 }).toList(),
               ),

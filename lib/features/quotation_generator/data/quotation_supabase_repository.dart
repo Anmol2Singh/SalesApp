@@ -375,6 +375,9 @@ class QuotationSupabaseRepository {
         pipelineId: row['pipeline_id'] as String?,
         productId: row['product_id'] as String?,
         productName: prodName.isNotEmpty ? prodName : 'Heat Pump',
+        productSpecs: (row['product_specs'] as Map?) != null
+            ? Map<String, dynamic>.from(row['product_specs'] as Map)
+            : const {},
       );
 
       final draft = QgProposalDraft.fromDealQuotation(dealItem, settings: _cachedSettings);

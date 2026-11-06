@@ -25,6 +25,8 @@ import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../admin/providers/inventory_provider.dart';
 import '../../quotation_generator/providers/quotation_generator_providers.dart';
 import '../../quotation_generator/services/tank_spec_options_service.dart';
+import '../../quotation_generator/services/tank_item_parser.dart';
+import '../../quotation_generator/services/qg_drafts_service.dart';
 import '../../quotation_generator/ui/widgets/manage_tank_options_dialog.dart';
 import '../../quotation_generator/ui/widgets/searchable_tank_dropdown.dart';
 
@@ -2021,25 +2023,38 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
 
     // Persist Heat Pump tank specifications if applicable
     if (_isHeatPump && _hasTankItem) {
-      final insText = (_tankInsulation.toLowerCase().contains('puff') || _tankInsulation.toLowerCase().contains('puf'))
+      String tankDesc = '';
+      for (final item in _lineItems) {
+        final d = (item['description'] as TextEditingController?)?.text ?? '';
+        if (d.toLowerCase().contains('tank')) {
+          tankDesc = d;
+          break;
+        }
+      }
+      final parsedTank = TankItemParser.parse(tankDesc);
+      final mat = parsedTank.material;
+      final cap = parsedTank.capacityLitres;
+      final isPress = parsedTank.isPressurized;
+
+      final insText = (_tankInsulation.toLowerCase() == 'puff' || _tankInsulation.toLowerCase() == 'puf')
           ? 'PUF'
           : _tankInsulation;
       specs['tank_spec'] = {
-        'material': _tankMaterial,
-        'capacity': _tankCapacity,
+        'material': mat,
+        'capacity': cap,
         'shell_thickness': _tankShellThickness,
         'dish_thickness': _tankDishThickness,
         'insulation': _tankInsulation,
-        'is_pressurized': _isTankPressurized,
+        'is_pressurized': isPress,
         'specs_table': {
-          'Capacity and Thickness': '$_tankCapacity ltr, $_tankShellThickness Shell, $_tankDishThickness Dish.',
-          'Operating pressure': _isTankPressurized ? 'Up to 5 Bar' : 'Atmospheric',
-          'Testing Pressure': _isTankPressurized ? '7 bar pressure' : 'Atmospheric',
+          'Capacity and Thickness': '$cap ltr, $_tankShellThickness Shell, $_tankDishThickness Dish.',
+          'Operating pressure': isPress ? 'Up to 5 Bar' : 'Atmospheric',
+          'Testing Pressure': isPress ? '7 bar pressure' : 'Atmospheric',
           'Hot Water Inlet/ outlet': '2 Inch,',
           'Heat Pump Circulation': '1 Inch,',
           'Outer Tank Insulation': insText,
           'Temperature drop': '3° C / 8 hour',
-          'Inner and outer Tank': _tankMaterial,
+          'Inner and outer Tank': mat,
           'Tank direction': 'Horizontal / Vertical',
           'Other': 'Solar Provision Additional Heat Pump Provision',
         },
@@ -2249,6 +2264,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     }
 
     ref.invalidate(dealQuotationsProvider);
+    if (quotationId != null) {
+      try {
+        await QgDraftsService.deleteDraft(quotationId);
+      } catch (_) {}
+    }
     return quotationId;
   }
 
@@ -2599,7 +2619,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             if (_isHeatPump && _hasTankItem) ...[
               _SectionHeader('Hot Water Storage Tank Specifications'),
               const SizedBox(height: 12),
-              _buildTankSpecsCard(enabled),
+              _buildTankSpecsCard(enabled, canManage: false),
               const SizedBox(height: 20),
             ],
 
@@ -3913,6 +3933,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     }
   }
 
+  void _syncTankSpecsToLineItems() {
+    // Intentionally no-op: line item description remains as entered by user or selected from catalog
+    // Tank properties (material, capacity, pressurization) are parsed dynamically from the item description.
+  }
+
   Future<void> _openManageTankOptions({
     required String category,
     required String title,
@@ -3948,6 +3973,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     required String category,
     required ValueChanged<String> onChanged,
     required bool enabled,
+    bool canManage = false,
   }) {
     return SearchableTankDropdown(
       label: label,
@@ -3955,6 +3981,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       options: options,
       category: category,
       enabled: enabled,
+      canManage: canManage,
       onChanged: onChanged,
       onOptionsChanged: (updated) {
         if (mounted) {
@@ -3974,7 +4001,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     );
   }
 
-  Widget _buildTankSpecsCard(bool enabled) {
+  Widget _buildTankSpecsCard(bool enabled, {bool canManage = false}) {
     _syncTankCapacityFromLineItems();
     return Container(
       padding: const EdgeInsets.all(16),
@@ -4005,38 +4032,15 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             children: [
               Expanded(
                 child: _buildTankDropdown(
-                  label: 'Tank Material',
-                  value: _tankMaterial,
-                  options: _materialOptions,
-                  category: TankSpecOptionsService.categoryMaterial,
-                  onChanged: (val) => setState(() => _tankMaterial = val),
-                  enabled: enabled,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildTankDropdown(
-                  label: 'Insulation Type',
-                  value: _tankInsulation,
-                  options: _insulationOptions,
-                  category: TankSpecOptionsService.categoryInsulation,
-                  onChanged: (val) => setState(() => _tankInsulation = val),
-                  enabled: enabled,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTankDropdown(
                   label: 'Shell Thickness',
                   value: _tankShellThickness,
                   options: _shellThicknessOptions,
                   category: TankSpecOptionsService.categoryShellThickness,
-                  onChanged: (val) => setState(() => _tankShellThickness = val),
+                  onChanged: (val) {
+                    setState(() => _tankShellThickness = val);
+                  },
                   enabled: enabled,
+                  canManage: canManage,
                 ),
               ),
               const SizedBox(width: 12),
@@ -4046,8 +4050,11 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                   value: _tankDishThickness,
                   options: _dishThicknessOptions,
                   category: TankSpecOptionsService.categoryDishThickness,
-                  onChanged: (val) => setState(() => _tankDishThickness = val),
+                  onChanged: (val) {
+                    setState(() => _tankDishThickness = val);
+                  },
                   enabled: enabled,
+                  canManage: canManage,
                 ),
               ),
             ],
@@ -4056,36 +4063,16 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           Row(
             children: [
               Expanded(
-                child: TextFormField(
-                  controller: _tankCapacityController,
-                  enabled: enabled,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Tank Capacity (Litres)',
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
+                child: _buildTankDropdown(
+                  label: 'Insulation Type',
+                  value: _tankInsulation,
+                  options: _insulationOptions,
+                  category: TankSpecOptionsService.categoryInsulation,
                   onChanged: (val) {
-                    final cap = int.tryParse(val);
-                    if (cap != null && cap > 0) {
-                      _tankCapacity = cap;
-                    }
+                    setState(() => _tankInsulation = val);
                   },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SwitchListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    _isTankPressurized ? 'Pressurized (Up to 5 Bar)' : 'Non-Pressurized (Atmospheric)',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  value: _isTankPressurized,
-                  onChanged: enabled
-                      ? (val) => setState(() => _isTankPressurized = val)
-                      : null,
+                  enabled: enabled,
+                  canManage: canManage,
                 ),
               ),
             ],

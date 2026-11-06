@@ -6,6 +6,11 @@ import '../theme/pm_tokens.dart';
 import '../../providers/pm_providers.dart';
 import '../../providers/pm_company_provider.dart';
 import '../../data/models/pm_ledger_entry.dart';
+import '../../data/models/pm_payment_term.dart';
+import '../../data/models/pm_expense.dart';
+import '../../data/models/pm_calling_record.dart';
+import '../../data/models/pm_checklist_item.dart';
+import '../../data/models/pm_work_remark.dart';
 import '../../data/services/pm_pdf_service.dart';
 import '../../data/services/pm_excel_service.dart';
 import '../../../../core/widgets/pdf_preview_screen.dart';
@@ -193,12 +198,42 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                 // Export PDF
                 InkWell(
                   onTap: () async {
+                    List<PmPaymentTerm> paymentTerms = [];
+                    List<PmExpense> expenses = [];
+                    List<PmCallingRecord> callingRecords = [];
+                    List<PmChecklistItem> checklistItems = [];
+                    List<PmWorkRemark> workRemarks = [];
+
+                    try {
+                      if (!widget.isPurchase) {
+                        final results = await Future.wait([
+                          ref.read(pmPaymentTermsProvider(widget.recordId).future).catchError((_) => <PmPaymentTerm>[]),
+                          ref.read(pmExpensesProvider(widget.recordId).future).catchError((_) => <PmExpense>[]),
+                          ref.read(pmCallingRecordsProvider((id: widget.recordId, isPurchase: widget.isPurchase)).future).catchError((_) => <PmCallingRecord>[]),
+                          ref.read(pmChecklistItemsProvider(widget.recordId).future).catchError((_) => <PmChecklistItem>[]),
+                          ref.read(pmWorkRemarksProvider(widget.recordId).future).catchError((_) => <PmWorkRemark>[]),
+                        ]);
+                        paymentTerms = results[0] as List<PmPaymentTerm>;
+                        expenses = results[1] as List<PmExpense>;
+                        callingRecords = results[2] as List<PmCallingRecord>;
+                        checklistItems = results[3] as List<PmChecklistItem>;
+                        workRemarks = results[4] as List<PmWorkRemark>;
+                      } else {
+                        callingRecords = await ref.read(pmCallingRecordsProvider((id: widget.recordId, isPurchase: widget.isPurchase)).future).catchError((_) => <PmCallingRecord>[]);
+                      }
+                    } catch (_) {}
+
                     final pdfBytes =
                         await PmPdfService.generateProjectLedgerPdf(
                       project: widget.project,
                       entries: entries,
                       companyName: activeCompany.name,
                       isPurchase: widget.isPurchase,
+                      paymentTerms: paymentTerms,
+                      expenses: expenses,
+                      callingRecords: callingRecords,
+                      checklistItems: checklistItems,
+                      workRemarks: workRemarks,
                     );
                     if (!context.mounted) return;
                     Navigator.of(context).push(
@@ -946,13 +981,8 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                                     final index = mapEntry.key;
                                     final e = mapEntry.value;
                                     final sr = index + 1;
-                                    final isReceipt = (e.particulars ?? '')
-                                            .toLowerCase()
-                                            .contains('advance') ||
-                                        (e.particulars ?? '')
-                                            .toLowerCase()
-                                            .contains('receipt') ||
-                                        e.paymentReceived > 0;
+                                    final hasBill = e.billSubmitted;
+                                    final hasReceipt = e.paymentReceipt;
 
                                     return DataRow(
                                       cells: [
@@ -1001,29 +1031,39 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                                             ),
                                           ),
                                         ),
-                                        // BILL Status (Pill badge: PENDING or RECEIPT)
+                                        // BILL Status (Pill badge: PENDING, BILL SUBMITTED, RECEIPT, or BILL & RECEIPT)
                                         DataCell(
                                           Container(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 10, vertical: 3),
                                             decoration: BoxDecoration(
-                                              color: isReceipt
+                                              color: hasReceipt && hasBill
                                                   ? const Color(0xFF0284C7)
-                                                  : const Color(0xFFF1F5F9),
+                                                  : (hasBill
+                                                      ? const Color(0xFF00875A)
+                                                      : (hasReceipt
+                                                          ? const Color(0xFF0284C7)
+                                                          : const Color(0xFFF1F5F9))),
                                               borderRadius:
                                                   BorderRadius.circular(9999),
-                                              border: isReceipt
+                                              border: (hasBill || hasReceipt)
                                                   ? null
                                                   : Border.all(
                                                       color: const Color(
                                                           0xFFCBD5E1)),
                                             ),
                                             child: Text(
-                                              isReceipt ? 'RECEIPT' : 'PENDING',
+                                              hasReceipt && hasBill
+                                                  ? 'BILL & RECEIPT'
+                                                  : (hasBill
+                                                      ? 'BILL SUBMITTED'
+                                                      : (hasReceipt
+                                                          ? 'RECEIPT'
+                                                          : 'PENDING')),
                                               style: TextStyle(
                                                 fontSize: 9.5,
                                                 fontWeight: FontWeight.w800,
-                                                color: isReceipt
+                                                color: (hasBill || hasReceipt)
                                                     ? Colors.white
                                                     : const Color(0xFF64748B),
                                               ),
@@ -1276,7 +1316,7 @@ class _AddEditLedgerModal extends ConsumerStatefulWidget {
   final PmLedgerEntry? entry;
   final int nextSrNo;
   final bool isPurchase;
-  final VoidCallback onSaved;
+  final Future<void> Function() onSaved;
 
   const _AddEditLedgerModal({
     required this.recordId,
@@ -1339,7 +1379,6 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
       _particulars = widget.entry!.particulars ?? 'Bill';
       if (!_defaultParticularsOptions.contains(_particulars)) {
         _particularsCustomCtrl.text = _particulars;
-        _particulars = 'Other';
       }
       _refNoCtrl.text = widget.entry!.referenceNumber ?? '';
       _invNoCtrl.text = widget.entry!.invoiceNo ?? '';
@@ -1359,11 +1398,11 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
           ? widget.entry!.paymentReceived.toStringAsFixed(0)
           : '';
       _billSubmitted = widget.isPurchase
-          ? widget.entry!.billReceived
+          ? (widget.entry!.billReceived || widget.entry!.billSubmitted)
           : widget.entry!.billSubmitted;
       _paymentReceipt = widget.isPurchase
-          ? widget.entry!.paymentBill
-          : (widget.entry!.paymentReceipt || widget.entry!.paymentReceived > 0);
+          ? (widget.entry!.paymentBill || widget.entry!.paymentReceipt)
+          : widget.entry!.paymentReceipt;
     }
   }
 
@@ -1386,7 +1425,9 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
 
     try {
       final actualParticulars = _particulars == 'Other'
-          ? _particularsCustomCtrl.text.trim()
+          ? (_particularsCustomCtrl.text.trim().isNotEmpty
+              ? _particularsCustomCtrl.text.trim()
+              : 'Other')
           : _particulars;
 
       final data = {
@@ -1401,19 +1442,19 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
             actualParticulars.isNotEmpty ? actualParticulars : 'Bill',
         'reference_number': _refNoCtrl.text.trim(),
         'invoice_no': _invNoCtrl.text.trim(),
-        'sales_m_value': double.tryParse(_salesMCtrl.text) ?? 0.0,
-        'm_outward_value': double.tryParse(_mOutwardCtrl.text) ?? 0.0,
-        'order_value': double.tryParse(_orderValueCtrl.text) ?? 0.0,
-        'extra_work_value': double.tryParse(_extraWorkCtrl.text) ?? 0.0,
-        'payment_received': double.tryParse(_paymentRecdCtrl.text) ?? 0.0,
-        if (widget.isPurchase)
+        if (!widget.isPurchase) ...{
+          'sales_m_value': double.tryParse(_salesMCtrl.text) ?? 0.0,
+          'm_outward_value': double.tryParse(_mOutwardCtrl.text) ?? 0.0,
+          'order_value': double.tryParse(_orderValueCtrl.text) ?? 0.0,
+          'extra_work_value': double.tryParse(_extraWorkCtrl.text) ?? 0.0,
+          'payment_received': double.tryParse(_paymentRecdCtrl.text) ?? 0.0,
+          'bill_submitted': _billSubmitted,
+          'payment_receipt': _paymentReceipt,
+        } else ...{
           'quotation_value': double.tryParse(_orderValueCtrl.text) ?? 0.0,
-        if (widget.isPurchase)
           'payment_paid': double.tryParse(_paymentRecdCtrl.text) ?? 0.0,
-        if (widget.isPurchase) ...{
           'bill_received': _billSubmitted,
           'payment_bill': _paymentReceipt,
-        } else ...{
           'bill_submitted': _billSubmitted,
           'payment_receipt': _paymentReceipt,
         },
@@ -1427,7 +1468,11 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
         await repo.addLedgerEntry(data, isPurchase: widget.isPurchase);
       }
 
-      widget.onSaved();
+      ref.invalidate(pmLedgerEntriesProvider(
+          (id: widget.recordId, isPurchase: widget.isPurchase)));
+
+      await widget.onSaved();
+
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -1492,29 +1537,37 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
         ref.watch(pmDropdownOptionsProvider('particulars'));
 
     final typesFromDb = paymentTypesAsync.valueOrNull ?? [];
-    final currentTypes = typesFromDb.isNotEmpty ? typesFromDb : _defaultTypes;
+    final currentTypes = {
+      ..._defaultTypes,
+      ...typesFromDb,
+    }.toList();
     if (!currentTypes.contains(_paymentType) && currentTypes.isNotEmpty) {
       _paymentType = currentTypes.first;
     }
 
     final particularsFromDb = particularsAsync.valueOrNull ?? [];
-    final currentParticulars = particularsFromDb.isNotEmpty
-        ? (particularsFromDb.contains('Other')
-            ? particularsFromDb
-            : [...particularsFromDb, 'Other'])
-        : _defaultParticularsOptions;
-    if (!currentParticulars.contains(_particulars) &&
-        currentParticulars.isNotEmpty) {
-      _particulars = currentParticulars.first;
+    final currentParticulars = {
+      ..._defaultParticularsOptions,
+      ...particularsFromDb,
+    }.toList();
+    if (!currentParticulars.contains('Other')) {
+      currentParticulars.add('Other');
+    }
+    if (!currentParticulars.contains(_particulars)) {
+      if (_particularsCustomCtrl.text.isEmpty && _particulars != 'Other') {
+        _particularsCustomCtrl.text = _particulars;
+      }
+      _particulars = 'Other';
     }
 
     return Dialog(
       backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
             child: SingleChildScrollView(
@@ -1606,15 +1659,19 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Payment Type',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0F172A))),
+                                const Flexible(
+                                  child: Text('Payment Type',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF0F172A)),
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                                const SizedBox(width: 4),
                                 InkWell(
                                   onTap: () => _openEditDropdown(
                                       'payment_type', 'Payment Types'),
-                                  child: const Text('Edit Dropdown List',
+                                  child: const Text('Edit List',
                                       style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
@@ -1710,15 +1767,19 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Particulars',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0F172A))),
+                          const Flexible(
+                            child: Text('Particulars',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A)),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          const SizedBox(width: 4),
                           InkWell(
                             onTap: () =>
                                 _openEditDropdown('particulars', 'Particulars'),
-                            child: const Text('Edit Dropdown List',
+                            child: const Text('Edit List',
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
@@ -1746,7 +1807,12 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                                 .toList(),
                             onChanged: (val) {
                               if (val != null) {
-                                setState(() => _particulars = val);
+                                setState(() {
+                                  _particulars = val;
+                                  if (val != 'Other') {
+                                    _particularsCustomCtrl.clear();
+                                  }
+                                });
                               }
                             },
                           ),
@@ -1768,50 +1834,64 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                   const SizedBox(height: 14),
 
                   // Checkboxes: Bill Submitted / Bill Received & Payment Receipt / Payment Bill
-                  Row(
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Checkbox(
-                            value: _billSubmitted,
-                            activeColor: const Color(0xFF005CE6),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4)),
-                            onChanged: (val) =>
-                                setState(() => _billSubmitted = val ?? false),
-                          ),
-                          Text(
-                              widget.isPurchase
-                                  ? 'Bill Received'
-                                  : 'Bill Submitted',
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF0F172A))),
-                        ],
+                      InkWell(
+                        onTap: () =>
+                            setState(() => _billSubmitted = !_billSubmitted),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: _billSubmitted,
+                              activeColor: const Color(0xFF005CE6),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4)),
+                              onChanged: (val) =>
+                                  setState(() => _billSubmitted = val ?? false),
+                            ),
+                            Text(
+                                widget.isPurchase
+                                    ? 'Bill Received'
+                                    : 'Bill Submitted',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F172A))),
+                            const SizedBox(width: 4),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 20),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Checkbox(
-                            value: _paymentReceipt,
-                            activeColor: const Color(0xFF005CE6),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4)),
-                            onChanged: (val) =>
-                                setState(() => _paymentReceipt = val ?? false),
-                          ),
-                          Text(
-                              widget.isPurchase
-                                  ? 'Payment Bill'
-                                  : 'Payment Receipt',
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF0F172A))),
-                        ],
+                      InkWell(
+                        onTap: () =>
+                            setState(() => _paymentReceipt = !_paymentReceipt),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: _paymentReceipt,
+                              activeColor: const Color(0xFF005CE6),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4)),
+                              onChanged: (val) =>
+                                  setState(() => _paymentReceipt = val ?? false),
+                            ),
+                            Text(
+                                widget.isPurchase
+                                    ? 'Payment Bill'
+                                    : 'Payment Receipt',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F172A))),
+                            const SizedBox(width: 4),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1940,8 +2020,10 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text('Order Value',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      fontSize: 12.5,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: Color(0xFF475569))),
                               const SizedBox(height: 6),
@@ -1955,14 +2037,16 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Extra Work Value',
+                              const Text('Extra Work',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      fontSize: 12.5,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: Color(0xFF475569))),
                               const SizedBox(height: 6),
@@ -1976,14 +2060,16 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Payment Received',
+                              const Text('Payment Recd',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      fontSize: 12.5,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: Color(0xFF475569))),
                               const SizedBox(height: 6),
@@ -2548,13 +2634,8 @@ class _FullScreenLedgerDialog extends ConsumerWidget {
                             final index = mapEntry.key;
                             final e = mapEntry.value;
                             final sr = index + 1;
-                            final isReceipt = (e.particulars ?? '')
-                                    .toLowerCase()
-                                    .contains('advance') ||
-                                (e.particulars ?? '')
-                                    .toLowerCase()
-                                    .contains('receipt') ||
-                                e.paymentReceived > 0;
+                            final hasBill = e.billSubmitted;
+                            final hasReceipt = e.paymentReceipt;
 
                             return DataRow(
                               cells: [
@@ -2604,21 +2685,31 @@ class _FullScreenLedgerDialog extends ConsumerWidget {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: isReceipt
+                                      color: hasReceipt && hasBill
                                           ? const Color(0xFF0284C7)
-                                          : const Color(0xFFF1F5F9),
+                                          : (hasBill
+                                              ? const Color(0xFF00875A)
+                                              : (hasReceipt
+                                                  ? const Color(0xFF0284C7)
+                                                  : const Color(0xFFF1F5F9))),
                                       borderRadius: BorderRadius.circular(9999),
-                                      border: isReceipt
+                                      border: (hasBill || hasReceipt)
                                           ? null
                                           : Border.all(
                                               color: const Color(0xFFCBD5E1)),
                                     ),
                                     child: Text(
-                                      isReceipt ? 'RECEIPT' : 'PENDING',
+                                      hasReceipt && hasBill
+                                          ? 'BILL & RECEIPT'
+                                          : (hasBill
+                                              ? 'BILL SUBMITTED'
+                                              : (hasReceipt
+                                                  ? 'RECEIPT'
+                                                  : 'PENDING')),
                                       style: TextStyle(
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.w800,
-                                        color: isReceipt
+                                        color: (hasBill || hasReceipt)
                                             ? Colors.white
                                             : const Color(0xFF64748B),
                                       ),

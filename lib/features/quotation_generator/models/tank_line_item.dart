@@ -17,6 +17,7 @@ class TankLineItem {
   final bool isWifiEnabled;
   final String? extraNote; // e.g. "Extra", "(Sr.No 01 Included with it)"
   final bool isIncludedInHp; // If true, rate shows 'Included'
+  final String? _explicitInsulationMaterial;
 
   const TankLineItem({
     required this.id,
@@ -42,13 +43,35 @@ class TankLineItem {
   })  : material = innerTankMaterial ?? material ?? outerCladdingMaterial ?? 'GI',
         shellThicknessMm = shellThicknessMm ?? (innerTankThickness != null ? 3 : 3),
         dishThicknessMm = dishThicknessMm ?? (outerCladdingThickness != null ? 3 : 3),
-        insulation = insulation ?? (insulationMaterial != null ? '$insulationThickness $insulationMaterial' : '50 mm with Puff Insulation');
+        _explicitInsulationMaterial = insulationMaterial,
+        insulation = insulation ??
+            (insulationMaterial != null
+                ? (insulationMaterial == 'Puff' || insulationMaterial == 'PUF'
+                    ? '50 mm with PUF Insulation'
+                    : (insulationMaterial == 'Rockwool'
+                        ? '50 mm with Rockwool Insulation'
+                        : '50 mm with $insulationMaterial Insulation'))
+                : '50 mm with PUF Insulation');
 
   String get innerTankMaterial => material;
   String get innerTankThickness => '${shellThicknessMm}mm';
   String get outerCladdingThickness => '${dishThicknessMm}mm';
   String get outerCladdingMaterial => material;
-  String get insulationMaterial => insulation.contains('Rockwool') ? 'Rockwool' : 'PUF';
+  String get insulationMaterial {
+    if (_explicitInsulationMaterial != null && _explicitInsulationMaterial!.isNotEmpty) {
+      final m = _explicitInsulationMaterial!;
+      if (m.toLowerCase().contains('puff') || m.toLowerCase().contains('puf')) return 'PUF';
+      return m;
+    }
+    final lower = insulation.toLowerCase();
+    if (lower.contains('puff') || lower.contains('puf')) return 'PUF';
+    if (lower.contains('rockwool')) return 'Rockwool';
+    final cleaned = insulation
+        .replaceAll(RegExp(r'^\s*50\s*mm\s*with\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*Insulation\s*$', caseSensitive: false), '')
+        .trim();
+    return cleaned.isNotEmpty ? cleaned : 'PUF';
+  }
   String get insulationThickness => '50mm';
 
   /// Generates clean description without stray commas or empty parentheses

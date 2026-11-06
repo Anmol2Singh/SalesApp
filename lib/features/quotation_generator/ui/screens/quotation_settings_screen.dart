@@ -15,6 +15,8 @@ import '../../models/heat_pump_model.dart';
 import '../../models/pool_heat_pump_model.dart';
 import '../../providers/quotation_generator_providers.dart';
 import '../../services/quotation_storage_service.dart';
+import '../../services/tank_spec_options_service.dart';
+import '../widgets/manage_tank_options_dialog.dart';
 import '../../../admin/screens/noc_certificate_settings_screen.dart';
 
 enum HpTypeCategory {
@@ -97,12 +99,20 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
   final _poolDescCtrl = TextEditingController();
   final List<SpecRowController> _poolSpecs = [];
 
+  // Hot Water Storage Tank Specifications Lists
+  List<String> _shellThicknessOptions = [];
+  List<String> _dishThicknessOptions = [];
+  List<String> _insulationOptions = [];
+  List<String> _materialOptions = [];
+  bool _isLoadingTankOptions = false;
+
   bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: kQgNocEnabled ? 4 : 3, vsync: this);
+    _loadTankOptions();
   }
 
   @override
@@ -335,6 +345,49 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✓ Quotation Defaults saved!'), backgroundColor: AppColors.success),
       );
+    }
+  }
+
+  Future<void> _loadTankOptions() async {
+    setState(() => _isLoadingTankOptions = true);
+    try {
+      final shell = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryShellThickness);
+      final dish = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryDishThickness);
+      final ins = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryInsulation);
+      final mat = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryMaterial);
+      if (mounted) {
+        setState(() {
+          _shellThicknessOptions = shell;
+          _dishThicknessOptions = dish;
+          _insulationOptions = ins;
+          _materialOptions = mat;
+          _isLoadingTankOptions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingTankOptions = false);
+    }
+  }
+
+  Future<void> _openManageCategory(String category, String title) async {
+    final updated = await ManageTankOptionsDialog.show(
+      context,
+      category: category,
+      title: title,
+      currentSelected: '',
+    );
+    if (updated != null && mounted) {
+      setState(() {
+        if (category == TankSpecOptionsService.categoryShellThickness) {
+          _shellThicknessOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryDishThickness) {
+          _dishThicknessOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryInsulation) {
+          _insulationOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryMaterial) {
+          _materialOptions = updated;
+        }
+      });
     }
   }
 
@@ -2467,8 +2520,198 @@ class _QuotationSettingsScreenState extends ConsumerState<QuotationSettingsScree
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
+        const SizedBox(height: 28),
+        const Divider(height: 36),
+
+        Row(
+          children: [
+            const Icon(Icons.water_drop_outlined, color: AppColors.primary, size: 22),
+            const SizedBox(width: 8),
+            const Text(
+              'Hot Water Storage Tank Specification Lists',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const Spacer(),
+            if (_isLoadingTankOptions)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Manage dropdown options for storage tank specifications (Shell, Dish, Insulation, Material) available during Quotation creation.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 16),
+
+        _buildTankSpecCategoryCard(
+          title: 'Shell Thickness',
+          category: TankSpecOptionsService.categoryShellThickness,
+          options: _shellThicknessOptions,
+          icon: Icons.line_weight_rounded,
+        ),
+        _buildTankSpecCategoryCard(
+          title: 'Dish Thickness',
+          category: TankSpecOptionsService.categoryDishThickness,
+          options: _dishThicknessOptions,
+          icon: Icons.layers_outlined,
+        ),
+        _buildTankSpecCategoryCard(
+          title: 'Insulation Type',
+          category: TankSpecOptionsService.categoryInsulation,
+          options: _insulationOptions,
+          icon: Icons.shield_outlined,
+        ),
+        _buildTankSpecCategoryCard(
+          title: 'Tank Material',
+          category: TankSpecOptionsService.categoryMaterial,
+          options: _materialOptions,
+          icon: Icons.architecture_rounded,
+        ),
         const SizedBox(height: 32),
       ],
+    );
+  }
+
+  Widget _buildTankSpecCategoryCard({
+    required String title,
+    required String category,
+    required List<String> options,
+    required IconData icon,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${options.length} configured option${options.length == 1 ? '' : 's'}',
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.tune_rounded, size: 16),
+                label: const Text('Manage List', style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => _openManageCategory(category, title),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (options.isEmpty)
+            const Text(
+              'No options configured yet. Tap "Manage List" to add.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: options.map((opt) {
+                return Chip(
+                  label: Text(
+                    opt,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  deleteIcon: const Icon(Icons.close_rounded, size: 14),
+                  deleteIconColor: AppColors.textSecondary,
+                  onDeleted: () async {
+                    if (options.length <= 1) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('At least one option must remain in the list.')),
+                      );
+                      return;
+                    }
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Delete Option?'),
+                        content: Text('Remove "$opt" from $title options?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      final updated = await TankSpecOptionsService.deleteOption(category, opt);
+                      if (mounted) {
+                        setState(() {
+                          if (category == TankSpecOptionsService.categoryShellThickness) {
+                            _shellThicknessOptions = updated;
+                          } else if (category == TankSpecOptionsService.categoryDishThickness) {
+                            _dishThicknessOptions = updated;
+                          } else if (category == TankSpecOptionsService.categoryInsulation) {
+                            _insulationOptions = updated;
+                          } else if (category == TankSpecOptionsService.categoryMaterial) {
+                            _materialOptions = updated;
+                          }
+                        });
+                      }
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+        ],
+      ),
     );
   }
 

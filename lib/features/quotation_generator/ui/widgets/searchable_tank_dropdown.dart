@@ -23,6 +23,7 @@ class SearchableTankDropdown extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final ValueChanged<List<String>>? onOptionsChanged;
   final bool enabled;
+  final bool canManage;
 
   const SearchableTankDropdown({
     super.key,
@@ -33,6 +34,7 @@ class SearchableTankDropdown extends StatelessWidget {
     required this.onChanged,
     this.onOptionsChanged,
     this.enabled = true,
+    this.canManage = false,
   });
 
   Future<void> _openSearchPicker(BuildContext context) async {
@@ -46,6 +48,7 @@ class SearchableTankDropdown extends StatelessWidget {
         currentSelected: value,
         options: options,
         category: category,
+        canManage: canManage,
         onSelected: (val) {
           onChanged(val);
         },
@@ -55,7 +58,7 @@ class SearchableTankDropdown extends StatelessWidget {
   }
 
   Future<void> _openManageDialog(BuildContext context) async {
-    if (!enabled) return;
+    if (!enabled || !canManage) return;
 
     final updated = await ManageTankOptionsDialog.show(
       context,
@@ -90,7 +93,7 @@ class SearchableTankDropdown extends StatelessWidget {
           suffixIcon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (enabled)
+              if (enabled && canManage)
                 IconButton(
                   icon: const Icon(Icons.tune_rounded, size: 18, color: AppColors.primary),
                   tooltip: 'Manage $label list',
@@ -123,6 +126,7 @@ class _SearchPickerContent extends StatefulWidget {
   final String currentSelected;
   final List<String> options;
   final String category;
+  final bool canManage;
   final ValueChanged<String> onSelected;
   final ValueChanged<List<String>>? onOptionsChanged;
 
@@ -131,6 +135,7 @@ class _SearchPickerContent extends StatefulWidget {
     required this.currentSelected,
     required this.options,
     required this.category,
+    this.canManage = false,
     required this.onSelected,
     this.onOptionsChanged,
   });
@@ -309,7 +314,7 @@ class _SearchPickerContentState extends State<_SearchPickerContent> {
                   if (filtered.isNotEmpty) {
                     widget.onSelected(filtered.first);
                     Navigator.of(context).pop(filtered.first);
-                  } else if (val.trim().isNotEmpty && !isExactMatch) {
+                  } else if (val.trim().isNotEmpty && !isExactMatch && widget.canManage) {
                     _quickAdd(val);
                   }
                 },
@@ -332,7 +337,7 @@ class _SearchPickerContentState extends State<_SearchPickerContent> {
                               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
                               textAlign: TextAlign.center,
                             ),
-                            if (query.isNotEmpty && !isExactMatch) ...[
+                            if (query.isNotEmpty && !isExactMatch && widget.canManage) ...[
                               const SizedBox(height: 16),
                               ElevatedButton.icon(
                                 icon: _isAdding
@@ -408,21 +413,22 @@ class _SearchPickerContentState extends State<_SearchPickerContent> {
                     '${_currentOptions.length} option${_currentOptions.length == 1 ? '' : 's'}',
                     style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.tune_rounded, size: 16, color: AppColors.primary),
-                    label: Text(
-                      'Manage ${widget.label} list',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+                  if (widget.canManage)
+                    TextButton.icon(
+                      icon: const Icon(Icons.tune_rounded, size: 16, color: AppColors.primary),
+                      label: Text(
+                        'Manage ${widget.label} list',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
                       ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      ),
+                      onPressed: _openManageDialog,
                     ),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    ),
-                    onPressed: _openManageDialog,
-                  ),
                 ],
               ),
             ),

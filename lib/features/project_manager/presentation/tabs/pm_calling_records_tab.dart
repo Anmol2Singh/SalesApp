@@ -36,14 +36,27 @@ class PmCallingRecordsTab extends ConsumerWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text('Call & Follow-up Logs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pm.foreground)),
-                    const SizedBox(width: 8),
-                    PmBadge(label: '${records.length} Logs', variant: PmBadgeVariant.secondary),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Call & Follow-up Logs',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: pm.foreground),
+                      ),
+                      const SizedBox(height: 4),
+                      PmBadge(
+                          label: '${records.length} Logs',
+                          variant: PmBadgeVariant.secondary),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 PmButton(
                   size: PmButtonSize.sm,
                   onPressed: () => _showAddEditModal(context, ref),

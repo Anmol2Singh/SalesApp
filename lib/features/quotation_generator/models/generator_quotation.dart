@@ -261,7 +261,7 @@ class GeneratorQuotation {
           innerTankMaterial: tankSpec.innerTankMaterial.isNotEmpty ? tankSpec.innerTankMaterial : 'GI',
           innerTankThickness: tankSpec.innerTankThickness.isNotEmpty ? tankSpec.innerTankThickness : '3mm',
           outerCladdingMaterial: 'Galvanized Painted',
-          insulationMaterial: 'PUF',
+          insulationMaterial: tankSpec.insulationMaterial,
         ),
       ];
     }
