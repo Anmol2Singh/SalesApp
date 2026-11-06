@@ -3,6 +3,8 @@
 class TankSpec {
   final int capacityLitres;
   final bool isPressurized;
+  final int shellThicknessMm;
+  final int dishThicknessMm;
   final String capacityAndThickness;
   final String operatingPressure;
   final String testingPressure;
@@ -17,7 +19,9 @@ class TankSpec {
   const TankSpec({
     this.capacityLitres = 500,
     this.isPressurized = true,
-    this.capacityAndThickness = '500 ltr, 3mm Shell, 3mm Dish.',
+    this.shellThicknessMm = 3,
+    this.dishThicknessMm = 3,
+    String? capacityAndThickness,
     this.operatingPressure = 'Up to 5 Bar',
     this.testingPressure = '7 bar pressure',
     this.hotWaterInletOutlet = '2 Inch,',
@@ -27,19 +31,19 @@ class TankSpec {
     this.innerAndOuterTank = 'GI',
     this.tankDirection = 'Horizontal / Vertical',
     this.other = 'Solar Provision Additional Heat Pump Provision',
-  });
+  }) : capacityAndThickness = capacityAndThickness ?? '$capacityLitres ltr, ${shellThicknessMm}mm Shell, ${dishThicknessMm}mm Dish.';
 
   String get innerTankMaterial => innerAndOuterTank.isNotEmpty ? innerAndOuterTank : 'GI';
-  String get innerTankThickness => '3mm';
+  String get innerTankThickness => '${shellThicknessMm}mm';
   String get outerCladdingMaterial => innerAndOuterTank.isNotEmpty ? innerAndOuterTank : 'GI';
-  String get outerCladdingThickness => '3mm';
+  String get outerCladdingThickness => '${dishThicknessMm}mm';
   String get insulationMaterial => outerTankInsulation.contains('Puff') || outerTankInsulation.contains('PUF') ? 'PUF' : 'Rockwool';
 
   String get tankTitle =>
       '$capacityLitres Ltr HOT WATER STORAGE $innerTankMaterial ${isPressurized ? "Pressurized" : "Non-Pressurized"} TANK';
 
   String get priceRowDescription =>
-      '$capacityLitres LTR Capacity, $innerTankMaterial ${isPressurized ? "Pressurized" : "Non-Pressurized"} Tank, 3mm Shell, and 3mm Dish Thickness, 50 mm with Puff Insulation.';
+      '$capacityLitres LTR Capacity, $innerTankMaterial ${isPressurized ? "Pressurized" : "Non-Pressurized"} Tank, ${shellThicknessMm}mm Shell, and ${dishThicknessMm}mm Dish Thickness, 50 mm with Puff Insulation.';
 
   static String generateSubjectLine({
     double? hpKw,
@@ -86,15 +90,20 @@ class TankSpec {
   }
 
   factory TankSpec.fromJson(Map<String, dynamic> json) {
+    final cap = (json['capacityLitres'] as num? ?? 500).toInt();
+    final shell = (json['shellThicknessMm'] as num? ?? 3).toInt();
+    final dish = (json['dishThicknessMm'] as num? ?? 3).toInt();
     return TankSpec(
-      capacityLitres: (json['capacityLitres'] as num? ?? 500).toInt(),
+      capacityLitres: cap,
       isPressurized: json['isPressurized'] as bool? ?? true,
-      capacityAndThickness: json['capacityAndThickness'] as String? ?? '500 ltr, 3mm Shell, 3mm Dish.',
+      shellThicknessMm: shell,
+      dishThicknessMm: dish,
+      capacityAndThickness: json['capacityAndThickness'] as String? ?? '$cap ltr, ${shell}mm Shell, ${dish}mm Dish.',
       operatingPressure: json['operatingPressure'] as String? ?? 'Up to 5 Bar',
       testingPressure: json['testingPressure'] as String? ?? '7 bar pressure',
       hotWaterInletOutlet: json['hotWaterInletOutlet'] as String? ?? '2 Inch,',
       heatPumpCirculation: json['heatPumpCirculation'] as String? ?? '1 Inch,',
-      outerTankInsulation: json['outerTankInsulation'] as String? ?? '50 mm with Puff Insulation',
+      outerTankInsulation: json['outerTankInsulation'] as String? ?? 'PUF',
       temperatureDrop: json['temperatureDrop'] as String? ?? '3° C / 8 hour',
       innerAndOuterTank: json['innerAndOuterTank'] as String? ?? 'GI',
       tankDirection: json['tankDirection'] as String? ?? 'Horizontal / Vertical',
@@ -105,6 +114,8 @@ class TankSpec {
   Map<String, dynamic> toJson() => {
     'capacityLitres': capacityLitres,
     'isPressurized': isPressurized,
+    'shellThicknessMm': shellThicknessMm,
+    'dishThicknessMm': dishThicknessMm,
     'capacityAndThickness': capacityAndThickness,
     'operatingPressure': operatingPressure,
     'testingPressure': testingPressure,

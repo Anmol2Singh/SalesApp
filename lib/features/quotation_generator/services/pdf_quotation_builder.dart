@@ -1528,14 +1528,15 @@ class PdfQuotationBuilder {
           final isPress =
               r.metadata?['isPressurized'] as bool? ?? q.isTankPressurized;
           final pressStr = isPress ? 'Pressurized' : 'Non-Pressurized';
-          final shellThick =
-              (mat == 'Enamel') ? '2mm' : (mat == 'MS' ? '5mm' : '3mm');
+          final shellThick = '${q.tankSpec.shellThicknessMm}mm';
+          final dishThick = '${q.tankSpec.dishThicknessMm}mm';
+          final insName = (q.tankSpec.insulationMaterial.toLowerCase().contains('puff') || q.tankSpec.insulationMaterial.toLowerCase().contains('puf')) ? 'PUF' : q.tankSpec.insulationMaterial;
 
           descWidget = pw.Padding(
             padding:
                 const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
             child: pw.Text(
-              '$tankCap  LTR Capacity, $mat $pressStr Tank, $shellThick Shell, and $shellThick Dish, , Thickness,19mm IC CLAD insulation.',
+              '$tankCap LTR Capacity, $mat $pressStr Tank, $shellThick Shell, and $dishThick Dish, 50 mm with $insName Insulation.',
               style: const pw.TextStyle(fontSize: 7.5),
             ),
           );
@@ -1643,7 +1644,7 @@ class PdfQuotationBuilder {
                 padding:
                     const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
                 child: pw.Text(
-                  '$tankCap  LTR Capacity, $innerMat $pressStr Tank, 3mm Shell, and 3mm Dish, , Thickness,19mm IC CLAD insulation.',
+                  '$tankCap LTR Capacity, $innerMat $pressStr Tank, ${q.tankSpec.shellThicknessMm}mm Shell, and ${q.tankSpec.dishThicknessMm}mm Dish, 50 mm with ${q.tankSpec.insulationMaterial} Insulation.',
                   style: const pw.TextStyle(fontSize: 7.5),
                 ),
               ),
@@ -1910,12 +1911,18 @@ class PdfQuotationBuilder {
     final pressStr = tank.isPressurized ? 'Pressurized' : 'Non-Pressurized';
     final mat =
         tank.innerTankMaterial.isNotEmpty ? tank.innerTankMaterial : 'GI';
-    final rawThick =
-        tank.innerTankThickness.isNotEmpty ? tank.innerTankThickness : '3mm';
-    final thick = RegExp(r'\d+\s*mm', caseSensitive: false)
-            .firstMatch(rawThick)
-            ?.group(0) ??
-        '3mm';
+    final shellThick = tank.shellThicknessMm > 0
+        ? '${tank.shellThicknessMm}mm'
+        : (RegExp(r'\d+\s*mm', caseSensitive: false)
+                .firstMatch(tank.innerTankThickness)
+                ?.group(0) ??
+            '3mm');
+    final dishThick = tank.dishThicknessMm > 0
+        ? '${tank.dishThicknessMm}mm'
+        : (RegExp(r'\d+\s*mm', caseSensitive: false)
+                .firstMatch(tank.outerCladdingThickness)
+                ?.group(0) ??
+            '3mm');
     final cap = tank.capacityLitres;
 
     final insMat = tank.insulationMaterial.isNotEmpty &&
@@ -1927,7 +1934,7 @@ class PdfQuotationBuilder {
         : 'PUF';
 
     final all10Rows = [
-      ('01', 'Capacity and Thickness', '$cap ltr, $thick Shell, $thick Dish.'),
+      ('01', 'Capacity and Thickness', '$cap ltr, $shellThick Shell, $dishThick Dish.'),
       (
         '02',
         'Operating pressure',

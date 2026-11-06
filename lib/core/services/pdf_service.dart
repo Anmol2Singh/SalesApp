@@ -724,6 +724,10 @@ class PdfService {
                       ),
                     ],
                   ),
+                  if (quotation.productSpecs.containsKey('tank_spec') &&
+                      quotation.productSpecs['tank_spec'] is Map)
+                    _buildTankSpecPdfTable(
+                        Map<String, dynamic>.from(quotation.productSpecs['tank_spec'] as Map)),
                 ];
               },
             ),
@@ -731,6 +735,107 @@ class PdfService {
 
           return pdf.save();
         }
+
+  static pw.Widget _buildTankSpecPdfTable(Map<String, dynamic> tankSpec) {
+    final mat = tankSpec['material']?.toString().toUpperCase() ?? 'GI';
+    final cap = (tankSpec['capacity'] as num?)?.toInt() ?? 500;
+    final shell = tankSpec['shell_thickness']?.toString() ?? '3mm';
+    final dish = tankSpec['dish_thickness']?.toString() ?? '3mm';
+    final ins = (tankSpec['insulation']?.toString().toLowerCase().contains('puff') == true ||
+            tankSpec['insulation']?.toString().toLowerCase().contains('puf') == true)
+        ? 'PUF'
+        : (tankSpec['insulation']?.toString() ?? 'PUF');
+    final isPress = tankSpec['is_pressurized'] as bool? ?? true;
+    final pressStr = isPress ? 'Pressurized' : 'Non-Pressurized';
+
+    final rows = [
+      ('01', 'Capacity and Thickness', '$cap ltr, $shell Shell, $dish Dish.'),
+      ('02', 'Operating pressure', isPress ? 'Up to 5 Bar' : 'Atmospheric'),
+      ('03', 'Testing Pressure', isPress ? '7 bar pressure' : 'Atmospheric'),
+      ('04', 'Hot Water Inlet/ outlet', '2 Inch,'),
+      ('05', 'Heat Pump Circulation', '1 Inch,'),
+      ('06', 'Outer Tank Insulation', ins),
+      ('07', 'Temperature drop', '3° C / 8 hour'),
+      ('08', 'Inner and outer Tank', mat),
+      ('09', 'Tank direction', 'Horizontal / Vertical'),
+      ('10', 'Other', 'Solar Provision Additional Heat Pump Provision'),
+    ];
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(height: 14),
+        pw.Text(
+          'TECHNICAL SPECIFICATION FOR : $mat HOT WATER STORAGE TANK.',
+          style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+        ),
+        pw.SizedBox(height: 6),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(28),
+            1: const pw.FixedColumnWidth(100),
+            2: const pw.FixedColumnWidth(140),
+            3: const pw.FlexColumnWidth(1),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3.5),
+                  child: pw.Text('SL\nNO', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3.5),
+                  child: pw.Text('', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3.5),
+                  child: pw.Text('DESCRIPTION', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3.5),
+                  child: pw.Text('SPECIFICATION', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                ),
+              ],
+            ),
+            ...rows.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final r = entry.value;
+              return pw.TableRow(
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(3.5),
+                    child: pw.Text(r.$1, style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.center),
+                  ),
+                  if (idx == 0)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(3.5),
+                      child: pw.Text(
+                        '$cap Ltr\nHOT WATER\nSTORAGE $mat\n$pressStr\nTANK',
+                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                    )
+                  else
+                    pw.Container(),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(3.5),
+                    child: pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7)),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(3.5),
+                    child: pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7)),
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ],
+    );
+  }
 
   static pw.Widget _metaItem(String label, String? value) {
     return pw.Padding(

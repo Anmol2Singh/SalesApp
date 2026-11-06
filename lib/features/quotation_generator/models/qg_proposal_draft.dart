@@ -74,6 +74,8 @@ class QgProposalDraft {
   // Tank details
   bool hasTank;
   String tankMaterial; // 'GI', 'MS', 'Enamel', 'SS'
+  String tankShellThickness; // '2mm', '3mm', '4mm', '5mm', '6mm' (default '3mm')
+  String tankDishThickness; // '2mm', '3mm', '4mm', '5mm', '6mm' (default '3mm')
   String tankInsulation; // 'Puff', 'Rockwool', 'Custom'
   String tankInsulationCustomText;
   int tankCapacityLitres;
@@ -134,6 +136,8 @@ class QgProposalDraft {
     this.specsCopiedFrom,
     this.hasTank = false,
     this.tankMaterial = 'GI',
+    this.tankShellThickness = '3mm',
+    this.tankDishThickness = '3mm',
     this.tankInsulation = 'Puff',
     this.tankInsulationCustomText = '',
     this.tankCapacityLitres = 500,
@@ -271,6 +275,9 @@ class QgProposalDraft {
     int tankLitres = 500;
     int tankQty = 1;
     String tankMat = 'GI';
+    String shellThick = '3mm';
+    String dishThick = '3mm';
+    String tankIns = 'Puff';
     bool isPressurized = true;
     double tankRate = 0.0;
 
@@ -288,6 +295,18 @@ class QgProposalDraft {
       }
     }
 
+    // Check if tank specs exist in q.productSpecs['tank_spec']
+    if (q.productSpecs.containsKey('tank_spec') && q.productSpecs['tank_spec'] is Map) {
+      final ts = Map<String, dynamic>.from(q.productSpecs['tank_spec'] as Map);
+      tankMat = ts['material']?.toString() ?? tankMat;
+      tankLitres = (ts['capacity'] as num?)?.toInt() ?? tankLitres;
+      shellThick = ts['shell_thickness']?.toString() ?? '3mm';
+      dishThick = ts['dish_thickness']?.toString() ?? '3mm';
+      tankIns = ts['insulation']?.toString() ?? 'Puff';
+      isPressurized = ts['is_pressurized'] as bool? ?? isPressurized;
+      hasTankLine = true;
+    }
+
     // 5. HP specs from centralized resolver
     final defaultSpecs = initialHpSpecs ?? resolvedSpecsResult.specs;
     final specsCopiedSource = initialSpecsCopiedFrom ?? resolvedSpecsResult.specsCopiedFrom;
@@ -297,6 +316,9 @@ class QgProposalDraft {
       material: tankMat,
       litres: tankLitres,
       isPressurized: isPressurized,
+      shellThick: shellThick,
+      dishThick: dishThick,
+      insulation: tankIns,
     );
 
     // 7. Payment terms text
@@ -366,7 +388,9 @@ class QgProposalDraft {
       specsCopiedFrom: specsCopiedSource,
       hasTank: hasTankLine,
       tankMaterial: tankMat,
-      tankInsulation: 'Puff',
+      tankShellThickness: shellThick,
+      tankDishThickness: dishThick,
+      tankInsulation: tankIns,
       tankInsulationCustomText: '',
       tankCapacityLitres: tankLitres,
       tankQty: tankQty,
@@ -385,16 +409,13 @@ class QgProposalDraft {
     required String material,
     required int litres,
     required bool isPressurized,
+    String shellThick = '3mm',
+    String dishThick = '3mm',
+    String insulation = 'Puff',
   }) {
-    String shellThick = '3mm';
-    String dishThick = '3mm';
-    if (material == 'Enamel') {
-      shellThick = '2mm';
-      dishThick = '2mm';
-    } else if (material == 'MS') {
-      shellThick = '5mm';
-      dishThick = '6mm';
-    }
+    final insText = (insulation.toLowerCase().contains('puff') || insulation.toLowerCase().contains('puf'))
+        ? 'PUF'
+        : insulation;
 
     return {
       'Capacity and Thickness': '$litres ltr, $shellThick Shell, $dishThick Dish.',
@@ -402,7 +423,7 @@ class QgProposalDraft {
       'Testing Pressure': isPressurized ? '7 bar pressure' : 'Atmospheric',
       'Hot Water Inlet/ outlet': '2 Inch,',
       'Heat Pump Circulation': '1 Inch,',
-      'Outer Tank Insulation': 'PUF',
+      'Outer Tank Insulation': insText,
       'Temperature drop': '3° C / 8 hour',
       'Inner and outer Tank': material,
       'Tank direction': 'Horizontal / Vertical',
@@ -449,6 +470,8 @@ class QgProposalDraft {
       'specsCopiedFrom': specsCopiedFrom,
       'hasTank': hasTank,
       'tankMaterial': tankMaterial,
+      'tankShellThickness': tankShellThickness,
+      'tankDishThickness': tankDishThickness,
       'tankInsulation': tankInsulation,
       'tankInsulationCustomText': tankInsulationCustomText,
       'tankCapacityLitres': tankCapacityLitres,
@@ -512,6 +535,8 @@ class QgProposalDraft {
       specsCopiedFrom: map['specsCopiedFrom'] as String?,
       hasTank: map['hasTank'] as bool? ?? false,
       tankMaterial: map['tankMaterial'] as String? ?? 'GI',
+      tankShellThickness: map['tankShellThickness'] as String? ?? '3mm',
+      tankDishThickness: map['tankDishThickness'] as String? ?? '3mm',
       tankInsulation: map['tankInsulation'] as String? ?? 'Puff',
       tankInsulationCustomText: map['tankInsulationCustomText'] as String? ?? '',
       tankCapacityLitres: (map['tankCapacityLitres'] as num?)?.toInt() ?? 500,
@@ -696,6 +721,9 @@ class QgProposalDraft {
 
     // Multi Tank Lines
     final tankLinesList = <TankLineItem>[];
+    final shellMm = int.tryParse(tankShellThickness.replaceAll(RegExp(r'[^0-9]'), '')) ?? 3;
+    final dishMm = int.tryParse(tankDishThickness.replaceAll(RegExp(r'[^0-9]'), '')) ?? 3;
+    final effectiveIns = (tankInsulation.toLowerCase().contains('puff') || tankInsulation.toLowerCase().contains('puf')) ? 'PUF' : tankInsulation;
     int tankIdx = 1;
     if (!isAllInOne && !isWallMounted) {
       for (final it in items) {
@@ -703,7 +731,6 @@ class QgProposalDraft {
           final cap = it.tankCapacityLitres ?? tankCapacityLitres;
           final mat = it.tankMaterial ?? tankMaterial;
           final isPress = it.isPressurized;
-          final thick = (mat == 'Enamel') ? '2mm' : (mat == 'MS' ? '5mm' : '3mm');
           tankLinesList.add(TankLineItem(
             id: 'tank_${tankIdx++}',
             capacityLitres: cap,
@@ -711,9 +738,12 @@ class QgProposalDraft {
             isPressurized: isPress,
             rate: it.rate.round(),
             innerTankMaterial: mat,
-            innerTankThickness: thick,
+            shellThicknessMm: shellMm,
+            dishThicknessMm: dishMm,
+            innerTankThickness: tankShellThickness,
+            outerCladdingThickness: tankDishThickness,
             outerCladdingMaterial: 'Galvanized Painted',
-            insulationMaterial: it.insulationType ?? tankInsulation,
+            insulationMaterial: it.insulationType ?? effectiveIns,
           ));
         }
       }
@@ -725,9 +755,12 @@ class QgProposalDraft {
           isPressurized: isTankPressurized,
           rate: tankRate.round(),
           innerTankMaterial: tankMaterial,
-          innerTankThickness: '3mm',
+          shellThicknessMm: shellMm,
+          dishThicknessMm: dishMm,
+          innerTankThickness: tankShellThickness,
+          outerCladdingThickness: tankDishThickness,
           outerCladdingMaterial: 'Galvanized Painted',
-          insulationMaterial: (tankInsulation.toLowerCase().contains('puff') || tankInsulation.toLowerCase().contains('puf')) ? 'PUF' : tankInsulation,
+          insulationMaterial: effectiveIns,
         ));
       }
     }
@@ -844,6 +877,10 @@ class QgProposalDraft {
               capacityLitres: hasTank ? tankCapacityLitres : 0,
               isPressurized: hasTank ? isTankPressurized : false,
               innerAndOuterTank: hasTank ? tankMaterial : 'GI',
+              shellThicknessMm: shellMm,
+              dishThicknessMm: dishMm,
+              capacityAndThickness: '$tankCapacityLitres ltr, $tankShellThickness Shell, $tankDishThickness Dish.',
+              outerTankInsulation: effectiveIns,
             ),
       extraPriceRows: mappedExtraRows,
       tankCapacityLitres: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankCapacityLitres : 0),

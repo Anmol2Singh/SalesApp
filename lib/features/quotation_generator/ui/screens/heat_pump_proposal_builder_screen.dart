@@ -15,7 +15,10 @@ import '../../services/qg_item_parser.dart';
 import '../../services/qg_drafts_service.dart';
 import '../../services/qg_catalog_service.dart';
 import '../widgets/item_resolve_dialog.dart';
+import '../widgets/manage_tank_options_dialog.dart';
+import '../widgets/searchable_tank_dropdown.dart';
 import '../../services/price_calculator.dart';
+import '../../services/tank_spec_options_service.dart';
 import '../../models/generator_company_settings.dart';
 import '../../providers/quotation_generator_providers.dart';
 import '../../../../core/providers/company_provider.dart';
@@ -45,12 +48,35 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
   bool _isRestoredFromDraft = false;
   bool _sourceQuotationChanged = false;
 
+  List<String> _materialOptions = ['GI', 'MS', 'Enamel', 'SS'];
+  List<String> _insulationOptions = ['Puff', 'Rockwool', 'Custom'];
+  List<String> _shellThicknessOptions = ['2mm', '3mm', '4mm', '5mm', '6mm'];
+  List<String> _dishThicknessOptions = ['2mm', '3mm', '4mm', '5mm', '6mm'];
+
   Timer? _autoSaveDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadQuotationAndDraft();
+    _loadTankDropdownOptions();
+  }
+
+  Future<void> _loadTankDropdownOptions() async {
+    try {
+      final mats = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryMaterial);
+      final ins = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryInsulation);
+      final shell = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryShellThickness);
+      final dish = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryDishThickness);
+      if (mounted) {
+        setState(() {
+          _materialOptions = mats;
+          _insulationOptions = ins;
+          _shellThicknessOptions = shell;
+          _dishThicknessOptions = dish;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -1181,7 +1207,10 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           title: const Text('Include Hot Water Storage Tank Specification', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           value: draft.hasTank,
           onChanged: (val) {
-            setState(() => draft.hasTank = val);
+            setState(() {
+              draft.hasTank = val;
+              _syncDraftTankSpecs(draft);
+            });
             _triggerAutoSave();
           },
         ),
@@ -1190,32 +1219,70 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           Row(
             children: [
               Expanded(
-                child: DropdownButtonFormField<String>(
+                child: _buildTankDropdown(
+                  label: 'Tank Material',
                   value: draft.tankMaterial,
-                  decoration: const InputDecoration(labelText: 'Tank Material', border: OutlineInputBorder()),
-                  items: ['GI', 'MS', 'Enamel', 'SS'].map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                  options: _materialOptions,
+                  category: TankSpecOptionsService.categoryMaterial,
                   onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        draft.tankMaterial = val;
-                        draft.warrantyTankYears = val == 'Enamel' ? 15 : 5;
-                      });
-                      _triggerAutoSave();
-                    }
+                    setState(() {
+                      draft.tankMaterial = val;
+                      draft.warrantyTankYears = val == 'Enamel' ? 15 : 5;
+                      _syncDraftTankSpecs(draft);
+                    });
+                    _triggerAutoSave();
                   },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: DropdownButtonFormField<String>(
+                child: _buildTankDropdown(
+                  label: 'Insulation',
                   value: draft.tankInsulation,
-                  decoration: const InputDecoration(labelText: 'Insulation', border: OutlineInputBorder()),
-                  items: ['Puff', 'Rockwool', 'Custom'].map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                  options: _insulationOptions,
+                  category: TankSpecOptionsService.categoryInsulation,
                   onChanged: (val) {
-                    if (val != null) {
-                      setState(() => draft.tankInsulation = val);
-                      _triggerAutoSave();
-                    }
+                    setState(() {
+                      draft.tankInsulation = val;
+                      _syncDraftTankSpecs(draft);
+                    });
+                    _triggerAutoSave();
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTankDropdown(
+                  label: 'Shell Thickness',
+                  value: draft.tankShellThickness,
+                  options: _shellThicknessOptions,
+                  category: TankSpecOptionsService.categoryShellThickness,
+                  onChanged: (val) {
+                    setState(() {
+                      draft.tankShellThickness = val;
+                      _syncDraftTankSpecs(draft);
+                    });
+                    _triggerAutoSave();
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTankDropdown(
+                  label: 'Dish Thickness',
+                  value: draft.tankDishThickness,
+                  options: _dishThicknessOptions,
+                  category: TankSpecOptionsService.categoryDishThickness,
+                  onChanged: (val) {
+                    setState(() {
+                      draft.tankDishThickness = val;
+                      _syncDraftTankSpecs(draft);
+                    });
+                    _triggerAutoSave();
                   },
                 ),
               ),
@@ -1233,6 +1300,7 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                     final lit = int.tryParse(val);
                     if (lit != null) {
                       draft.tankCapacityLitres = lit;
+                      _syncDraftTankSpecs(draft);
                       _triggerAutoSave();
                     }
                   },
@@ -1245,7 +1313,10 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                   title: const Text('Pressurized (6/9 bar)', style: TextStyle(fontSize: 12)),
                   value: draft.isTankPressurized,
                   onChanged: (val) {
-                    setState(() => draft.isTankPressurized = val);
+                    setState(() {
+                      draft.isTankPressurized = val;
+                      _syncDraftTankSpecs(draft);
+                    });
                     _triggerAutoSave();
                   },
                 ),
@@ -1254,6 +1325,78 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           ),
         ],
       ],
+    );
+  }
+
+  void _syncDraftTankSpecs(QgProposalDraft draft) {
+    final insText = (draft.tankInsulation.toLowerCase().contains('puff') || draft.tankInsulation.toLowerCase().contains('puf'))
+        ? 'PUF'
+        : draft.tankInsulation;
+    draft.tankSpecs['Capacity and Thickness'] =
+        '${draft.tankCapacityLitres} ltr, ${draft.tankShellThickness} Shell, ${draft.tankDishThickness} Dish.';
+    draft.tankSpecs['Inner and outer Tank'] = draft.tankMaterial;
+    draft.tankSpecs['Outer Tank Insulation'] = insText;
+    draft.tankSpecs['Operating pressure'] = draft.isTankPressurized ? 'Up to 5 Bar' : 'Atmospheric';
+    draft.tankSpecs['Testing Pressure'] = draft.isTankPressurized ? '7 bar pressure' : 'Atmospheric';
+  }
+
+  Future<void> _openManageTankOptions({
+    required String category,
+    required String title,
+    required String currentSelected,
+    required ValueChanged<String> onSelectedChanged,
+  }) async {
+    final updated = await ManageTankOptionsDialog.show(
+      context,
+      category: category,
+      title: title,
+      currentSelected: currentSelected,
+      onSelectedChanged: onSelectedChanged,
+    );
+    if (updated != null && mounted) {
+      setState(() {
+        if (category == TankSpecOptionsService.categoryMaterial) {
+          _materialOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryInsulation) {
+          _insulationOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryShellThickness) {
+          _shellThicknessOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryDishThickness) {
+          _dishThicknessOptions = updated;
+        }
+      });
+    }
+  }
+
+  Widget _buildTankDropdown({
+    required String label,
+    required String value,
+    required List<String> options,
+    required String category,
+    required ValueChanged<String> onChanged,
+  }) {
+    return SearchableTankDropdown(
+      label: label,
+      value: value,
+      options: options,
+      category: category,
+      enabled: true,
+      onChanged: onChanged,
+      onOptionsChanged: (updated) {
+        if (mounted) {
+          setState(() {
+            if (category == TankSpecOptionsService.categoryMaterial) {
+              _materialOptions = updated;
+            } else if (category == TankSpecOptionsService.categoryInsulation) {
+              _insulationOptions = updated;
+            } else if (category == TankSpecOptionsService.categoryShellThickness) {
+              _shellThicknessOptions = updated;
+            } else if (category == TankSpecOptionsService.categoryDishThickness) {
+              _dishThicknessOptions = updated;
+            }
+          });
+        }
+      },
     );
   }
 

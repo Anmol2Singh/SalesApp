@@ -150,7 +150,7 @@ class TankLinesEditor extends StatelessWidget {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: ['GI', 'MS', 'ENAMEL'].contains(tank.innerTankMaterial.toUpperCase())
+                          value: ['GI', 'MS', 'ENAMEL', 'SS'].contains(tank.innerTankMaterial.toUpperCase())
                               ? tank.innerTankMaterial.toUpperCase()
                               : 'GI',
                           isDense: true,
@@ -162,23 +162,12 @@ class TankLinesEditor extends StatelessWidget {
                             DropdownMenuItem(value: 'GI', child: Text('GI (Galvanized)')),
                             DropdownMenuItem(value: 'MS', child: Text('MS (Mild Steel)')),
                             DropdownMenuItem(value: 'ENAMEL', child: Text('ENAMEL Coated')),
+                            DropdownMenuItem(value: 'SS', child: Text('SS (Stainless Steel)')),
                           ],
                           onChanged: (val) {
                             if (val != null) {
-                              // Auto-set preset thickness
-                              String innerT = '3mm';
-                              String outerT = '3mm';
-                              if (val == 'MS') {
-                                innerT = '5mm';
-                                outerT = '6mm';
-                              } else if (val == 'ENAMEL') {
-                                innerT = '2mm';
-                                outerT = '2mm';
-                              }
                               _updateTankLine(index, tank.copyWith(
                                 innerTankMaterial: val,
-                                innerTankThickness: innerT,
-                                outerCladdingThickness: outerT,
                               ));
                             }
                           },
@@ -195,6 +184,78 @@ class TankLinesEditor extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Shell & Dish Thickness
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: [2, 3, 4, 5, 6].contains(tank.shellThicknessMm) ? tank.shellThicknessMm : 3,
+                          isDense: true,
+                          decoration: InputDecoration(
+                            labelText: 'Shell Thickness',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          items: [2, 3, 4, 5, 6].map((mm) => DropdownMenuItem(value: mm, child: Text('${mm}mm'))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              _updateTankLine(index, tank.copyWith(
+                                shellThicknessMm: val,
+                                innerTankThickness: '${val}mm',
+                              ));
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: [2, 3, 4, 5, 6].contains(tank.dishThicknessMm) ? tank.dishThicknessMm : 3,
+                          isDense: true,
+                          decoration: InputDecoration(
+                            labelText: 'Dish Thickness',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          items: [2, 3, 4, 5, 6].map((mm) => DropdownMenuItem(value: mm, child: Text('${mm}mm'))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              _updateTankLine(index, tank.copyWith(
+                                dishThicknessMm: val,
+                                outerCladdingThickness: '${val}mm',
+                              ));
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Insulation
+                  DropdownButtonFormField<String>(
+                    value: ['PUF', 'Rockwool', 'Custom'].contains(tank.insulationMaterial)
+                        ? tank.insulationMaterial
+                        : 'PUF',
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Insulation Type',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'PUF', child: Text('Puff (PUF)')),
+                      DropdownMenuItem(value: 'Rockwool', child: Text('Rockwool')),
+                      DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateTankLine(index, tank.copyWith(
+                          insulationMaterial: val,
+                          insulation: '50 mm with $val Insulation',
+                        ));
+                      }
+                    },
                   ),
                   const SizedBox(height: 10),
 

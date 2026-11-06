@@ -24,6 +24,9 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../admin/providers/inventory_provider.dart';
 import '../../quotation_generator/providers/quotation_generator_providers.dart';
+import '../../quotation_generator/services/tank_spec_options_service.dart';
+import '../../quotation_generator/ui/widgets/manage_tank_options_dialog.dart';
+import '../../quotation_generator/ui/widgets/searchable_tank_dropdown.dart';
 
 class QuotationFormScreen extends ConsumerStatefulWidget {
   final String? pipelineId;
@@ -76,6 +79,21 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   // Dynamic product spec fields
   final Map<String, TextEditingController> _specControllers = {};
   final Map<String, String?> _specDropdownValues = {};
+
+  // Heat Pump Hot Water Storage Tank Specs
+  String _tankMaterial = 'GI';
+  String _tankShellThickness = '3mm';
+  String _tankDishThickness = '3mm';
+  String _tankInsulation = 'Puff';
+  int _tankCapacity = 500;
+  bool _isTankPressurized = true;
+  final TextEditingController _tankCapacityController =
+      TextEditingController(text: '500');
+
+  List<String> _materialOptions = ['GI', 'MS', 'Enamel', 'SS'];
+  List<String> _insulationOptions = ['Puff', 'Rockwool', 'Custom'];
+  List<String> _shellThicknessOptions = ['2mm', '3mm', '4mm', '5mm', '6mm'];
+  List<String> _dishThicknessOptions = ['2mm', '3mm', '4mm', '5mm', '6mm'];
 
   // Line items
   final List<Map<String, dynamic>> _lineItems = [];
@@ -902,6 +920,24 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     super.initState();
     _syncPaymentTermControllers();
     _loadData();
+    _loadTankDropdownOptions();
+  }
+
+  Future<void> _loadTankDropdownOptions() async {
+    try {
+      final mats = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryMaterial);
+      final ins = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryInsulation);
+      final shell = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryShellThickness);
+      final dish = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryDishThickness);
+      if (mounted) {
+        setState(() {
+          _materialOptions = mats;
+          _insulationOptions = ins;
+          _shellThicknessOptions = shell;
+          _dishThicknessOptions = dish;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -922,6 +958,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     _shippingAddressController.dispose();
     _stateCodeController.dispose();
     _salesmanController.dispose();
+    _tankCapacityController.dispose();
     for (final c in _specControllers.values) {
       c.dispose();
     }
@@ -968,6 +1005,18 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _specDropdownValues[key] = value?.toString();
       }
     });
+
+    // Prefill tank specifications if present
+    if (q.productSpecs.containsKey('tank_spec') && q.productSpecs['tank_spec'] is Map) {
+      final ts = Map<String, dynamic>.from(q.productSpecs['tank_spec'] as Map);
+      _tankMaterial = ts['material']?.toString() ?? 'GI';
+      _tankShellThickness = ts['shell_thickness']?.toString() ?? '3mm';
+      _tankDishThickness = ts['dish_thickness']?.toString() ?? '3mm';
+      _tankInsulation = ts['insulation']?.toString() ?? 'Puff';
+      _tankCapacity = (ts['capacity'] as num?)?.toInt() ?? 500;
+      _tankCapacityController.text = '$_tankCapacity';
+      _isTankPressurized = ts['is_pressurized'] as bool? ?? true;
+    }
 
     // Prefill line items
     _lineItems.clear();
@@ -1104,7 +1153,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         // Determine next revision number for this lead
         final leadQuots = await supabase
             .from('quotations')
-            .select('revision, line_items, payment_terms')
+            .select('revision, line_items, payment_terms, product_specs')
             .eq('lead_id', widget.leadId!)
             .order('revision', ascending: false)
             .limit(1);
@@ -1112,6 +1161,20 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         if (leadQuots.isNotEmpty) {
           _currentRevision =
               ((leadQuots.first['revision'] as num?)?.toInt() ?? 1) + 1;
+
+          if (leadQuots.first['product_specs'] is Map) {
+            final prevSpecs = Map<String, dynamic>.from(leadQuots.first['product_specs'] as Map);
+            if (prevSpecs.containsKey('tank_spec') && prevSpecs['tank_spec'] is Map) {
+              final ts = Map<String, dynamic>.from(prevSpecs['tank_spec'] as Map);
+              _tankMaterial = ts['material']?.toString() ?? 'GI';
+              _tankShellThickness = ts['shell_thickness']?.toString() ?? '3mm';
+              _tankDishThickness = ts['dish_thickness']?.toString() ?? '3mm';
+              _tankInsulation = ts['insulation']?.toString() ?? 'Puff';
+              _tankCapacity = (ts['capacity'] as num?)?.toInt() ?? 500;
+              _tankCapacityController.text = '$_tankCapacity';
+              _isTankPressurized = ts['is_pressurized'] as bool? ?? true;
+            }
+          }
         } else {
           _currentRevision = 1;
         }
@@ -1956,6 +2019,33 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       specs[entry.key] = entry.value;
     }
 
+    // Persist Heat Pump tank specifications if applicable
+    if (_isHeatPump && _hasTankItem) {
+      final insText = (_tankInsulation.toLowerCase().contains('puff') || _tankInsulation.toLowerCase().contains('puf'))
+          ? 'PUF'
+          : _tankInsulation;
+      specs['tank_spec'] = {
+        'material': _tankMaterial,
+        'capacity': _tankCapacity,
+        'shell_thickness': _tankShellThickness,
+        'dish_thickness': _tankDishThickness,
+        'insulation': _tankInsulation,
+        'is_pressurized': _isTankPressurized,
+        'specs_table': {
+          'Capacity and Thickness': '$_tankCapacity ltr, $_tankShellThickness Shell, $_tankDishThickness Dish.',
+          'Operating pressure': _isTankPressurized ? 'Up to 5 Bar' : 'Atmospheric',
+          'Testing Pressure': _isTankPressurized ? '7 bar pressure' : 'Atmospheric',
+          'Hot Water Inlet/ outlet': '2 Inch,',
+          'Heat Pump Circulation': '1 Inch,',
+          'Outer Tank Insulation': insText,
+          'Temperature drop': '3° C / 8 hour',
+          'Inner and outer Tank': _tankMaterial,
+          'Tank direction': 'Horizontal / Vertical',
+          'Other': 'Solar Provision Additional Heat Pump Provision',
+        },
+      };
+    }
+
     final totalTermsPct = _paymentTerms.fold<double>(
       0.0,
       (sum, item) => sum + ((item['percent'] as num?)?.toDouble() ?? 0.0),
@@ -2504,6 +2594,14 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 label: const Text('Add Line Item'),
               ),
             const SizedBox(height: 16),
+
+            // Heat Pump Tank Specifications (if heat pump and tank item present)
+            if (_isHeatPump && _hasTankItem) ...[
+              _SectionHeader('Hot Water Storage Tank Specifications'),
+              const SizedBox(height: 12),
+              _buildTankSpecsCard(enabled),
+              const SizedBox(height: 20),
+            ],
 
             // Supplementary Terms
             _SectionHeader('Supplementary Terms'),
@@ -3765,6 +3863,232 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 ],
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool get _isHeatPump {
+    final prodName = (_product?.name ?? _leadData?['product_name'] ?? '').toString().toLowerCase();
+    if (prodName.contains('heat pump') || prodName.contains('heat') || prodName.contains('hp')) {
+      return true;
+    }
+    for (final item in _lineItems) {
+      final desc = (item['description'] as TextEditingController?)?.text.toLowerCase() ?? '';
+      if (desc.contains('heat pump') || desc.contains('heatpump') || desc.contains('iz-')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool get _hasTankItem {
+    for (final item in _lineItems) {
+      final desc = (item['description'] as TextEditingController?)?.text.toLowerCase() ?? '';
+      if (desc.contains('tank')) {
+        return true;
+      }
+    }
+    if (_existingQuotation?.productSpecs.containsKey('tank_spec') == true) {
+      return true;
+    }
+    return false;
+  }
+
+  void _syncTankCapacityFromLineItems() {
+    for (final item in _lineItems) {
+      final desc = (item['description'] as TextEditingController?)?.text.toLowerCase() ?? '';
+      if (desc.contains('tank')) {
+        final match = RegExp(r'(\d+)\s*(?:ltr|l|liter|litres)', caseSensitive: false).firstMatch(desc);
+        if (match != null) {
+          final cap = int.tryParse(match.group(1)!);
+          if (cap != null && cap > 0 && _tankCapacityController.text == '500') {
+            _tankCapacity = cap;
+            _tankCapacityController.text = '$cap';
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _openManageTankOptions({
+    required String category,
+    required String title,
+    required String currentSelected,
+    required ValueChanged<String> onSelectedChanged,
+  }) async {
+    final updated = await ManageTankOptionsDialog.show(
+      context,
+      category: category,
+      title: title,
+      currentSelected: currentSelected,
+      onSelectedChanged: onSelectedChanged,
+    );
+    if (updated != null && mounted) {
+      setState(() {
+        if (category == TankSpecOptionsService.categoryMaterial) {
+          _materialOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryInsulation) {
+          _insulationOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryShellThickness) {
+          _shellThicknessOptions = updated;
+        } else if (category == TankSpecOptionsService.categoryDishThickness) {
+          _dishThicknessOptions = updated;
+        }
+      });
+    }
+  }
+
+  Widget _buildTankDropdown({
+    required String label,
+    required String value,
+    required List<String> options,
+    required String category,
+    required ValueChanged<String> onChanged,
+    required bool enabled,
+  }) {
+    return SearchableTankDropdown(
+      label: label,
+      value: value,
+      options: options,
+      category: category,
+      enabled: enabled,
+      onChanged: onChanged,
+      onOptionsChanged: (updated) {
+        if (mounted) {
+          setState(() {
+            if (category == TankSpecOptionsService.categoryMaterial) {
+              _materialOptions = updated;
+            } else if (category == TankSpecOptionsService.categoryInsulation) {
+              _insulationOptions = updated;
+            } else if (category == TankSpecOptionsService.categoryShellThickness) {
+              _shellThicknessOptions = updated;
+            } else if (category == TankSpecOptionsService.categoryDishThickness) {
+              _dishThicknessOptions = updated;
+            }
+          });
+        }
+      },
+    );
+  }
+
+  Widget _buildTankSpecsCard(bool enabled) {
+    _syncTankCapacityFromLineItems();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.water_drop_outlined, color: AppColors.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Hot Water Storage Tank Specifications',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTankDropdown(
+                  label: 'Tank Material',
+                  value: _tankMaterial,
+                  options: _materialOptions,
+                  category: TankSpecOptionsService.categoryMaterial,
+                  onChanged: (val) => setState(() => _tankMaterial = val),
+                  enabled: enabled,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTankDropdown(
+                  label: 'Insulation Type',
+                  value: _tankInsulation,
+                  options: _insulationOptions,
+                  category: TankSpecOptionsService.categoryInsulation,
+                  onChanged: (val) => setState(() => _tankInsulation = val),
+                  enabled: enabled,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTankDropdown(
+                  label: 'Shell Thickness',
+                  value: _tankShellThickness,
+                  options: _shellThicknessOptions,
+                  category: TankSpecOptionsService.categoryShellThickness,
+                  onChanged: (val) => setState(() => _tankShellThickness = val),
+                  enabled: enabled,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTankDropdown(
+                  label: 'Dish Thickness',
+                  value: _tankDishThickness,
+                  options: _dishThicknessOptions,
+                  category: TankSpecOptionsService.categoryDishThickness,
+                  onChanged: (val) => setState(() => _tankDishThickness = val),
+                  enabled: enabled,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _tankCapacityController,
+                  enabled: enabled,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Tank Capacity (Litres)',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) {
+                    final cap = int.tryParse(val);
+                    if (cap != null && cap > 0) {
+                      _tankCapacity = cap;
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    _isTankPressurized ? 'Pressurized (Up to 5 Bar)' : 'Non-Pressurized (Atmospheric)',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  value: _isTankPressurized,
+                  onChanged: enabled
+                      ? (val) => setState(() => _isTankPressurized = val)
+                      : null,
+                ),
+              ),
+            ],
           ),
         ],
       ),

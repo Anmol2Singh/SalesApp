@@ -45,6 +45,7 @@ class DealQuotationItem {
   final String? pipelineId;
   final String? productId;
   final String productName;
+  final Map<String, dynamic> productSpecs;
   
   // Proposal state in module
   final bool hasFinalizedProposal;
@@ -85,6 +86,7 @@ class DealQuotationItem {
     this.pipelineId,
     this.productId,
     this.productName = 'Heat Pump',
+    this.productSpecs = const {},
     this.hasFinalizedProposal = false,
     this.finalizedPdfPath,
     this.finalizedRefNo,
@@ -284,6 +286,9 @@ class DealQuotationItem {
       pipelineId: pipeline != null ? pipeline['id'] as String? : (row['pipeline_id'] as String?),
       productId: product != null ? product['id'] as String? : (row['product_id'] as String?),
       productName: pName,
+      productSpecs: (row['product_specs'] as Map?) != null
+          ? Map<String, dynamic>.from(row['product_specs'] as Map)
+          : const {},
       hasFinalizedProposal: proposalRecord != null,
       finalizedPdfPath: proposalRecord?['pdf_path'] as String?,
       finalizedRefNo: proposalRecord?['ref_no'] as String?,
@@ -332,6 +337,7 @@ class DealQuotationItem {
       pipelineId: pipelineId,
       productId: productId,
       productName: productName,
+      productSpecs: productSpecs,
       hasFinalizedProposal: hasFinalizedProposal ?? this.hasFinalizedProposal,
       finalizedPdfPath: finalizedPdfPath ?? this.finalizedPdfPath,
       finalizedRefNo: finalizedRefNo ?? this.finalizedRefNo,
