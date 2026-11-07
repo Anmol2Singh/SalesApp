@@ -125,11 +125,19 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
         (profile?.roles.contains(UserRole.manager) ?? false);
     final isCrmStaff = profile?.primaryRole == UserRole.crmStaff;
 
+    final pendingApprovalLeads =
+        ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{};
+    final approvedLeads =
+        ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{};
     final rejectedQuotationLeads =
         ref.watch(leadsWithRejectedQuotationProvider).value ?? const <String>{};
     final quotMetaMap =
         ref.watch(leadQuotationsMetaMapProvider).value ?? const <String, LeadQuotationMeta>{};
     final allLeads = leadsAsync.value ?? [];
+    final approvedCount = allLeads.where((l) =>
+        approvedLeads.contains(l.id) || quotMetaMap[l.id]?.isApproved == true).length;
+    final pendingApprovalCount = allLeads.where((l) =>
+        pendingApprovalLeads.contains(l.id) || quotMetaMap[l.id]?.isPendingApproval == true).length;
     final rejectedCount = allLeads.where((l) =>
         l.status.toLowerCase() == 'rejected' ||
         rejectedQuotationLeads.contains(l.id) ||
@@ -204,10 +212,12 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
         body: Column(
           children: [
             _buildFilters(
-              ref.watch(leadsWithPendingQuotationApprovalProvider).value ?? const <String>{},
-              ref.watch(leadsWithApprovedQuotationProvider).value ?? const <String>{},
+              pendingApprovalLeads,
+              approvedLeads,
               rejectedQuotationLeads,
               canSeePendingApproval: canSeePendingApproval,
+              pendingApprovalCount: pendingApprovalCount,
+              approvedCount: approvedCount,
               rejectedCount: rejectedCount,
             ),
           Container(
@@ -651,6 +661,8 @@ loading: () => const Center(child: CircularProgressIndicator()),
     Set<String> approvedLeads,
     Set<String> rejectedQuotationLeads, {
     required bool canSeePendingApproval,
+    int pendingApprovalCount = 0,
+    int approvedCount = 0,
     int rejectedCount = 0,
   }) {
     final filterOptions = [
@@ -718,9 +730,9 @@ loading: () => const Center(child: CircularProgressIndicator()),
                 final isApprovedChip = status == 'Approved';
                 final isRejectedChip = status == 'Rejected';
                 final count = isPendingChip
-                    ? pendingApprovalLeads.length
+                    ? pendingApprovalCount
                     : (isApprovedChip
-                        ? approvedLeads.length
+                        ? approvedCount
                         : (isRejectedChip ? rejectedCount : 0));
 
                 return Padding(

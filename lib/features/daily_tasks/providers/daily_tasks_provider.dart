@@ -7,6 +7,7 @@ import '../../../core/models/user_role.dart';
 import '../../../core/models/customer.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/daily_task_model.dart';
+import '../../crm/data/models/prospect_model.dart';
 
 class DailyTaskFilter {
   final String dateFilter; // 'today', 'specific_day', 'this_week', 'this_month', 'this_year', 'custom', 'all'
@@ -83,6 +84,44 @@ final taskSelectableCustomersProvider = FutureProvider<List<Customer>>((ref) asy
 
     final res = await query.order('customer_name', ascending: true);
     return (res as List).map((c) => Customer.fromJson(c as Map<String, dynamic>)).toList();
+  } catch (e) {
+    return [];
+  }
+});
+
+// Provider for prospects selectable by the logged in user when logging a daily task
+final taskSelectableProspectsProvider = FutureProvider<List<Prospect>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final profile = ref.watch(currentProfileProvider);
+  if (profile == null) return [];
+
+  final bool isAdmin = profile.roles.contains(UserRole.admin) ||
+      profile.roles.contains(UserRole.manager) ||
+      profile.primaryRole == UserRole.admin ||
+      profile.primaryRole == UserRole.manager;
+  final bool isSalesHead = profile.roles.contains(UserRole.salesHead) ||
+      profile.primaryRole == UserRole.salesHead;
+  final bool isServiceHead = profile.roles.contains(UserRole.serviceHead) ||
+      profile.primaryRole == UserRole.serviceHead;
+
+  try {
+    var query = supabase.from('crm_prospects').select('*');
+
+    // ServiceHead, Admin, Manager, SalesHead see ALL prospects for entering daily tasks!
+    if (!isAdmin && !isSalesHead && !isServiceHead) {
+      final isSalesStaff = profile.primaryRole == UserRole.sales ||
+          profile.primaryRole == UserRole.crmStaff ||
+          profile.roles.contains(UserRole.sales) ||
+          profile.roles.contains(UserRole.crmStaff);
+      if (isSalesStaff) {
+        query = query.or('created_by.eq.${profile.id},assigned_to.eq.${profile.id}');
+      } else {
+        query = query.eq('created_by', profile.id);
+      }
+    }
+
+    final res = await query.order('created_at', ascending: false);
+    return (res as List).map((p) => Prospect.fromJson(p as Map<String, dynamic>)).toList();
   } catch (e) {
     return [];
   }

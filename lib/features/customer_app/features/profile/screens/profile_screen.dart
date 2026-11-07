@@ -10,6 +10,7 @@ import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart
 import 'package:salesapp/core/providers/theme_provider.dart';
 import 'package:salesapp/core/providers/supabase_provider.dart';
 import 'package:salesapp/features/customer_app/features/services/screens/amc_avail_screen.dart';
+import 'package:salesapp/core/widgets/logout_helper.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -74,42 +75,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.bgSecondary,
-        title: const Text(
-          'Log Out',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Are you sure you want to log out of your customer portal?',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () async {
-              Navigator.pop(context);
-              await ref.read(authControllerProvider.notifier).signOut();
-              if (!context.mounted) return;
-              context.go('/login');
-            },
-            child: const Text(
-              'Log Out',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    confirmAndSignOut(context, ref);
   }
 
   void _deleteAddress(int index) {

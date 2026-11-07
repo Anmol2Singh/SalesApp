@@ -643,7 +643,7 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
             const SizedBox(height: 24),
 
             // Actions
-            if (isConverted)
+            if (isConverted && ((profile?.primaryRole.isSalesOrAdmin ?? false) || (profile?.roles.any((r) => r.isSalesOrAdmin) ?? false) || profile?.primaryRole == UserRole.crmStaff || (profile?.roles.contains(UserRole.crmStaff) ?? false)))
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.surface,

@@ -24,7 +24,6 @@ import '../../features/quotation_generator/ui/screens/noc_hub_screen.dart';
 import '../../features/quotation_generator/ui/screens/noc_builder_screen.dart';
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
 import '../../features/boq/screens/boq_form_screen.dart';
-import '../../features/boq/screens/boq_dashboard_screen.dart';
 import '../../features/admin/screens/manage_boq_items_screen.dart';
 import '../../features/factory_order/screens/factory_order_screen.dart';
 import '../../features/factory_order/screens/factory_queue_screen.dart';
@@ -36,7 +35,7 @@ import '../../features/reports/screens/user_activity_report_screen.dart';
 import '../../features/reports/screens/customer_report_screen.dart';
 import '../../features/pdf_search/screens/search_pdf_screen.dart';
 import '../../features/dashboard/screens/sales_dashboard_screen.dart';
-import '../../features/dashboard/screens/accounts_dashboard_screen.dart';
+import '../../features/dashboard/screens/unified_dashboard_screen.dart';
 import '../../features/admin/screens/admin_panel_screen.dart';
 import '../../features/admin/screens/product_catalog_screen.dart';
 import '../../features/admin/screens/inventory_screen.dart';
@@ -113,6 +112,7 @@ class AppRoutes {
   static const String dashboard = adminDashboard;
   static const String salesDashboard = '/sales/dashboard';
   static const String accountsDashboard = '/accounts/dashboard';
+  static const String unifiedDashboard = '/unified/dashboard';
   static const String inventory = '/inventory';
   static const String customers = '/customers';
   static const String customerDetail = '/customers/:id';
@@ -138,6 +138,7 @@ class AppRoutes {
   static const String coordinatorDashboard = complaintsDashboard;
   static const String technicianDashboard = '/technician/dashboard';
   static const String technicianTasks = '/technician/tasks';
+  static const String technicianHistory = '/technician/history';
   static const String bookComplaint = '/complaints/book';
   static const String assignTechnician = '/complaints/assign';
   static const String serviceHistory = '/complaints/history';
@@ -194,6 +195,7 @@ class AppRoutes {
   /// Checks whether a given route path is any primary home/dashboard
   static bool isDashboard(String path) {
     return path == adminDashboard ||
+        path == unifiedDashboard ||
         path == salesDashboard ||
         path == accountsDashboard ||
         path == complaintsDashboard ||
@@ -319,20 +321,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             }
           }
 
-          // Guard Accounts role: access to Accounts Dashboard, Project Manager, and standard operational screens
+          // Guard Accounts role: access to Unified Dashboard, Project Manager, and standard operational screens
           if (profile.roles.contains(UserRole.accounts) &&
               !profile.roles.contains(UserRole.admin) &&
               !profile.roles.contains(UserRole.manager)) {
             final isAllowedAccountsRoute = location.startsWith('/accounts') ||
+                location == AppRoutes.unifiedDashboard ||
+                location.startsWith('/unified') ||
                 location.startsWith('/pm') ||
                 location.startsWith('/assigned-work') ||
                 location.startsWith('/daily-tasks') ||
                 location.startsWith('/notifications') ||
                 location.startsWith('/reports') ||
-                location.startsWith('/pipelines') ||
+                location.startsWith('/products') ||
+                location.startsWith('/crm/prospects') ||
                 location.startsWith('/customers');
             if (!isAllowedAccountsRoute) {
-              return AppRoutes.accountsDashboard;
+              return AppRoutes.unifiedDashboard;
             }
           }
 
@@ -357,19 +362,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             return AppRoutes.technicianDashboard;
           }
 
-          // Guard pure Operations (BOQ, Factory, Purchase): cannot access CRM screens or customers
+          // Guard pure Operations (BOQ, Factory, Purchase): cannot access other CRM screens or customers, but can access prospects
           final isPureOperations = (profile.roles.contains(UserRole.boq) ||
                   profile.roles.contains(UserRole.factory) ||
                   profile.roles.contains(UserRole.purchase)) &&
               !isAdminOrManager &&
               !profile.roles.contains(UserRole.sales) &&
               !profile.roles.contains(UserRole.salesHead) &&
-              !profile.roles.contains(UserRole.crmStaff);
+              !profile.roles.contains(UserRole.crmStaff) &&
+              !profile.roles.contains(UserRole.serviceHead);
           if (isPureOperations &&
+              location != '/crm/prospects' &&
+              !location.startsWith('/crm/prospects') &&
               (location.startsWith('/crm') ||
                   location == AppRoutes.customers ||
                   location.startsWith('/customers'))) {
-            return AppRoutes.boqDashboard;
+            return AppRoutes.unifiedDashboard;
           }
         }
       }
@@ -472,11 +480,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.accountsDashboard,
-            builder: (context, state) => const AccountsDashboardScreen(),
+            redirect: (context, state) => AppRoutes.unifiedDashboard,
           ),
           GoRoute(
             path: AppRoutes.adminDashboard,
             builder: (context, state) => const AdminDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.unifiedDashboard,
+            builder: (context, state) => const UnifiedDashboardScreen(),
           ),
           GoRoute(
             path: AppRoutes.customers,
@@ -500,7 +512,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.boqDashboard,
-            builder: (context, state) => const BoqDashboardScreen(),
+            redirect: (context, state) => AppRoutes.unifiedDashboard,
           ),
           GoRoute(
             path: AppRoutes.manageBoqItems,
@@ -523,7 +535,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                     if (context.canPop()) {
                       context.pop();
                     } else {
-                      context.go(AppRoutes.boqDashboard);
+                      context.go(AppRoutes.unifiedDashboard);
                     }
                   },
                 ),
@@ -643,6 +655,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   (tabParam == 'installations' || tabParam == '1') ? 1 : 0;
               return TechnicianTasksScreen(initialTab: initialTab);
             },
+          ),
+          GoRoute(
+            path: AppRoutes.technicianHistory,
+            builder: (context, state) => const ServiceHistoryScreen(isTechnicianView: true),
           ),
           GoRoute(
             path: AppRoutes.bookComplaint,
@@ -958,26 +974,22 @@ String getRoleHome(UserRole role) {
     case UserRole.admin:
       return AppRoutes.adminDashboard;
     case UserRole.manager:
-    case UserRole.sales:
     case UserRole.salesHead:
       return AppRoutes.salesDashboard;
-    case UserRole.factory:
-    case UserRole.purchase:
-    case UserRole.boq:
-      return AppRoutes.boqDashboard;
-    case UserRole.serviceHead:
-    case UserRole.complaints:
-      return AppRoutes.complaintsDashboard;
-    case UserRole.installation:
-      return AppRoutes.installationsDashboard;
     case UserRole.technician:
       return AppRoutes.technicianDashboard;
     case UserRole.customer:
       return '/customer/dashboard';
+    case UserRole.sales:
+    case UserRole.factory:
+    case UserRole.purchase:
+    case UserRole.boq:
+    case UserRole.serviceHead:
+    case UserRole.complaints:
+    case UserRole.installation:
     case UserRole.crmStaff:
-      return '/crm/dashboard';
     case UserRole.accounts:
-      return AppRoutes.accountsDashboard;
+      return AppRoutes.unifiedDashboard;
   }
 }
 

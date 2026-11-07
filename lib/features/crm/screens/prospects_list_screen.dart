@@ -38,6 +38,18 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
     final leads = ref.watch(leadsProvider).value ?? [];
     final profile = ref.watch(currentProfileProvider);
 
+    final isSalesOrAdminOrManager = profile?.roles.any((r) =>
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.sales ||
+        r == UserRole.salesHead ||
+        r == UserRole.crmStaff) ?? false;
+
+    final allProspects = prospectsAsync.value ?? [];
+    final myProspectsCount = isSalesOrAdminOrManager
+        ? allProspects.length
+        : allProspects.where((p) => p.createdBy == profile?.id).length;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -48,12 +60,10 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
               context.pop();
             } else {
               final role = profile?.primaryRole;
-              if (role == UserRole.factory || role == UserRole.purchase || role == UserRole.boq) {
-                context.go(getRoleHome(role!));
-              } else if (role == UserRole.admin || role == UserRole.manager) {
-                context.go(AppRoutes.adminDashboard);
+              if (role != null) {
+                context.go(getRoleHome(role));
               } else {
-                context.go('/crm/dashboard');
+                context.go(AppRoutes.unifiedDashboard);
               }
             }
           },
@@ -70,7 +80,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                '${prospectsAsync.value?.length ?? 0}',
+                '$myProspectsCount',
                 style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 12,
@@ -86,9 +96,12 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
             icon: const Icon(Icons.download),
             tooltip: 'Export Prospects',
             onPressed: () {
-              final prospects = ref.read(prospectsProvider).value;
-              if (prospects != null && prospects.isNotEmpty) {
-                ExcelService.exportProspects(context, prospects);
+              final allP = ref.read(prospectsProvider).value ?? [];
+              final toExport = isSalesOrAdminOrManager
+                  ? allP
+                  : allP.where((p) => p.createdBy == profile?.id).toList();
+              if (toExport.isNotEmpty) {
+                ExcelService.exportProspects(context, toExport);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No prospects to export')));
               }
@@ -115,7 +128,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                     const Icon(Icons.people_alt_outlined, size: 18, color: AppColors.primary),
                     const SizedBox(width: 8),
                     Text(
-                      'Total Prospects: ${prospectsAsync.value?.length ?? 0}',
+                      'Total Prospects: $myProspectsCount',
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 13,
@@ -141,7 +154,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
           CrmDateFilterBar(
             filter: _dateFilter,
             dateFieldName: 'created_at',
-            resultCount: prospectsAsync.value?.length ?? 0,
+            resultCount: myProspectsCount,
             onFilterChanged: (newFilter) {
               final needsReload = _dateFilter.preset != newFilter.preset ||
                   _dateFilter.customStart != newFilter.customStart ||
@@ -157,8 +170,14 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
               onRefresh: () => ref.read(prospectsProvider.notifier).load(refresh: true),
               child: prospectsAsync.when(
               data: (prospects) {
+                // For non-sales/non-admin staff (e.g. operations, service, accounts), only show prospects added by themselves
+                var userScopedProspects = prospects;
+                if (!isSalesOrAdminOrManager && profile != null) {
+                  userScopedProspects = prospects.where((p) => p.createdBy == profile.id).toList();
+                }
+
                 // Apply filters
-                var filtered = prospects.where((p) {
+                var filtered = userScopedProspects.where((p) {
                   final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
                                         p.phone.contains(_searchQuery) ||
                                         (p.company?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);

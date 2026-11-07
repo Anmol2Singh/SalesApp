@@ -279,25 +279,24 @@ class _ManageTankOptionsDialogState extends State<ManageTankOptionsDialog> {
                                   ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      children: [
-                                        if (isSelected)
-                                          const Padding(
-                                            padding: EdgeInsets.only(right: 6),
-                                            child: Icon(Icons.check_circle, size: 16, color: AppColors.primary),
-                                          ),
-                                        Text(
-                                          item,
-                                          style: TextStyle(
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                            fontSize: 13,
-                                            color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                                          ),
+                                    if (isSelected)
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 6),
+                                        child: Icon(Icons.check_circle, size: 16, color: AppColors.primary),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        item,
+                                        style: TextStyle(
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                          fontSize: 13,
+                                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
                                         ),
-                                      ],
+                                        softWrap: true,
+                                      ),
                                     ),
+                                    const SizedBox(width: 8),
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
                                       tooltip: 'Delete $item',

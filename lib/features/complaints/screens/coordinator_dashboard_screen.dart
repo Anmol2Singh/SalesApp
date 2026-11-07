@@ -168,6 +168,20 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             backgroundColor: AppColors.navBarColor,
             elevation: 0,
             clipBehavior: Clip.antiAlias,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              tooltip: 'Back to Dashboard',
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else if (context.canPop()) {
+                  context.pop();
+                } else {
+                  final profile = ref.read(currentProfileProvider);
+                  context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+                }
+              },
+            ),
             automaticallyImplyLeading: false,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -434,77 +448,6 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               );
             },
           ),
-
-          if (!isAdmin) ...[
-            const SizedBox(height: 16),
-
-            // Action Buttons: Assigned Work, Daily Tasks, View Products & Daily Report
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionBtn(
-                    title: 'Assigned Work',
-                    subtitle: 'Calendar & Roster',
-                    icon: Icons.calendar_month_outlined,
-                    color: const Color(0xFF4F46E5),
-                    onTap: () => context.push(AppRoutes.assignedWork),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionBtn(
-                    title: 'Daily Tasks',
-                    subtitle: 'Tasks Completed',
-                    icon: Icons.fact_check_outlined,
-                    color: const Color(0xFF6366F1),
-                    onTap: () => context.push(AppRoutes.dailyTasks),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionBtn(
-                    title: 'View Products',
-                    subtitle: 'Catalog & Specs',
-                    icon: Icons.inventory_2_outlined,
-                    color: const Color(0xFF10B981),
-                    onTap: () => context.push('/products'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionBtn(
-                    title: 'Daily Report',
-                    subtitle: 'Export PDF / Excel',
-                    icon: Icons.summarize_outlined,
-                    color: const Color(0xFF8B5CF6),
-                    onTap: () => DailyReportModal.show(context, ref),
-                  ),
-                ),
-              ],
-            ),
-            if ((profile?.roles.length ?? 0) > 1) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionBtn(
-                      title: 'Technicians',
-                      subtitle: 'Add & Manage',
-                      icon: Icons.engineering_outlined,
-                      color: const Color(0xFF0D9488),
-                      onTap: () => context.push('/complaints/technicians'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(child: SizedBox.shrink()),
-                ],
-              ),
-            ],
-          ],
 
           const SizedBox(height: 12),
 

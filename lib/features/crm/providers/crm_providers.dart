@@ -21,10 +21,8 @@ final prospectsProvider = StateNotifierProvider<ProspectsNotifier, AsyncValue<Li
   final isAdminOrSalesHead = profile?.primaryRole == UserRole.admin ||
       profile?.primaryRole == UserRole.manager ||
       profile?.primaryRole == UserRole.salesHead ||
-      profile?.primaryRole == UserRole.serviceHead ||
       (profile?.roles.contains(UserRole.admin) ?? false) ||
-      (profile?.roles.contains(UserRole.salesHead) ?? false) ||
-      (profile?.roles.contains(UserRole.serviceHead) ?? false);
+      (profile?.roles.contains(UserRole.salesHead) ?? false);
   return ProspectsNotifier(supabase, profile?.id, isAdminOrSalesHead, profile);
 });
 
@@ -73,7 +71,15 @@ class ProspectsNotifier extends StateNotifier<AsyncValue<List<Prospect>>> {
 
       // Non-admins see only their own prospects or assigned to them
       if (!_isAdmin && _userId != null) {
-        query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
+        final isSalesStaff = _profile?.primaryRole == UserRole.sales ||
+            _profile?.primaryRole == UserRole.crmStaff ||
+            (_profile?.roles.contains(UserRole.sales) ?? false) ||
+            (_profile?.roles.contains(UserRole.crmStaff) ?? false);
+        if (isSalesStaff) {
+          query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
+        } else {
+          query = query.eq('created_by', _userId);
+        }
       }
 
       // Choice: Filter prospects by created_at (when prospect was registered into CRM)
@@ -1889,7 +1895,7 @@ class CrmWonCustomersNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       dynamic query = _supabase.from('crm_leads').select().or('status.eq.Won,converted_to_customer_id.not.is.null');
 
       if (!_isAdmin && _userId != null) {
-        query = query.or('created_by.eq.,assigned_to.eq.');
+        query = query.or('created_by.eq.$_userId,assigned_to.eq.$_userId');
       }
 
       // Choice: Filter converted customers by updated_at (date the deal was won/converted)

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/pm_project.dart';
 
@@ -182,47 +183,51 @@ class PmProjectsRepository {
 
   /// Recalculate and synchronize project financial totals from its ledger entries
   Future<void> syncProjectTotals(String projectId) async {
-    final entriesRes = await _supabase
-        .from('pm_ledger_entries')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('sr_no', ascending: true);
+    try {
+      final entriesRes = await _supabase
+          .from('pm_ledger_entries')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('sr_no', ascending: true);
 
-    final entries = (entriesRes as List<dynamic>);
+      final entries = (entriesRes as List<dynamic>);
 
-    double totalSalesM = 0;
-    double totalMOutward = 0;
-    double totalOrder = 0;
-    double totalExtraWork = 0;
-    double totalPaymentReceived = 0;
+      double totalSalesM = 0;
+      double totalMOutward = 0;
+      double totalOrder = 0;
+      double totalExtraWork = 0;
+      double totalPaymentReceived = 0;
 
-    for (final e in entries) {
-      totalSalesM += (e['sales_m_value'] as num?)?.toDouble() ?? 0;
-      totalMOutward += (e['m_outward_value'] as num?)?.toDouble() ?? 0;
-      totalOrder += (e['order_value'] as num?)?.toDouble() ?? 0;
-      totalExtraWork += (e['extra_work_value'] as num?)?.toDouble() ?? 0;
-      totalPaymentReceived += (e['payment_received'] as num?)?.toDouble() ?? 0;
+      for (final e in entries) {
+        totalSalesM += (e['sales_m_value'] as num?)?.toDouble() ?? 0;
+        totalMOutward += (e['m_outward_value'] as num?)?.toDouble() ?? 0;
+        totalOrder += (e['order_value'] as num?)?.toDouble() ?? 0;
+        totalExtraWork += (e['extra_work_value'] as num?)?.toDouble() ?? 0;
+        totalPaymentReceived += (e['payment_received'] as num?)?.toDouble() ?? 0;
+      }
+
+      final existing = await _supabase
+          .from('pm_projects')
+          .select('order_value')
+          .eq('id', projectId)
+          .maybeSingle();
+
+      final finalOrder = totalOrder > 0
+          ? totalOrder
+          : ((existing?['order_value'] as num?)?.toDouble() ?? 0);
+
+      await _supabase.from('pm_projects').update({
+        'sales_m_value': totalSalesM,
+        'm_outward_value': totalMOutward,
+        'm_balance': totalSalesM - totalMOutward,
+        'order_value': finalOrder,
+        'extra_work_value': totalExtraWork,
+        'payment_received': totalPaymentReceived,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', projectId);
+    } catch (e) {
+      debugPrint('Error syncing project totals: $e');
     }
-
-    final existing = await _supabase
-        .from('pm_projects')
-        .select('order_value')
-        .eq('id', projectId)
-        .maybeSingle();
-
-    final finalOrder = totalOrder > 0
-        ? totalOrder
-        : ((existing?['order_value'] as num?)?.toDouble() ?? 0);
-
-    await _supabase.from('pm_projects').update({
-      'sales_m_value': totalSalesM,
-      'm_outward_value': totalMOutward,
-      'm_balance': totalSalesM - totalMOutward,
-      'order_value': finalOrder,
-      'extra_work_value': totalExtraWork,
-      'payment_received': totalPaymentReceived,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', projectId);
   }
 
   /// Move a project and all its records to a target company

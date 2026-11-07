@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/pm_purchase.dart';
 
@@ -180,39 +181,43 @@ class PmPurchasesRepository {
 
   /// Recalculate totals from purchase ledger entries
   Future<void> syncPurchaseTotals(String purchaseId) async {
-    final entriesRes = await _supabase
-        .from('pm_purchase_ledger_entries')
-        .select('*')
-        .eq('purchase_id', purchaseId)
-        .order('sr_no', ascending: true);
+    try {
+      final entriesRes = await _supabase
+          .from('pm_purchase_ledger_entries')
+          .select('*')
+          .eq('purchase_id', purchaseId)
+          .order('sr_no', ascending: true);
 
-    final entries = (entriesRes as List<dynamic>);
+      final entries = (entriesRes as List<dynamic>);
 
-    double totalQuotation = 0;
-    double totalPaid = 0;
+      double totalQuotation = 0;
+      double totalPaid = 0;
 
-    for (final e in entries) {
-      totalQuotation += (e['quotation_value'] ?? e['order_value'] as num?)?.toDouble() ?? 0;
-      totalPaid += (e['payment_paid'] ?? e['payment_received'] as num?)?.toDouble() ?? 0;
+      for (final e in entries) {
+        totalQuotation += (e['quotation_value'] ?? e['order_value'] as num?)?.toDouble() ?? 0;
+        totalPaid += (e['payment_paid'] ?? e['payment_received'] as num?)?.toDouble() ?? 0;
+      }
+
+      final existing = await _supabase
+          .from('pm_purchases')
+          .select('quotation_value, order_value')
+          .eq('id', purchaseId)
+          .maybeSingle();
+
+      final initialQuot = (existing?['quotation_value'] ?? existing?['order_value'] as num?)?.toDouble() ?? 0;
+      final finalQuot = totalQuotation > 0 ? totalQuotation : initialQuot;
+      final balance = finalQuot - totalPaid;
+
+      await _supabase.from('pm_purchases').update({
+        'quotation_value': finalQuot,
+        'order_value': finalQuot,
+        'payment_paid': totalPaid,
+        'payment_received': totalPaid,
+        'balance': balance,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', purchaseId);
+    } catch (e) {
+      debugPrint('Error syncing purchase totals: $e');
     }
-
-    final existing = await _supabase
-        .from('pm_purchases')
-        .select('quotation_value, order_value')
-        .eq('id', purchaseId)
-        .maybeSingle();
-
-    final initialQuot = (existing?['quotation_value'] ?? existing?['order_value'] as num?)?.toDouble() ?? 0;
-    final finalQuot = totalQuotation > 0 ? totalQuotation : initialQuot;
-    final balance = finalQuot - totalPaid;
-
-    await _supabase.from('pm_purchases').update({
-      'quotation_value': finalQuot,
-      'order_value': finalQuot,
-      'payment_paid': totalPaid,
-      'payment_received': totalPaid,
-      'balance': balance,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', purchaseId);
   }
 }

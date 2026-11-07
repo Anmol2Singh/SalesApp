@@ -422,19 +422,24 @@ class PmPdfService {
           pw.SizedBox(height: 12),
 
           // 4. Section 2: Payment Terms Breakdown
-          _buildPaymentTermsSection(paymentTerms),
-          pw.SizedBox(height: 12),
+          if (!isPurchase && paymentTerms.isNotEmpty) ...[
+            _buildPaymentTermsSection(paymentTerms),
+            pw.SizedBox(height: 12),
+          ],
 
           // 5. Section 3: Project Expenses & Call Records
           _buildExpensesAndCallRecordsSection(expenses, callingRecords),
           pw.SizedBox(height: 12),
 
           // 6. Section 4: Checklist Scope Breakdown
-          _buildChecklistSection(checklistItems, project.orderType?.toString() ?? ''),
-          pw.SizedBox(height: 12),
+          if (!isPurchase && checklistItems.isNotEmpty) ...[
+            _buildChecklistSection(checklistItems, project.orderType?.toString() ?? ''),
+            pw.SizedBox(height: 12),
+          ],
 
           // 7. Section 5: Latest Work Remark
-          _buildWorkRemarksSection(workRemarks, project),
+          if (!isPurchase)
+            _buildWorkRemarksSection(workRemarks, project),
         ],
       ),
     );
@@ -463,7 +468,7 @@ class PmPdfService {
                   text: pw.TextSpan(
                     children: [
                       pw.TextSpan(
-                        text: 'Customer / Site: ',
+                        text: isPurchase ? 'Vendor Name: ' : 'Customer / Site: ',
                         style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.black),
                       ),
                       pw.TextSpan(
@@ -474,11 +479,11 @@ class PmPdfService {
                   ),
                 ),
                 pw.SizedBox(height: 3),
-                _buildDetailRow('Type', project.orderType?.toString() ?? 'N/A'),
+                _buildDetailRow('Type', project.orderType?.toString() ?? (isPurchase ? 'Vendor Order' : 'N/A')),
                 pw.SizedBox(height: 2),
                 _buildDetailRow('Mobile No.', (project.mobileNumber != null && project.mobileNumber.toString().trim().isNotEmpty) ? project.mobileNumber.toString().trim() : 'N/A'),
                 pw.SizedBox(height: 2),
-                _buildDetailRow('Site Address', (project.address != null && project.address.toString().trim().isNotEmpty) ? project.address.toString().trim() : 'N/A'),
+                _buildDetailRow(isPurchase ? 'Vendor Address' : 'Site Address', (project.address != null && project.address.toString().trim().isNotEmpty) ? project.address.toString().trim() : 'N/A'),
               ],
             ),
           ),
@@ -489,26 +494,32 @@ class PmPdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                _buildDetailRow(
-                  'HP Specs',
-                  (project.hpType != null && project.hpType.toString().trim().isNotEmpty)
-                      ? '${project.hpType} (${project.hpQty ?? 0} Qty)'
-                      : (isPurchase ? 'Plumbing item (0 Qty)' : 'N/A'),
-                ),
-                pw.SizedBox(height: 2),
-                _buildDetailRow(
-                  'Storage Tank',
-                  (project.tankType != null && project.tankType.toString().trim().isNotEmpty)
-                      ? '${project.tankType}${(project.tankQty != null && project.tankQty > 0) ? " (${project.tankQty} Qty)" : ""}'
-                      : 'N/A',
-                ),
-                pw.SizedBox(height: 2),
-                _buildDetailRow(
-                  'Sales Man',
-                  (project.salesMan != null && project.salesMan.toString().trim().isNotEmpty)
-                      ? project.salesMan.toString().trim()
-                      : 'N/A',
-                ),
+                if (!isPurchase) ...[
+                  _buildDetailRow(
+                    'HP Specs',
+                    (project.hpType != null && project.hpType.toString().trim().isNotEmpty)
+                        ? '${project.hpType} (${project.hpQty ?? 0} Qty)'
+                        : 'N/A',
+                  ),
+                  pw.SizedBox(height: 2),
+                  _buildDetailRow(
+                    'Storage Tank',
+                    (project.tankType != null && project.tankType.toString().trim().isNotEmpty)
+                        ? '${project.tankType}${(project.tankQty != null && project.tankQty > 0) ? " (${project.tankQty} Qty)" : ""}'
+                        : 'N/A',
+                  ),
+                  pw.SizedBox(height: 2),
+                  _buildDetailRow(
+                    'Sales Man',
+                    (project.salesMan != null && project.salesMan.toString().trim().isNotEmpty)
+                        ? project.salesMan.toString().trim()
+                        : 'N/A',
+                  ),
+                ] else ...[
+                  _buildDetailRow('Firm Name', (project.firmName != null && project.firmName.toString().trim().isNotEmpty) ? project.firmName.toString().trim() : 'N/A'),
+                  pw.SizedBox(height: 2),
+                  _buildDetailRow('Print Name', (project.partyPrintName != null && project.partyPrintName.toString().trim().isNotEmpty) ? project.partyPrintName.toString().trim() : 'N/A'),
+                ],
               ],
             ),
           ),

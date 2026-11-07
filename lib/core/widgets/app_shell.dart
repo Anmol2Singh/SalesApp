@@ -228,6 +228,9 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     ref.watch(realtimeSubscriptionProvider);
     final profile = ref.watch(currentProfileProvider);
+    if (profile != null && !_hasCheckedTodayTasks) {
+      _triggerStartupTodayTasksPopup();
+    }
     final unreadCount = ref.watch(unreadNotificationCountProvider).value ?? 0;
 
     if (profile == null) return widget.child;
@@ -303,10 +306,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   profile.primaryRole != UserRole.customer &&
                   !widget.currentRoute.startsWith('/inventory') &&
                   widget.currentRoute != AppRoutes.inventory &&
-                  (!widget.currentRoute.startsWith('/crm') ||
-                      profile.primaryRole == UserRole.boq ||
-                      profile.primaryRole == UserRole.factory ||
-                      profile.primaryRole == UserRole.purchase);
+                  !widget.currentRoute.startsWith('/crm');
 
               if (isWide && profile.primaryRole != UserRole.customer) {
                 return Row(
@@ -347,10 +347,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   profile.primaryRole != UserRole.customer &&
                   !widget.currentRoute.startsWith('/inventory') &&
                   widget.currentRoute != AppRoutes.inventory &&
-                  (!widget.currentRoute.startsWith('/crm') ||
-                      profile.primaryRole == UserRole.boq ||
-                      profile.primaryRole == UserRole.factory ||
-                      profile.primaryRole == UserRole.purchase)
+                  !widget.currentRoute.startsWith('/crm')
               ? _buildNavBar(context, profile.roles, unreadCount, false)
               : null,
         ),
@@ -510,21 +507,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                 _buildNavItemTile(
                   route: hasAdmin
                       ? AppRoutes.adminDashboard
-                      : (hasAccounts
-                          ? AppRoutes.accountsDashboard
-                          : (isServiceHead
-                              ? AppRoutes.installationsDashboard
-                              : (hasSales || isManager
-                                  ? AppRoutes.salesDashboard
-                                  : (isBoq
-                                      ? AppRoutes.boqDashboard
-                                      : (isFactory
-                                          ? AppRoutes.factoryQueue
-                                          : (isPurchase
-                                              ? AppRoutes.purchaseQueue
-                                              : (isTechnician
-                                                  ? AppRoutes.technicianDashboard
-                                                  : '/crm/dashboard'))))))),
+                      : ((isManager || (roles.contains(UserRole.salesHead) && !roles.any((r) => r == UserRole.boq || r == UserRole.factory || r == UserRole.purchase || r == UserRole.complaints || r == UserRole.installation)))
+                          ? AppRoutes.salesDashboard
+                          : (isPureTechnician
+                              ? AppRoutes.technicianDashboard
+                              : AppRoutes.unifiedDashboard)),
                   label: 'Dashboard',
                   icon: const Icon(Icons.dashboard_outlined),
                   selectedIcon: const Icon(Icons.dashboard),
@@ -1018,7 +1005,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                   ),
                   _buildNavItemTile(
-                    route: AppRoutes.serviceHistory,
+                    route: AppRoutes.technicianHistory,
                     label: 'History',
                     icon: const Icon(Icons.history_outlined),
                     selectedIcon: const Icon(Icons.history),
@@ -1049,10 +1036,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                 if ((isBoq || isServiceHead) && !hasAdminOrManager) ...[
                   _buildNavItemTile(
-                    route: AppRoutes.boqDashboard,
-                    label: 'BOQ',
-                    icon: const Icon(Icons.calculate_outlined),
-                    selectedIcon: const Icon(Icons.calculate),
+                    route: AppRoutes.manageBoqItems,
+                    label: 'BOQ Items',
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    selectedIcon: const Icon(Icons.inventory_2),
                     selectedTextColor: selectedTextColor,
                     unselectedTextColor: unselectedTextColor,
                     selectedBgColor: selectedBgColor,
@@ -1901,6 +1888,77 @@ class _AppShellState extends ConsumerState<AppShell> {
         widget.currentRoute == AppRoutes.assignedWork ||
             widget.currentRoute.startsWith('/assigned-work');
 
+    final String userHomeRoute = hasAdmin
+        ? AppRoutes.adminDashboard
+        : ((isManager || (roles.contains(UserRole.salesHead) && !roles.any((r) => r == UserRole.boq || r == UserRole.factory || r == UserRole.purchase || r == UserRole.complaints || r == UserRole.installation)))
+            ? AppRoutes.salesDashboard
+            : (isPureTechnician
+                ? AppRoutes.technicianDashboard
+                : AppRoutes.unifiedDashboard));
+
+    // 0.35 Single-role Unified Dashboard navigation (strictly for single-role complaints, installation, crm)
+    final Set<UserRole> staffRoles =
+        roles.where((r) => r != UserRole.customer).toSet();
+    final bool isSingleRoleRestricted = !hasAdminOrManager &&
+        !isServiceHead &&
+        !hasSales &&
+        (staffRoles.length == 1) &&
+        (staffRoles.contains(UserRole.complaints) ||
+            staffRoles.contains(UserRole.installation) ||
+            staffRoles.contains(UserRole.crmStaff));
+
+    final bool isOnRoleSpecificRoute =
+        (staffRoles.contains(UserRole.complaints) && isComplaintsRoute) ||
+        (staffRoles.contains(UserRole.installation) && isInstallationsRoute) ||
+        (staffRoles.contains(UserRole.crmStaff) &&
+            widget.currentRoute.startsWith('/crm'));
+
+    if (!isWide && isSingleRoleRestricted && !isOnRoleSpecificRoute) {
+      addItem(const _NavItem(
+        route: AppRoutes.unifiedDashboard,
+        label: 'Dashboard',
+        icon: Icon(Icons.dashboard_outlined),
+        selectedIcon: Icon(Icons.dashboard),
+      ));
+      addItem(const _NavItem(
+        route: AppRoutes.notifications,
+        label: 'Alert',
+        icon: Icon(Icons.notifications_outlined),
+        selectedIcon: Icon(Icons.notifications),
+      ));
+      addItem(const _NavItem(
+        route: AppRoutes.dailyTasks,
+        label: 'Daily Task',
+        icon: Icon(Icons.fact_check_outlined),
+        selectedIcon: Icon(Icons.fact_check),
+      ));
+      return uniqueItems.values.toList();
+    }
+
+    final bool isPmRoute = widget.currentRoute.startsWith('/pm');
+
+    // 0.36 Accounts Unified Dashboard / general navigation: strictly Dashboard & Alerts
+    final bool isPureAccounts = hasAccounts &&
+        !hasAdminOrManager &&
+        !hasSales &&
+        !isServiceHead;
+
+    if (!isWide && isPureAccounts && !isPmRoute) {
+      addItem(const _NavItem(
+        route: AppRoutes.unifiedDashboard,
+        label: 'Dashboard',
+        icon: Icon(Icons.dashboard_outlined),
+        selectedIcon: Icon(Icons.dashboard),
+      ));
+      addItem(const _NavItem(
+        route: AppRoutes.notifications,
+        label: 'Alerts',
+        icon: Icon(Icons.notifications_outlined),
+        selectedIcon: Icon(Icons.notifications),
+      ));
+      return uniqueItems.values.toList();
+    }
+
     // 0.4 Assigned Work contextual route
     if (!isWide && isAssignedWorkRoute) {
       addItem(const _NavItem(
@@ -1910,13 +1968,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         selectedIcon: Icon(Icons.calendar_month),
       ));
       addItem(_NavItem(
-        route: hasAdmin
-            ? AppRoutes.adminDashboard
-            : (hasAccounts
-                ? AppRoutes.accountsDashboard
-                : (isPureTechnician
-                    ? AppRoutes.technicianDashboard
-                    : AppRoutes.salesDashboard)),
+        route: userHomeRoute,
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1929,8 +1981,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       ));
       return uniqueItems.values.toList();
     }
-
-    final bool isPmRoute = widget.currentRoute.startsWith('/pm');
 
     // 0.5 Project Manager contextual route
     if (!isWide && (hasAdminOrManager || hasAccounts) && isPmRoute) {
@@ -1950,11 +2000,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           icon: Icon(Icons.filter_list_outlined),
           selectedIcon: Icon(Icons.filter_list)));
       addItem(_NavItem(
-        route: hasAdmin
-            ? AppRoutes.adminDashboard
-            : (hasAccounts
-                ? AppRoutes.accountsDashboard
-                : AppRoutes.salesDashboard),
+        route: userHomeRoute,
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1962,7 +2008,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       return uniqueItems.values.toList();
     }
 
-    // 0.6 Technician navigation (For pure technicians OR whenever on technician routes)
+    // 0.6 Technician navigation (Strictly 3 tabs whenever on technician routes or for pure technicians)
     if (!isWide && (isTechnicianRoute || isPureTechnician || (isTechnician && !hasAdminOrManager && !isServiceHead))) {
       addItem(const _NavItem(
           route: AppRoutes.technicianDashboard,
@@ -1975,45 +2021,15 @@ class _AppShellState extends ConsumerState<AppShell> {
           icon: Icon(Icons.assignment_outlined),
           selectedIcon: Icon(Icons.assignment)));
       addItem(const _NavItem(
-          route: AppRoutes.serviceHistory,
+          route: AppRoutes.technicianHistory,
           label: 'History',
           icon: Icon(Icons.history_outlined),
           selectedIcon: Icon(Icons.history)));
       return uniqueItems.values.toList();
     }
 
-    // 0.7 Operations navigation (BOQ / Factory / Purchase - contextual or pure)
-    if (!isWide && (isOperationsRoute || isPureOperations)) {
-      addItem(const _NavItem(
-          route: AppRoutes.boqDashboard,
-          label: 'Dashboard',
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard)));
-      addItem(const _NavItem(
-          route: AppRoutes.pipelines,
-          label: 'Deals',
-          icon: Icon(Icons.handshake_outlined),
-          selectedIcon: Icon(Icons.handshake)));
-      addItem(const _NavItem(
-          route: AppRoutes.manageBoqItems,
-          label: 'BOQ Items',
-          icon: Icon(Icons.inventory_2_outlined),
-          selectedIcon: Icon(Icons.inventory_2)));
-      addItem(const _NavItem(
-          route: AppRoutes.dailyTasks,
-          label: 'Tasks',
-          icon: Icon(Icons.fact_check_outlined),
-          selectedIcon: Icon(Icons.fact_check)));
-      addItem(const _NavItem(
-          route: AppRoutes.notifications,
-          label: 'Alerts',
-          icon: Icon(Icons.notifications_outlined),
-          selectedIcon: Icon(Icons.notifications)));
-      return uniqueItems.values.toList();
-    }
-
-    // 1. Complaints routes
-    if (!isWide && (hasAdminOrManager || hasComplaints) && isComplaintsRoute) {
+    // 0.7 Complaints contextual route (Must be evaluated before generic Operations navigation)
+    if (!isWide && (hasAdminOrManager || hasComplaints || isServiceHead) && isComplaintsRoute) {
       addItem(const _NavItem(
           route: AppRoutes.complaintsDashboard,
           label: 'Dashboard',
@@ -2029,32 +2045,11 @@ class _AppShellState extends ConsumerState<AppShell> {
           label: 'Assign',
           icon: Icon(Icons.assignment_ind_outlined),
           selectedIcon: Icon(Icons.assignment_ind)));
-
-      if (hasCrm) {
-        addItem(const _NavItem(
-            route: '/crm/dashboard',
-            label: 'CRM',
-            icon: Icon(Icons.people_alt_outlined),
-            selectedIcon: Icon(Icons.people_alt)));
-      } else if (hasSales) {
-        addItem(const _NavItem(
-            route: AppRoutes.salesDashboard,
-            label: 'Sales',
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart)));
-      } else if (isBoq || isFactory || isPurchase) {
-        addItem(const _NavItem(
-            route: AppRoutes.boqDashboard,
-            label: 'Operations',
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard)));
-      } else {
-        addItem(const _NavItem(
-            route: '/complaints/technicians',
-            label: 'Technicians',
-            icon: Icon(Icons.engineering_outlined),
-            selectedIcon: Icon(Icons.engineering)));
-      }
+      addItem(const _NavItem(
+          route: '/complaints/technicians',
+          label: 'Technicians',
+          icon: Icon(Icons.engineering_outlined),
+          selectedIcon: Icon(Icons.engineering)));
       addItem(const _NavItem(
           route: AppRoutes.serviceHistory,
           label: 'History',
@@ -2063,8 +2058,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       return uniqueItems.values.toList();
     }
 
-    // 1.5 Installations routes
-    if (!isWide && hasInstallations && isInstallationsRoute) {
+    // 0.8 Installations contextual route (Must be evaluated before generic Operations navigation)
+    if (!isWide && (hasAdminOrManager || hasInstallations || isServiceHead) && isInstallationsRoute) {
       addItem(const _NavItem(
           route: AppRoutes.installationsDashboard,
           label: 'Dashboard',
@@ -2085,6 +2080,33 @@ class _AppShellState extends ConsumerState<AppShell> {
           label: 'History',
           icon: Icon(Icons.history_outlined),
           selectedIcon: Icon(Icons.history)));
+      return uniqueItems.values.toList();
+    }
+
+    final bool isOperationsRole = isBoq || isFactory || isPurchase;
+
+    // 0.9 Operations navigation (BOQ / Factory / Purchase - contextual, pure, or operations staff)
+    if (!isWide && ((isOperationsRoute && !hasSales) || isPureOperations || (isOperationsRole && !hasAdminOrManager && !hasSales))) {
+      addItem(_NavItem(
+          route: userHomeRoute,
+          label: 'Dashboard',
+          icon: const Icon(Icons.dashboard_outlined),
+          selectedIcon: const Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(
+          route: AppRoutes.dailyTasks,
+          label: 'Tasks',
+          icon: Icon(Icons.fact_check_outlined),
+          selectedIcon: Icon(Icons.fact_check)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
       return uniqueItems.values.toList();
     }
 
@@ -2158,11 +2180,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // 3. Sales / SalesHead
     if (hasSales) {
-      addItem(const _NavItem(
-          route: AppRoutes.salesDashboard,
+      addItem(_NavItem(
+          route: userHomeRoute,
           label: 'Dashboard',
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart)));
+          icon: const Icon(Icons.bar_chart_outlined),
+          selectedIcon: const Icon(Icons.bar_chart)));
       addItem(const _NavItem(
           route: AppRoutes.customers,
           label: 'Customers',
@@ -2178,19 +2200,6 @@ class _AppShellState extends ConsumerState<AppShell> {
           label: 'Alerts',
           icon: Icon(Icons.notifications_outlined),
           selectedIcon: Icon(Icons.notifications)));
-      if (hasComplaints) {
-        addItem(const _NavItem(
-            route: AppRoutes.complaintsDashboard,
-            label: 'Complaints',
-            icon: Icon(Icons.support_agent_outlined),
-            selectedIcon: Icon(Icons.support_agent)));
-      } else {
-        addItem(const _NavItem(
-            route: '/crm/dashboard',
-            label: 'CRM',
-            icon: Icon(Icons.people_alt_outlined),
-            selectedIcon: Icon(Icons.people_alt)));
-      }
       return uniqueItems.values.toList();
     }
 
@@ -2219,8 +2228,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             selectedIcon: Icon(Icons.support_agent)));
       } else if (isBoq || isFactory || isPurchase) {
         addItem(const _NavItem(
-            route: AppRoutes.boqDashboard,
-            label: 'Operations',
+            route: AppRoutes.unifiedDashboard,
+            label: 'Dashboard',
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard)));
       } else {
@@ -2251,10 +2260,10 @@ class _AppShellState extends ConsumerState<AppShell> {
           icon: Icon(Icons.support_agent_outlined),
           selectedIcon: Icon(Icons.support_agent)));
       addItem(const _NavItem(
-          route: AppRoutes.boqDashboard,
-          label: 'BOQ',
-          icon: Icon(Icons.calculate_outlined),
-          selectedIcon: Icon(Icons.calculate)));
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
       addItem(const _NavItem(
           route: '/crm/dashboard',
           label: 'CRM',
@@ -2287,8 +2296,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           selectedIcon: Icon(Icons.assignment_ind)));
       if (isBoq || isFactory || isPurchase) {
         addItem(const _NavItem(
-            route: AppRoutes.boqDashboard,
-            label: 'Operations',
+            route: AppRoutes.unifiedDashboard,
+            label: 'Dashboard',
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard)));
       } else {
@@ -2319,7 +2328,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           icon: Icon(Icons.assignment_outlined),
           selectedIcon: Icon(Icons.assignment)));
       addItem(const _NavItem(
-          route: AppRoutes.serviceHistory,
+          route: AppRoutes.technicianHistory,
           label: 'History',
           icon: Icon(Icons.history_outlined),
           selectedIcon: Icon(Icons.history)));
@@ -2328,21 +2337,16 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // 7. Operations (BOQ/Factory/Purchase)
     if (isBoq || isFactory || isPurchase) {
-      addItem(const _NavItem(
-          route: AppRoutes.boqDashboard,
+      addItem(_NavItem(
+          route: userHomeRoute,
           label: 'Dashboard',
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard)));
+          icon: const Icon(Icons.dashboard_outlined),
+          selectedIcon: const Icon(Icons.dashboard)));
       addItem(const _NavItem(
           route: AppRoutes.pipelines,
           label: 'Deals',
           icon: Icon(Icons.handshake_outlined),
           selectedIcon: Icon(Icons.handshake)));
-      addItem(const _NavItem(
-          route: AppRoutes.manageBoqItems,
-          label: 'BOQ Items',
-          icon: Icon(Icons.inventory_2_outlined),
-          selectedIcon: Icon(Icons.inventory_2)));
       addItem(const _NavItem(
           route: AppRoutes.dailyTasks,
           label: 'Tasks',

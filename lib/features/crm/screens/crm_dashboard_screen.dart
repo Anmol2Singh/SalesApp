@@ -143,20 +143,20 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
             ),
           ),
         ),
-        leading: isCrmStaff
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () {
-                  if (isAdmin) {
-                    context.go('/admin/dashboard');
-                  } else if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/');
-                  }
-                },
-              ),
+        leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            tooltip: 'Back to Dashboard',
+            onPressed: () {
+              if (isAdmin) {
+                context.go('/admin/dashboard');
+              } else if (context.canPop()) {
+                context.pop();
+              } else {
+                final role = profile?.primaryRole;
+                context.go(role != null ? getRoleHome(role) : AppRoutes.login);
+              }
+            },
+          ),
         actions: [
           const DashboardSwitcherButton(),
           IconButton(
@@ -259,60 +259,6 @@ class _CrmDashboardScreenState extends ConsumerState<CrmDashboardScreen> with Si
 
             // Top KPI Metrics Bento Grid
             _buildKpiSection(prospectsAsync, leadsAsync, isCrmStaff: isCrmStaff),
-            const SizedBox(height: 12),
-
-            // Quick Actions (Admin Dashboard Theme)
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCrmQuickActionBtn(
-                    context,
-                    title: 'Assigned Work',
-                    subtitle: 'Calendar & roster',
-                    icon: Icons.calendar_month_outlined,
-                    color: const Color(0xFF4F46E5),
-                    onTap: () => context.push(AppRoutes.assignedWork),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildCrmQuickActionBtn(
-                    context,
-                    title: 'Daily Tasks',
-                    subtitle: 'Tasks completed',
-                    icon: Icons.fact_check_outlined,
-                    color: const Color(0xFF8B5CF6),
-                    onTap: () => context.push(AppRoutes.dailyTasks),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCrmQuickActionBtn(
-                    context,
-                    title: 'View Products',
-                    subtitle: 'Catalog & specs',
-                    icon: Icons.inventory_2_outlined,
-                    color: const Color(0xFF10B981),
-                    onTap: () => context.push('/products'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildCrmQuickActionBtn(
-                    context,
-                    title: "Today's Report",
-                    subtitle: 'Daily activity',
-                    icon: Icons.assessment_outlined,
-                    color: const Color(0xFF2563EB),
-                    onTap: () => context.push('/reports/activity'),
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: 14),
 
             // Monthly Trend Chart Card (Hidden for CRM staff)

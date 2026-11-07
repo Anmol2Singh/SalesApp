@@ -30,6 +30,7 @@ import '../../quotation_generator/models/qg_noc_builder_state.dart';
 import '../../quotation_generator/services/pdf_noc_builder.dart';
 import '../../quotation_generator/services/qg_noc_extractor.dart';
 import '../widgets/work_progress_box.dart';
+import '../../../core/widgets/sliding_marquee_text.dart';
 
 class PipelineDetailScreen extends ConsumerWidget {
   final String pipelineId;
@@ -504,7 +505,7 @@ class _PipelineDetailContent extends ConsumerWidget {
                       PipelineStep.factoryOrder: pipeline.factoryOrder != null ? 'available' : null,
                       PipelineStep.purchaseOrder: pipeline.purchaseOrder != null ? 'available' : null,
                     } else ...{
-                      if (profile?.primaryRole == UserRole.boq && pipeline.boq != null)
+                      if ((profile?.primaryRole == UserRole.boq || (profile?.roles.contains(UserRole.boq) ?? false) || (profile?.roles.contains(UserRole.serviceHead) ?? false)) && pipeline.boq != null)
                         PipelineStep.boq: 'available',
                       if (profile?.primaryRole == UserRole.factory && pipeline.factoryOrder != null)
                         PipelineStep.factoryOrder: 'available',
@@ -546,10 +547,10 @@ class _PipelineDetailContent extends ConsumerWidget {
                     }
                     
                     final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-                    final isAllowed = (userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead) || userRoles.contains(UserRole.manager)) ||
+                    final isAllowed = (userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead) || userRoles.contains(UserRole.manager) || userRoles.contains(UserRole.serviceHead)) ||
                         (userRoles.contains(UserRole.factory) && step == PipelineStep.factoryOrder) ||
                         (userRoles.contains(UserRole.purchase) && step == PipelineStep.purchaseOrder) ||
-                        (userRoles.contains(UserRole.boq) && step == PipelineStep.boq);
+                        ((userRoles.contains(UserRole.boq) || userRoles.contains(UserRole.serviceHead)) && step == PipelineStep.boq);
 
                     if (isAvailable && isAllowed) {
                       String? variant;
@@ -567,7 +568,7 @@ class _PipelineDetailContent extends ConsumerWidget {
                               return [
                                 if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
                                   TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
-                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq))
+                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead))
                                   TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
                                 if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
                                   TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
@@ -768,13 +769,15 @@ class _HeaderCard extends StatelessWidget {
                 const Icon(Icons.business_outlined,
                     color: Colors.white70, size: 14),
                 const SizedBox(width: 6),
-                Text(
-                  pipeline.customer!.companyName,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
+                Expanded(
+                  child: SlidingMarqueeText(
+                    text: pipeline.customer!.companyName,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -873,25 +876,13 @@ class _StepActionCard extends ConsumerWidget {
     final is100PercentComplete = pipeline.status == PipelineStatus.completed;
     final canApproveQuotations = currentRoles.any((r) => r.canApproveQuotations);
 
-    // BOQ role: cannot see Factory Order (step 4) or Purchase Order (step 5) as completed/active
-    final isBoqOnlyRole = currentRoles.contains(UserRole.boq) &&
-        !currentRoles.contains(UserRole.admin) &&
-        !currentRoles.contains(UserRole.manager) &&
-        !currentRoles.contains(UserRole.salesHead) &&
-        !currentRoles.contains(UserRole.factory) &&
-        !currentRoles.contains(UserRole.purchase);
-    final isRestrictedStepForBoq = isBoqOnlyRole &&
-        (step == PipelineStep.factoryOrder || step == PipelineStep.purchaseOrder);
-
     final displayCompleted = hasData &&
-        (step != PipelineStep.quotation || !isQuotationPending) &&
-        !isRestrictedStepForBoq;
-    final displayActive = !hasData && !isLocked && !isRestrictedStepForBoq && (isActive || isCompleted);
+        (step != PipelineStep.quotation || !isQuotationPending);
+    final displayActive = !hasData && !isLocked && (isActive || isCompleted);
 
     // Show action section when: the step is the current active step OR step has data (completed)
     // Or when the step is earlier than current (so Sales Head/Admin can fill missing steps)
-    // BOQ role cannot see action section for factory/purchase steps
-    final showActionSection = !isLocked && !isRestrictedStepForBoq && (isActive || isCompleted || hasData);
+    final showActionSection = !isLocked && (isActive || isCompleted || hasData);
     
     bool isButtonEnabled = !isLocked;
     String buttonText = hasData ? 'View / Edit' : 'Fill In';
@@ -941,7 +932,7 @@ class _StepActionCard extends ConsumerWidget {
           isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead) || roles.contains(UserRole.boq) || roles.contains(UserRole.factory);
           break;
         case PipelineStep.boq:
-          isPdfVisible = roles.contains(UserRole.boq) || roles.contains(UserRole.factory);
+          isPdfVisible = roles.contains(UserRole.boq) || roles.contains(UserRole.serviceHead);
           break;
         case PipelineStep.factoryOrder:
           isPdfVisible = roles.contains(UserRole.factory);
@@ -1129,7 +1120,7 @@ class _StepActionCard extends ConsumerWidget {
                                 return [
                                   if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
-                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq))
+                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead))
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
                                   if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
@@ -1319,7 +1310,7 @@ class _StepActionCard extends ConsumerWidget {
       case PipelineStep.factoryOrder:
         return 'Step 4 — Factory Order';
       case PipelineStep.purchaseOrder:
-        return 'Step 5 — Material Requisition';
+        return 'Step 5 — Purchase Order';
       case PipelineStep.completed:
         return 'Completed';
     }
@@ -1344,7 +1335,7 @@ class _StepActionCard extends ConsumerWidget {
       case PipelineStep.salesOrder:
         return hasRole(UserRole.sales);
       case PipelineStep.boq:
-        return hasRole(UserRole.boq);
+        return hasRole(UserRole.boq) || hasRole(UserRole.serviceHead);
       case PipelineStep.factoryOrder:
         return hasRole(UserRole.factory);
       case PipelineStep.purchaseOrder:

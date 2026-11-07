@@ -351,7 +351,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                         icon: Icons.check_circle_outline,
                         color: const Color(0xFF10B981),
                         isDark: isDark,
-                        onTap: () => context.push(AppRoutes.serviceHistory),
+                        onTap: () => context.push(AppRoutes.technicianHistory),
                       ),
                     ],
                   ),
@@ -683,7 +683,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                       ),
                     ],
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   
                   // --- INSTALLATIONS SECTION ---
                   Row(
@@ -771,7 +771,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                       },
                     ),
                   ],
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 110),
                 ]),
               ),
             ),

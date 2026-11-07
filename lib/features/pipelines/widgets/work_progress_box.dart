@@ -232,6 +232,13 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     final pipeline = widget.pipeline;
     final meta = WorkProgressService.parseProgressMeta(pipeline);
 
+    final profile = ref.watch(currentProfileProvider);
+    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+    final bool isServiceHead = userRoles.contains(UserRole.serviceHead) &&
+        !userRoles.contains(UserRole.admin) &&
+        !userRoles.contains(UserRole.manager) &&
+        !userRoles.contains(UserRole.salesHead);
+
     // Dynamic Step Status calculations
     final bool step1QuotationDone = pipeline.quotation != null;
     final bool step2SalesOrderDone = pipeline.salesOrder != null;
@@ -624,19 +631,21 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                     stepNum: 10,
                     title: 'NOC',
                     isCompleted: step10NocDone,
-                    isActive: step10NocActivated && !step10NocDone,
+                    isActive: isServiceHead
+                        ? false
+                        : (step10NocActivated && !step10NocDone),
                     isDeactivated: !step10NocActivated,
                     badgeText: step10NocDone
                         ? 'Issued ✓'
-                        : step10NocActivated
-                            ? 'Generate'
-                            : 'Locked',
+                        : isServiceHead
+                            ? (step10NocActivated ? 'Not Generated' : 'Locked')
+                            : (step10NocActivated ? 'Generate' : 'Locked'),
                     badgeColor: step10NocDone
                         ? const Color(0xFF286B37)
-                        : step10NocActivated
+                        : (step10NocActivated && !isServiceHead)
                             ? const Color(0xFF059669)
                             : AppColors.textDisabled,
-                    hasActionIndicator: step10NocActivated && !step10NocDone,
+                    hasActionIndicator: (step10NocActivated && !step10NocDone && !isServiceHead),
                     onTap: _handleNocStepTap,
                   ),
                 ],
@@ -1182,6 +1191,40 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       return;
     }
 
+    final profile = ref.read(currentProfileProvider);
+    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+    final isServiceHead = userRoles.contains(UserRole.serviceHead) &&
+        !userRoles.contains(UserRole.admin) &&
+        !userRoles.contains(UserRole.manager) &&
+        !userRoles.contains(UserRole.salesHead);
+
+    if (isServiceHead) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFF0284C7), size: 22),
+              SizedBox(width: 10),
+              Text('NOC Not Generated', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'The No Objection Certificate (NOC) has not yet been generated for this deal. Only Sales or Admin roles can generate NOC certificates.',
+            style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     // Otherwise prompt to generate NOC
     showDialog(
       context: context,
@@ -1219,6 +1262,22 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
   // Generate NOC Certificate directly
   Future<void> _generateNoc() async {
+    final profile = ref.read(currentProfileProvider);
+    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+    final isServiceHead = userRoles.contains(UserRole.serviceHead) &&
+        !userRoles.contains(UserRole.admin) &&
+        !userRoles.contains(UserRole.manager) &&
+        !userRoles.contains(UserRole.salesHead);
+    if (isServiceHead) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Service Head cannot generate NOC certificates.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     if (!_isInstallationCompleted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1407,7 +1466,11 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
   Future<void> _viewNocPdf(QgNocDocument doc) async {
     final profile = ref.read(currentProfileProvider);
     final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-    final canViewNoc = userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.manager) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead);
+    final canViewNoc = userRoles.contains(UserRole.admin) ||
+        userRoles.contains(UserRole.manager) ||
+        userRoles.contains(UserRole.sales) ||
+        userRoles.contains(UserRole.salesHead) ||
+        userRoles.contains(UserRole.serviceHead);
     if (!canViewNoc) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

@@ -19,6 +19,7 @@ import '../providers/product_inquiries_provider.dart';
 import '../../../core/widgets/network_status_chip.dart';
 import '../../../core/widgets/dashboard_skeleton.dart';
 import '../../../core/models/user_role.dart';
+import '../../../core/widgets/logout_helper.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
@@ -290,32 +291,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 child: IconButton(
                   icon: const Icon(Icons.logout, color: Colors.white, size: 22),
                   tooltip: 'Logout',
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Logout'),
-                        content:
-                            const Text('Are you sure you want to sign out?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.error),
-                            child: const Text('Logout',
-                                style: TextStyle(color: Colors.white)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      await ref.read(authControllerProvider.notifier).signOut();
-                    }
-                  },
+                  onPressed: () => confirmAndSignOut(context, ref),
                 ),
               ),
               const SizedBox(width: 4),
@@ -483,15 +459,23 @@ class AdminDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 pipelinesAsync.when(
                   data: (pipelines) {
-                    final recent = pipelines.take(5).toList();
+                    final activeDeals = pipelines.where((p) =>
+                        p.status != PipelineStatus.completed &&
+                        p.currentStep != PipelineStep.completed &&
+                        p.status != PipelineStatus.cancelled).toList();
+                    final recent = (activeDeals
+                          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+                        .take(5)
+                        .toList();
                     if (recent.isEmpty) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Text(
-                            'No deals yet',
+                            'No active leads',
                             style: TextStyle(
                                 fontFamily: 'Inter',
+                                fontSize: 14,
                                 color: AppColors.textSecondary),
                           ),
                         ),

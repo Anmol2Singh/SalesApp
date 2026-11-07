@@ -154,15 +154,15 @@ class DashboardSwitcherButton extends ConsumerWidget {
           );
         }
 
-        if (hasOperations) {
+        if (hasOperations || hasService) {
           items.add(
             const PopupMenuItem<String>(
-              value: AppRoutes.boqDashboard,
+              value: AppRoutes.unifiedDashboard,
               child: Row(
                 children: [
-                  Icon(Icons.precision_manufacturing_outlined, color: Color(0xFFF59E0B), size: 18),
+                  Icon(Icons.dashboard_customize_outlined, color: Color(0xFFF59E0B), size: 18),
                   SizedBox(width: 10),
-                  Text('Operations Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('Unified Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -178,21 +178,6 @@ class DashboardSwitcherButton extends ConsumerWidget {
                   Icon(Icons.home_outlined, color: Color(0xFF4ADE80), size: 18),
                   SizedBox(width: 10),
                   Text('Technician Home', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (hasAccounts) {
-          items.add(
-            const PopupMenuItem<String>(
-              value: AppRoutes.accountsDashboard,
-              child: Row(
-                children: [
-                  Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF0284C7), size: 18),
-                  SizedBox(width: 10),
-                  Text('Accounts Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),

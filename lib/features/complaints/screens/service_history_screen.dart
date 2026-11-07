@@ -9,7 +9,8 @@ import '../../../core/models/user_role.dart';
 import '../../../core/router/app_router.dart';
 
 class ServiceHistoryScreen extends ConsumerStatefulWidget {
-  const ServiceHistoryScreen({super.key});
+  final bool isTechnicianView;
+  const ServiceHistoryScreen({super.key, this.isTechnicianView = false});
 
   @override
   ConsumerState<ServiceHistoryScreen> createState() => _ServiceHistoryScreenState();
@@ -32,10 +33,13 @@ class _ServiceHistoryScreenState extends ConsumerState<ServiceHistoryScreen> {
     
     var history = complaints.where((c) => c.status == 'closed' || c.status == 'resolved').toList();
     
-    final isTech = profile?.roles.contains(UserRole.technician) == true;
-    final canViewAll = profile?.roles.contains(UserRole.admin) == true || 
-                       profile?.roles.contains(UserRole.manager) == true || 
-                       profile?.roles.contains(UserRole.serviceHead) == true;
+    final routePath = GoRouterState.of(context).uri.path;
+    final isTechRoute = widget.isTechnicianView || routePath.startsWith('/technician');
+    final isTech = isTechRoute || (profile?.roles.contains(UserRole.technician) == true);
+    final canViewAll = !isTechRoute &&
+        (profile?.roles.contains(UserRole.admin) == true || 
+         profile?.roles.contains(UserRole.manager) == true || 
+         profile?.roles.contains(UserRole.serviceHead) == true);
 
     if (isTech && !canViewAll) {
       history = history.where((c) {
@@ -70,6 +74,8 @@ class _ServiceHistoryScreenState extends ConsumerState<ServiceHistoryScreen> {
           onPressed: () {
             if (Navigator.canPop(context)) {
               context.pop();
+            } else if (isTechRoute) {
+              context.go(AppRoutes.technicianDashboard);
             } else {
               context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.technicianDashboard);
             }

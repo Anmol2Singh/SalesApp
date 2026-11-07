@@ -129,6 +129,20 @@ class _InstallationDashboardScreenState
             backgroundColor: AppColors.navBarColor,
             elevation: 0,
             clipBehavior: Clip.antiAlias,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              tooltip: 'Back to Dashboard',
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else if (context.canPop()) {
+                  context.pop();
+                } else {
+                  final profile = ref.read(currentProfileProvider);
+                  context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+                }
+              },
+            ),
             automaticallyImplyLeading: false,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
@@ -321,82 +335,7 @@ class _InstallationDashboardScreenState
             },
           ),
 
-          const SizedBox(height: 10),
-
-          // Action navigation shortcuts
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionBtn(
-                  title: 'Assigned Work',
-                  subtitle: 'Calendar & Roster',
-                  icon: Icons.calendar_month_outlined,
-                  color: const Color(0xFF4F46E5),
-                  onTap: () => context.push(AppRoutes.assignedWork),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionBtn(
-                  title: 'Daily Tasks',
-                  subtitle: 'Tasks completed',
-                  icon: Icons.fact_check_outlined,
-                  color: const Color(0xFF8B5CF6),
-                  onTap: () => context.push(AppRoutes.dailyTasks),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionBtn(
-                  title: 'All Installations',
-                  subtitle: 'List & Filter ($totalCount)',
-                  icon: Icons.list_alt_outlined,
-                  color: const Color(0xFF2563EB),
-                  onTap: () => context.push('/installations'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionBtn(
-                  title: 'Assign Techs',
-                  subtitle: 'Pending ($pendingCount)',
-                  icon: Icons.person_add_alt_1_outlined,
-                  color: const Color(0xFFD97706),
-                  onTap: () => context.push('/installations/assign'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionBtn(
-                  title: 'History',
-                  subtitle: 'Closed ($closedCount)',
-                  icon: Icons.history_rounded,
-                  color: const Color(0xFF0D9488),
-                  onTap: () => context.push('/installations/history'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionBtn(
-                  title: 'Technicians',
-                  subtitle: 'Manage Roster',
-                  icon: Icons.engineering_outlined,
-                  color: const Color(0xFF8B5CF6),
-                  onTap: () => context.push('/complaints/technicians'),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           // Recently Added Installations
           Row(

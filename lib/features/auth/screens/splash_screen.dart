@@ -169,32 +169,5 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  String _getRoleHome(UserRole role) {
-    switch (role) {
-      case UserRole.admin:
-        return AppRoutes.adminDashboard;
-      case UserRole.manager:
-      case UserRole.sales:
-      case UserRole.salesHead:
-        return AppRoutes.salesDashboard;
-      case UserRole.factory:
-      case UserRole.purchase:
-      case UserRole.boq:
-        return AppRoutes.boqDashboard;
-      case UserRole.serviceHead:
-        return AppRoutes.installationsDashboard;
-      case UserRole.complaints:
-        return AppRoutes.complaintsDashboard;
-      case UserRole.technician:
-        return AppRoutes.technicianDashboard;
-      case UserRole.customer:
-        return '/customer/dashboard';
-      case UserRole.crmStaff:
-        return '/crm/dashboard';
-      case UserRole.installation:
-        return AppRoutes.installationsDashboard;
-      case UserRole.accounts:
-        return AppRoutes.accountsDashboard;
-    }
-  }
+  String _getRoleHome(UserRole role) => getRoleHome(role);
 }

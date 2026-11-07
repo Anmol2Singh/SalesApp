@@ -3802,6 +3802,11 @@ class _CustomerProjectsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectsAsync = ref.watch(customerLinkedProjectsProvider(customerId));
+    final profile = ref.watch(currentProfileProvider);
+    final bool canAccessPm = profile?.roles.any((r) =>
+        r == UserRole.admin ||
+        r == UserRole.manager ||
+        r == UserRole.accounts) ?? false;
     final currencyFmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return Column(
@@ -4014,8 +4019,8 @@ class _CustomerProjectsSection extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-                    onTap: () => context.push('/pm/projects/${project.id}'),
+                    trailing: canAccessPm ? const Icon(Icons.chevron_right, color: AppColors.textSecondary) : null,
+                    onTap: canAccessPm ? () => context.push('/pm/projects/${project.id}') : null,
                   ),
                 );
               },

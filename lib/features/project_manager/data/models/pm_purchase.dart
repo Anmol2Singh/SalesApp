@@ -24,8 +24,12 @@ class PmPurchase {
   String? get gstNo => null;
   String? get itemPurchased => null;
   int? get itemQuantity => null;
+  String? get hpType => null;
+  int? get hpQty => null;
   String? get tankType => null;
   int? get tankCapacity => null;
+  int? get tankQty => null;
+  String? get workRemark => null;
   dynamic get customer => null;
   String? get customerId => null;
 

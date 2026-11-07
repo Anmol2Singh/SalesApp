@@ -198,52 +198,104 @@ class _PmLedgerTabState extends ConsumerState<PmLedgerTab> {
                 // Export PDF
                 InkWell(
                   onTap: () async {
-                    List<PmPaymentTerm> paymentTerms = [];
-                    List<PmExpense> expenses = [];
-                    List<PmCallingRecord> callingRecords = [];
-                    List<PmChecklistItem> checklistItems = [];
-                    List<PmWorkRemark> workRemarks = [];
-
-                    try {
-                      if (!widget.isPurchase) {
-                        final results = await Future.wait([
-                          ref.read(pmPaymentTermsProvider(widget.recordId).future).catchError((_) => <PmPaymentTerm>[]),
-                          ref.read(pmExpensesProvider(widget.recordId).future).catchError((_) => <PmExpense>[]),
-                          ref.read(pmCallingRecordsProvider((id: widget.recordId, isPurchase: widget.isPurchase)).future).catchError((_) => <PmCallingRecord>[]),
-                          ref.read(pmChecklistItemsProvider(widget.recordId).future).catchError((_) => <PmChecklistItem>[]),
-                          ref.read(pmWorkRemarksProvider(widget.recordId).future).catchError((_) => <PmWorkRemark>[]),
-                        ]);
-                        paymentTerms = results[0] as List<PmPaymentTerm>;
-                        expenses = results[1] as List<PmExpense>;
-                        callingRecords = results[2] as List<PmCallingRecord>;
-                        checklistItems = results[3] as List<PmChecklistItem>;
-                        workRemarks = results[4] as List<PmWorkRemark>;
-                      } else {
-                        callingRecords = await ref.read(pmCallingRecordsProvider((id: widget.recordId, isPurchase: widget.isPurchase)).future).catchError((_) => <PmCallingRecord>[]);
-                      }
-                    } catch (_) {}
-
-                    final pdfBytes =
-                        await PmPdfService.generateProjectLedgerPdf(
-                      project: widget.project,
-                      entries: entries,
-                      companyName: activeCompany.name,
-                      isPurchase: widget.isPurchase,
-                      paymentTerms: paymentTerms,
-                      expenses: expenses,
-                      callingRecords: callingRecords,
-                      checklistItems: checklistItems,
-                      workRemarks: workRemarks,
-                    );
-                    if (!context.mounted) return;
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => PdfPreviewScreen(
-                          pdfBytes: pdfBytes,
-                          fileName: 'Ledger_${widget.project.siteName}.pdf',
+                    // Show loading dialog until PDF is ready
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (dialogCtx) => PopScope(
+                        canPop: false,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(color: Color(0xFF005CE6)),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Generating PDF Statement...',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     );
+
+                    try {
+                      List<PmPaymentTerm> paymentTerms = [];
+                      List<PmExpense> expenses = [];
+                      List<PmCallingRecord> callingRecords = [];
+                      List<PmChecklistItem> checklistItems = [];
+                      List<PmWorkRemark> workRemarks = [];
+
+                      try {
+                        if (!widget.isPurchase) {
+                          final results = await Future.wait([
+                            ref.read(pmPaymentTermsProvider(widget.recordId).future).catchError((_) => <PmPaymentTerm>[]),
+                            ref.read(pmExpensesProvider(widget.recordId).future).catchError((_) => <PmExpense>[]),
+                            ref.read(pmCallingRecordsProvider((id: widget.recordId, isPurchase: widget.isPurchase)).future).catchError((_) => <PmCallingRecord>[]),
+                            ref.read(pmChecklistItemsProvider(widget.recordId).future).catchError((_) => <PmChecklistItem>[]),
+                            ref.read(pmWorkRemarksProvider(widget.recordId).future).catchError((_) => <PmWorkRemark>[]),
+                          ]);
+                          paymentTerms = results[0] as List<PmPaymentTerm>;
+                          expenses = results[1] as List<PmExpense>;
+                          callingRecords = results[2] as List<PmCallingRecord>;
+                          checklistItems = results[3] as List<PmChecklistItem>;
+                          workRemarks = results[4] as List<PmWorkRemark>;
+                        } else {
+                          callingRecords = await ref.read(pmCallingRecordsProvider((id: widget.recordId, isPurchase: widget.isPurchase)).future).catchError((_) => <PmCallingRecord>[]);
+                        }
+                      } catch (_) {}
+
+                      final pdfBytes =
+                          await PmPdfService.generateProjectLedgerPdf(
+                        project: widget.project,
+                        entries: entries,
+                        companyName: activeCompany.name,
+                        isPurchase: widget.isPurchase,
+                        paymentTerms: paymentTerms,
+                        expenses: expenses,
+                        callingRecords: callingRecords,
+                        checklistItems: checklistItems,
+                        workRemarks: workRemarks,
+                      );
+
+                      if (context.mounted) {
+                        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => PdfPreviewScreen(
+                              pdfBytes: pdfBytes,
+                              fileName: 'Ledger_${widget.project.siteName}.pdf',
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (err) {
+                      if (context.mounted) {
+                        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to generate PDF: $err')),
+                        );
+                      }
+                    }
                   },
                   borderRadius: BorderRadius.circular(9999),
                   child: Container(
@@ -1431,10 +1483,12 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
           : _particulars;
 
       final data = {
-        if (widget.isPurchase)
-          'purchase_id': widget.recordId
-        else
-          'project_id': widget.recordId,
+        if (widget.entry == null) ...{
+          if (widget.isPurchase)
+            'purchase_id': widget.recordId
+          else
+            'project_id': widget.recordId,
+        },
         'sr_no': widget.entry?.srNo ?? widget.nextSrNo,
         'date': _date.toIso8601String().split('T').first,
         'payment_type': _paymentType,
@@ -1471,7 +1525,9 @@ class _AddEditLedgerModalState extends ConsumerState<_AddEditLedgerModal> {
       ref.invalidate(pmLedgerEntriesProvider(
           (id: widget.recordId, isPurchase: widget.isPurchase)));
 
-      await widget.onSaved();
+      try {
+        await widget.onSaved();
+      } catch (_) {}
 
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

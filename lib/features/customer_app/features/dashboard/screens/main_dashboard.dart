@@ -12,6 +12,7 @@ import 'package:salesapp/features/customer_app/shared/widgets/glass_card.dart';
 import 'package:salesapp/features/customer_app/features/dashboard/widgets/product_card.dart';
 import 'package:salesapp/features/amc/providers/amc_provider.dart';
 import 'package:salesapp/core/widgets/network_status_chip.dart';
+import 'package:salesapp/core/widgets/logout_helper.dart';
 
 class ActivityEvent {
   final String title;
@@ -887,33 +888,7 @@ class MainDashboard extends ConsumerWidget {
   }
 
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title:
-            const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text(
-            'Are you sure you want to sign out of your customer portal?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEF4444)),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await ref.read(authControllerProvider.notifier).signOut();
-              if (context.mounted) {
-                context.go(AppRoutes.login);
-              }
-            },
-            child: const Text('Logout', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    confirmAndSignOut(context, ref);
   }
 
   Widget _buildProductsList(

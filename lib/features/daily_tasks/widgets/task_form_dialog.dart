@@ -237,7 +237,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
   @override
   Widget build(BuildContext context) {
     final customersAsync = ref.watch(taskSelectableCustomersProvider);
-    final prospectsAsync = ref.watch(prospectsProvider);
+    final prospectsAsync = ref.watch(taskSelectableProspectsProvider);
     final leadsAsync = ref.watch(leadsProvider);
     final isEditing = widget.taskToEdit != null;
     final now = DateTime.now();

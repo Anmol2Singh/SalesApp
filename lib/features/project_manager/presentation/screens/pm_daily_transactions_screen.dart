@@ -494,12 +494,16 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                 children: [
                   Row(
                     children: [
-                      Text(
-                        tx.partyName,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: pm.foreground,
+                      Flexible(
+                        child: Text(
+                          tx.partyName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: pm.foreground,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -524,21 +528,24 @@ class _PmDailyTransactionsScreenState extends ConsumerState<PmDailyTransactionsS
                   ),
                   const SizedBox(height: 4),
 
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    runSpacing: 2,
                     children: [
                       Text(
                         '${_dateFmt.format(tx.date)}  •  ${tx.paymentMode}',
                         style: TextStyle(fontSize: 12, color: pm.mutedForeground),
                       ),
                       if (tx.firmName.isNotEmpty) ...[
-                        Text('  •  ', style: TextStyle(color: pm.mutedForeground)),
+                        Text('•', style: TextStyle(fontSize: 12, color: pm.mutedForeground)),
                         Text(
                           tx.firmName,
                           style: TextStyle(fontSize: 12, color: pm.mutedForeground),
                         ),
                       ],
                       if (tx.transactionName.isNotEmpty) ...[
-                        Text('  •  ', style: TextStyle(color: pm.mutedForeground)),
+                        Text('•', style: TextStyle(fontSize: 12, color: pm.mutedForeground)),
                         Text(
                           tx.transactionName,
                           style: TextStyle(fontSize: 12, color: pm.primary, fontWeight: FontWeight.w500),

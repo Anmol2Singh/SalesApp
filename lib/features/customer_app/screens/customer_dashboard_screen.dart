@@ -8,6 +8,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/router/app_router.dart';
 import 'package:salesapp/features/customer_app/data/repositories/app_repositories.dart';
+import '../../../core/widgets/logout_helper.dart';
 
 final customerPurchasedProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
@@ -88,10 +89,8 @@ class CustomerDashboardScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authControllerProvider.notifier).signOut();
-              if (context.mounted) context.go(AppRoutes.login);
-            },
+            tooltip: 'Logout',
+            onPressed: () => confirmAndSignOut(context, ref),
           ),
         ],
       ),

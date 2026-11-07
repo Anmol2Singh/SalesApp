@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/user_role.dart';
+import '../../../core/models/pipeline.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../../core/models/customer.dart';
@@ -14,6 +15,7 @@ import '../../crm/providers/crm_providers.dart';
 import '../../../core/widgets/dashboard_switcher_button.dart';
 import '../../../core/widgets/network_status_chip.dart';
 import '../../../core/widgets/dashboard_skeleton.dart';
+import '../../../core/widgets/logout_helper.dart';
 
 class SalesDashboardScreen extends ConsumerWidget {
   const SalesDashboardScreen({super.key});
@@ -205,31 +207,7 @@ class SalesDashboardScreen extends ConsumerWidget {
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white),
                 tooltip: 'Logout',
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Logout'),
-                      content: const Text('Are you sure you want to sign out?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.error),
-                          child: const Text('Logout',
-                              style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    await ref.read(authControllerProvider.notifier).signOut();
-                  }
-                },
+                onPressed: () => confirmAndSignOut(context, ref),
               ),
               const SizedBox(width: 4),
             ],
@@ -321,247 +299,219 @@ class SalesDashboardScreen extends ConsumerWidget {
                         roles.contains(UserRole.admin) ||
                         roles.contains(UserRole.salesHead);
 
-                    final actions = <_QuickActionBtn>[];
-
                     final isSalesRole = profile?.primaryRole == UserRole.sales ||
                         profile?.primaryRole == UserRole.salesHead ||
                         roles.contains(UserRole.sales) ||
                         roles.contains(UserRole.salesHead);
 
-                    if (!isSalesRole && (profile?.primaryRole.canCreateCustomers ?? false)) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.business_outlined,
-                          label: 'New Customer',
-                          color: AppColors.primary,
-                          onTap: () => context.push(AppRoutes.createCustomer),
-                        ),
-                      );
-                    }
-
-                    if (!isSalesRole) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.alt_route_outlined,
-                          label: 'View Deals',
-                          color: const Color(0xFF6366F1),
-                          onTap: () => context.go(AppRoutes.pipelines),
-                        ),
-                      );
-                    }
-
-                    actions.add(
-                      _QuickActionBtn(
-                        icon: Icons.grid_view_outlined,
-                        label: 'View Products',
-                        color: const Color(0xFF0D9488),
-                        onTap: () => context.push('/products'),
-                      ),
-                    );
-
                     final canAccessQuotation = roles.any((r) => r.canCreateQuotation) ||
                         (profile?.primaryRole.canCreateQuotation ?? false) ||
                         isHeadOrAdmin;
-                    if (canAccessQuotation) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.request_quote_outlined,
-                          label: 'Quotation Generator',
-                          color: const Color(0xFF0284C7),
-                          onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
-                        ),
-                      );
-                    }
 
-                    if (roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.support_agent_outlined,
-                          label: 'Complaints',
-                          color: const Color(0xFF8B5CF6),
-                          onTap: () => context.push('/complaints/dashboard'),
-                        ),
-                      );
-                    }
+                    final categories = <_QuickActionCategory>[];
 
-                    if (roles.contains(UserRole.installation) || roles.contains(UserRole.serviceHead) || isHeadOrAdmin) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.build_circle_outlined,
-                          label: 'Installations',
-                          color: const Color(0xFF0284C7),
-                          onTap: () => context.push('/installations/dashboard'),
-                        ),
-                      );
-                    }
-
-                    if (roles.contains(UserRole.boq) || isHeadOrAdmin) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.format_list_bulleted_outlined,
-                          label: 'BOQ Items',
-                          color: const Color(0xFFEC4899),
-                          onTap: () => context.push(AppRoutes.manageBoqItems),
-                        ),
-                      );
-                    }
-
-                    if (roles.contains(UserRole.factory)) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.precision_manufacturing_outlined,
-                          label: 'Factory Queue',
-                          color: const Color(0xFFEA580C),
-                          onTap: () => context.push(AppRoutes.factoryQueue),
-                        ),
-                      );
-                    }
-
-                    if (roles.contains(UserRole.purchase)) {
-                      actions.add(
-                        _QuickActionBtn(
-                          icon: Icons.shopping_cart_outlined,
-                          label: 'Material Queue',
-                          color: const Color(0xFF10B981),
-                          onTap: () => context.push(AppRoutes.purchaseQueue),
-                        ),
-                      );
-                    }
-
-                    actions.add(
-                      _QuickActionBtn(
-                        icon: Icons.bar_chart_outlined,
-                        label: "Today's Report",
-                        color: const Color(0xFF10B981),
-                        onTap: () => context.push('/reports/activity'),
-                      ),
-                    );
-
-                    actions.add(
-                      _QuickActionBtn(
-                        icon: Icons.contact_page_outlined,
-                        label: 'Customer 360',
-                        color: const Color(0xFFF59E0B),
-                        onTap: () => context.push('/reports/customer'),
-                      ),
-                    );
-
-                    actions.add(
+                    // 1. Sales & CRM
+                    final salesActions = <_QuickActionBtn>[
                       _QuickActionBtn(
                         icon: Icons.people_alt_outlined,
                         label: 'CRM',
                         color: const Color(0xFF3B82F6),
                         onTap: () => context.push('/crm/dashboard'),
                       ),
-                    );
+                      if (!isSalesRole && (profile?.primaryRole.canCreateCustomers ?? false))
+                        _QuickActionBtn(
+                          icon: Icons.business_outlined,
+                          label: 'New Customer',
+                          color: AppColors.primary,
+                          onTap: () => context.push(AppRoutes.createCustomer),
+                        ),
+                      if (!isSalesRole)
+                        _QuickActionBtn(
+                          icon: Icons.alt_route_outlined,
+                          label: 'View Deals',
+                          color: const Color(0xFF6366F1),
+                          onTap: () => context.go(AppRoutes.pipelines),
+                        ),
+                      if (canAccessQuotation)
+                        _QuickActionBtn(
+                          icon: Icons.request_quote_outlined,
+                          label: 'Quotation Generator',
+                          color: const Color(0xFF0284C7),
+                          onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
+                        ),
+                    ];
+                    if (salesActions.isNotEmpty) {
+                      categories.add(
+                        _QuickActionCategory(
+                          title: 'Sales & CRM',
+                          icon: Icons.trending_up,
+                          color: const Color(0xFF6366F1),
+                          actions: salesActions,
+                        ),
+                      );
+                    }
 
-                    actions.add(
-                      _QuickActionBtn(
-                        icon: Icons.calendar_month_outlined,
-                        label: 'Assigned Work',
-                        color: const Color(0xFF4F46E5),
-                        onTap: () => context.push(AppRoutes.assignedWork),
-                      ),
-                    );
-
-                    actions.add(
+                    // 2. Work & Tasks
+                    final workActions = <_QuickActionBtn>[
                       _QuickActionBtn(
                         icon: Icons.fact_check_outlined,
                         label: 'Daily Tasks',
                         color: const Color(0xFF8B5CF6),
                         onTap: () => context.push(AppRoutes.dailyTasks),
                       ),
+                      _QuickActionBtn(
+                        icon: Icons.calendar_month_outlined,
+                        label: 'Assigned Work',
+                        color: const Color(0xFF4F46E5),
+                        onTap: () => context.push(AppRoutes.assignedWork),
+                      ),
+                    ];
+                    categories.add(
+                      _QuickActionCategory(
+                        title: 'Work & Tasks',
+                        icon: Icons.calendar_today_outlined,
+                        color: const Color(0xFF4F46E5),
+                        actions: workActions,
+                      ),
                     );
+
+                    // 3. Field Operations & Service
+                    final opsActions = <_QuickActionBtn>[
+                      if (roles.contains(UserRole.serviceHead) || isHeadOrAdmin)
+                        _QuickActionBtn(
+                          icon: Icons.support_agent_outlined,
+                          label: 'Complaints',
+                          color: const Color(0xFF8B5CF6),
+                          onTap: () => context.push('/complaints/dashboard'),
+                        ),
+                      if (roles.contains(UserRole.installation) || roles.contains(UserRole.serviceHead) || isHeadOrAdmin)
+                        _QuickActionBtn(
+                          icon: Icons.build_circle_outlined,
+                          label: 'Installations',
+                          color: const Color(0xFF0284C7),
+                          onTap: () => context.push('/installations/dashboard'),
+                        ),
+                    ];
+                    if (opsActions.isNotEmpty) {
+                      categories.add(
+                        _QuickActionCategory(
+                          title: 'Field Operations & Service',
+                          icon: Icons.miscellaneous_services_outlined,
+                          color: const Color(0xFF0284C7),
+                          actions: opsActions,
+                        ),
+                      );
+                    }
+
+                    // 4. Reports & Analytics
+                    final reportActions = <_QuickActionBtn>[
+                      _QuickActionBtn(
+                        icon: Icons.bar_chart_outlined,
+                        label: "Today's Report",
+                        color: const Color(0xFF10B981),
+                        onTap: () => context.push('/reports/activity'),
+                      ),
+                      _QuickActionBtn(
+                        icon: Icons.contact_page_outlined,
+                        label: 'Customer 360',
+                        color: const Color(0xFFF59E0B),
+                        onTap: () => context.push('/reports/customer'),
+                      ),
+                    ];
+                    categories.add(
+                      _QuickActionCategory(
+                        title: 'Reports & Analytics',
+                        icon: Icons.analytics_outlined,
+                        color: const Color(0xFF10B981),
+                        actions: reportActions,
+                      ),
+                    );
+
+                    // 5. Catalog & Inventory
+                    final catalogActions = <_QuickActionBtn>[
+                      _QuickActionBtn(
+                        icon: Icons.grid_view_outlined,
+                        label: 'View Products',
+                        color: const Color(0xFF0D9488),
+                        onTap: () => context.push('/products'),
+                      ),
+                      if (roles.contains(UserRole.boq) || isHeadOrAdmin)
+                        _QuickActionBtn(
+                          icon: Icons.format_list_bulleted_outlined,
+                          label: 'BOQ Items',
+                          color: const Color(0xFFEC4899),
+                          onTap: () => context.push(AppRoutes.manageBoqItems),
+                        ),
+                      if (roles.contains(UserRole.factory))
+                        _QuickActionBtn(
+                          icon: Icons.precision_manufacturing_outlined,
+                          label: 'Factory Queue',
+                          color: const Color(0xFFEA580C),
+                          onTap: () => context.push(AppRoutes.factoryQueue),
+                        ),
+                      if (roles.contains(UserRole.purchase))
+                        _QuickActionBtn(
+                          icon: Icons.shopping_cart_outlined,
+                          label: 'Material Queue',
+                          color: const Color(0xFF10B981),
+                          onTap: () => context.push(AppRoutes.purchaseQueue),
+                        ),
+                    ];
+                    if (catalogActions.isNotEmpty) {
+                      categories.add(
+                        _QuickActionCategory(
+                          title: 'Catalog & Inventory',
+                          icon: Icons.inventory_2_outlined,
+                          color: const Color(0xFFEC4899),
+                          actions: catalogActions,
+                        ),
+                      );
+                    }
 
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        final crossAxisCount = constraints.maxWidth >= 700 ? 4 : 2;
-                        final rows = <Widget>[];
-
-                        for (int i = 0; i < actions.length; i += crossAxisCount) {
-                          final rowChildren = <Widget>[];
-                          for (int j = 0; j < crossAxisCount; j++) {
-                            if (i + j < actions.length) {
-                              final a = actions[i + j];
-                              rowChildren.add(
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: a.onTap,
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(
-                                            color: isDark
-                                                ? const Color(0xFF334155)
-                                                : Colors.grey.shade200,
-                                            width: 1.2,
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: categories.map((cat) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8, left: 2),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: cat.color.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(6),
                                           ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black
-                                                  .withValues(alpha: isDark ? 0.2 : 0.02),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
+                                          child: Icon(cat.icon, size: 13, color: cat.color),
                                         ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 36,
-                                              height: 36,
-                                              decoration: BoxDecoration(
-                                                color: a.color.withValues(alpha: 0.12),
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              child: Icon(a.icon, color: a.color, size: 20),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                a.label,
-                                                style: TextStyle(
-                                                  fontFamily: 'Inter',
-                                                  fontSize: 13.5,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: isDark
-                                                      ? Colors.white
-                                                      : const Color(0xFF0F172A),
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          cat.title.toUpperCase(),
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.6,
+                                            color: isDark
+                                                ? Colors.grey.shade400
+                                                : const Color(0xFF64748B),
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                              );
-                              if (j < crossAxisCount - 1) {
-                                rowChildren.add(const SizedBox(width: 10));
-                              }
-                            } else {
-                              rowChildren.add(const Expanded(child: SizedBox.shrink()));
-                              if (j < crossAxisCount - 1) {
-                                rowChildren.add(const SizedBox(width: 10));
-                              }
-                            }
-                          }
-                          rows.add(Row(children: rowChildren));
-                          if (i + crossAxisCount < actions.length) {
-                            rows.add(const SizedBox(height: 10));
-                          }
-                        }
-
-                        return Column(children: rows);
+                                  _buildSalesActionGrid(cat.actions, constraints, isDark),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
                       },
                     );
                   },
@@ -589,34 +539,31 @@ class SalesDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 pipelinesAsync.when(
                   data: (pipelines) {
-                    if (pipelines.isEmpty) {
-                      return Center(
+                    final activeDeals = pipelines.where((p) =>
+                        p.status != PipelineStatus.completed &&
+                        p.currentStep != PipelineStep.completed &&
+                        p.status != PipelineStatus.cancelled).toList();
+                    final recent = (activeDeals
+                          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+                        .take(5)
+                        .toList();
+                    if (recent.isEmpty) {
+                      return const Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              const Icon(Icons.alt_route_outlined,
-                                  size: 48, color: AppColors.textSecondary),
-                              const SizedBox(height: 12),
-                              const Text(
-                                'No deals yet',
-                                style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: () =>
-                                    context.push(AppRoutes.createCustomer),
-                                child: const Text('Start First Deal'),
-                              ),
-                            ],
+                          child: Text(
+                            'No active leads',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
                       );
                     }
                     return Column(
-                      children: pipelines.take(5).map((p) {
+                      children: recent.map((p) {
                         return GestureDetector(
                           onTap: () => context.push(
                             AppRoutes.pipelineDetail.replaceAll(':id', p.id),
@@ -741,6 +688,104 @@ class _QuickActionBtn {
     required this.color,
     required this.onTap,
   });
+}
+
+class _QuickActionCategory {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<_QuickActionBtn> actions;
+
+  const _QuickActionCategory({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.actions,
+  });
+}
+
+Widget _buildSalesActionGrid(
+    List<_QuickActionBtn> actions, BoxConstraints constraints, bool isDark) {
+  final crossAxisCount = constraints.maxWidth >= 700 ? 4 : 2;
+  final rows = <Widget>[];
+
+  for (int i = 0; i < actions.length; i += crossAxisCount) {
+    final rowChildren = <Widget>[];
+    for (int j = 0; j < crossAxisCount; j++) {
+      if (i + j < actions.length) {
+        final a = actions[i + j];
+        rowChildren.add(
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: a.onTap,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: a.color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(a.icon, color: a.color, size: 18),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          a.label,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        if (j < crossAxisCount - 1) {
+          rowChildren.add(const SizedBox(width: 10));
+        }
+      } else {
+        rowChildren.add(const Expanded(child: SizedBox.shrink()));
+        if (j < crossAxisCount - 1) {
+          rowChildren.add(const SizedBox(width: 10));
+        }
+      }
+    }
+    rows.add(Row(children: rowChildren));
+    if (i + crossAxisCount < actions.length) {
+      rows.add(const SizedBox(height: 10));
+    }
+  }
+
+  return Column(children: rows);
 }
 
 class _SalesStatCard extends StatelessWidget {
