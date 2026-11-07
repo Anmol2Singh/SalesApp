@@ -11,6 +11,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/user_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/router/app_router.dart';
 import 'package:go_router/go_router.dart';
 
 class TechniciansTabScreen extends ConsumerStatefulWidget {
@@ -592,12 +593,13 @@ class _TechniciansTabScreenState extends ConsumerState<TechniciansTabScreen> {
           : AppBar(
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
-                tooltip: 'Back to Complaints Dashboard',
+                tooltip: 'Back',
                 onPressed: () {
                   if (Navigator.canPop(context)) {
                     context.pop();
                   } else {
-                    context.go('/complaints/dashboard');
+                    final profile = ref.read(currentProfileProvider);
+                    context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.complaintsDashboard);
                   }
                 },
               ),

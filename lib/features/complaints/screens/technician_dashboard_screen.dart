@@ -65,51 +65,44 @@ class TechnicianDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final complaints = ref.watch(complaintsProvider);
     final profile = ref.watch(currentProfileProvider);
+    final techsAsync = ref.watch(availableTechniciansProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Filter assigned complaints for this technician (Robust matching by ID, Name, Email, Phone, and Notes)
+    // Filter assigned complaints for this technician using multi-factor matcher
     final assignedComplaints = complaints.where((c) {
-      if (profile == null) return true;
-      final pName = profile.fullName.trim().toLowerCase();
-      final pEmail = profile.email.trim().toLowerCase();
-      final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d+]'), '');
-      final tName = (c.technicianName ?? '').trim().toLowerCase();
-      final tId = (c.technicianId ?? '').trim();
-      final notes = (c.notes ?? '').toLowerCase();
-      
-      final matchesId = tId.isNotEmpty && (tId == profile.id);
-      final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
-      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || notes.contains(pEmail));
-      final matchesNotes = pName.isNotEmpty && notes.contains(pName);
-      final matchesPhone = pPhone.isNotEmpty && (notes.contains(pPhone) || (c.customerPhone.isNotEmpty && notes.contains(pPhone)));
-      
-      return matchesId || matchesName || matchesEmail || matchesNotes || matchesPhone;
+      return isTaskAssignedToTechnician(
+        profile: profile,
+        availableTechnicians: techsAsync.value,
+        technicianId: c.technicianId,
+        technicianName: c.technicianName,
+        notes: c.notes,
+      );
     }).toList();
 
-    final myActiveTasks = assignedComplaints.where((c) => c.status == 'assigned' || c.status == 'in_progress').toList();
+    final myActiveTasks = assignedComplaints
+        .where((c) => c.status == 'assigned' || c.status == 'in_progress')
+        .toList();
     final activeTask = myActiveTasks.isNotEmpty ? myActiveTasks.first : null;
     final recentComplaints = assignedComplaints.take(5).toList();
 
     final installations = ref.watch(installationsProvider);
     final assignedInstallations = installations.where((i) {
-      if (profile == null) return true;
-      final pName = profile.fullName.trim().toLowerCase();
-      final pEmail = profile.email.trim().toLowerCase();
-      final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d+]'), '');
-      final tName = (i.technicianName ?? '').trim().toLowerCase();
-      final tId = (i.technicianId ?? '').trim();
-      final notes = (i.notes ?? '').toLowerCase();
-      
-      final matchesId = tId.isNotEmpty && (tId == profile.id);
-      final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
-      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || notes.contains(pEmail));
-      final matchesNotes = pName.isNotEmpty && notes.contains(pName);
-      final matchesPhone = pPhone.isNotEmpty && (notes.contains(pPhone) || (i.customerPhone.isNotEmpty && notes.contains(pPhone)));
-      
-      return matchesId || matchesName || matchesEmail || matchesNotes || matchesPhone;
+      return isTaskAssignedToTechnician(
+        profile: profile,
+        availableTechnicians: techsAsync.value,
+        technicianId: i.technicianId,
+        technicianName: i.technicianName,
+        notes: i.notes,
+      );
     }).toList();
     
-    final myActiveInstallations = assignedInstallations.where((i) => i.status == 'assigned' || i.status == 'in_progress' || i.status == 'pending' || i.status == 'scheduled').toList();
+    final myActiveInstallations = assignedInstallations
+        .where((i) =>
+            i.status == 'assigned' ||
+            i.status == 'in_progress' ||
+            i.status == 'pending' ||
+            i.status == 'scheduled')
+        .toList();
     final recentInstallations = assignedInstallations.take(5).toList();
 
     final isWide = MediaQuery.of(context).size.width >= 800;
@@ -310,10 +303,61 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               ],
             ),
             SliverPadding(
-              padding: EdgeInsets.all(isWide ? 32.0 : 16.0),
+              padding: EdgeInsets.fromLTRB(
+                isWide ? 32.0 : 16.0,
+                isWide ? 20.0 : 10.0,
+                isWide ? 32.0 : 16.0,
+                20.0,
+              ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  // 1. Quick Actions Section (Admin Dashboard Theme)
+                  // 1. KPI Metric Cards Grid (2x2)
+                  GridView.count(
+                    crossAxisCount: isWide ? 4 : 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: isWide ? 1.6 : 1.34,
+                    children: [
+                      _buildTechStatCard(
+                        title: 'Active\nComplaints',
+                        value: '${myActiveTasks.length}',
+                        icon: Icons.support_agent_outlined,
+                        color: const Color(0xFF2563EB),
+                        isDark: isDark,
+                        onTap: () => context.push(AppRoutes.technicianTasks),
+                      ),
+                      _buildTechStatCard(
+                        title: 'Active\nInstallations',
+                        value: '${myActiveInstallations.length}',
+                        icon: Icons.build_circle_outlined,
+                        color: const Color(0xFF0D9488),
+                        isDark: isDark,
+                        onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                      ),
+                      _buildTechStatCard(
+                        title: 'Pending\nApproval',
+                        value: '${assignedComplaints.where((c) => c.status == "pending_approval").length + assignedInstallations.where((i) => i.status == "pending_approval").length}',
+                        icon: Icons.hourglass_top,
+                        color: const Color(0xFFF59E0B),
+                        isDark: isDark,
+                        onTap: () => context.push(AppRoutes.technicianTasks),
+                      ),
+                      _buildTechStatCard(
+                        title: 'Completed\nJobs',
+                        value: '${assignedComplaints.where((c) => c.status == "closed" || c.status == "resolved").length + assignedInstallations.where((i) => i.status == "closed" || i.status == "resolved" || i.status == "completed").length}',
+                        icon: Icons.check_circle_outline,
+                        color: const Color(0xFF10B981),
+                        isDark: isDark,
+                        onTap: () => context.push(AppRoutes.serviceHistory),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 2. Quick Actions Section (Admin Dashboard Theme)
                   const Text(
                     'Quick Actions',
                     style: TextStyle(
@@ -325,20 +369,50 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      // Quick Action 1: Assigned Work
+                      // Quick Action 1: My Tasks (Complaints & Installations)
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'My Tasks',
+                          subtitle: '${myActiveTasks.length + myActiveInstallations.length} assigned',
+                          icon: Icons.assignment_outlined,
+                          color: const Color(0xFF4F46E5),
+                          isDark: isDark,
+                          onTap: () => context.push(AppRoutes.technicianTasks),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Quick Action 2: Installations
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          context,
+                          title: 'Installations',
+                          subtitle: '${myActiveInstallations.length} assigned',
+                          icon: Icons.build_circle_outlined,
+                          color: const Color(0xFF0D9488),
+                          isDark: isDark,
+                          onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Quick Action 3: Assigned Work
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
                           title: 'Assigned Work',
                           subtitle: 'Plan & roster',
                           icon: Icons.calendar_month_outlined,
-                          color: const Color(0xFF4F46E5),
+                          color: const Color(0xFF6366F1),
                           isDark: isDark,
                           onTap: () => context.push(AppRoutes.assignedWork),
                         ),
                       ),
                       const SizedBox(width: 10),
-                      // Quick Action 2: Daily Tasks
+                      // Quick Action 4: Daily Tasks
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
@@ -348,36 +422,6 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           color: const Color(0xFF8B5CF6),
                           isDark: isDark,
                           onTap: () => context.push(AppRoutes.dailyTasks),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      // Quick Action 3: Installations
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          context,
-                          title: 'Installations',
-                          subtitle: '${assignedInstallations.length} assigned',
-                          icon: Icons.build_circle_outlined,
-                          color: const Color(0xFF0284C7),
-                          isDark: isDark,
-                          onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Quick Action 4: View Products
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          context,
-                          title: 'View Products',
-                          subtitle: 'Catalog & specs',
-                          icon: Icons.inventory_2_outlined,
-                          color: const Color(0xFF10B981),
-                          isDark: isDark,
-                          onTap: () => context.push('/products'),
                         ),
                       ),
                     ],
@@ -416,48 +460,6 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           isDark: isDark,
                           onTap: () => context.push('/complaints/book'),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 2. 2x2 Bento Metric Cards Grid
-                  GridView.count(
-                    crossAxisCount: isWide ? 4 : 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: EdgeInsets.zero,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: isWide ? 1.6 : 1.34,
-                    children: [
-                      _buildTechStatCard(
-                        title: 'Active\nComplaints',
-                        value: '${assignedComplaints.where((c) => c.status == "assigned" || c.status == "in_progress").length}',
-                        icon: Icons.support_agent_outlined,
-                        color: const Color(0xFF2563EB),
-                        isDark: isDark,
-                      ),
-                      _buildTechStatCard(
-                        title: 'Active\nInstallations',
-                        value: '${myActiveInstallations.length}',
-                        icon: Icons.build_circle_outlined,
-                        color: const Color(0xFF0D9488),
-                        isDark: isDark,
-                      ),
-                      _buildTechStatCard(
-                        title: 'Pending\nApproval',
-                        value: '${assignedComplaints.where((c) => c.status == "pending_approval").length + assignedInstallations.where((i) => i.status == "pending_approval").length}',
-                        icon: Icons.hourglass_top,
-                        color: const Color(0xFFF59E0B),
-                        isDark: isDark,
-                      ),
-                      _buildTechStatCard(
-                        title: 'Completed\nJobs',
-                        value: '${assignedComplaints.where((c) => c.status == "closed" || c.status == "resolved").length + assignedInstallations.where((i) => i.status == "closed" || i.status == "resolved" || i.status == "completed").length}',
-                        icon: Icons.check_circle_outline,
-                        color: const Color(0xFF10B981),
-                        isDark: isDark,
                       ),
                     ],
                   ),
@@ -867,74 +869,79 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     required IconData icon,
     required Color color,
     bool isDark = false,
+    VoidCallback? onTap,
   }) {
     return Material(
       color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
-            width: 1.2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 22),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.grey.shade300 : const Color(0xFF1E293B),
-                      height: 1.2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
                     ),
-                    maxLines: 2,
+                    child: Icon(icon, color: Colors.white, size: 22),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  letterSpacing: -0.5,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey.shade300 : const Color(0xFF1E293B),
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

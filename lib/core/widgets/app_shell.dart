@@ -381,6 +381,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     final hasComplaints = RoleAccess.canAccessComplaints(roles);
     final hasInstallations = RoleAccess.canAccessInstallation(roles);
     final isTechnician = roles.any((r) => r == UserRole.technician);
+    final bool isPureTechnician = isTechnician &&
+        !hasAdminOrManager &&
+        !hasSalesHead &&
+        !RoleAccess.isServiceHead(roles) &&
+        !roles.contains(UserRole.complaints);
     final isBoq = RoleAccess.canAccessBoq(roles);
     final isFactory = roles.any((r) => r == UserRole.factory);
     final isPurchase = roles.any((r) => r == UserRole.purchase);
@@ -768,7 +773,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                         ],
 
                         // Sub-Group 2: Complaints (Extending buttons)
-                        if (hasComplaints) ...[
+                        if (hasComplaints && !isPureTechnician) ...[
                           _buildSubGroupHeader(
                             label: 'Complaints',
                             icon: isComplaintsActive
@@ -1002,7 +1007,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
 
                 // Specific role tasks for technicians, factory, purchase, boq
-                if (isTechnician && !hasComplaints) ...[
+                if (isTechnician) ...[
                   _buildNavItemTile(
                     route: AppRoutes.technicianTasks,
                     label: 'My Tasks',
@@ -1838,12 +1843,15 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   List<_NavItem> _getNavItems(List<UserRole> roles, bool isWide) {
-    final bool isComplaintsRoute =
-        widget.currentRoute.startsWith('/complaints') ||
-            widget.currentRoute.startsWith('/technician') ||
+    final bool isTechnicianRoute =
+        widget.currentRoute == AppRoutes.technicianDashboard ||
+            widget.currentRoute.startsWith('/technician');
+
+    final bool isComplaintsRoute = !isTechnicianRoute &&
+        (widget.currentRoute.startsWith('/complaints') ||
             widget.currentRoute == AppRoutes.complaintsDashboard ||
             widget.currentRoute == AppRoutes.assignTechnician ||
-            widget.currentRoute == AppRoutes.serviceHistory;
+            widget.currentRoute == AppRoutes.serviceHistory);
 
     final bool isInstallationsRoute =
         widget.currentRoute.startsWith('/installations') ||
@@ -1852,6 +1860,12 @@ class _AppShellState extends ConsumerState<AppShell> {
             widget.currentRoute == AppRoutes.bookInstallation ||
             widget.currentRoute == AppRoutes.assignInstallation ||
             widget.currentRoute == AppRoutes.installationHistory;
+
+    final bool isOperationsRoute = widget.currentRoute.startsWith('/boq') ||
+        widget.currentRoute.startsWith('/factory') ||
+        widget.currentRoute.startsWith('/purchase') ||
+        widget.currentRoute == AppRoutes.boqDashboard ||
+        widget.currentRoute == AppRoutes.manageBoqItems;
 
     final Map<String, _NavItem> uniqueItems = {};
 
@@ -1874,6 +1888,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     final bool isFactory = roles.any((r) => r == UserRole.factory);
     final bool isPurchase = roles.any((r) => r == UserRole.purchase);
     final bool isTechnician = roles.any((r) => r == UserRole.technician);
+    final bool isPureTechnician = isTechnician &&
+        !hasAdminOrManager &&
+        !isServiceHead &&
+        !roles.contains(UserRole.complaints);
+    final bool isPureOperations = (isBoq || isFactory || isPurchase) &&
+        !hasAdminOrManager &&
+        !hasSales &&
+        !isServiceHead;
     final bool hasAccounts = roles.any((r) => r == UserRole.accounts);
     final bool isAssignedWorkRoute =
         widget.currentRoute == AppRoutes.assignedWork ||
@@ -1892,7 +1914,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             ? AppRoutes.adminDashboard
             : (hasAccounts
                 ? AppRoutes.accountsDashboard
-                : AppRoutes.salesDashboard),
+                : (isPureTechnician
+                    ? AppRoutes.technicianDashboard
+                    : AppRoutes.salesDashboard)),
         label: 'Home',
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
@@ -1935,6 +1959,56 @@ class _AppShellState extends ConsumerState<AppShell> {
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home),
       ));
+      return uniqueItems.values.toList();
+    }
+
+    // 0.6 Technician navigation (For pure technicians OR whenever on technician routes)
+    if (!isWide && (isTechnicianRoute || isPureTechnician || (isTechnician && !hasAdminOrManager && !isServiceHead))) {
+      addItem(const _NavItem(
+          route: AppRoutes.technicianDashboard,
+          label: 'Home',
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home)));
+      addItem(const _NavItem(
+          route: AppRoutes.technicianTasks,
+          label: 'My Tasks',
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment)));
+      addItem(const _NavItem(
+          route: AppRoutes.serviceHistory,
+          label: 'History',
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history)));
+      return uniqueItems.values.toList();
+    }
+
+    // 0.7 Operations navigation (BOQ / Factory / Purchase - contextual or pure)
+    if (!isWide && (isOperationsRoute || isPureOperations)) {
+      addItem(const _NavItem(
+          route: AppRoutes.boqDashboard,
+          label: 'Dashboard',
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard)));
+      addItem(const _NavItem(
+          route: AppRoutes.pipelines,
+          label: 'Deals',
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
+      addItem(const _NavItem(
+          route: AppRoutes.manageBoqItems,
+          label: 'BOQ Items',
+          icon: Icon(Icons.inventory_2_outlined),
+          selectedIcon: Icon(Icons.inventory_2)));
+      addItem(const _NavItem(
+          route: AppRoutes.dailyTasks,
+          label: 'Tasks',
+          icon: Icon(Icons.fact_check_outlined),
+          selectedIcon: Icon(Icons.fact_check)));
+      addItem(const _NavItem(
+          route: AppRoutes.notifications,
+          label: 'Alerts',
+          icon: Icon(Icons.notifications_outlined),
+          selectedIcon: Icon(Icons.notifications)));
       return uniqueItems.values.toList();
     }
 
@@ -2262,13 +2336,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       addItem(const _NavItem(
           route: AppRoutes.pipelines,
           label: 'Deals',
-          icon: Icon(Icons.work_outline),
-          selectedIcon: Icon(Icons.work)));
+          icon: Icon(Icons.handshake_outlined),
+          selectedIcon: Icon(Icons.handshake)));
       addItem(const _NavItem(
-          route: '/crm/prospects',
-          label: 'Prospects',
-          icon: Icon(Icons.person_search_outlined),
-          selectedIcon: Icon(Icons.person_search)));
+          route: AppRoutes.manageBoqItems,
+          label: 'BOQ Items',
+          icon: Icon(Icons.inventory_2_outlined),
+          selectedIcon: Icon(Icons.inventory_2)));
+      addItem(const _NavItem(
+          route: AppRoutes.dailyTasks,
+          label: 'Tasks',
+          icon: Icon(Icons.fact_check_outlined),
+          selectedIcon: Icon(Icons.fact_check)));
       addItem(const _NavItem(
           route: AppRoutes.notifications,
           label: 'Alerts',

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/router/app_router.dart';
 import '../providers/complaints_provider.dart';
 import '../data/models/complaint_model.dart';
 import '../../../features/auth/providers/auth_provider.dart';
@@ -121,42 +122,30 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
   Widget build(BuildContext context) {
     final complaints = ref.watch(complaintsProvider);
     final profile = ref.watch(currentProfileProvider);
+    final techsAsync = ref.watch(availableTechniciansProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Filter assigned complaints for this technician
     final assignedComplaints = complaints.where((c) {
-      if (profile == null) return true;
-      final pName = profile.fullName.trim().toLowerCase();
-      final pEmail = profile.email.trim().toLowerCase();
-      final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d]'), '');
-      final tName = (c.technicianName ?? '').trim().toLowerCase();
-      final tId = (c.technicianId ?? '').trim();
-
-      final matchesId = tId.isNotEmpty && (tId == profile.id);
-      final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
-      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || (c.notes?.toLowerCase().contains(pEmail) ?? false));
-      final matchesPhone = pPhone.isNotEmpty && ((c.notes?.replaceAll(RegExp(r'[^\d]'), '').contains(pPhone) ?? false));
-
-      return matchesId || matchesName || matchesEmail || matchesPhone;
+      return isTaskAssignedToTechnician(
+        profile: profile,
+        availableTechnicians: techsAsync.value,
+        technicianId: c.technicianId,
+        technicianName: c.technicianName,
+        notes: c.notes,
+      );
     }).toList();
 
     // Fetch and filter installations
     final installations = ref.watch(installationsProvider);
     final assignedInstallations = installations.where((i) {
-      if (profile == null) return true;
-      final pName = profile.fullName.trim().toLowerCase();
-      final pEmail = profile.email.trim().toLowerCase();
-      final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d]'), '');
-      final tName = (i.technicianName ?? '').trim().toLowerCase();
-      final tId = (i.technicianId ?? '').trim();
-
-      final matchesId = tId.isNotEmpty && (tId == profile.id);
-      final matchesName = tName.isNotEmpty && (tName == pName || tName.contains(pName) || pName.contains(tName));
-      final matchesEmail = pEmail.isNotEmpty && (tName.contains(pEmail) || (i.notes?.toLowerCase().contains(pEmail) ?? false));
-      final matchesPhone = pPhone.isNotEmpty && ((i.notes?.replaceAll(RegExp(r'[^\d]'), '').contains(pPhone) ?? false));
-      final matchesSupporter = pName.isNotEmpty && (i.notes?.toLowerCase().contains(pName) ?? false);
-
-      return matchesId || matchesName || matchesEmail || matchesPhone || matchesSupporter;
+      return isTaskAssignedToTechnician(
+        profile: profile,
+        availableTechnicians: techsAsync.value,
+        technicianId: i.technicianId,
+        technicianName: i.technicianName,
+        notes: i.notes,
+      );
     }).toList();
 
     // Use current tab list
@@ -199,7 +188,18 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        titleSpacing: 16,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          tooltip: 'Back to Dashboard',
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.technicianDashboard);
+            }
+          },
+        ),
+        titleSpacing: 0,
         backgroundColor: const Color(0xFF1E1B4B),
         elevation: 0,
         title: Row(

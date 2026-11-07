@@ -458,7 +458,7 @@ class _ProspectsListScreenState extends ConsumerState<ProspectsListScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  '\ (\)',
+                                  '${entry.key} (${entry.value.length})',
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
                                 ),
                               ),
@@ -617,7 +617,7 @@ loading: () => const Center(child: CircularProgressIndicator()),
     final r = role.toLowerCase();
     if (r == 'boq') return 'BOQ Staff';
     if (r == 'factory') return 'Factory Staff';
-    if (r == 'purchase') return 'Material Requisition Staff';
+    if (r == 'purchase') return 'Purchase Staff';
     if (r == 'sales') return 'Sales Executive';
     if (r == 'sales_head') return 'Sales Head';
     if (r == 'admin') return 'Admin';

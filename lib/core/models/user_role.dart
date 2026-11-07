@@ -76,7 +76,7 @@ enum UserRole {
       case UserRole.factory:
         return 'Factory Staff';
       case UserRole.purchase:
-        return 'Material Requisition Staff';
+        return 'Purchase Staff';
       case UserRole.boq:
         return 'BOQ Staff';
       case UserRole.technician:
@@ -142,10 +142,7 @@ enum UserRole {
       this == UserRole.sales ||
       this == UserRole.salesHead ||
       this == UserRole.serviceHead ||
-      this == UserRole.crmStaff ||
-      this == UserRole.boq ||
-      this == UserRole.factory ||
-      this == UserRole.purchase;
+      this == UserRole.crmStaff;
 
   bool get canAccessInstallation =>
       this == UserRole.admin ||

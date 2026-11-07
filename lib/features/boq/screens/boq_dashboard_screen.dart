@@ -11,6 +11,7 @@ import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../reports/widgets/daily_report_modal.dart';
 import '../../../core/widgets/network_status_chip.dart';
+import '../../crm/screens/prospects_list_screen.dart' show AddProspectForm;
 
 final boqDashboardDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
@@ -67,21 +68,19 @@ final boqDashboardDataProvider = FutureProvider.autoDispose<Map<String, dynamic>
     totalBoqItems = (boqRes as List).length;
   } catch (_) {}
 
-  // 4. Fetch prospects created today by this user
-  int todayProspectsCount = 0;
+  // 4. Fetch daily tasks count for today
+  int todayTasksCount = 0;
   if (userId != null) {
     try {
       final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0).toIso8601String();
-      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      final pRes = await supabase
-          .from('crm_prospects')
+      final tRes = await supabase
+          .from('daily_tasks')
           .select('id')
-          .eq('created_by', userId)
-          .gte('created_at', startOfDay)
-          .lte('created_at', endOfDay);
-      todayProspectsCount = (pRes as List).length;
+          .eq('user_id', userId)
+          .eq('task_date', todayStr);
+      todayTasksCount = (tRes as List).length;
     } catch (_) {}
   }
 
@@ -89,7 +88,7 @@ final boqDashboardDataProvider = FutureProvider.autoDispose<Map<String, dynamic>
     'pendingBoqDeals': pendingBoqDeals,
     'activeDealsCount': activeDealsCount,
     'totalBoqItems': totalBoqItems,
-    'todayProspectsCount': todayProspectsCount,
+    'todayTasksCount': todayTasksCount,
   };
 });
 
@@ -131,14 +130,14 @@ class BoqDashboardScreen extends ConsumerWidget {
           slivers: [
             // Gradient Header with User Info & Actions
             SliverAppBar(
-              expandedHeight: 180,
+              expandedHeight: 154,
               pinned: true,
               backgroundColor: const Color(0xFF0F172A),
               elevation: 0,
               clipBehavior: Clip.antiAlias,
               automaticallyImplyLeading: false,
               shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
               flexibleSpace: FlexibleSpaceBar(
                 background: Stack(
@@ -339,7 +338,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                   final pendingBoqDeals = data['pendingBoqDeals'] as List<Map<String, dynamic>>;
                   final activeDealsCount = data['activeDealsCount'] as int;
                   final totalBoqItems = data['totalBoqItems'] as int;
-                  final todayProspectsCount = data['todayProspectsCount'] as int;
+                  final todayTasksCount = data['todayTasksCount'] as int? ?? 0;
                   final roles = profile?.roles ?? [];
                   final hasBoqRole = roles.contains(UserRole.boq);
                   final hasFactoryRole = roles.contains(UserRole.factory);
@@ -353,7 +352,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                   ].join('/');
 
                   return Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -397,18 +396,18 @@ class BoqDashboardScreen extends ConsumerWidget {
                                   onTap: () => context.push('/boq/manage-items'),
                                 ),
                                 _buildMetricCard(
-                                  title: 'Prospects\nToday',
-                                  count: todayProspectsCount.toString(),
-                                  icon: Icons.person_add_alt_1_outlined,
+                                  title: 'Today\'s\nTasks',
+                                  count: todayTasksCount.toString(),
+                                  icon: Icons.fact_check_outlined,
                                   color: const Color(0xFF8B5CF6),
-                                  onTap: () => context.go('/crm/prospects'),
+                                  onTap: () => context.push(AppRoutes.dailyTasks),
                                 ),
                               ],
                             );
                           },
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 14),
 
                         // Section: Quick Actions
                         const Text(
@@ -420,7 +419,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
 
                         Builder(
                           builder: (context) {
@@ -436,17 +435,42 @@ class BoqDashboardScreen extends ConsumerWidget {
                               _buildQuickActionButton(
                                 context,
                                 title: 'Deals & Pipelines',
-
-                                icon: Icons.work_outline,
+                                icon: Icons.handshake_outlined,
                                 color: const Color(0xFF2563EB),
                                 isDark: isDark,
                                 onTap: () => context.go(AppRoutes.pipelines),
+                              ),
+                              _buildQuickActionButton(
+                                context,
+                                title: 'Add Prospect',
+                                icon: Icons.person_add_alt_1_outlined,
+                                color: const Color(0xFF6366F1),
+                                isDark: isDark,
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    useRootNavigator: true,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (ctx) {
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                                        ),
+                                        child: const SafeArea(
+                                          bottom: true,
+                                          child: AddProspectForm(),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               ),
                               if (hasBoqRole)
                                 _buildQuickActionButton(
                                   context,
                                   title: 'Configure BOQ',
-                                  icon: Icons.format_list_bulleted,
+                                  icon: Icons.tune_outlined,
                                   color: const Color(0xFFD97706),
                                   isDark: isDark,
                                   onTap: () => context.push('/boq/manage-items'),
@@ -493,24 +517,16 @@ class BoqDashboardScreen extends ConsumerWidget {
                                 isDark: isDark,
                                 onTap: () => DailyReportModal.show(context, ref),
                               ),
-                              _buildQuickActionButton(
-                                context,
-                                title: 'Customer Prospects',
-                                icon: Icons.person_search_outlined,
-                                color: const Color(0xFF6366F1),
-                                isDark: isDark,
-                                onTap: () => context.go('/crm/prospects'),
-                              ),
                             ];
 
                             return Column(
                               children: [
                                 for (int i = 0; i < buttons.length; i += 2) ...[
-                                  if (i > 0) const SizedBox(height: 12),
+                                  if (i > 0) const SizedBox(height: 10),
                                   Row(
                                     children: [
                                       Expanded(child: buttons[i]),
-                                      const SizedBox(width: 12),
+                                      const SizedBox(width: 10),
                                       if (i + 1 < buttons.length)
                                         Expanded(child: buttons[i + 1])
                                       else
@@ -523,7 +539,7 @@ class BoqDashboardScreen extends ConsumerWidget {
                           },
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 14),
 
                         // Section: Operations Deals
                         Row(

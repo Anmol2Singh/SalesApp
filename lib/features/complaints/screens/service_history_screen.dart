@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/complaints_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
+import '../../../core/router/app_router.dart';
 
 class ServiceHistoryScreen extends ConsumerStatefulWidget {
   const ServiceHistoryScreen({super.key});
@@ -27,6 +28,7 @@ class _ServiceHistoryScreenState extends ConsumerState<ServiceHistoryScreen> {
   Widget build(BuildContext context) {
     final complaints = ref.watch(complaintsProvider);
     final profile = ref.watch(currentProfileProvider);
+    final techsAsync = ref.watch(availableTechniciansProvider);
     
     var history = complaints.where((c) => c.status == 'closed' || c.status == 'resolved').toList();
     
@@ -36,10 +38,14 @@ class _ServiceHistoryScreenState extends ConsumerState<ServiceHistoryScreen> {
                        profile?.roles.contains(UserRole.serviceHead) == true;
 
     if (isTech && !canViewAll) {
-      final pName = profile!.fullName.toLowerCase();
       history = history.where((c) {
-        final tName = c.technicianName?.toLowerCase() ?? '';
-        return tName.contains(pName) || pName.contains(tName) || c.technicianId == profile.id;
+        return isTaskAssignedToTechnician(
+          profile: profile,
+          availableTechnicians: techsAsync.value,
+          technicianId: c.technicianId,
+          technicianName: c.technicianName,
+          notes: c.notes,
+        );
       }).toList();
     }
 
@@ -60,12 +66,12 @@ class _ServiceHistoryScreenState extends ConsumerState<ServiceHistoryScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          tooltip: 'Back to Complaints Dashboard',
+          tooltip: 'Back',
           onPressed: () {
             if (Navigator.canPop(context)) {
               context.pop();
             } else {
-              context.go('/complaints/dashboard');
+              context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.technicianDashboard);
             }
           },
         ),

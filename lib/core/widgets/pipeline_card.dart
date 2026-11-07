@@ -148,7 +148,7 @@ class PipelineCard extends ConsumerWidget {
         roles.contains(UserRole.factory) ||
         roles.contains(UserRole.purchase);
 
-    // Requirement 7: For BOQ, Factory & Material roles, don't show Deal Amount
+    // For BOQ, Factory & Purchase roles, don't show Deal Amount
     final hideDealAmount = isBoqFactoryOrMaterial && !isSalesOrAdmin;
 
     final bool requiresApproval =

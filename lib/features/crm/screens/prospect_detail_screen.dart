@@ -945,7 +945,7 @@ class _ProspectDetailScreenState extends ConsumerState<ProspectDetailScreen> {
     final r = role.toLowerCase();
     if (r == 'boq') return 'BOQ Staff';
     if (r == 'factory') return 'Factory Staff';
-    if (r == 'purchase') return 'Material Requisition Staff';
+    if (r == 'purchase') return 'Purchase Staff';
     if (r == 'sales') return 'Sales Executive';
     if (r == 'sales_head') return 'Sales Head';
     if (r == 'admin') return 'Admin';

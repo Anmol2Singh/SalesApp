@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/models/user_role.dart';
 import '../../../core/services/excel_service.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/complaints_provider.dart';
 import '../data/models/complaint_model.dart';
 
@@ -48,8 +50,29 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen>
 
   @override
   Widget build(BuildContext context) {
-    final complaints = ref.watch(complaintsProvider);
+    final rawComplaints = ref.watch(complaintsProvider);
     final isLoading = ref.watch(complaintsLoadingProvider);
+    final profile = ref.watch(currentProfileProvider);
+    final techsAsync = ref.watch(availableTechniciansProvider);
+    final isPureTechnician = profile != null &&
+        profile.roles.contains(UserRole.technician) &&
+        !profile.roles.contains(UserRole.admin) &&
+        !profile.roles.contains(UserRole.manager) &&
+        !profile.roles.contains(UserRole.serviceHead) &&
+        !profile.roles.contains(UserRole.complaints);
+
+    // If pure technician, only show complaints assigned to them
+    final complaints = isPureTechnician
+        ? rawComplaints.where((c) {
+            return isTaskAssignedToTechnician(
+              profile: profile,
+              availableTechnicians: techsAsync.value,
+              technicianId: c.technicianId,
+              technicianName: c.technicianName,
+              notes: c.notes,
+            );
+          }).toList()
+        : rawComplaints;
 
     // Counts for status filters
     final pendingCount = complaints.where((c) => c.status == 'pending').length;
@@ -66,7 +89,8 @@ class _ComplaintsListScreenState extends ConsumerState<ComplaintsListScreen>
             if (Navigator.canPop(context)) {
               context.pop();
             } else {
-              context.go(AppRoutes.complaintsDashboard);
+              final p = ref.read(currentProfileProvider);
+              context.go(p != null ? getRoleHome(p.primaryRole) : AppRoutes.technicianDashboard);
             }
           },
         ),

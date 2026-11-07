@@ -78,9 +78,6 @@ class RoleAccess {
       UserRole.salesHead,
       UserRole.sales,
       UserRole.crmStaff,
-      UserRole.boq,
-      UserRole.factory,
-      UserRole.purchase,
     ]);
   }
 

@@ -344,6 +344,33 @@ final routerProvider = Provider<GoRouter>((ref) {
               return _getRoleHome(profile.primaryRole);
             }
           }
+
+          // Guard pure Technician: redirect Coordinator screens to Technician Dashboard
+          final isPureTechnician = profile.roles.contains(UserRole.technician) &&
+              !isAdminOrManager &&
+              !isServiceHead &&
+              !profile.roles.contains(UserRole.complaints);
+          if (isPureTechnician &&
+              (location == AppRoutes.complaintsDashboard ||
+                  location == AppRoutes.assignTechnician ||
+                  location == '/complaints/technicians')) {
+            return AppRoutes.technicianDashboard;
+          }
+
+          // Guard pure Operations (BOQ, Factory, Purchase): cannot access CRM screens or customers
+          final isPureOperations = (profile.roles.contains(UserRole.boq) ||
+                  profile.roles.contains(UserRole.factory) ||
+                  profile.roles.contains(UserRole.purchase)) &&
+              !isAdminOrManager &&
+              !profile.roles.contains(UserRole.sales) &&
+              !profile.roles.contains(UserRole.salesHead) &&
+              !profile.roles.contains(UserRole.crmStaff);
+          if (isPureOperations &&
+              (location.startsWith('/crm') ||
+                  location == AppRoutes.customers ||
+                  location.startsWith('/customers'))) {
+            return AppRoutes.boqDashboard;
+          }
         }
       }
 

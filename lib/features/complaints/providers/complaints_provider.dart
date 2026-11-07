@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../data/models/complaint_model.dart';
+import '../../../core/models/profile.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/storage_service.dart';
 
@@ -654,4 +655,89 @@ class ErrorCodesNotifier extends StateNotifier<List<ErrorCodeItem>> {
 final errorCodesProvider = StateNotifierProvider<ErrorCodesNotifier, List<ErrorCodeItem>>((ref) {
   return ErrorCodesNotifier(ref);
 });
+
+/// Multi-factor matcher to robustly check if a task (complaint/installation)
+/// is assigned to a technician profile.
+bool isTaskAssignedToTechnician({
+  required Profile? profile,
+  List<TechnicianInfo>? availableTechnicians,
+  required String? technicianId,
+  required String? technicianName,
+  String? notes,
+}) {
+  if (profile == null) return false;
+
+  final pId = profile.id.trim();
+  final pName = profile.fullName.trim().toLowerCase();
+  final pEmail = profile.email.trim().toLowerCase();
+  final pPhone = (profile.phone ?? '').trim().replaceAll(RegExp(r'[^\d]'), '');
+
+  final tId = (technicianId ?? '').trim();
+  final tName = (technicianName ?? '').trim().toLowerCase();
+  final tNotes = (notes ?? '').toLowerCase();
+
+  // 1. Direct ID match
+  if (tId.isNotEmpty && tId == pId) return true;
+
+  // 2. Available technicians table ID match
+  final matchingIds = <String>{if (pId.isNotEmpty) pId};
+  final matchingNames = <String>{if (pName.isNotEmpty) pName};
+
+  if (availableTechnicians != null && availableTechnicians.isNotEmpty) {
+    for (final tech in availableTechnicians) {
+      final techId = tech.id.trim();
+      final techEmail = (tech.email ?? '').trim().toLowerCase();
+      final techPhone = (tech.phone ?? '').trim().replaceAll(RegExp(r'[^\d]'), '');
+      final techName = tech.name.trim().toLowerCase();
+
+      final matchesTech = (techId.isNotEmpty && techId == pId) ||
+          (pEmail.isNotEmpty && techEmail.isNotEmpty && techEmail == pEmail) ||
+          (pPhone.length >= 7 && techPhone.length >= 7 && techPhone == pPhone) ||
+          (pName.isNotEmpty &&
+              techName.isNotEmpty &&
+              (techName == pName || techName.contains(pName) || pName.contains(techName)));
+
+      if (matchesTech) {
+        if (techId.isNotEmpty) matchingIds.add(techId);
+        if (techName.isNotEmpty) matchingNames.add(techName);
+      }
+    }
+  }
+
+  if (tId.isNotEmpty && matchingIds.contains(tId)) return true;
+
+  // 3. Name match across matched names & profile name
+  if (tName.isNotEmpty) {
+    for (final name in matchingNames) {
+      if (tName == name || tName.contains(name) || name.contains(tName)) {
+        return true;
+      }
+    }
+
+    // Tokenized word matching (e.g. "Sohail" matches "Sohail Chiplunkar")
+    final pTokens = pName.split(RegExp(r'\s+')).where((tok) => tok.length >= 3).toList();
+    final tTokens = tName.split(RegExp(r'\s+')).where((tok) => tok.length >= 3).toList();
+    for (final pTok in pTokens) {
+      for (final tTok in tTokens) {
+        if (pTok == tTok) return true;
+      }
+    }
+  }
+
+  // 4. Email match in name or notes
+  if (pEmail.isNotEmpty) {
+    if (tName.contains(pEmail) || tNotes.contains(pEmail)) return true;
+  }
+
+  // 5. Phone match in notes
+  if (pPhone.length >= 7) {
+    final digitsInNotes = tNotes.replaceAll(RegExp(r'[^\d]'), '');
+    if (digitsInNotes.contains(pPhone)) return true;
+  }
+
+  // 6. Name match in notes
+  if (pName.isNotEmpty && tNotes.contains(pName)) return true;
+
+  return false;
+}
 
