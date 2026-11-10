@@ -9,6 +9,7 @@ import '../../../core/models/customer.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/quotation.dart';
 import '../../../core/models/user_role.dart';
+import '../../../core/auth/role_access.dart';
 import '../../../core/widgets/pipeline_card.dart';
 import '../../../core/widgets/shimmer_loader.dart';
 import '../../../core/widgets/sync_status_indicator.dart';
@@ -95,43 +96,29 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
         profile?.roles.contains(UserRole.salesHead) == true;
 
     final roles = profile?.roles ?? [];
-    final isSalesOrAdmin = profile?.primaryRole == UserRole.admin ||
-        profile?.primaryRole == UserRole.manager ||
-        profile?.primaryRole == UserRole.salesHead ||
-        profile?.primaryRole == UserRole.sales ||
-        roles.contains(UserRole.admin) ||
-        roles.contains(UserRole.manager) ||
-        roles.contains(UserRole.salesHead) ||
+    final isSalesExecutive = profile?.primaryRole == UserRole.sales ||
         roles.contains(UserRole.sales);
-
-    final hasBoqRole =
-        profile?.primaryRole == UserRole.boq || roles.contains(UserRole.boq);
+    final hasBoqOrServiceRole = profile?.primaryRole == UserRole.boq ||
+        roles.contains(UserRole.boq) ||
+        profile?.primaryRole == UserRole.serviceHead ||
+        roles.contains(UserRole.serviceHead) ||
+        profile?.primaryRole == UserRole.installation ||
+        roles.contains(UserRole.installation) ||
+        profile?.primaryRole == UserRole.complaints ||
+        roles.contains(UserRole.complaints);
     final hasFactoryRole = profile?.primaryRole == UserRole.factory ||
         roles.contains(UserRole.factory);
     final hasMaterialRole = profile?.primaryRole == UserRole.purchase ||
         roles.contains(UserRole.purchase);
 
-    final isRoleRestricted =
-        !isSalesOrAdmin && (hasBoqRole || hasFactoryRole || hasMaterialRole);
+    final canSeeQuotation = canViewAll || isSalesExecutive;
+    final canSeeSalesOrder = canViewAll || isSalesExecutive;
+    final canSeeBoq = canViewAll || hasBoqOrServiceRole;
+    final canSeeFactory = canViewAll || hasBoqOrServiceRole || hasFactoryRole;
+    final canSeePurchase = canViewAll || hasBoqOrServiceRole || hasFactoryRole || hasMaterialRole;
 
     bool isDealVisibleForUser(SalesPipeline p) {
-      if (!isRoleRestricted) return true;
-      final isCompleted = p.status == PipelineStatus.completed ||
-          p.currentStep == PipelineStep.completed;
-      if (isCompleted) return true;
-
-      final stepIndex = p.currentStep.stepIndex;
-      if (hasBoqRole && stepIndex >= PipelineStep.boq.stepIndex) {
-        return true;
-      }
-      if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex) {
-        return true;
-      }
-      if (hasMaterialRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex) {
-        return true;
-      }
-
-      return false;
+      return RoleAccess.isDealVisibleForUser(p, profile);
     }
 
     return Scaffold(
@@ -397,17 +384,27 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                           child: Row(
                             children: [
                               _buildQuickChip('All', 'all'),
-                              const SizedBox(width: 6),
-                              _buildQuickChip('Quotation', 'quotation'),
-                              const SizedBox(width: 6),
-                              _buildQuickChip('Sales Order', 'sales_order'),
-                              const SizedBox(width: 6),
-                              _buildQuickChip('BOQ', 'boq'),
-                              const SizedBox(width: 6),
-                              _buildQuickChip('Factory Order', 'factory_order'),
-                              const SizedBox(width: 6),
-                              _buildQuickChip(
-                                  'Material Requisition', 'material_requisition'),
+                              if (canSeeQuotation) ...[
+                                const SizedBox(width: 6),
+                                _buildQuickChip('Quotation', 'quotation'),
+                              ],
+                              if (canSeeSalesOrder) ...[
+                                const SizedBox(width: 6),
+                                _buildQuickChip('Sales Order', 'sales_order'),
+                              ],
+                              if (canSeeBoq) ...[
+                                const SizedBox(width: 6),
+                                _buildQuickChip('BOQ', 'boq'),
+                              ],
+                              if (canSeeFactory) ...[
+                                const SizedBox(width: 6),
+                                _buildQuickChip('Factory Order', 'factory_order'),
+                              ],
+                              if (canSeePurchase) ...[
+                                const SizedBox(width: 6),
+                                _buildQuickChip(
+                                    'Material Requisition', 'material_requisition'),
+                              ],
                             ],
                           ),
                         ),
@@ -495,13 +492,15 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                         .toLowerCase();
                     final quoteNo =
                         (p.quotation?.quotationNumber ?? '').toLowerCase();
+                    final baseQuoteNo = p.baseQuotationNumber.toLowerCase();
 
                     final matches = custName.contains(q) ||
                         compName.contains(q) ||
                         phone.contains(q) ||
                         prod.contains(q) ||
                         salesman.contains(q) ||
-                        quoteNo.contains(q);
+                        quoteNo.contains(q) ||
+                        baseQuoteNo.contains(q);
 
                     if (!matches) return false;
                   }
@@ -752,7 +751,9 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
   }
 
   void _exportExcel(BuildContext context, WidgetRef ref) async {
-    final pipelines = ref.read(pipelinesNotifierProvider).value ?? [];
+    final raw = ref.read(pipelinesNotifierProvider).value ?? [];
+    final profile = ref.read(currentProfileProvider);
+    final pipelines = raw.where((p) => RoleAccess.isDealVisibleForUser(p, profile)).toList();
     if (pipelines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No data to export')),

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/user_role.dart';
@@ -13,14 +14,19 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
+import '../../../core/models/quotation.dart';
+import '../../../core/models/sales_order.dart';
 import '../../../core/models/factory_order.dart';
 import '../../../core/models/purchase_order.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
+import '../../../core/utils/financial_year_helper.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../providers/pipelines_provider.dart';
 import '../../sales_order/widgets/delivery_challan_modal.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../../core/auth/role_access.dart';
 import '../../quotation_generator/data/qg_noc_repository.dart';
 import '../../quotation_generator/models/qg_noc_document.dart';
 import '../../quotation_generator/models/qg_noc_builder_state.dart';
@@ -30,24 +36,49 @@ import '../../quotation_generator/services/qg_noc_extractor.dart';
 /// Helper service for Work Progress metadata persistence & live evaluations.
 class WorkProgressService {
   static const String _wpTagPrefix = '[WORK_PROGRESS:';
-  static const String _wpTagSuffix = ']';
+  static const String _wpTagSuffix = ':WORK_PROGRESS]';
+
+  static Map<String, dynamic> _extractMetaFromNotes(String? notes) {
+    if (notes == null || !notes.contains(_wpTagPrefix)) return {};
+    final start = notes.indexOf(_wpTagPrefix) + _wpTagPrefix.length;
+    int end = notes.indexOf(_wpTagSuffix, start);
+    if (end == -1) {
+      end = notes.lastIndexOf(']');
+    }
+    if (end != -1 && end > start) {
+      try {
+        final jsonStr = notes.substring(start, end);
+        final parsed = jsonDecode(jsonStr);
+        if (parsed is Map) {
+          return Map<String, dynamic>.from(parsed);
+        }
+      } catch (_) {}
+    }
+    return {};
+  }
+
+  static String _replaceWorkProgressTag(String text, String newTag) {
+    if (!text.contains(_wpTagPrefix)) {
+      return text.trim().isEmpty ? newTag : '${text.trim()} $newTag';
+    }
+    final start = text.indexOf(_wpTagPrefix);
+    int end = text.indexOf(_wpTagSuffix, start);
+    if (end != -1) {
+      end += _wpTagSuffix.length;
+    } else {
+      end = text.lastIndexOf(']');
+      if (end != -1) end += 1;
+    }
+    if (end == -1 || end <= start) {
+      return '$text $newTag';
+    }
+    return '${text.substring(0, start)}$newTag${text.substring(end)}'.trim();
+  }
 
   /// Extracts work progress metadata from pipeline notes or steps_config.
   static Map<String, dynamic> parseProgressMeta(SalesPipeline pipeline) {
-    final notes = pipeline.notes;
-    if (notes != null && notes.contains(_wpTagPrefix)) {
-      final start = notes.indexOf(_wpTagPrefix) + _wpTagPrefix.length;
-      final end = notes.indexOf(_wpTagSuffix, start);
-      if (end != -1) {
-        try {
-          final jsonStr = notes.substring(start, end);
-          final parsed = jsonDecode(jsonStr);
-          if (parsed is Map) {
-            return Map<String, dynamic>.from(parsed);
-          }
-        } catch (_) {}
-      }
-    }
+    final fromNotes = _extractMetaFromNotes(pipeline.notes);
+    if (fromNotes.isNotEmpty) return fromNotes;
 
     if (pipeline.stepsConfig != null) {
       for (final s in pipeline.stepsConfig!) {
@@ -58,6 +89,93 @@ class WorkProgressService {
       }
     }
     return {};
+  }
+
+  /// Returns the list of recorded delivery challans for this pipeline.
+  static List<Map<String, dynamic>> getDeliveryChallans(SalesPipeline pipeline) {
+    final meta = parseProgressMeta(pipeline);
+    if (meta['delivery_challans'] is List) {
+      return List<Map<String, dynamic>>.from(
+        (meta['delivery_challans'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
+      );
+    }
+    return [];
+  }
+
+  /// Records a newly generated delivery challan for this pipeline.
+  static Future<void> recordDeliveryChallan(
+    SupabaseClient supabase,
+    String pipelineId,
+    Map<String, dynamic> challanData,
+  ) async {
+    final res = await supabase
+        .from('sales_pipelines')
+        .select('notes')
+        .eq('id', pipelineId)
+        .maybeSingle();
+
+    final currentNotes = res?['notes']?.toString() ?? '';
+    final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
+
+    final List<dynamic> challans = (currentMeta['delivery_challans'] is List)
+        ? List<dynamic>.from(currentMeta['delivery_challans'] as List)
+        : [];
+    challans.add(challanData);
+    currentMeta['delivery_challans'] = challans;
+    currentMeta['challan_generated'] = true;
+    currentMeta['site_dispatched'] = true;
+    currentMeta['dispatch_ready'] = true;
+
+    // Check if factory is also dispatched, or default to overall dispatched
+    final bool fDisp = currentMeta['factory_dispatched'] == true;
+    if (fDisp || challans.isNotEmpty) {
+      currentMeta['dispatched'] = true;
+    }
+
+    final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
+    final newNotes = _replaceWorkProgressTag(currentNotes, newTag);
+
+    await supabase.from('sales_pipelines').update({
+      'notes': newNotes,
+    }).eq('id', pipelineId);
+  }
+
+  /// Updates specific sub-track statuses (Factory / Site)
+  static Future<void> updateTrackStatus(
+    SupabaseClient supabase,
+    String pipelineId, {
+    bool? factoryReady,
+    bool? factoryDispatched,
+    bool? siteReady,
+    bool? siteDispatched,
+  }) async {
+    final res = await supabase
+        .from('sales_pipelines')
+        .select('notes')
+        .eq('id', pipelineId)
+        .maybeSingle();
+
+    final currentNotes = res?['notes']?.toString() ?? '';
+    final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
+
+    if (factoryReady != null) currentMeta['factory_ready'] = factoryReady;
+    if (factoryDispatched != null) currentMeta['factory_dispatched'] = factoryDispatched;
+    if (siteReady != null) currentMeta['site_ready'] = siteReady;
+    if (siteDispatched != null) currentMeta['site_dispatched'] = siteDispatched;
+
+    // If both tracks are dispatched, mark overall dispatched
+    final bool fDisp = currentMeta['factory_dispatched'] == true;
+    final bool sDisp = currentMeta['site_dispatched'] == true;
+    if (fDisp && sDisp) {
+      currentMeta['dispatched'] = true;
+    }
+
+    final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
+    final newNotes = _replaceWorkProgressTag(currentNotes, newTag);
+
+    await supabase.from('sales_pipelines').update({
+      'notes': newNotes,
+    }).eq('id', pipelineId);
   }
 
   /// Updates work progress metadata in sales_pipelines notes.
@@ -75,29 +193,14 @@ class WorkProgressService {
         .maybeSingle();
 
     final currentNotes = res?['notes']?.toString() ?? '';
-    Map<String, dynamic> currentMeta = {};
-    if (currentNotes.contains(_wpTagPrefix)) {
-      final start = currentNotes.indexOf(_wpTagPrefix) + _wpTagPrefix.length;
-      final end = currentNotes.indexOf(_wpTagSuffix, start);
-      if (end != -1) {
-        try {
-          final jsonStr = currentNotes.substring(start, end);
-          currentMeta = Map<String, dynamic>.from(jsonDecode(jsonStr) as Map);
-        } catch (_) {}
-      }
-    }
+    final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
 
     if (dispatchReady != null) currentMeta['dispatch_ready'] = dispatchReady;
     if (challanGenerated != null) currentMeta['challan_generated'] = challanGenerated;
     if (dispatched != null) currentMeta['dispatched'] = dispatched;
 
     final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
-    String newNotes;
-    if (currentNotes.contains(_wpTagPrefix)) {
-      newNotes = currentNotes.replaceAll(RegExp(r'\[WORK_PROGRESS:.*?\]'), newTag);
-    } else {
-      newNotes = currentNotes.trim().isEmpty ? newTag : '${currentNotes.trim()} $newTag';
-    }
+    final newNotes = _replaceWorkProgressTag(currentNotes, newTag);
 
     await supabase.from('sales_pipelines').update({
       'notes': newNotes,
@@ -130,9 +233,9 @@ class WorkProgressService {
   }
 }
 
-/// Dynamic Work Progress Tracker displaying the 10 real workflow steps:
-/// Quotation -> Sales Order -> Dispatch Ready -> Dispatched -> Factory BOQ ->
-/// Site BOQ -> Factory Manufacture -> PO -> Installation -> NOC.
+/// Dynamic Work Progress Tracker displaying the 5 core operational phases:
+/// Quote -> Sales Order -> Material & Dispatch -> Install -> NOC
+/// with Factory & Site sub-tracks and a dedicated Delivery Challan generator slot.
 class WorkProgressBox extends ConsumerStatefulWidget {
   final SalesPipeline pipeline;
 
@@ -163,889 +266,305 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.pipeline.id != widget.pipeline.id ||
         oldWidget.pipeline.notes != widget.pipeline.notes ||
-        oldWidget.pipeline.updatedAt != widget.pipeline.updatedAt) {
+        oldWidget.pipeline.currentStep != widget.pipeline.currentStep) {
       _fetchAuxData();
     }
   }
 
   Future<void> _fetchAuxData() async {
-    try {
-      final supabase = ref.read(supabaseClientProvider);
+    final supabase = ref.read(supabaseClientProvider);
+    final custId = widget.pipeline.customerId;
+    final pId = widget.pipeline.id;
 
-      // 1. Fetch real customer installation tickets
+    try {
+      // 1. Check installations
       final instList = await supabase
           .from('installations')
-          .select('id, ticket_number, status, notes, created_at, customer_id')
-          .or('customer_id.eq.${widget.pipeline.customerId},notes.ilike.%Deal ID: ${widget.pipeline.id}%')
-          .order('created_at', ascending: false);
+          .select('id, ticket_number, status, notes, customer_id')
+          .or('customer_id.eq.$custId,notes.ilike.%Deal ID: $pId%');
 
-      bool foundCreated = false;
-      bool foundResolved = false;
-      String? ticketNo;
-      String rawStatus = 'none';
+      bool isCreated = false;
+      bool isDone = false;
+      String? tNum;
+      String sStatus = 'none';
 
       if (instList.isNotEmpty) {
-        foundCreated = true;
+        isCreated = true;
         for (final item in instList) {
           final m = Map<String, dynamic>.from(item as Map);
           final s = (m['status']?.toString() ?? '').toLowerCase();
-          ticketNo ??= m['ticket_number']?.toString();
-          rawStatus = s;
+          tNum = m['ticket_number']?.toString();
+          sStatus = s;
           if (s == 'resolved' || s == 'closed') {
-            foundResolved = true;
-            ticketNo = m['ticket_number']?.toString();
-            rawStatus = s;
+            isDone = true;
             break;
           }
         }
       }
 
-      // 2. Fetch real NOC documents for this deal
-      QgNocDocument? noc;
-      try {
-        final docs = await QgNocRepository.listNocs(dealId: widget.pipeline.id);
-        if (docs.isNotEmpty) {
-          noc = docs.first;
-        }
-      } catch (_) {}
+      // 2. Check NOC
+      final nocList = await QgNocRepository.instance.getDocumentsForPipeline(pId);
+      final noc = nocList.isNotEmpty ? nocList.first : null;
 
       if (mounted) {
         setState(() {
-          _isInstallationCreated = foundCreated;
-          _isInstallationCompleted = foundResolved;
-          _installationTicketNumber = ticketNo;
-          _installationStatus = rawStatus;
+          _isInstallationCreated = isCreated;
+          _isInstallationCompleted = isDone;
+          _installationTicketNumber = tNum;
+          _installationStatus = sStatus;
           _nocDoc = noc;
           _isNocCompleted = noc != null;
           _loadingAux = false;
         });
       }
     } catch (_) {
+      if (mounted) setState(() => _loadingAux = false);
+    }
+  }
+
+  Future<void> _viewExistingChallan(Map<String, dynamic> challan) async {
+    final pipeline = widget.pipeline;
+    final cust = pipeline.customer;
+    if (cust == null) return;
+
+    final itemsList = (challan['items'] is List) ? (challan['items'] as List) : [];
+    final List<SalesOrderLineItem> customLineItems = itemsList.map((it) {
+      final m = Map<String, dynamic>.from(it as Map);
+      return SalesOrderLineItem(
+        description: m['name']?.toString() ?? '',
+        qty: (m['qty'] as num?)?.toDouble() ?? 1.0,
+        uom: m['uom']?.toString() ?? 'NOS',
+        remark: m['remark']?.toString(),
+        rate: 0.0,
+        discPercent: 0.0,
+        amount: 0.0,
+      );
+    }).toList();
+
+    final so = pipeline.salesOrder;
+    final effectiveSalesOrder = so != null
+        ? so.copyWith(
+            vehicleNumber: challan['vehicle_number']?.toString(),
+            shippingCompany: challan['shipping_company']?.toString(),
+            lineItems: customLineItems,
+          )
+        : SalesOrder(
+            id: 'so_temp',
+            pipelineId: pipeline.id,
+            salesOrderNumber: pipeline.baseQuotationNumber,
+            orderDate: DateTime.tryParse(challan['date']?.toString() ?? '') ?? DateTime.now(),
+            vehicleNumber: challan['vehicle_number']?.toString(),
+            shippingCompany: challan['shipping_company']?.toString(),
+            billingAddress: cust.address,
+            shippingAddress: cust.address,
+            lineItems: customLineItems,
+            subtotal: 0,
+            cgstRate: 0,
+            sgstRate: 0,
+            cgstAmount: 0,
+            sgstAmount: 0,
+            igstAmount: 0,
+            grandTotal: 0,
+            status: SalesOrderStatus.confirmed,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+
+    final supabase = ref.read(supabaseClientProvider);
+    Map<String, dynamic> templateConfig = {};
+    try {
+      final res = await supabase
+          .from('pdf_templates')
+          .select()
+          .eq('document_type', 'sales_order')
+          .maybeSingle();
+      if (res != null && res['template_config'] != null) {
+        templateConfig = res['template_config'] as Map<String, dynamic>;
+      }
+    } catch (_) {}
+
+    final product = pipeline.product ??
+        Product(
+          id: pipeline.productId,
+          name: 'Product',
+          category: 'Solar',
+          baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+    final challanDate = DateTime.tryParse(challan['date']?.toString() ?? '') ?? DateTime.now();
+    final challanNo = challan['challan_number']?.toString() ?? 'IZY/DC/0001';
+
+    final pdfBytes = await PdfService.generateDeliveryChallanPdf(
+      salesOrder: effectiveSalesOrder,
+      customer: cust,
+      product: product,
+      templateConfig: templateConfig,
+      quotationNumber: pipeline.baseQuotationNumber,
+      challanDate: challanDate,
+      customLineItems: customLineItems,
+      customChallanNumber: challanNo,
+      deliveryTakenBy: challan['delivery_taken_by']?.toString(),
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PdfPreviewScreen(
+          pdfBytes: pdfBytes,
+          fileName: '${challanNo.replaceAll('/', '_')}.pdf',
+        ),
+      ),
+    );
+  }
+
+  void _openDeliveryChallanModal() {
+    final cust = widget.pipeline.customer;
+    if (cust == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Customer information missing on deal.'), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    DeliveryChallanModal.show(
+      context,
+      pipelineId: widget.pipeline.id,
+      customer: cust,
+    );
+  }
+
+  Future<void> _viewQuotationPdf() async {
+    final quot = widget.pipeline.quotation;
+    if (quot == null) return;
+    final supabase = ref.read(supabaseClientProvider);
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final cust = widget.pipeline.customer ??
+          Customer(
+            id: 'cust',
+            companyName: quot.customerName ?? 'Customer',
+            phone: quot.customerPhone ?? '',
+            address: quot.billingAddress ?? '',
+            createdBy: '',
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+
+      final product = widget.pipeline.product ??
+          Product(
+            id: 'prod',
+            name: quot.lineItems.isNotEmpty ? quot.lineItems.first.description : 'Product',
+            category: 'Solar',
+            baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+            isActive: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+
+      Map<String, dynamic> templateConfig = {};
+      try {
+        final res = await supabase.from('pdf_templates').select().eq('document_type', 'quotation').single();
+        templateConfig = res['template_config'] as Map<String, dynamic>;
+      } catch (_) {}
+
+      final bytes = await PdfService.generateQuotationPdf(
+        quotation: quot,
+        customer: cust,
+        product: product,
+        templateConfig: templateConfig,
+      );
+
+      if (mounted) Navigator.pop(context);
       if (mounted) {
-        setState(() => _loadingAux = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: bytes,
+              fileName: 'Quotation_${quot.quotationNumber.replaceAll('/', '_')}.pdf',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final pipeline = widget.pipeline;
-    final meta = WorkProgressService.parseProgressMeta(pipeline);
+  Future<void> _viewSalesOrderPdf() async {
+    final so = widget.pipeline.salesOrder;
+    if (so == null) return;
+    final cust = widget.pipeline.customer;
+    if (cust == null) return;
+    final supabase = ref.read(supabaseClientProvider);
 
-    final profile = ref.watch(currentProfileProvider);
-    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-    final bool isServiceHead = userRoles.contains(UserRole.serviceHead) &&
-        !userRoles.contains(UserRole.admin) &&
-        !userRoles.contains(UserRole.manager) &&
-        !userRoles.contains(UserRole.salesHead);
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
 
-    // Dynamic Step Status calculations
-    final bool step1QuotationDone = pipeline.quotation != null;
-    final bool step2SalesOrderDone = pipeline.salesOrder != null;
+      final product = widget.pipeline.product ??
+          Product(
+            id: 'prod',
+            name: 'Product',
+            category: 'Solar',
+            baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+            isActive: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
 
-    final bool step3DispatchReady = meta['dispatch_ready'] == true;
+      Map<String, dynamic> templateConfig = {};
+      try {
+        final res = await supabase.from('pdf_templates').select().eq('document_type', 'sales_order').single();
+        templateConfig = res['template_config'] as Map<String, dynamic>;
+      } catch (_) {}
 
-    final bool isChallanGenerated = meta['challan_generated'] == true;
-    final bool step4DispatchedDone = meta['dispatched'] == true;
-    final bool step4CanCheck = isChallanGenerated && !step4DispatchedDone;
+      final bytes = await PdfService.generateSalesOrderPdf(
+        salesOrder: so,
+        customer: cust,
+        product: product,
+        templateConfig: templateConfig,
+        variant: 'commercial',
+      );
 
-    final bool step5FactoryBoqDone = pipeline.boq != null &&
-        (pipeline.boq!.items.any((i) => i.scope == 'company') ||
-            pipeline.boq!.isSubmitted ||
-            pipeline.boq!.items.isNotEmpty);
-
-    final bool step6SiteBoqDone = pipeline.boq != null &&
-        (pipeline.boq!.items.any((i) => i.scope == 'customer') ||
-            pipeline.boq!.extraFields.isNotEmpty ||
-            pipeline.boq!.isSubmitted);
-
-    final bool step7FactoryMfgDone = pipeline.factoryOrder != null &&
-        pipeline.factoryOrder!.status == FactoryOrderStatus.completed;
-    final bool step7FactoryMfgInProgress = pipeline.factoryOrder != null &&
-        pipeline.factoryOrder!.status == FactoryOrderStatus.inProduction;
-
-    final bool step8PoDone = pipeline.purchaseOrder != null &&
-        (pipeline.purchaseOrder!.status == PurchaseOrderStatus.received ||
-            pipeline.purchaseOrder!.status == PurchaseOrderStatus.ordered ||
-            pipeline.purchaseOrder!.items.isNotEmpty);
-
-    final bool step9InstallationDone = _isInstallationCompleted;
-
-    // NOC is strictly activated only AFTER Installation is created & completed
-    final bool step10NocActivated = step9InstallationDone;
-    final bool step10NocDone = _isNocCompleted;
-
-    // Count completed steps
-    final stepsCompleted = [
-      step1QuotationDone,
-      step2SalesOrderDone,
-      step3DispatchReady,
-      step4DispatchedDone,
-      step5FactoryBoqDone,
-      step6SiteBoqDone,
-      step7FactoryMfgDone,
-      step8PoDone,
-      step9InstallationDone,
-      step10NocDone,
-    ].where((c) => c).length;
-
-    final double progressFraction = stepsCompleted / 10.0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Bar
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.account_tree_outlined,
-                  size: 20,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Work Progress',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        if (_loadingAux) ...[
-                          const SizedBox(width: 8),
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.primary),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Live order fulfillment & commissioning pipeline',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11.5,
-                        color: AppColors.textSecondary.withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Progress percentage pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: progressFraction == 1.0
-                      ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                      : progressFraction >= 0.5
-                          ? const Color(0xFF2563EB).withValues(alpha: 0.12)
-                          : const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: progressFraction == 1.0
-                        ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                        : progressFraction >= 0.5
-                            ? const Color(0xFF2563EB).withValues(alpha: 0.3)
-                            : const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$stepsCompleted / 10',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: progressFraction == 1.0
-                            ? const Color(0xFF059669)
-                            : progressFraction >= 0.5
-                                ? const Color(0xFF2563EB)
-                                : const Color(0xFFD97706),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '(${(progressFraction * 100).toInt()}%)',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: progressFraction == 1.0
-                            ? const Color(0xFF059669)
-                            : progressFraction >= 0.5
-                                ? const Color(0xFF2563EB)
-                                : const Color(0xFFD97706),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // Sleek gradient progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 4,
-              child: LinearProgressIndicator(
-                value: progressFraction,
-                backgroundColor: AppColors.border.withValues(alpha: 0.6),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  progressFraction == 1.0
-                      ? const Color(0xFF10B981)
-                      : const Color(0xFF2563EB),
-                ),
-              ),
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: bytes,
+              fileName: 'SalesOrder_${so.salesOrderNumber.replaceAll('/', '_')}.pdf',
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Horizontal scrollable step line
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Step 1: Quotation
-                  _buildStepItem(
-                    stepNum: 1,
-                    title: 'Quotation',
-                    isCompleted: step1QuotationDone,
-                    isActive: !step1QuotationDone,
-                    badgeText: step1QuotationDone ? 'Done' : 'Pending',
-                    badgeColor: step1QuotationDone ? AppColors.success : AppColors.textDisabled,
-                    onTap: () => _handleStepTap(1, step1QuotationDone),
-                  ),
-                  _buildConnector(isCompleted: step1QuotationDone),
-
-                  // Step 2: Sales Order
-                  _buildStepItem(
-                    stepNum: 2,
-                    title: 'Sales\nOrder',
-                    isCompleted: step2SalesOrderDone,
-                    isActive: step1QuotationDone && !step2SalesOrderDone,
-                    badgeText: step2SalesOrderDone ? 'Done' : 'Pending',
-                    badgeColor: step2SalesOrderDone ? AppColors.success : AppColors.textDisabled,
-                    onTap: () => _handleStepTap(2, step2SalesOrderDone),
-                  ),
-                  _buildConnector(isCompleted: step2SalesOrderDone),
-
-                  // Step 3: Dispatch Ready (clicking pops up confirmation)
-                  _buildStepItem(
-                    stepNum: 3,
-                    title: 'Dispatch\nReady',
-                    isCompleted: step3DispatchReady,
-                    isActive: step2SalesOrderDone && !step3DispatchReady,
-                    badgeText: step3DispatchReady ? 'Ready ✓' : 'Check',
-                    badgeColor: step3DispatchReady ? AppColors.success : const Color(0xFF2563EB),
-                    hasActionIndicator: !step3DispatchReady,
-                    onTap: _showDispatchReadyDialog,
-                  ),
-                  _buildConnector(isCompleted: step3DispatchReady),
-
-                  // Step 4: Dispatched (activated after delivery challan generated)
-                  _buildStepItem(
-                    stepNum: 4,
-                    title: 'Dispatched',
-                    isCompleted: step4DispatchedDone,
-                    isActive: step4CanCheck,
-                    isDeactivated: !isChallanGenerated && !step4DispatchedDone,
-                    badgeText: step4DispatchedDone
-                        ? 'Dispatched ✓'
-                        : isChallanGenerated
-                            ? 'Check Dispatched'
-                            : 'Challan Req.',
-                    badgeColor: step4DispatchedDone
-                        ? AppColors.success
-                        : isChallanGenerated
-                            ? const Color(0xFF059669)
-                            : AppColors.textDisabled,
-                    hasActionIndicator: step4CanCheck,
-                    customActionWidget: step4CanCheck
-                        ? Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            child: InkWell(
-                              onTap: _showConfirmDispatchedDialog,
-                              borderRadius: BorderRadius.circular(6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF059669),
-                                  borderRadius: BorderRadius.circular(6),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF059669).withValues(alpha: 0.35),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ],
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check_circle, size: 11, color: Colors.white),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      'Check',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        : null,
-                    onTap: () {
-                      if (!isChallanGenerated && !step4DispatchedDone) {
-                        _showChallanRequiredDialog();
-                      } else {
-                        _showConfirmDispatchedDialog();
-                      }
-                    },
-                  ),
-                  _buildConnector(isCompleted: step4DispatchedDone),
-
-                  // Step 5: Factory BOQ
-                  _buildStepItem(
-                    stepNum: 5,
-                    title: 'Factory\nBOQ',
-                    isCompleted: step5FactoryBoqDone,
-                    isActive: step4DispatchedDone && !step5FactoryBoqDone,
-                    badgeText: step5FactoryBoqDone ? 'Done' : 'Pending',
-                    badgeColor: step5FactoryBoqDone ? AppColors.success : AppColors.textDisabled,
-                    onTap: () => _handleStepTap(5, step5FactoryBoqDone),
-                  ),
-                  _buildConnector(isCompleted: step5FactoryBoqDone),
-
-                  // Step 6: Site BOQ
-                  _buildStepItem(
-                    stepNum: 6,
-                    title: 'Site\nBOQ',
-                    isCompleted: step6SiteBoqDone,
-                    isActive: step5FactoryBoqDone && !step6SiteBoqDone,
-                    badgeText: step6SiteBoqDone ? 'Done' : 'Pending',
-                    badgeColor: step6SiteBoqDone ? AppColors.success : AppColors.textDisabled,
-                    onTap: () => _handleStepTap(6, step6SiteBoqDone),
-                  ),
-                  _buildConnector(isCompleted: step6SiteBoqDone),
-
-                  // Step 7: Factory Manufacture
-                  _buildStepItem(
-                    stepNum: 7,
-                    title: 'Factory\nMfg',
-                    isCompleted: step7FactoryMfgDone,
-                    isActive: step7FactoryMfgInProgress || (step6SiteBoqDone && !step7FactoryMfgDone),
-                    badgeText: step7FactoryMfgDone
-                        ? 'Done'
-                        : step7FactoryMfgInProgress
-                            ? 'In Prod'
-                            : 'Pending',
-                    badgeColor: step7FactoryMfgDone
-                        ? AppColors.success
-                        : step7FactoryMfgInProgress
-                            ? const Color(0xFF7C3AED)
-                            : AppColors.textDisabled,
-                    onTap: () => _handleStepTap(7, step7FactoryMfgDone),
-                  ),
-                  _buildConnector(isCompleted: step7FactoryMfgDone),
-
-                  // Step 8: PO (Purchase Order)
-                  _buildStepItem(
-                    stepNum: 8,
-                    title: 'PO',
-                    isCompleted: step8PoDone,
-                    isActive: step7FactoryMfgDone && !step8PoDone,
-                    badgeText: step8PoDone ? 'Done' : 'Pending',
-                    badgeColor: step8PoDone ? AppColors.success : AppColors.textDisabled,
-                    onTap: () => _handleStepTap(8, step8PoDone),
-                  ),
-                  _buildConnector(isCompleted: step8PoDone),
-
-                  // Step 9: Installation (requires created & completed customer installation)
-                  _buildStepItem(
-                    stepNum: 9,
-                    title: 'Installation',
-                    isCompleted: step9InstallationDone,
-                    isActive: _isInstallationCreated && !_isInstallationCompleted,
-                    badgeText: step9InstallationDone
-                        ? 'Done ✓'
-                        : _isInstallationCreated
-                            ? 'In Progress'
-                            : 'Pending',
-                    badgeColor: step9InstallationDone
-                        ? AppColors.success
-                        : _isInstallationCreated
-                            ? const Color(0xFFD97706)
-                            : AppColors.textDisabled,
-                    onTap: _showInstallationDialog,
-                  ),
-                  _buildConnector(isCompleted: step9InstallationDone),
-
-                  // Step 10: NOC (activated only AFTER installation completed)
-                  _buildStepItem(
-                    stepNum: 10,
-                    title: 'NOC',
-                    isCompleted: step10NocDone,
-                    isActive: isServiceHead
-                        ? false
-                        : (step10NocActivated && !step10NocDone),
-                    isDeactivated: !step10NocActivated,
-                    badgeText: step10NocDone
-                        ? 'Issued ✓'
-                        : isServiceHead
-                            ? (step10NocActivated ? 'Not Generated' : 'Locked')
-                            : (step10NocActivated ? 'Generate' : 'Locked'),
-                    badgeColor: step10NocDone
-                        ? const Color(0xFF286B37)
-                        : (step10NocActivated && !isServiceHead)
-                            ? const Color(0xFF059669)
-                            : AppColors.textDisabled,
-                    hasActionIndicator: (step10NocActivated && !step10NocDone && !isServiceHead),
-                    onTap: _handleNocStepTap,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepItem({
-    required int stepNum,
-    required String title,
-    required bool isCompleted,
-    required bool isActive,
-    bool isDeactivated = false,
-    required String badgeText,
-    required Color badgeColor,
-    bool hasActionIndicator = false,
-    Widget? customActionWidget,
-    required VoidCallback onTap,
-  }) {
-    Color circleBg;
-    Widget centerIcon;
-    List<BoxShadow>? shadows;
-
-    if (isCompleted) {
-      circleBg = const Color(0xFF10B981);
-      centerIcon = const Icon(Icons.check, size: 15, color: Colors.white);
-    } else if (isDeactivated) {
-      circleBg = const Color(0xFFF1F5F9);
-      centerIcon = const Icon(Icons.lock_outline_rounded, size: 13, color: Color(0xFF94A3B8));
-    } else if (isActive) {
-      circleBg = hasActionIndicator ? const Color(0xFF2563EB) : const Color(0xFF3B82F6);
-      shadows = [
-        BoxShadow(
-          color: circleBg.withValues(alpha: 0.35),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ];
-      centerIcon = Text(
-        '$stepNum',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
-      );
-    } else {
-      circleBg = const Color(0xFFE2E8F0);
-      centerIcon = Text(
-        '$stepNum',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF64748B),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
+      }
     }
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 70, maxWidth: 84),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: circleBg,
-                shape: BoxShape.circle,
-                border: isDeactivated
-                    ? Border.all(color: const Color(0xFFCBD5E1), width: 1.2)
-                    : null,
-                boxShadow: shadows,
-              ),
-              child: Center(child: centerIcon),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 10,
-                fontWeight: (isActive || isCompleted) ? FontWeight.w700 : FontWeight.w500,
-                color: isDeactivated
-                    ? AppColors.textDisabled
-                    : (isCompleted || isActive)
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                height: 1.15,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            if (customActionWidget != null)
-              customActionWidget
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  badgeText,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w700,
-                    color: badgeColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 
-  Widget _buildConnector({required bool isCompleted}) {
-    return Container(
-      width: 22,
-      height: 2,
-      margin: const EdgeInsets.only(top: 15),
-      color: isCompleted ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
-    );
-  }
-
-  // Step 3 dialog: Dispatch ready popup
-  void _showDispatchReadyDialog() {
-    final meta = WorkProgressService.parseProgressMeta(widget.pipeline);
-    final isReady = meta['dispatch_ready'] == true;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2563EB).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.verified_outlined, color: Color(0xFF2563EB), size: 22),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Dispatch Readiness Check',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isReady
-                  ? 'This order is currently marked as verified and READY for dispatch.'
-                  : 'Are all goods and components inspected, verified, and ready for dispatch?',
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                color: AppColors.textPrimary,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isReady ? Icons.check_circle : Icons.info_outline,
-                    size: 16,
-                    color: isReady ? AppColors.success : const Color(0xFF2563EB),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isReady ? 'Status: Ready for Dispatch' : 'Status: Pending Verification',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isReady ? AppColors.success : const Color(0xFF2563EB),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isReady ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final supabase = ref.read(supabaseClientProvider);
-              await WorkProgressService.updateProgressMeta(
-                supabase,
-                widget.pipeline.id,
-                dispatchReady: !isReady,
-              );
-              ref.invalidate(pipelineDetailProvider(widget.pipeline.id));
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      !isReady
-                          ? '✓ Order marked as Ready for Dispatch.'
-                          : 'Order dispatch ready status reset.',
-                    ),
-                    backgroundColor: !isReady ? AppColors.success : AppColors.warning,
-                  ),
-                );
-              }
-            },
-            child: Text(isReady ? 'Mark as Not Ready' : 'Confirm Dispatch Ready'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Step 4 dialog: Delivery Challan required
-  void _showChallanRequiredDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.lock_outline_rounded, color: AppColors.warning, size: 22),
-            SizedBox(width: 10),
-            Text('Delivery Challan Required', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: const Text(
-          'Before checking this order as Dispatched, a Delivery Challan must be generated for this customer.',
-          style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          if (widget.pipeline.salesOrder != null && widget.pipeline.customer != null)
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                DeliveryChallanModal.show(
-                  context,
-                  pipelineId: widget.pipeline.id,
-                  customer: widget.pipeline.customer!,
-                );
-              },
-              icon: const Icon(Icons.receipt_long, size: 16),
-              label: const Text('Generate Delivery Challan'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // Step 4 dialog: Confirm Dispatched
-  void _showConfirmDispatchedDialog() {
-    final meta = WorkProgressService.parseProgressMeta(widget.pipeline);
-    final isDispatched = meta['dispatched'] == true;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF059669).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.local_shipping, color: Color(0xFF059669), size: 22),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              isDispatched ? 'Dispatched Status' : 'Confirm Dispatch',
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isDispatched
-                  ? 'This order has been verified and recorded as Dispatched.'
-                  : 'Delivery Challan has been generated. Would you like to check and mark this deal as officially Dispatched?',
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.receipt_long, size: 16, color: Color(0xFF059669)),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Delivery Challan: Generated & Verified ✓',
-                      style: TextStyle(fontFamily: 'Inter', fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF059669)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isDispatched ? const Color(0xFFDC2626) : const Color(0xFF059669),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final supabase = ref.read(supabaseClientProvider);
-              await WorkProgressService.updateProgressMeta(
-                supabase,
-                widget.pipeline.id,
-                dispatched: !isDispatched,
-              );
-              ref.invalidate(pipelineDetailProvider(widget.pipeline.id));
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      !isDispatched
-                          ? '✓ Shipment successfully marked as Dispatched!'
-                          : 'Dispatched status reverted.',
-                    ),
-                    backgroundColor: !isDispatched ? AppColors.success : AppColors.warning,
-                  ),
-                );
-              }
-            },
-            child: Text(isDispatched ? 'Revert Dispatch' : 'Check as Dispatched'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Step 9 dialog: Installation status
   void _showInstallationDialog() {
     showDialog(
       context: context,
@@ -1147,206 +666,98 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     );
   }
 
-  // Step 10: NOC Step tap handler
-  Future<void> _handleNocStepTap() async {
-    if (!_isInstallationCompleted) {
+  Future<void> _viewNocPdf(QgNocDocument doc) async {
+    try {
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.lock_outline_rounded, color: AppColors.warning, size: 22),
-              SizedBox(width: 10),
-              Text('NOC Locked', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'The No Objection Certificate (NOC) can only be generated after customer installation has been created and marked as completed/resolved.',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got It')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                context.go(AppRoutes.installationsList);
-              },
-              child: const Text('View Installations'),
-            ),
-          ],
-        ),
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
       );
-      return;
-    }
 
-    // If NOC already issued, view it
-    if (_nocDoc != null) {
-      _viewNocPdf(_nocDoc!);
-      return;
-    }
-
-    final profile = ref.read(currentProfileProvider);
-    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-    final isServiceHead = userRoles.contains(UserRole.serviceHead) &&
-        !userRoles.contains(UserRole.admin) &&
-        !userRoles.contains(UserRole.manager) &&
-        !userRoles.contains(UserRole.salesHead);
-
-    if (isServiceHead) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.info_outline, color: Color(0xFF0284C7), size: 22),
-              SizedBox(width: 10),
-              Text('NOC Not Generated', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'The No Objection Certificate (NOC) has not yet been generated for this deal. Only Sales or Admin roles can generate NOC certificates.',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+      final payload = QgNocPayload(
+        companyName: doc.companySnapshot['company_name'] ?? 'INSIYA TRADING CORPORATION',
+        companyAddress: doc.companySnapshot['company_address'] ?? '',
+        companyEmail: doc.companySnapshot['company_email'] ?? '',
+        companyPhone: doc.companySnapshot['company_phone'] ?? '',
+        companyWebsite: doc.companySnapshot['company_website'] ?? 'www.izyheat.com',
+        logoUrl: doc.companySnapshot['logo_url'],
+        salutation: 'M/s',
+        customerName: doc.customerName,
+        address: doc.siteAddress,
+        productName: doc.productName,
+        subject: 'No Objection Certificate for Installation & Commissioning of ${doc.productName}.',
+        date: doc.issuedOn,
+        equipmentLabel: doc.productName,
+        equipmentLines: doc.equipmentLines,
+        workType: '${doc.productName} Installation work',
+        wiring: 'Done',
+        testing: 'Done',
+        remark: 'All Installation & Commissioning work Completed as per work order',
+        confirmations: doc.confirmations.isNotEmpty
+            ? doc.confirmations
+            : (await QgNocRepository.instance.getProfileForProduct(doc.productName))
+                .confirmationLines
+                .map((l) => l.replaceAll('{Product}', doc.productName))
+                .toList(),
+        closingSentence: doc.closingSentence ??
+            'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
+        wordingMode: NocWordingMode.templateExact,
+        quotationNumber: doc.quotationNumber,
       );
-      return;
-    }
 
-    // Otherwise prompt to generate NOC
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.verified_outlined, color: Color(0xFF286B37), size: 22),
-            SizedBox(width: 10),
-            Text('Generate NOC', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: const Text(
-          'Customer installation is verified and completed. Would you like to generate and finalize the official No Objection Certificate (NOC) now?',
-          style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF286B37),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
+
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: '${doc.nocNumber.replaceAll('/', '_')}.pdf',
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _generateNoc();
-            },
-            child: const Text('Generate NOC Now'),
           ),
-        ],
-      ),
-    );
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating NOC PDF: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
-  // Generate NOC Certificate directly
   Future<void> _generateNoc() async {
+    final pipeline = widget.pipeline;
     final profile = ref.read(currentProfileProvider);
-    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-    final isServiceHead = userRoles.contains(UserRole.serviceHead) &&
-        !userRoles.contains(UserRole.admin) &&
-        !userRoles.contains(UserRole.manager) &&
-        !userRoles.contains(UserRole.salesHead);
-    if (isServiceHead) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Service Head cannot generate NOC certificates.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    if (!_isInstallationCompleted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot generate NOC: Customer installation must be completed first.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Color(0xFF286B37)),
-                SizedBox(width: 16),
-                Text(
-                  'Generating NOC Certificate...',
-                  style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    final supabase = ref.read(supabaseClientProvider);
 
     try {
-      final pipeline = widget.pipeline;
-      final supabase = ref.read(supabaseClientProvider);
-
-      // Fetch live quotation info if present
-      Map<String, dynamic>? qData;
-      if (pipeline.quotation?.id != null) {
-        final res = await supabase.from('quotations').select().eq('id', pipeline.quotation!.id).maybeSingle();
-        if (res != null) qData = res;
-      }
-
-      String customerName = pipeline.customer?.companyName.trim() ?? '';
-      if (customerName.isEmpty) customerName = pipeline.customer?.customerName.trim() ?? '';
-      if (customerName.isEmpty) customerName = 'Customer';
-
-      Map<String, dynamic>? instData;
-      try {
-        final instRes = await supabase.from('installations').select().eq('customer_id', pipeline.customerId).limit(1).maybeSingle();
-        if (instRes != null) instData = instRes;
-      } catch (_) {}
-
-      final siteAddress = QgNocExtractor.resolveSiteAddress(
-        installation: instData,
-        quotation: qData,
-        customer: pipeline.customer != null ? {'address': pipeline.customer!.address} : null,
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
       );
 
-      final rawLines = (qData?['line_items'] as List?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          (pipeline.quotation?.lineItems.map((i) => {
-                'description': i.description,
-                'qty': i.qty,
-                'unit': i.uom,
-              }).toList() ??
-              []);
+      final qRes = await supabase.from('quotations').select().eq('pipeline_id', pipeline.id).maybeSingle();
+      final qData = qRes != null ? Map<String, dynamic>.from(qRes) : null;
+
+      final custRes = await supabase.from('customers').select().eq('id', pipeline.customerId).maybeSingle();
+      final cRes = custRes != null ? Map<String, dynamic>.from(custRes) : null;
+
+      final customerName = cRes?['company_name']?.toString() ??
+          cRes?['customer_name']?.toString() ??
+          pipeline.customer?.companyName ??
+          'Valued Customer';
+      final siteAddress = cRes?['address']?.toString() ?? pipeline.customer?.address ?? '';
+
+      final rawLines = (qData?['line_items'] is List)
+          ? List<Map<String, dynamic>>.from(qData!['line_items'] as List)
+          : (pipeline.quotation != null
+              ? pipeline.quotation!.lineItems.map((l) => l.toJson()).toList()
+              : <Map<String, dynamic>>[]);
 
       final itemsTreatedAsProducts = await QgNocExtractor.fetchItemsTreatedAsProducts(supabase);
 
@@ -1379,7 +790,8 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       final logoUrl = compConfig['logo_url']?.toString();
 
       final subject = 'No Objection Certificate for Installation & Commissioning of $productName.';
-      final quoteNumber = qData?['quotation_number']?.toString() ?? pipeline.quotation?.quotationNumber;
+      final rawQuote = qData?['quotation_number']?.toString() ?? pipeline.baseQuotationNumber;
+      final quoteNumber = rawQuote.isNotEmpty ? FinancialYearHelper.extractBaseNumber(rawQuote) : null;
 
       final nocProfile = await QgNocRepository.instance.getProfileForProduct(productName);
       final profileConfirmations = nocProfile.confirmationLines.isNotEmpty
@@ -1435,7 +847,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       );
 
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading
+        Navigator.of(context, rootNavigator: true).pop();
         setState(() {
           _nocDoc = issuedDoc;
           _isNocCompleted = true;
@@ -1456,283 +868,1010 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate NOC: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Error generating NOC: $e'), backgroundColor: AppColors.error),
         );
       }
     }
   }
 
-  // View NOC PDF preview
-  Future<void> _viewNocPdf(QgNocDocument doc) async {
-    final profile = ref.read(currentProfileProvider);
-    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-    final canViewNoc = userRoles.contains(UserRole.admin) ||
-        userRoles.contains(UserRole.manager) ||
-        userRoles.contains(UserRole.sales) ||
-        userRoles.contains(UserRole.salesHead) ||
-        userRoles.contains(UserRole.serviceHead);
-    if (!canViewNoc) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You do not have permission to view NOC PDF.'),
-          backgroundColor: AppColors.error,
+  @override
+  Widget build(BuildContext context) {
+    final pipeline = widget.pipeline;
+    final meta = WorkProgressService.parseProgressMeta(pipeline);
+    final deliveryChallans = WorkProgressService.getDeliveryChallans(pipeline);
+    final profile = ref.watch(currentProfileProvider);
+
+    final bool canViewQuoteAndSo = RoleAccess.canViewQuotationAndSalesOrder(profile);
+    final bool canManageFactoryTrack = RoleAccess.canManageFactoryTrack(profile);
+    final bool canManageSiteTrack = RoleAccess.canManageSiteTrack(profile);
+    final bool canGenerateDeliveryChallan = RoleAccess.canGenerateDeliveryChallan(profile);
+    final bool hasDeliveryChallan = deliveryChallans.isNotEmpty;
+
+    // Live Step 1: Quotation
+    final bool step1QuotationDone = pipeline.quotation != null;
+
+    // Live Step 2: Sales Order
+    final bool step2SalesOrderDone = pipeline.salesOrder != null;
+
+    // Live Sub-Track A: Factory Track
+    // BOQ -> Ready -> Dispatched
+    final bool factoryBoqDone = pipeline.boq != null &&
+        (pipeline.boq!.items.any((i) => i.scope == 'company') || pipeline.boq!.isSubmitted || pipeline.boq!.items.isNotEmpty);
+    final bool factoryOrderReady = meta['factory_ready'] == true ||
+        (pipeline.factoryOrder != null &&
+            (pipeline.factoryOrder!.status == FactoryOrderStatus.completed ||
+                pipeline.factoryOrder!.status == FactoryOrderStatus.inProduction));
+    final bool factoryDispatched = meta['factory_dispatched'] == true;
+
+    int factoryProgressCount = 0;
+    if (factoryBoqDone) factoryProgressCount++;
+    if (factoryOrderReady) factoryProgressCount++;
+    if (factoryDispatched) factoryProgressCount++;
+
+    // Live Sub-Track B: Site Track
+    // BOQ -> Ready -> Dispatched
+    final bool siteBoqDone = pipeline.boq != null &&
+        (pipeline.boq!.items.any((i) => i.scope == 'customer') || pipeline.boq!.extraFields.isNotEmpty || pipeline.boq!.isSubmitted);
+    final bool siteReady = meta['site_ready'] == true ||
+        (pipeline.purchaseOrder != null && pipeline.purchaseOrder!.items.isNotEmpty);
+    final bool siteDispatched = meta['site_dispatched'] == true || deliveryChallans.isNotEmpty;
+
+    int siteProgressCount = 0;
+    if (siteBoqDone) siteProgressCount++;
+    if (siteReady) siteProgressCount++;
+    if (siteDispatched) siteProgressCount++;
+
+    // Live Step 3: Material & Dispatch overall
+    final bool step3DispatchDone = factoryDispatched && siteDispatched;
+    final bool step3DispatchActive = step2SalesOrderDone && !step3DispatchDone;
+
+    // Live Step 4: Installation
+    final bool step4InstallDone = _isInstallationCompleted;
+    final bool step4InstallActive = (step3DispatchDone || deliveryChallans.isNotEmpty) && !step4InstallDone;
+
+    // Live Step 5: NOC
+    final bool step5NocDone = _isNocCompleted;
+    final bool step5NocActive = step4InstallDone && !step5NocDone;
+
+    // Count overall completed phases (out of 5)
+    int completedPhases = 0;
+    if (step1QuotationDone) completedPhases++;
+    if (step2SalesOrderDone) completedPhases++;
+    if (step3DispatchDone || (factoryDispatched || siteDispatched)) completedPhases++;
+    if (step4InstallDone) completedPhases++;
+    if (step5NocDone) completedPhases++;
+
+    final double overallFraction = (completedPhases / 5.0).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Header Bar
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.account_tree_outlined,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Work Progress',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        if (_loadingAux) ...[
+                          const SizedBox(width: 8),
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.primary),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Live order fulfillment & commissioning pipeline',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: overallFraction == 1.0
+                      ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                      : const Color(0xFF2563EB).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: overallFraction == 1.0
+                        ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                        : const Color(0xFF2563EB).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  '$completedPhases / 5 (${(overallFraction * 100).toInt()}%)',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: overallFraction == 1.0 ? const Color(0xFF059669) : const Color(0xFF2563EB),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Sleek progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 4,
+              child: LinearProgressIndicator(
+                value: overallFraction,
+                backgroundColor: AppColors.border.withValues(alpha: 0.6),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  overallFraction == 1.0 ? const Color(0xFF10B981) : const Color(0xFF2563EB),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // 2. Top Horizontal Compact Stepper (Matching Reference Image)
+          _buildTopHorizontalStepper(
+            step1Done: step1QuotationDone,
+            step2Done: step2SalesOrderDone,
+            step3Done: step3DispatchDone,
+            step3Active: step3DispatchActive,
+            step4Done: step4InstallDone,
+            step4Active: step4InstallActive,
+            step5Done: step5NocDone,
+            step5Active: step5NocActive,
+          ),
+
+          const SizedBox(height: 20),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 16),
+
+          // 3. Vertical Timeline Pipeline Nodes
+          // Node 1: Quotation
+          _buildVerticalNode(
+            isFirst: true,
+            isCompleted: step1QuotationDone,
+            isActive: !step1QuotationDone,
+            title: 'Quotation',
+            statusText: step1QuotationDone ? 'Done' : 'Pending',
+            statusColor: step1QuotationDone ? AppColors.success : AppColors.textDisabled,
+            onTap: (step1QuotationDone && canViewQuoteAndSo) ? _viewQuotationPdf : null,
+            child: (step1QuotationDone && canViewQuoteAndSo)
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
+                    child: InkWell(
+                      onTap: _viewQuotationPdf,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.picture_as_pdf_outlined, size: 14, color: AppColors.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'View Quote PDF (${pipeline.baseQuotationNumber})',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+
+          // Node 2: Sales Order
+          _buildVerticalNode(
+            isCompleted: step2SalesOrderDone,
+            isActive: step1QuotationDone && !step2SalesOrderDone,
+            title: 'Sales Order',
+            statusText: step2SalesOrderDone ? 'Done' : (step1QuotationDone ? 'In Work' : 'Locked'),
+            statusColor: step2SalesOrderDone ? AppColors.success : (step1QuotationDone ? const Color(0xFF2563EB) : AppColors.textDisabled),
+            onTap: (step2SalesOrderDone && canViewQuoteAndSo) ? _viewSalesOrderPdf : null,
+            child: (step2SalesOrderDone && canViewQuoteAndSo)
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
+                    child: InkWell(
+                      onTap: _viewSalesOrderPdf,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.picture_as_pdf_outlined, size: 14, color: AppColors.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'View SO PDF (${pipeline.salesOrder?.salesOrderNumber ?? ""})',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+
+          // Node 3: Material & Dispatch (Dual Tracks + Delivery Challan Slot)
+          _buildVerticalNode(
+            isCompleted: step3DispatchDone,
+            isActive: step3DispatchActive,
+            isLocked: !step2SalesOrderDone,
+            title: 'Material & Dispatch',
+            statusText: step3DispatchDone ? 'Done' : (step3DispatchActive ? 'In Work' : 'Locked'),
+            statusColor: step3DispatchDone ? AppColors.success : (step3DispatchActive ? const Color(0xFF2563EB) : AppColors.textDisabled),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+
+                // Sub-Card A: Factory Track
+                _buildSubTrackCard(
+                  icon: Icons.factory_outlined,
+                  trackTitle: 'Factory Track',
+                  progressFractionText: '$factoryProgressCount/3',
+                  step1Title: 'BOQ',
+                  step1Done: factoryBoqDone,
+                  step2Title: 'Ready',
+                  step2Done: factoryOrderReady,
+                  step2Active: factoryBoqDone && !factoryOrderReady,
+                  step3Title: 'Dispatched',
+                  step3Done: factoryDispatched,
+                  step3Active: factoryOrderReady && !factoryDispatched,
+                  actionButtonText: factoryDispatched
+                      ? 'Factory Dispatched ✓'
+                      : (factoryOrderReady
+                          ? (hasDeliveryChallan ? 'Mark Factory Dispatched' : 'Mark Factory Dispatched (Challan Req.)')
+                          : 'Mark Factory Ready'),
+                  isActionDone: factoryDispatched,
+                  onAction: factoryDispatched
+                      ? null
+                      : (!canManageFactoryTrack
+                          ? null
+                          : (!factoryOrderReady
+                              ? () async {
+                                  final supabase = ref.read(supabaseClientProvider);
+                                  await WorkProgressService.updateTrackStatus(supabase, pipeline.id, factoryReady: true);
+                                  ref.invalidate(pipelineDetailProvider(pipeline.id));
+                                }
+                              : (hasDeliveryChallan
+                                  ? () async {
+                                      final supabase = ref.read(supabaseClientProvider);
+                                      await WorkProgressService.updateTrackStatus(supabase, pipeline.id, factoryDispatched: true);
+                                      ref.invalidate(pipelineDetailProvider(pipeline.id));
+                                    }
+                                  : null))),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Sub-Card B: Site Track
+                _buildSubTrackCard(
+                  icon: Icons.location_on_outlined,
+                  trackTitle: 'Site Track',
+                  progressFractionText: '$siteProgressCount/3',
+                  step1Title: 'BOQ',
+                  step1Done: siteBoqDone,
+                  step2Title: 'Ready',
+                  step2Done: siteReady,
+                  step2Active: siteBoqDone && !siteReady,
+                  step3Title: 'Dispatched',
+                  step3Done: siteDispatched,
+                  step3Active: siteReady && !siteDispatched,
+                  actionButtonText: siteDispatched
+                      ? 'Material Dispatched ✓'
+                      : (siteReady
+                          ? (hasDeliveryChallan ? 'Mark Material Dispatched' : 'Mark Material Dispatched (Challan Req.)')
+                          : 'Mark Material Ready'),
+                  isActionDone: siteDispatched,
+                  onAction: siteDispatched
+                      ? null
+                      : (!canManageSiteTrack
+                          ? null
+                          : (!siteReady
+                              ? () async {
+                                  final supabase = ref.read(supabaseClientProvider);
+                                  await WorkProgressService.updateTrackStatus(supabase, pipeline.id, siteReady: true);
+                                  ref.invalidate(pipelineDetailProvider(pipeline.id));
+                                }
+                              : (hasDeliveryChallan
+                                  ? () async {
+                                      final supabase = ref.read(supabaseClientProvider);
+                                      await WorkProgressService.updateTrackStatus(supabase, pipeline.id, siteDispatched: true);
+                                      ref.invalidate(pipelineDetailProvider(pipeline.id));
+                                    }
+                                  : null))),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Dedicated Slot: Delivery Challans
+                _buildDeliveryChallansSlot(deliveryChallans, canGenerate: canGenerateDeliveryChallan),
+
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+
+          // Node 4: Installation
+          _buildVerticalNode(
+            isCompleted: step4InstallDone,
+            isActive: step4InstallActive,
+            isLocked: !step3DispatchDone && deliveryChallans.isEmpty,
+            title: 'Installation',
+            statusText: step4InstallDone
+                ? 'Done'
+                : (_isInstallationCreated
+                    ? 'In Progress'
+                    : ((step3DispatchDone || deliveryChallans.isNotEmpty) ? 'Ready' : 'Locked')),
+            statusColor: step4InstallDone
+                ? AppColors.success
+                : (_isInstallationCreated
+                    ? const Color(0xFFD97706)
+                    : ((step3DispatchDone || deliveryChallans.isNotEmpty) ? const Color(0xFF2563EB) : AppColors.textDisabled)),
+            onTap: _showInstallationDialog,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 8),
+              child: Row(
+                children: [
+                  if (_isInstallationCreated && _installationTicketNumber != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _installationTicketNumber!,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  InkWell(
+                    onTap: _showInstallationDialog,
+                    child: Text(
+                      _isInstallationCreated ? 'View Ticket & Status ➔' : 'Assign / Check Installation ➔',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Node 5: NOC
+          _buildVerticalNode(
+            isLast: true,
+            isCompleted: step5NocDone,
+            isActive: step5NocActive,
+            isLocked: !step4InstallDone,
+            title: 'NOC (No Objection Certificate)',
+            statusText: step5NocDone
+                ? 'Issued ✓'
+                : (step4InstallDone ? 'Ready' : 'Locked'),
+            statusColor: step5NocDone
+                ? AppColors.success
+                : (step4InstallDone ? const Color(0xFF2563EB) : AppColors.textDisabled),
+            onTap: step5NocDone
+                ? () => _viewNocPdf(_nocDoc!)
+                : (step4InstallDone ? _generateNoc : null),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 4),
+              child: step5NocDone
+                  ? OutlinedButton.icon(
+                      onPressed: () => _viewNocPdf(_nocDoc!),
+                      icon: const Icon(Icons.verified, size: 14, color: Color(0xFF059669)),
+                      label: Text(
+                        'View NOC PDF (${_nocDoc!.nocNumber})',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF10B981)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    )
+                  : (step4InstallDone
+                      ? ElevatedButton.icon(
+                          onPressed: _generateNoc,
+                          icon: const Icon(Icons.verified_outlined, size: 14),
+                          label: const Text('Generate NOC Certificate', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF286B37),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        )
+                      : const Text(
+                          'Unlocks automatically once customer installation is resolved/closed.',
+                          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                        )),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Top Horizontal Compact Stepper
+  Widget _buildTopHorizontalStepper({
+    required bool step1Done,
+    required bool step2Done,
+    required bool step3Done,
+    required bool step3Active,
+    required bool step4Done,
+    required bool step4Active,
+    required bool step5Done,
+    required bool step5Active,
+  }) {
+    return Row(
+      children: [
+        _buildTopStepperItem('Quote', step1Done, !step1Done),
+        _buildTopStepperLine(step1Done),
+        _buildTopStepperItem('Sales Order', step2Done, step1Done && !step2Done),
+        _buildTopStepperLine(step2Done),
+        _buildTopStepperItem('Dispatch', step3Done, step3Active),
+        _buildTopStepperLine(step3Done),
+        _buildTopStepperItem('Install', step4Done, step4Active),
+        _buildTopStepperLine(step4Done),
+        _buildTopStepperItem('NOC', step5Done, step5Active),
+      ],
+    );
+  }
+
+  Widget _buildTopStepperItem(String title, bool isDone, bool isActive) {
+    Color iconBg;
+    Color iconFg;
+    Widget iconChild;
+
+    if (isDone) {
+      iconBg = const Color(0xFF10B981);
+      iconFg = Colors.white;
+      iconChild = const Icon(Icons.check, size: 12, color: Colors.white);
+    } else if (isActive) {
+      iconBg = const Color(0xFF2563EB);
+      iconFg = Colors.white;
+      iconChild = Container(
+        width: 6,
+        height: 6,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
         ),
       );
-      return;
+    } else {
+      iconBg = const Color(0xFFE2E8F0);
+      iconFg = const Color(0xFF94A3B8);
+      iconChild = const SizedBox.shrink();
     }
-    try {
-      final payload = QgNocPayload(
-        companyName: doc.companySnapshot['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION',
-        companyAddress: doc.companySnapshot['company_address']?.toString() ?? doc.companySnapshot['short_address']?.toString() ?? '',
-        companyEmail: doc.companySnapshot['company_email']?.toString() ?? doc.companySnapshot['email']?.toString() ?? '',
-        companyPhone: doc.companySnapshot['company_phone']?.toString() ?? doc.companySnapshot['phone']?.toString() ?? '',
-        companyWebsite: doc.companySnapshot['company_website']?.toString() ?? doc.companySnapshot['website']?.toString() ?? 'www.izyheat.com',
-        logoUrl: doc.companySnapshot['logo_url']?.toString(),
-        salutation: 'M/s',
-        customerName: doc.customerName,
-        address: doc.siteAddress,
-        productName: doc.productName,
-        subject: 'No Objection Certificate for Installation & Commissioning of ${doc.productName}.',
-        date: doc.issuedDate,
-        equipmentLabel: doc.productName,
-        equipmentLines: doc.equipmentLines,
-        workType: '${doc.productName} Installation work',
-        wiring: 'Done',
-        testing: 'Done',
-        remark: 'All Installation & Commissioning work Completed as per work order',
-        confirmations: doc.confirmations,
-        closingSentence: doc.closingSentence ?? 'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
-        wordingMode: NocWordingMode.templateExact,
-        quotationNumber: doc.quotationNumber,
-      );
 
-      final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PdfPreviewScreen(
-            pdfBytes: pdfBytes,
-            fileName: (doc.pdfName != null && doc.pdfName!.isNotEmpty)
-                ? doc.pdfName!
-                : 'NOC_${doc.nocNumber.replaceAll('/', '_')}.pdf',
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: iconBg,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: iconChild,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 10,
+            fontWeight: isActive || isDone ? FontWeight.bold : FontWeight.normal,
+            color: isDone
+                ? const Color(0xFF059669)
+                : (isActive ? const Color(0xFF1E3A8A) : const Color(0xFF94A3B8)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopStepperLine(bool isDone) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        height: 2,
+        color: isDone ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+      ),
+    );
+  }
+
+  // Vertical Timeline Node with connector
+  Widget _buildVerticalNode({
+    bool isFirst = false,
+    bool isLast = false,
+    required bool isCompleted,
+    required bool isActive,
+    bool isLocked = false,
+    required String title,
+    required String statusText,
+    required Color statusColor,
+    VoidCallback? onTap,
+    Widget? child,
+  }) {
+    Widget indicator;
+    if (isCompleted) {
+      indicator = Container(
+        width: 22,
+        height: 22,
+        decoration: const BoxDecoration(
+          color: Color(0xFF10B981),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.check, size: 14, color: Colors.white),
+      );
+    } else if (isActive) {
+      indicator = Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF2563EB), width: 2),
+        ),
+        child: Center(
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF2563EB),
+              shape: BoxShape.circle,
+            ),
           ),
         ),
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to view NOC: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
-  // General step tap handler with role permissions
-  void _handleStepTap(int stepIndex, bool isDone) {
-    final profile = ref.read(currentProfileProvider);
-    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-    final isAdminOrManager = userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.manager);
-    final isSales = userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead);
-    final isBoq = RoleAccess.canAccessBoq(userRoles);
-    final isServiceHead = RoleAccess.isServiceHead(userRoles);
-    final isCrm = RoleAccess.canAccessCrm(userRoles);
-    final isFactory = userRoles.contains(UserRole.factory);
-    final isPurchase = userRoles.contains(UserRole.purchase);
-
-    switch (stepIndex) {
-      case 1: // Quotation
-        if (isDone) {
-          if (!isAdminOrManager && !isSales && !isServiceHead && !isCrm) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You do not have permission to view Quotation PDF.'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-            return;
-          }
-          _viewQuotationPdf();
-        } else {
-          if (!isAdminOrManager && !isSales) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You do not have permission to create Quotation.'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-            return;
-          }
-          context.push(AppRoutes.quotationFormPath(widget.pipeline.id));
-        }
-        break;
-      case 2: // Sales Order
-        if (isDone) {
-          if (!isAdminOrManager && !isSales && !isBoq && !isServiceHead && !isCrm) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You do not have permission to view Sales Order documents.'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-            return;
-          }
-          _viewSalesOrderDialog();
-        } else {
-          if (!isAdminOrManager && !isSales) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You do not have permission to create Sales Order.'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-            return;
-          }
-          context.push(AppRoutes.salesOrderFormPath(widget.pipeline.id));
-        }
-        break;
-      case 5: // Factory BOQ
-      case 6: // Site BOQ
-        if (!isAdminOrManager && !isBoq && !isSales && !isServiceHead) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You do not have permission to view BOQ documents.'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-          return;
-        }
-        context.push(AppRoutes.boqFormPath(widget.pipeline.id));
-        break;
-      case 7: // Factory Manufacture
-        if (!isAdminOrManager && !isFactory) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You do not have permission to view Factory Order documents.'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-          return;
-        }
-        context.push(AppRoutes.factoryOrderFormPath(widget.pipeline.id));
-        break;
-      case 8: // Purchase Order
-        if (!isAdminOrManager && !isPurchase) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You do not have permission to view Purchase Order documents.'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-          return;
-        }
-        context.push(AppRoutes.purchaseOrderFormPath(widget.pipeline.id));
-        break;
-    }
-  }
-
-  Future<void> _viewQuotationPdf() async {
-    final quotation = widget.pipeline.quotation;
-    if (quotation == null) return;
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      );
-      final supabase = ref.read(supabaseClientProvider);
-      Map<String, dynamic> templateConfig = {};
-      try {
-        final res = await supabase.from('pdf_templates').select().eq('document_type', 'quotation').maybeSingle();
-        if (res != null && res['template_config'] != null) {
-          templateConfig = res['template_config'] as Map<String, dynamic>;
-        }
-      } catch (_) {}
-
-      final customer = widget.pipeline.customer ??
-          Customer(
-            id: widget.pipeline.customerId,
-            companyName: 'Customer',
-            contactPerson: 'Customer',
-            phone: '',
-            email: '',
-            createdBy: '',
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-      final product = widget.pipeline.product ??
-          Product(
-            id: widget.pipeline.productId,
-            name: 'Standard System',
-            category: 'Solar',
-            baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
-            isActive: true,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-      final bytes = await PdfService.generateQuotationPdf(
-        quotation: quotation,
-        customer: customer,
-        product: product,
-        templateConfig: templateConfig,
-      );
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PdfPreviewScreen(
-              pdfBytes: bytes,
-              fileName: 'Quotation_${quotation.quotationNumber.replaceAll('/', '_')}.pdf',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
-  void _viewSalesOrderDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sales Order Actions', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Select document to view or generate:',
-          style: TextStyle(fontFamily: 'Inter'),
+    } else {
+      indicator = Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 2),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.push(AppRoutes.salesOrderFormPath(widget.pipeline.id));
-            },
-            child: const Text('View Sales Order'),
+      );
+    }
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline indicator & vertical line
+          Column(
+            children: [
+              indicator,
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: isCompleted ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+            ],
           ),
-          if (widget.pipeline.customer != null)
-            ElevatedButton(
+          const SizedBox(width: 14),
+
+          // Content
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                            color: isLocked ? const Color(0xFF94A3B8) : AppColors.textPrimary,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (child != null) child,
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Sub-Track Card (Factory / Site Track)
+  Widget _buildSubTrackCard({
+    required IconData icon,
+    required String trackTitle,
+    required String progressFractionText,
+    required String step1Title,
+    required bool step1Done,
+    required String step2Title,
+    required bool step2Done,
+    required bool step2Active,
+    required String step3Title,
+    required bool step3Done,
+    required bool step3Active,
+    required String actionButtonText,
+    required bool isActionDone,
+    VoidCallback? onAction,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Track Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 18, color: const Color(0xFF334155)),
+                  const SizedBox(width: 8),
+                  Text(
+                    trackTitle,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  progressFractionText,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Mini horizontal stepper
+          Row(
+            children: [
+              _buildMiniStep(step1Title, step1Done, false),
+              _buildMiniLine(step1Done),
+              _buildMiniStep(step2Title, step2Done, step2Active),
+              _buildMiniLine(step2Done),
+              _buildMiniStep(step3Title, step3Done, step3Active),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Action Button
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: isActionDone ? const Color(0xFFECFDF5) : const Color(0xFF2563EB),
+                foregroundColor: isActionDone ? const Color(0xFF059669) : Colors.white,
+                disabledBackgroundColor: const Color(0xFFF1F5F9),
+                disabledForegroundColor: const Color(0xFF94A3B8),
+                elevation: (isActionDone || onAction == null) ? 0 : 1,
+                side: isActionDone
+                    ? const BorderSide(color: Color(0xFF10B981))
+                    : (onAction == null ? BorderSide(color: Colors.grey.shade300) : BorderSide.none),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                DeliveryChallanModal.show(
-                  context,
-                  pipelineId: widget.pipeline.id,
-                  customer: widget.pipeline.customer!,
-                );
-              },
-              child: const Text('Delivery Challan'),
+              onPressed: onAction,
+              child: Text(
+                actionButtonText,
+                style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniStep(String label, bool isDone, bool isActive) {
+    Widget icon;
+    if (isDone) {
+      icon = Container(
+        width: 18,
+        height: 18,
+        decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+        child: const Icon(Icons.check, size: 11, color: Colors.white),
+      );
+    } else if (isActive) {
+      icon = Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF2563EB), width: 2),
+        ),
+        child: Center(
+          child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF2563EB), shape: BoxShape.circle)),
+        ),
+      );
+    } else {
+      icon = Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        icon,
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 10,
+            fontWeight: isDone || isActive ? FontWeight.bold : FontWeight.normal,
+            color: isDone ? const Color(0xFF059669) : (isActive ? const Color(0xFF1E3A8A) : const Color(0xFF64748B)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniLine(bool isDone) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        height: 2,
+        color: isDone ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+      ),
+    );
+  }
+
+  // Dedicated Slot: Delivery Challans
+  Widget _buildDeliveryChallansSlot(List<Map<String, dynamic>> challans, {bool canGenerate = false}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.local_shipping_outlined, size: 18, color: Color(0xFF166534)),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Delivery Challans',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF14532D),
+                    ),
+                  ),
+                  if (challans.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${challans.length}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+
+          if (challans.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...challans.map((dc) {
+              final dcNum = dc['challan_number']?.toString() ?? 'Challan';
+              final dStr = dc['date'] != null
+                  ? DateFormat('dd MMM yyyy').format(DateTime.tryParse(dc['date'].toString()) ?? DateTime.now())
+                  : '';
+              final itemCount = dc['item_count'] ?? (dc['items'] as List?)?.length ?? 0;
+              final receiver = dc['delivery_taken_by']?.toString();
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF86EFAC)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.description_outlined, size: 16, color: Color(0xFF166534)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dcNum,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text(
+                            '$dStr • $itemCount items${(receiver != null && receiver.isNotEmpty) ? " • Recv: $receiver" : ""}',
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF166534),
+                        side: const BorderSide(color: Color(0xFF22C55E)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(50, 28),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () => _viewExistingChallan(dc),
+                      icon: const Icon(Icons.picture_as_pdf, size: 13),
+                      label: const Text('View PDF', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ] else if (!canGenerate) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'No delivery challans generated yet. (Admins only)',
+              style: TextStyle(fontFamily: 'Inter', fontSize: 11.5, color: AppColors.textDisabled, fontStyle: FontStyle.italic),
+            ),
+          ],
+
+          if (canGenerate) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: _openDeliveryChallanModal,
+                icon: const Icon(Icons.add, size: 16),
+                label: Text(
+                  challans.isEmpty ? 'Generate Delivery Challan' : 'Add Another Delivery Challan',
+                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

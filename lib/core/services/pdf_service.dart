@@ -2086,6 +2086,8 @@ class PdfService {
     String? quotationNumber,
     DateTime? challanDate,
     List<SalesOrderLineItem>? customLineItems,
+    String? customChallanNumber,
+    String? deliveryTakenBy,
   }) async {
     final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
@@ -2110,7 +2112,8 @@ class PdfService {
 
     final cleanCompanyName = _cleanText(companyName);
     final effectiveChallanDate = challanDate ?? salesOrder.orderDate;
-    final formattedDcNum = formatDeliveryChallanNumber(salesOrder.salesOrderNumber, effectiveChallanDate);
+    final formattedDcNum = customChallanNumber ??
+        formatDeliveryChallanNumber(salesOrder.salesOrderNumber, effectiveChallanDate);
 
     final effectiveSalesOrder = customLineItems != null && customLineItems.isNotEmpty
         ? SalesOrder(
@@ -2216,7 +2219,7 @@ class PdfService {
               pw.TableRow(
                 children: [
                   _metaCellRow('Place of Supply', effectiveSalesOrder.placeOfSupply),
-                  _metaCellRow('', ''),
+                  _metaCellRow('Delivery Taken By', deliveryTakenBy ?? effectiveSalesOrder.partyContactPerson ?? '-'),
                 ],
               ),
             ],

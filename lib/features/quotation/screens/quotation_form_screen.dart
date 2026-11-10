@@ -21,6 +21,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../crm/providers/crm_providers.dart';
 import '../../../core/services/pdf_service.dart';
+import '../../../core/utils/financial_year_helper.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../admin/providers/inventory_provider.dart';
 import '../../quotation_generator/providers/quotation_generator_providers.dart';
@@ -106,6 +107,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
   double _sgstRate = 9.0;
 
   int _currentRevision = 1;
+  String? _baseQuotationNumber;
   final List<Map<String, dynamic>> _paymentTerms = [
     {'term': 'Advance', 'percent': 50.0, 'amount': 0.0},
     {'term': 'Dispatch', 'percent': 40.0, 'amount': 0.0},
@@ -1073,8 +1075,22 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         _populateFromQuotation(widget.initialQuotation!);
         _currentRevision =
             widget.revisionNumber ?? (widget.initialQuotation!.revision + 1);
+        _baseQuotationNumber = FinancialYearHelper.extractBaseNumber(
+            widget.initialQuotation!.quotationNumber);
         _isEditing = true;
         _existingQuotation = null; // Create new revision record on save
+
+        final effectiveLeadId = widget.leadId ?? widget.initialQuotation!.leadId;
+        if (effectiveLeadId != null) {
+          try {
+            final leadData = await supabase
+                .from('crm_leads')
+                .select()
+                .eq('id', effectiveLeadId)
+                .single();
+            _leadData = leadData;
+          } catch (_) {}
+        }
       } else if (widget.leadId != null) {
         // Mode 2: Generating quotation directly from a CRM Lead
         final leadData = await supabase
@@ -1152,20 +1168,25 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           _shippingAddressController.text = prospectAddress;
         }
 
-        // Determine next revision number for this lead
+        // Determine next revision number and base quotation number for this lead
         final leadQuots = await supabase
             .from('quotations')
-            .select('revision, line_items, payment_terms, product_specs')
+            .select('quotation_number, revision, line_items, payment_terms, product_specs')
             .eq('lead_id', widget.leadId!)
-            .order('revision', ascending: false)
-            .limit(1);
+            .order('revision', ascending: true);
 
         if (leadQuots.isNotEmpty) {
-          _currentRevision =
-              ((leadQuots.first['revision'] as num?)?.toInt() ?? 1) + 1;
+          final firstQuot = leadQuots.first;
+          final latestQuot = leadQuots.last;
+          _baseQuotationNumber = FinancialYearHelper.extractBaseNumber(
+              firstQuot['quotation_number']?.toString() ?? '');
+          final maxRev = leadQuots
+              .map((q) => (q['revision'] as num?)?.toInt() ?? 1)
+              .fold<int>(1, (max, r) => r > max ? r : max);
+          _currentRevision = widget.revisionNumber ?? (maxRev + 1);
 
-          if (leadQuots.first['product_specs'] is Map) {
-            final prevSpecs = Map<String, dynamic>.from(leadQuots.first['product_specs'] as Map);
+          if (latestQuot['product_specs'] is Map) {
+            final prevSpecs = Map<String, dynamic>.from(latestQuot['product_specs'] as Map);
             if (prevSpecs.containsKey('tank_spec') && prevSpecs['tank_spec'] is Map) {
               final ts = Map<String, dynamic>.from(prevSpecs['tank_spec'] as Map);
               _tankMaterial = ts['material']?.toString() ?? 'GI';
@@ -1179,13 +1200,14 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           }
         } else {
           _currentRevision = 1;
+          _baseQuotationNumber = null;
         }
         _isEditing = true;
 
         if (_lineItems.isEmpty) {
-          if (leadQuots.isNotEmpty && leadQuots.first['line_items'] != null) {
+          if (leadQuots.isNotEmpty && leadQuots.last['line_items'] != null) {
             // Revision 2+: Pre-fill line items directly from previous revision without mutating prices
-            final prevLineItems = leadQuots.first['line_items'] as List;
+            final prevLineItems = leadQuots.last['line_items'] as List;
             for (final item in prevLineItems) {
               if (item is Map) {
                 _lineItems.add({
@@ -2103,10 +2125,38 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
     }).toList();
 
     final subtotal = _calcSubtotal();
+    final effectiveLeadId = widget.leadId ?? widget.initialQuotation?.leadId;
+    if (_currentRevision >= 2 &&
+        (_baseQuotationNumber == null || _baseQuotationNumber!.isEmpty) &&
+        effectiveLeadId != null) {
+      try {
+        final firstQ = await supabase
+            .from('quotations')
+            .select('quotation_number')
+            .eq('lead_id', effectiveLeadId)
+            .order('revision', ascending: true)
+            .limit(1)
+            .maybeSingle();
+        if (firstQ != null && firstQ['quotation_number'] != null) {
+          _baseQuotationNumber = FinancialYearHelper.extractBaseNumber(
+              firstQ['quotation_number'].toString());
+        }
+      } catch (_) {}
+    }
+
+    String? assignedRevisionNumber;
+    if (_currentRevision >= 2 &&
+        _baseQuotationNumber != null &&
+        _baseQuotationNumber!.isNotEmpty) {
+      assignedRevisionNumber = '$_baseQuotationNumber-R${_currentRevision - 1}';
+    }
+
     final data = {
       if (widget.pipelineId != null) 'pipeline_id': widget.pipelineId,
-      if (widget.leadId != null) 'lead_id': widget.leadId,
+      if (effectiveLeadId != null) 'lead_id': effectiveLeadId,
       'revision': _currentRevision,
+      if (assignedRevisionNumber != null)
+        'quotation_number': assignedRevisionNumber,
       'payment_terms': _paymentTerms
           .map((t) => {
                 'term': t['term']?.toString() ?? '',
@@ -2218,7 +2268,10 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       }
 
       final id = response['id'] as String;
-      final qNum = response['quotation_number'] as String? ?? '';
+      final qNum = response['quotation_number'] as String? ?? assignedRevisionNumber ?? '';
+      if (_baseQuotationNumber == null || _baseQuotationNumber!.isEmpty) {
+        _baseQuotationNumber = FinancialYearHelper.extractBaseNumber(qNum);
+      }
       setState(() => _existingQuotation = Quotation.fromJson({
             'id': id,
             ...data,
@@ -2232,12 +2285,12 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       quotationId = id;
     }
 
-    if (widget.leadId != null) {
+    if (effectiveLeadId != null) {
       try {
         final currentLeadRes = await supabase
             .from('crm_leads')
             .select('status, estimated_value')
-            .eq('id', widget.leadId!)
+            .eq('id', effectiveLeadId)
             .maybeSingle();
 
         String? newStatus;
@@ -2258,7 +2311,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
           'estimated_value': _grandTotal,
           if (newStatus != null) 'status': newStatus,
           'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', widget.leadId!);
+        }).eq('id', effectiveLeadId);
         ref.read(leadsProvider.notifier).load(refresh: true);
       } catch (_) {}
     }
@@ -2498,7 +2551,9 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
             ? 'Quotation (Confirmed - Rev $_currentRevision)'
             : isPendingApproval
                 ? 'Quotation (Pending Approval - Rev $_currentRevision)'
-                : 'Quotation (Rev $_currentRevision)'),
+                : (_currentRevision >= 2 && _baseQuotationNumber != null && _baseQuotationNumber!.isNotEmpty)
+                    ? 'Quotation (Rev $_currentRevision • $_baseQuotationNumber-R${_currentRevision - 1})'
+                    : 'Quotation (Rev $_currentRevision)'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
@@ -2565,7 +2620,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                                 fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           Text(
-                            'Lead Deal: ${_leadData!['product_name'] ?? ''} • Revision $_currentRevision',
+                            'Lead Deal: ${_leadData!['product_name'] ?? ''} • Revision $_currentRevision${_currentRevision >= 2 && _baseQuotationNumber != null && _baseQuotationNumber!.isNotEmpty ? ' ($_baseQuotationNumber-R${_currentRevision - 1})' : ''}',
                             style: const TextStyle(
                                 color: AppColors.primary,
                                 fontSize: 13,

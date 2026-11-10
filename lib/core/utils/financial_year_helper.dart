@@ -31,4 +31,16 @@ class FinancialYearHelper {
       (match) => '/$fy/',
     );
   }
+
+  /// Extracts the main base document/quotation number by stripping revision suffixes.
+  /// E.g.:
+  /// - 'IZY/QT/26-27/0237-R1' -> 'IZY/QT/26-27/0237'
+  /// - 'IZY/QT/26-27/0237-R2' -> 'IZY/QT/26-27/0237'
+  /// - 'IZY/QT/26-27/0237-v2' -> 'IZY/QT/26-27/0237'
+  /// - 'IZY/QT/26-27/0237'    -> 'IZY/QT/26-27/0237'
+  static String extractBaseNumber(String docNumber) {
+    final clean = docNumber.trim();
+    if (clean.isEmpty) return clean;
+    return clean.replaceAll(RegExp(r'-(R|v)\d+$', caseSensitive: false), '').trim();
+  }
 }

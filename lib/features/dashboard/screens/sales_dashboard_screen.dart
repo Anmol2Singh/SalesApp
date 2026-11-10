@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/models/pipeline.dart';
+import '../../../core/auth/role_access.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../../core/models/customer.dart';
@@ -539,7 +540,10 @@ class SalesDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 pipelinesAsync.when(
                   data: (pipelines) {
-                    final activeDeals = pipelines.where((p) =>
+                    final visiblePipelines = pipelines
+                        .where((p) => RoleAccess.isDealVisibleForUser(p, profile))
+                        .toList();
+                    final activeDeals = visiblePipelines.where((p) =>
                         p.status != PipelineStatus.completed &&
                         p.currentStep != PipelineStep.completed &&
                         p.status != PipelineStatus.cancelled).toList();

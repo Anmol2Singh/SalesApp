@@ -2,6 +2,8 @@
 
 import '../models/profile.dart';
 import '../models/user_role.dart';
+import '../models/pipeline.dart';
+import '../models/customer.dart';
 
 /// Centralized Role & Permission Access Helper
 /// Defines module-level capabilities across the app.
@@ -81,6 +83,43 @@ class RoleAccess {
     ]);
   }
 
+  /// Quotation & Sales Order view access: Admins, Sales Head, Sales Executive, Manager
+  static bool canViewQuotationAndSalesOrder(dynamic profileOrRoles) {
+    return hasAnyRole(profileOrRoles, [
+      UserRole.admin,
+      UserRole.manager,
+      UserRole.salesHead,
+      UserRole.sales,
+    ]);
+  }
+
+  /// Site Track management (Material Ready / Dispatched): BOQ staff, Service Head, Admin, Manager
+  static bool canManageSiteTrack(dynamic profileOrRoles) {
+    return hasAnyRole(profileOrRoles, [
+      UserRole.admin,
+      UserRole.manager,
+      UserRole.boq,
+      UserRole.serviceHead,
+    ]);
+  }
+
+  /// Factory Track management (Factory Ready / Dispatched): Factory staff, Admin, Manager
+  static bool canManageFactoryTrack(dynamic profileOrRoles) {
+    return hasAnyRole(profileOrRoles, [
+      UserRole.admin,
+      UserRole.manager,
+      UserRole.factory,
+    ]);
+  }
+
+  /// Delivery Challan generation: Admin and Sales Head
+  static bool canGenerateDeliveryChallan(dynamic profileOrRoles) {
+    return hasAnyRole(profileOrRoles, [
+      UserRole.admin,
+      UserRole.salesHead,
+    ]);
+  }
+
   /// Reports access: Daily tasks, User activity report, Customer report, Analytics, Excel/PDF exports
   static bool canViewAllReports(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
@@ -92,11 +131,12 @@ class RoleAccess {
     ]);
   }
 
-  /// PDF Library access (List PDFs): Admin, Manager, Service Head
+  /// PDF Library access (List PDFs): Admin, Manager, Sales Head, Service Head
   static bool canAccessPdfList(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
       UserRole.admin,
       UserRole.manager,
+      UserRole.salesHead,
       UserRole.serviceHead,
     ]);
   }
@@ -137,6 +177,67 @@ class RoleAccess {
       UserRole.purchase,
       UserRole.boq,
     ]);
+  }
+
+  /// Whether a specific deal is visible to a user given their roles & profile.
+  /// For service roles (serviceHead, installation, complaints), deals start to show up
+  /// when they reach the BOQ step.
+  static bool isDealVisibleForUser(SalesPipeline p, Profile? profile) {
+    if (profile == null) return false;
+    final roles = profile.roles.isNotEmpty ? profile.roles : [profile.primaryRole];
+
+    // Admin, Manager, Sales Head can view all deals at all stages
+    if (roles.contains(UserRole.admin) ||
+        roles.contains(UserRole.manager) ||
+        roles.contains(UserRole.salesHead)) {
+      return true;
+    }
+
+    final isCompleted = p.status == PipelineStatus.completed ||
+        p.currentStep == PipelineStep.completed;
+
+    // Service roles (serviceHead, installation, complaints) encompass BOQ capabilities.
+    // Deals for service roles start showing up when they reach BOQ.
+    final hasBoqOrServiceRole = roles.contains(UserRole.boq) ||
+        roles.contains(UserRole.serviceHead) ||
+        roles.contains(UserRole.installation) ||
+        roles.contains(UserRole.complaints);
+
+    final hasFactoryRole = roles.contains(UserRole.factory);
+    final hasPurchaseRole = roles.contains(UserRole.purchase);
+    final hasSalesRole = roles.contains(UserRole.sales);
+
+    // If deal is completed, all operational/service/purchase/factory/boq/sales roles can view it
+    if (isCompleted &&
+        (hasBoqOrServiceRole || hasFactoryRole || hasPurchaseRole || hasSalesRole)) {
+      return true;
+    }
+
+    final stepIndex = p.currentStep.stepIndex;
+
+    // 1. BOQ / Service role: visible from BOQ step onwards (BOQ, Factory Order, Purchase Order)
+    if (hasBoqOrServiceRole && stepIndex >= PipelineStep.boq.stepIndex) {
+      return true;
+    }
+
+    // 2. Factory role: visible from Factory Order step onwards (Factory Order, Purchase Order)
+    if (hasFactoryRole && stepIndex >= PipelineStep.factoryOrder.stepIndex) {
+      return true;
+    }
+
+    // 3. Purchase role: visible from Purchase Order step onwards (Purchase Order)
+    if (hasPurchaseRole && stepIndex >= PipelineStep.purchaseOrder.stepIndex) {
+      return true;
+    }
+
+    // 4. Sales role: visible if created by this salesperson or assigned to them
+    if (hasSalesRole) {
+      if (p.createdBy == profile.id || p.customer?.assignedTo == profile.id) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// Customers access

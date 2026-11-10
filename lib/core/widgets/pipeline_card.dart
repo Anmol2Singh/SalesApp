@@ -11,6 +11,7 @@ import '../router/app_router.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../models/user_role.dart';
 import '../models/quotation.dart';
+import '../utils/financial_year_helper.dart';
 import '../../features/pipelines/providers/pipelines_provider.dart';
 import '../providers/supabase_provider.dart';
 
@@ -681,7 +682,9 @@ class PipelineCard extends ConsumerWidget {
         pipeline.product != null) {
       return {
         'product_name': pipeline.product!.name,
-        'quotation_number': pipeline.quotation!.quotationNumber,
+        'quotation_number': pipeline.baseQuotationNumber.isNotEmpty
+            ? pipeline.baseQuotationNumber
+            : pipeline.quotation!.quotationNumber,
         'grand_total': pipeline.quotation!.grandTotal,
         'salesman': pipeline.quotation!.salesman ??
             pipeline.createdByProfile?.fullName ??
@@ -704,12 +707,14 @@ class PipelineCard extends ConsumerWidget {
         if (res['products'] is Map) {
           prodName = res['products']['name'] as String?;
         }
+        final rawQNum = res['quotation_number']?.toString() ??
+            pipeline.baseQuotationNumber;
         return {
           'product_name':
               prodName ?? pipeline.product?.name ?? 'Standard System',
-          'quotation_number': res['quotation_number']?.toString() ??
-              pipeline.quotation?.quotationNumber ??
-              '-',
+          'quotation_number': rawQNum.isNotEmpty && rawQNum != '-'
+              ? FinancialYearHelper.extractBaseNumber(rawQNum)
+              : '-',
           'grand_total': (res['grand_total'] as num?)?.toDouble() ??
               pipeline.quotation?.grandTotal ??
               0.0,
@@ -722,7 +727,9 @@ class PipelineCard extends ConsumerWidget {
 
     return {
       'product_name': pipeline.product?.name ?? 'Standard System',
-      'quotation_number': pipeline.quotation?.quotationNumber ?? '-',
+      'quotation_number': pipeline.baseQuotationNumber.isNotEmpty
+          ? pipeline.baseQuotationNumber
+          : (pipeline.quotation?.quotationNumber ?? '-'),
       'grand_total': pipeline.quotation?.grandTotal ?? 0.0,
       'salesman': pipeline.createdByProfile?.fullName ?? 'Sales Executive',
     };

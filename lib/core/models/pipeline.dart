@@ -33,6 +33,9 @@ class SalesPipeline {
   final FactoryOrder? factoryOrder;
   final PurchaseOrder? purchaseOrder;
 
+  /// Returns the main base quotation number without revision suffix (e.g. 'IZY/QT/26-27/0237').
+  String get baseQuotationNumber => quotation != null ? quotation!.baseQuotationNumber : '';
+
   const SalesPipeline({
     required this.id,
     required this.customerId,
@@ -177,13 +180,6 @@ class SalesPipeline {
     }
     if (quotation != null && quotation!.status == QuotationStatus.confirmed) {
       return PipelineStep.salesOrder;
-    }
-    if (quotation == null &&
-        salesOrder == null &&
-        boq == null &&
-        factoryOrder == null &&
-        purchaseOrder == null) {
-      return PipelineStep.quotation;
     }
     return _dbCurrentStep;
   }

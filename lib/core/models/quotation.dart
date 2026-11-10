@@ -1,5 +1,6 @@
 // lib/core/models/quotation.dart
 
+import '../utils/financial_year_helper.dart';
 import 'supplementary_item.dart';
 
 class LineItem {
@@ -170,6 +171,9 @@ class Quotation {
   bool get isApproved => status == QuotationStatus.confirmed;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Returns the base quotation number without revision suffix (e.g. 'IZY/QT/26-27/0237').
+  String get baseQuotationNumber => FinancialYearHelper.extractBaseNumber(quotationNumber);
 
   // New Indian GST Form Fields
   final String? salesOrderNo;

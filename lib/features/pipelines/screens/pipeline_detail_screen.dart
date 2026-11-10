@@ -18,6 +18,7 @@ import '../providers/pipelines_provider.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
+import '../../../core/utils/financial_year_helper.dart';
 import '../../../core/widgets/breadcrumbs.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/models/amc_contract.dart';
@@ -916,7 +917,7 @@ class _StepActionCard extends ConsumerWidget {
     // PDF visibility: role-based
     bool isPdfVisible = false;
     final roles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
-    if (roles.contains(UserRole.admin) || roles.contains(UserRole.manager)) {
+    if (roles.contains(UserRole.admin) || roles.contains(UserRole.manager) || roles.contains(UserRole.salesHead)) {
       isPdfVisible = true;
     } else {
       switch (step) {
@@ -929,7 +930,7 @@ class _StepActionCard extends ConsumerWidget {
           }
           break;
         case PipelineStep.salesOrder:
-          isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead) || roles.contains(UserRole.boq) || roles.contains(UserRole.factory);
+          isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead);
           break;
         case PipelineStep.boq:
           isPdfVisible = roles.contains(UserRole.boq) || roles.contains(UserRole.serviceHead);
@@ -1124,7 +1125,7 @@ class _StepActionCard extends ConsumerWidget {
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
                                   if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
-                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
+                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.salesHead))
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'challan'), child: const Text('Delivery Challan')),
                                 ];
                               }(),
@@ -1874,9 +1875,11 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
 
     final grandTotal = (qData?['grand_total'] as num?)?.toDouble() ??
         (pipeline.quotation?.grandTotal ?? 0.0);
-    final quoteNumber = qData?['quotation_number']?.toString() ??
-        pipeline.quotation?.quotationNumber ??
-        '';
+    final rawQuoteNumber = qData?['quotation_number']?.toString() ??
+        pipeline.baseQuotationNumber;
+    final quoteNumber = rawQuoteNumber.isNotEmpty
+        ? FinancialYearHelper.extractBaseNumber(rawQuoteNumber)
+        : '';
     final salesman = qData?['salesman']?.toString() ??
         pipeline.quotation?.salesman ??
         pipeline.createdByProfile?.fullName ??
@@ -1897,7 +1900,9 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
       'customerName': pipeline.customer?.companyName ??
           pipeline.customer?.customerName ??
           'Customer',
-      'quoteNumber': pipeline.quotation?.quotationNumber ?? '',
+      'quoteNumber': pipeline.baseQuotationNumber.isNotEmpty
+          ? pipeline.baseQuotationNumber
+          : (pipeline.quotation?.quotationNumber ?? ''),
       'grandTotal': pipeline.quotation?.grandTotal ?? 0.0,
       'salesman': pipeline.quotation?.salesman ??
           pipeline.createdByProfile?.fullName ??
@@ -2921,7 +2926,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
 
       // 7. Auto-generated Subject
       final subject = 'No Objection Certificate for Installation & Commissioning of $productName.';
-      final quoteNumber = qData?['quotation_number']?.toString() ?? pipeline.quotation?.quotationNumber;
+      final rawQuote = qData?['quotation_number']?.toString() ?? pipeline.baseQuotationNumber;
+      final quoteNumber = rawQuote.isNotEmpty ? FinancialYearHelper.extractBaseNumber(rawQuote) : null;
 
       // 8. Fetch Profile and Build Payload
       final nocProfile = await QgNocRepository.instance.getProfileForProduct(productName);

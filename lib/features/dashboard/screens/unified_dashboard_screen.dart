@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/user_role.dart';
+import '../../../core/auth/role_access.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
@@ -34,7 +35,10 @@ final unifiedDashboardDataProvider =
       roles.contains(UserRole.manager) ||
       roles.contains(UserRole.salesHead);
   final isSales = roles.contains(UserRole.sales);
-  final hasBoq = roles.contains(UserRole.boq);
+  final hasBoq = roles.contains(UserRole.boq) ||
+      roles.contains(UserRole.serviceHead) ||
+      roles.contains(UserRole.installation) ||
+      roles.contains(UserRole.complaints);
   final hasFactory = roles.contains(UserRole.factory);
   final hasPurchase = roles.contains(UserRole.purchase);
 
@@ -127,16 +131,20 @@ final unifiedDashboardDataProvider =
       final List<String> visibleSteps = [];
       if (hasBoq) {
         visibleSteps.addAll(['boq', 'factory_order', 'purchase_order']);
-      } else if (hasFactory) {
+      }
+      if (hasFactory) {
         visibleSteps.addAll(['factory_order', 'purchase_order']);
-      } else if (hasPurchase) {
+      }
+      if (hasPurchase) {
         visibleSteps.add('purchase_order');
       }
+
+      final uniqueVisibleSteps = visibleSteps.toSet().toList();
 
       final res = await supabase
           .from('sales_pipelines')
           .select('id')
-          .inFilter('current_step', visibleSteps)
+          .inFilter('current_step', uniqueVisibleSteps)
           .neq('status', 'cancelled')
           .neq('status', 'suspended')
           .neq('status', 'completed')
@@ -562,7 +570,10 @@ class UnifiedDashboardScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       pipelinesAsync.when(
                         data: (pipelines) {
-                          final activeDeals = pipelines.where((p) =>
+                          final visiblePipelines = pipelines
+                              .where((p) => RoleAccess.isDealVisibleForUser(p, profile))
+                              .toList();
+                          final activeDeals = visiblePipelines.where((p) =>
                               p.status != PipelineStatus.completed &&
                               p.currentStep != PipelineStep.completed &&
                               p.status != PipelineStatus.cancelled).toList();

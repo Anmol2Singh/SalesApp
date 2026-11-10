@@ -43,9 +43,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      setState(() {});
-    });
   }
 
   @override
@@ -61,7 +58,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   Widget build(BuildContext context) {
     final inventoryAsync = ref.watch(inventoryProvider);
     final isProductAddUnlocked = ref.watch(productAddUnlockedProvider);
-    final isProductsTab = _tabController.index == 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -79,53 +75,96 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => context.pop(),
         ),
-        actions: isProductsTab
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.download, color: Colors.white),
-                  tooltip: 'Export Products',
-                  onPressed: () {
-                    final products = ref.read(productsProvider).valueOrNull ?? [];
-                    if (products.isNotEmpty) {
-                      ExcelService.exportProducts(context, products);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('No products to export.')),
-                      );
-                    }
-                  },
-                ),
-              ]
-            : [
-                IconButton(
-                  icon: const Icon(Icons.file_download_outlined, color: Colors.white),
-                  tooltip: 'Download Template',
-                  onPressed: () {
-                    final products = ref.read(productsProvider).valueOrNull ?? [];
-                    ExcelService.downloadInventoryTemplate(context, products: products);
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.upload_file, color: Colors.white),
-                  tooltip: 'Import Excel',
-                  onPressed: () => _importExcel(context, ref),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download, color: Colors.white),
-                  tooltip: 'Export Excel',
-                  onPressed: () {
-                    final items = inventoryAsync.valueOrNull ?? [];
-                    if (items.isNotEmpty) {
-                      final products = ref.read(productsProvider).valueOrNull ?? [];
-                      ExcelService.exportInventoryItems(context, items, products: products);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('No items to export.')),
-                      );
-                    }
-                  },
-                ),
-              ],
+        actions: [
+          AnimatedBuilder(
+            animation: _tabController.animation ?? _tabController,
+            builder: (context, _) {
+              final animVal = _tabController.animation?.value ?? _tabController.index.toDouble();
+              final isProducts = animVal.round() == 0;
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+                  return Stack(
+                    alignment: Alignment.centerRight,
+                    children: <Widget>[
+                      ...previousChildren,
+                      if (currentChild != null) currentChild,
+                    ],
+                  );
+                },
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.08, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: isProducts
+                    ? Row(
+                        key: const ValueKey('actions_products'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.download, color: Colors.white),
+                            tooltip: 'Export Products',
+                            onPressed: () {
+                              final products = ref.read(productsProvider).valueOrNull ?? [];
+                              if (products.isNotEmpty) {
+                                ExcelService.exportProducts(context, products);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('No products to export.')),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      )
+                    : Row(
+                        key: const ValueKey('actions_items_supp'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.file_download_outlined, color: Colors.white),
+                            tooltip: 'Download Template',
+                            onPressed: () {
+                              final products = ref.read(productsProvider).valueOrNull ?? [];
+                              ExcelService.downloadInventoryTemplate(context, products: products);
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.upload_file, color: Colors.white),
+                            tooltip: 'Import Excel',
+                            onPressed: () => _importExcel(context, ref),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.download, color: Colors.white),
+                            tooltip: 'Export Excel',
+                            onPressed: () {
+                              final items = inventoryAsync.valueOrNull ?? [];
+                              if (items.isNotEmpty) {
+                                final products = ref.read(productsProvider).valueOrNull ?? [];
+                                ExcelService.exportInventoryItems(context, items, products: products);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('No items to export.')),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
@@ -157,44 +196,82 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           _buildSupplementaryTab(),
         ],
       ),
-      floatingActionButton: isProductsTab
-          ? FloatingActionButton.extended(
-              tooltip: isProductAddUnlocked
-                  ? 'Add Product'
-                  : 'Product creation is locked. Enable in Admin > Configuration to add products.',
-              backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
-              onPressed: () {
-                if (!isProductAddUnlocked) {
-                  _showProductAddLockedDialog(context);
-                } else {
-                  _showAddProductDialog(context);
-                }
-              },
-              icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
-              label: Text(
-                isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
-                style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
-              ),
-            )
-          : _tabController.index == 1
-              ? FloatingActionButton.extended(
-                  onPressed: () => _showAddItemDialog(context, ref),
-                  backgroundColor: AppColors.primary,
-                  icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text(
-                    'Add Item',
-                    style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
-                  ),
-                )
-              : FloatingActionButton.extended(
-                  onPressed: () => _showAddSupplementaryDialog(context, ref),
-                  backgroundColor: AppColors.primary,
-                  icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text(
-                    'Add Supplementary',
-                    style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
-                  ),
+      floatingActionButton: AnimatedBuilder(
+        animation: _tabController.animation ?? _tabController,
+        builder: (context, _) {
+          final animVal = _tabController.animation?.value ?? _tabController.index.toDouble();
+          final activeTab = animVal.round().clamp(0, 2);
+
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+              return Stack(
+                alignment: Alignment.bottomRight,
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
+              );
+            },
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+                  child: child,
                 ),
+              );
+            },
+            child: activeTab == 0
+                ? FloatingActionButton.extended(
+                    key: const ValueKey('fab_products'),
+                    heroTag: null,
+                    tooltip: isProductAddUnlocked
+                        ? 'Add Product'
+                        : 'Product creation is locked. Enable in Admin > Configuration to add products.',
+                    backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+                    onPressed: () {
+                      if (!isProductAddUnlocked) {
+                        _showProductAddLockedDialog(context);
+                      } else {
+                        _showAddProductDialog(context);
+                      }
+                    },
+                    icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+                    label: Text(
+                      isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
+                      style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                    ),
+                  )
+                : (activeTab == 1
+                    ? FloatingActionButton.extended(
+                        key: const ValueKey('fab_items'),
+                        heroTag: null,
+                        onPressed: () => _showAddItemDialog(context, ref),
+                        backgroundColor: AppColors.primary,
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text(
+                          'Add Item',
+                          style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    : FloatingActionButton.extended(
+                        key: const ValueKey('fab_supp'),
+                        heroTag: null,
+                        onPressed: () => _showAddSupplementaryDialog(context, ref),
+                        backgroundColor: AppColors.primary,
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text(
+                          'Add Supplementary',
+                          style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                        ),
+                      )),
+          );
+        },
+      ),
     );
   }
 

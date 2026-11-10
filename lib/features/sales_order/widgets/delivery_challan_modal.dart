@@ -7,12 +7,35 @@ import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/sales_order.dart';
+import '../../../core/models/inventory_item.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
+import '../../admin/providers/inventory_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../pipelines/widgets/work_progress_box.dart';
+import '../../complaints/providers/complaints_provider.dart';
+import '../../complaints/data/models/complaint_model.dart';
+import '../../../core/models/user_role.dart';
+import '../../../core/auth/role_access.dart';
+
+class _ChallanItemRow {
+  String name;
+  String uom; // Fixed from inventory (NOS, Mtr, Set, etc.)
+  double qty; // Selected quantity (min 1)
+  double? requiredQty; // Track main quantity if fetched from Quote / BOQ
+  String? remark; // Note / serial number
+
+  _ChallanItemRow({
+    required this.name,
+    this.uom = 'NOS',
+    required this.qty,
+    this.requiredQty,
+    this.remark,
+  });
+}
 
 class DeliveryChallanModal extends ConsumerStatefulWidget {
   final String pipelineId;
@@ -47,53 +70,672 @@ class DeliveryChallanModal extends ConsumerStatefulWidget {
 
 class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   DateTime _challanDate = DateTime.now();
+  final _vehicleNumberController = TextEditingController();
+  final _shippingCompanyController = TextEditingController();
+  final _driverContactController = TextEditingController();
+  final _deliveryPersonController = TextEditingController();
+  String? _selectedDeliveryPerson;
+  List<String> _customDeliveryPersons = [];
+
+  final List<_ChallanItemRow> _items = [];
   final Map<int, TextEditingController> _remarkControllers = {};
+  final Map<int, TextEditingController> _qtyControllers = {};
+
+  String _currentSource = 'quotation'; // 'quotation' or 'boq' or 'custom'
+  bool _initialized = false;
   bool _isGenerating = false;
 
   @override
   void dispose() {
-    for (final controller in _remarkControllers.values) {
-      controller.dispose();
+    _vehicleNumberController.dispose();
+    _shippingCompanyController.dispose();
+    _driverContactController.dispose();
+    _deliveryPersonController.dispose();
+    for (final c in _remarkControllers.values) {
+      c.dispose();
+    }
+    for (final c in _qtyControllers.values) {
+      c.dispose();
     }
     super.dispose();
   }
 
-  void _initControllers(List<SalesOrderLineItem> items) {
-    for (int i = 0; i < items.length; i++) {
+  Future<void> _loadCustomDeliveryPersons() async {
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      final res = await supabase
+          .from('qg_settings')
+          .select('value')
+          .eq('key', 'delivery_challan_persons')
+          .maybeSingle();
+      if (res != null && res['value'] is Map && res['value']['persons'] is List) {
+        if (mounted) {
+          setState(() {
+            _customDeliveryPersons = List<String>.from(res['value']['persons'] as List);
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCustomDeliveryPersons(List<String> list) async {
+    setState(() {
+      _customDeliveryPersons = list;
+    });
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+      await supabase.from('qg_settings').upsert({
+        'key': 'delivery_challan_persons',
+        'value': {'persons': list},
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  void _openManageDeliveryPersonsDialog() {
+    final newPersonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              title: Row(
+                children: const [
+                  Icon(Icons.tune_outlined, color: AppColors.primary, size: 22),
+                  SizedBox(width: 8),
+                  Text('Manage Delivery Persons', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Add or remove custom delivery receivers. These are kept strictly here and not added to technicians.',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: newPersonController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter full name...',
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () async {
+                            final name = newPersonController.text.trim();
+                            if (name.isEmpty) return;
+                            if (!_customDeliveryPersons.contains(name)) {
+                              final updated = [..._customDeliveryPersons, name];
+                              await _saveCustomDeliveryPersons(updated);
+                              setDialogState(() {});
+                              newPersonController.clear();
+                            }
+                          },
+                          child: const Text('Add'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('Custom Delivery Staff List:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    if (_customDeliveryPersons.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No custom persons added yet.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _customDeliveryPersons.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (c, idx) {
+                            final person = _customDeliveryPersons[idx];
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const CircleAvatar(
+                                radius: 14,
+                                backgroundColor: Color(0xFFE0F2FE),
+                                child: Icon(Icons.person, size: 16, color: Color(0xFF0284C7)),
+                              ),
+                              title: Text(person, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                onPressed: () async {
+                                  final updated = List<String>.from(_customDeliveryPersons)..removeAt(idx);
+                                  await _saveCustomDeliveryPersons(updated);
+                                  setDialogState(() {});
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openSelectDeliveryPersonSheet(BuildContext context) async {
+    final techsAsync = ref.read(availableTechniciansProvider);
+    final List<TechnicianInfo> techs = techsAsync.value ?? [];
+    final List<Map<String, String>> allOptions = [];
+
+    for (final t in techs) {
+      allOptions.add({
+        'name': t.name,
+        'role': 'Technician',
+        'phone': t.phone ?? '',
+      });
+    }
+    for (final cp in _customDeliveryPersons) {
+      allOptions.add({
+        'name': cp,
+        'role': 'Delivery Staff',
+        'phone': '',
+      });
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (dialogCtx, setSheetState) {
+            final filtered = allOptions.where((opt) {
+              final q = query.toLowerCase().trim();
+              if (q.isEmpty) return true;
+              return (opt['name'] ?? '').toLowerCase().contains(q) ||
+                  (opt['phone'] ?? '').toLowerCase().contains(q);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.badge_outlined, color: AppColors.primary, size: 22),
+                          SizedBox(width: 8),
+                          Text(
+                            'Select Person Taking Delivery',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Search technician or delivery staff...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onChanged: (val) => setSheetState(() => query = val),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person_off_outlined, size: 40, color: Colors.grey),
+                                const SizedBox(height: 8),
+                                Text(
+                                  query.isEmpty ? 'No persons available' : 'No match for "$query"',
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                                if (query.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedDeliveryPerson = query.trim();
+                                        _deliveryPersonController.text = query.trim();
+                                      });
+                                      Navigator.pop(ctx);
+                                    },
+                                    icon: const Icon(Icons.check, size: 16),
+                                    label: Text('Use "$query"'),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (c, idx) {
+                              final item = filtered[idx];
+                              final isTech = item['role'] == 'Technician';
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: isTech ? const Color(0xFFEDE9FE) : const Color(0xFFE0F2FE),
+                                  child: Icon(
+                                    isTech ? Icons.handyman_outlined : Icons.local_shipping_outlined,
+                                    size: 18,
+                                    color: isTech ? const Color(0xFF7C3AED) : const Color(0xFF0284C7),
+                                  ),
+                                ),
+                                title: Text(item['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                subtitle: item['phone'] != null && item['phone']!.isNotEmpty
+                                    ? Text('📞 ${item['phone']}')
+                                    : null,
+                                trailing: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isTech ? const Color(0xFFF3E8FF) : const Color(0xFFF0FDF4),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: isTech ? const Color(0xFFD8B4FE) : const Color(0xFF86EFAC)),
+                                  ),
+                                  child: Text(
+                                    item['role'] ?? '',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isTech ? const Color(0xFF6B21A8) : const Color(0xFF166534),
+                                    ),
+                                  ),
+                                ),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedDeliveryPerson = item['name'];
+                                    _deliveryPersonController.text = item['name'] ?? '';
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _syncControllers() {
+    for (int i = 0; i < _items.length; i++) {
       if (!_remarkControllers.containsKey(i)) {
-        _remarkControllers[i] =
-            TextEditingController(text: items[i].remark ?? '');
+        _remarkControllers[i] = TextEditingController(text: _items[i].remark ?? '');
+      } else {
+        _remarkControllers[i]!.text = _items[i].remark ?? '';
+      }
+      final qStr = _items[i].qty == _items[i].qty.roundToDouble()
+          ? _items[i].qty.toInt().toString()
+          : _items[i].qty.toString();
+      if (!_qtyControllers.containsKey(i)) {
+        _qtyControllers[i] = TextEditingController(text: qStr);
+      } else {
+        _qtyControllers[i]!.text = qStr;
       }
     }
   }
 
-  Future<void> _generateChallan(
-    SalesPipeline pipeline,
-    SalesOrder salesOrder,
-  ) async {
+  void _initFromPipeline(SalesPipeline pipeline) {
+    if (_initialized) return;
+    _initialized = true;
+
+    _loadCustomDeliveryPersons();
+
+    final so = pipeline.salesOrder;
+    if (so != null) {
+      _vehicleNumberController.text = so.vehicleNumber ?? '';
+      _shippingCompanyController.text = so.shippingCompany ?? '';
+    }
+
+    if (pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+      _loadFromQuotation(pipeline);
+    } else if (pipeline.boq != null && pipeline.boq!.items.isNotEmpty) {
+      _loadFromBoq(pipeline);
+    } else if (so != null && so.lineItems.isNotEmpty) {
+      _loadFromSalesOrder(pipeline);
+    }
+  }
+
+  void _loadFromQuotation(SalesPipeline pipeline) {
+    setState(() {
+      _currentSource = 'quotation';
+      _items.clear();
+      final qItems = pipeline.quotation?.lineItems ?? [];
+      for (final item in qItems) {
+        _items.add(_ChallanItemRow(
+          name: item.description,
+          uom: item.uom.isNotEmpty ? item.uom : 'NOS',
+          qty: item.qty > 0 ? item.qty : 1.0,
+          requiredQty: item.qty > 0 ? item.qty : 1.0,
+          remark: null,
+        ));
+      }
+      _syncControllers();
+    });
+  }
+
+  void _loadFromBoq(SalesPipeline pipeline) {
+    setState(() {
+      _currentSource = 'boq';
+      _items.clear();
+      final boqItems = pipeline.boq?.items ?? [];
+      for (final item in boqItems) {
+        _items.add(_ChallanItemRow(
+          name: item.component,
+          uom: item.unit.isNotEmpty ? item.unit : 'NOS',
+          qty: item.qty > 0 ? item.qty : 1.0,
+          requiredQty: item.qty > 0 ? item.qty : 1.0,
+          remark: item.remarks,
+        ));
+      }
+      _syncControllers();
+    });
+  }
+
+  void _loadFromSalesOrder(SalesPipeline pipeline) {
+    setState(() {
+      _currentSource = 'so';
+      _items.clear();
+      final soItems = pipeline.salesOrder?.lineItems ?? [];
+      for (final item in soItems) {
+        _items.add(_ChallanItemRow(
+          name: item.description,
+          uom: item.uom.isNotEmpty ? item.uom : 'NOS',
+          qty: item.qty > 0 ? item.qty : 1.0,
+          requiredQty: item.qty > 0 ? item.qty : 1.0,
+          remark: item.remark,
+        ));
+      }
+      _syncControllers();
+    });
+  }
+
+  Future<void> _openAddInventoryItemSheet(BuildContext context) async {
+    List<InventoryItem> inventoryItems = ref.read(inventoryProvider).value ?? [];
+
+    if (inventoryItems.isEmpty) {
+      final supabase = ref.read(supabaseClientProvider);
+      try {
+        final res = await supabase.from('inventory_items').select().order('item_name');
+        inventoryItems = (res as List).map((e) => InventoryItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = inventoryItems.where((it) {
+              final q = searchQuery.toLowerCase().trim();
+              if (q.isEmpty) return true;
+              return it.itemName.toLowerCase().contains(q) ||
+                  (it.hsnSac != null && it.hsnSac!.toLowerCase().contains(q));
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.inventory_2_outlined, color: AppColors.primary, size: 22),
+                          SizedBox(width: 8),
+                          Text(
+                            'Select Item from Inventory',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Search items by name or keyword...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                    onChanged: (val) => setModalState(() => searchQuery = val),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No matching items found in company inventory.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, idx) {
+                              final it = filtered[idx];
+                              final uom = (it.uom != null && it.uom!.isNotEmpty) ? it.uom! : 'NOS';
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                  child: const Icon(Icons.widgets_outlined, size: 16, color: AppColors.primary),
+                                ),
+                                title: Text(
+                                  it.itemName,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Unit: $uom',
+                                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                                ),
+                                trailing: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    minimumSize: const Size(60, 30),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    setState(() {
+                                      _items.add(_ChallanItemRow(
+                                        name: it.itemName,
+                                        uom: uom,
+                                        qty: 1.0,
+                                        requiredQty: null,
+                                        remark: null,
+                                      ));
+                                      _syncControllers();
+                                    });
+                                  },
+                                  child: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _updateItemQty(int idx, double delta) {
+    setState(() {
+      final current = _items[idx].qty;
+      final newQty = (current + delta).clamp(1.0, 99999.0);
+      _items[idx].qty = newQty;
+      final qStr = newQty == newQty.roundToDouble()
+          ? newQty.toInt().toString()
+          : newQty.toString();
+      _qtyControllers[idx]?.text = qStr;
+    });
+  }
+
+  void _removeItem(int idx) {
+    setState(() {
+      _items.removeAt(idx);
+      _remarkControllers.remove(idx)?.dispose();
+      _qtyControllers.remove(idx)?.dispose();
+      _syncControllers();
+    });
+  }
+
+  Future<void> _generateChallan(SalesPipeline pipeline) async {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one item to generate a delivery challan.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final profile = ref.read(currentProfileProvider);
+    if (!RoleAccess.canGenerateDeliveryChallan(profile)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Permission Denied: Delivery Challan generation is restricted to Administrators.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isGenerating = true);
     try {
       final supabase = ref.read(supabaseClientProvider);
 
-      // 1. Build updated line items with user entered remarks
-      final updatedLineItems = salesOrder.lineItems.asMap().entries.map((entry) {
-        final idx = entry.key;
-        final item = entry.value;
-        final remark = _remarkControllers[idx]?.text.trim();
-        return item.copyWith(remark: remark != null && remark.isNotEmpty ? remark : null);
-      }).toList();
-
-      // 2. Persist remarks to sales_orders table in Supabase
-      try {
-        await supabase.from('sales_orders').update({
-          'line_items': updatedLineItems.map((e) => e.toJson()).toList(),
-        }).eq('id', salesOrder.id);
-        ref.invalidate(pipelineDetailProvider(widget.pipelineId));
-      } catch (_) {
-        // If persistence fails due to network/policy, proceed with local generation
+      // Read remark from controllers into items
+      for (int i = 0; i < _items.length; i++) {
+        _items[i].remark = _remarkControllers[i]?.text.trim();
+        final rawQty = double.tryParse(_qtyControllers[i]?.text.trim() ?? '');
+        if (rawQty != null && rawQty > 0) {
+          _items[i].qty = rawQty;
+        }
       }
 
-      // 3. Fetch template config
+      // Convert items to SalesOrderLineItem for PDF generator
+      final List<SalesOrderLineItem> customLineItems = _items.map((it) {
+        return SalesOrderLineItem(
+          description: it.name,
+          qty: it.qty,
+          uom: it.uom,
+          remark: (it.remark != null && it.remark!.isNotEmpty) ? it.remark : null,
+          rate: 0.0,
+          discPercent: 0.0,
+          amount: 0.0,
+        );
+      }).toList();
+
+      // Determine next challan sequence number for this deal
+      final existingChallans = WorkProgressService.getDeliveryChallans(pipeline);
+      final existingCount = existingChallans.length;
+
+      final so = pipeline.salesOrder;
+      final baseDocRef = so?.salesOrderNumber.isNotEmpty == true
+          ? so!.salesOrderNumber
+          : pipeline.baseQuotationNumber;
+      final baseChallanNo = PdfService.formatDeliveryChallanNumber(baseDocRef, _challanDate);
+
+      final nextSuffix = (existingCount + 1).toString().padLeft(2, '0');
+      final challanNo = existingCount == 0 ? '$baseChallanNo-01' : '$baseChallanNo-$nextSuffix';
+      final fileName = '${challanNo.replaceAll('/', '_')}.pdf';
+
+      // Fetch template config
       Map<String, dynamic> templateConfig = {};
       try {
         final res = await supabase
@@ -117,37 +759,90 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
             updatedAt: DateTime.now(),
           );
 
-      // 4. Generate Delivery Challan PDF bytes
+      final effectiveSalesOrder = so != null
+          ? so.copyWith(
+              vehicleNumber: _vehicleNumberController.text.trim().isNotEmpty
+                  ? _vehicleNumberController.text.trim()
+                  : so.vehicleNumber,
+              shippingCompany: _shippingCompanyController.text.trim().isNotEmpty
+                  ? _shippingCompanyController.text.trim()
+                  : so.shippingCompany,
+              lineItems: customLineItems,
+            )
+          : SalesOrder(
+              id: 'so_temp',
+              pipelineId: pipeline.id,
+              salesOrderNumber: baseDocRef.isNotEmpty ? baseDocRef : 'IZY/SO/0001',
+              orderDate: _challanDate,
+              vehicleNumber: _vehicleNumberController.text.trim(),
+              shippingCompany: _shippingCompanyController.text.trim(),
+              billingAddress: pipeline.customer?.address,
+              shippingAddress: pipeline.customer?.address,
+              lineItems: customLineItems,
+              subtotal: 0,
+              cgstRate: 0,
+              sgstRate: 0,
+              cgstAmount: 0,
+              sgstAmount: 0,
+              igstAmount: 0,
+              grandTotal: 0,
+              status: SalesOrderStatus.confirmed,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+
+      // Generate Delivery Challan PDF bytes
+      final effectiveDeliveryTakenBy = _selectedDeliveryPerson != null && _selectedDeliveryPerson!.isNotEmpty
+          ? _selectedDeliveryPerson
+          : (_deliveryPersonController.text.trim().isNotEmpty ? _deliveryPersonController.text.trim() : null);
+
       final pdfBytes = await PdfService.generateDeliveryChallanPdf(
-        salesOrder: salesOrder,
+        salesOrder: effectiveSalesOrder,
         customer: widget.customer,
         product: product,
         templateConfig: templateConfig,
-        quotationNumber: pipeline.quotation?.quotationNumber,
+        quotationNumber: pipeline.baseQuotationNumber,
         challanDate: _challanDate,
-        customLineItems: updatedLineItems,
+        customLineItems: customLineItems,
+        customChallanNumber: challanNo,
+        deliveryTakenBy: effectiveDeliveryTakenBy,
       );
 
-      final challanNo = PdfService.formatDeliveryChallanNumber(
-        salesOrder.salesOrderNumber,
-        _challanDate,
-      );
-      final fileName = '${challanNo.replaceAll('/', '_')}.pdf';
+      // Record this Delivery Challan in Work Progress metadata
+      final challanRecord = {
+        'id': 'dc_${DateTime.now().millisecondsSinceEpoch}',
+        'challan_number': challanNo,
+        'date': _challanDate.toIso8601String(),
+        'vehicle_number': _vehicleNumberController.text.trim(),
+        'shipping_company': _shippingCompanyController.text.trim(),
+        'driver_contact': _driverContactController.text.trim(),
+        'delivery_taken_by': effectiveDeliveryTakenBy,
+        'source': _currentSource,
+        'item_count': _items.length,
+        'items': _items.map((it) => {
+          'name': it.name,
+          'qty': it.qty,
+          'uom': it.uom,
+          'required_qty': it.requiredQty,
+          'remark': it.remark,
+        }).toList(),
+        'created_at': DateTime.now().toIso8601String(),
+        'created_by': profile?.fullName ?? 'Staff',
+      };
 
-      // 4b. Record Delivery Challan generation in Work Progress
-      try {
-        await WorkProgressService.updateProgressMeta(
-          supabase,
-          widget.pipelineId,
-          challanGenerated: true,
-        );
-        ref.invalidate(pipelineDetailProvider(widget.pipelineId));
-      } catch (_) {}
+      await WorkProgressService.recordDeliveryChallan(
+        supabase,
+        widget.pipelineId,
+        challanRecord,
+      );
+
+      // Invalidate pipeline provider so the whole deal screen updates live!
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
 
       if (!mounted) return;
-      Navigator.of(context).pop(); // Close bottom sheet
+      Navigator.of(context).pop(); // Close modal
 
-      // 5. Open in standard preview screen with Download, Print, Share
+      // Open in standard preview screen with Download, Print, Share
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => PdfPreviewScreen(
@@ -173,10 +868,12 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   @override
   Widget build(BuildContext context) {
     final pipelineAsync = ref.watch(pipelineDetailProvider(widget.pipelineId));
+    final profile = ref.watch(currentProfileProvider);
+    final isAdmin = RoleAccess.canGenerateDeliveryChallan(profile);
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
+        maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -184,77 +881,50 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
       ),
       child: pipelineAsync.when(
         data: (pipeline) {
-          final salesOrder = pipeline.salesOrder;
-          if (salesOrder == null) {
-            return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.info_outline, size: 48, color: AppColors.warning),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Sales Order Required',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+          _initFromPipeline(pipeline);
+
+          final quotationNo = pipeline.baseQuotationNumber.isNotEmpty
+              ? pipeline.baseQuotationNumber
+              : (pipeline.quotation?.quotationNumber ?? '-');
+
+          final existingChallans = WorkProgressService.getDeliveryChallans(pipeline);
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              16,
+              20,
+              MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'A Delivery Challan can only be generated once the Sales Order for this deal has been created and confirmed.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          _initControllers(salesOrder.lineItems);
-
-          final challanNo = PdfService.formatDeliveryChallanNumber(
-            salesOrder.salesOrderNumber,
-            _challanDate,
-          );
-          final quotationNo = pipeline.quotation?.quotationNumber ?? 'N/A';
-
-          return Column(
-            children: [
-              // Sheet Header handle
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 10, bottom: 6),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
                 ),
-              ),
-              // Header title
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Row(
+                const SizedBox(height: 12),
+
+                // Header
+                Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
                         Icons.local_shipping_outlined,
-                        color: AppColors.primary,
-                        size: 24,
+                        size: 22,
+                        color: Color(0xFF2563EB),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -262,367 +932,642 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'DELIVERY CHALLAN',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
+                          Row(
+                            children: [
+                              const Text(
+                                'Generate Delivery Challan',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (existingChallans.isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF6FF),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                                  ),
+                                  child: Text(
+                                    '#${existingChallans.length + 1}',
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1D4ED8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
+                          const SizedBox(height: 2),
                           Text(
-                            challanNo,
+                            'Customer: ${widget.customer.companyName}',
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 12,
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
-              ),
-              const Divider(height: 1),
+                const SizedBox(height: 12),
 
-              // Scrollable body
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
+                // Source selection pills
+                Row(
                   children: [
-                    // Metadata card
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                    const Text(
+                      'Source:',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
                       ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              const Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'Challan Date:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('From Quotation', style: TextStyle(fontSize: 12)),
+                      selected: _currentSource == 'quotation',
+                      onSelected: (selected) {
+                        if (selected) _loadFromQuotation(pipeline);
+                      },
+                      selectedColor: const Color(0xFFDBEAFE),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _currentSource == 'quotation' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('From BOQ', style: TextStyle(fontSize: 12)),
+                      selected: _currentSource == 'boq',
+                      onSelected: (selected) {
+                        if (selected) _loadFromBoq(pipeline);
+                      },
+                      selectedColor: const Color(0xFFDBEAFE),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _currentSource == 'boq' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Scrollable form body
+                Expanded(
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      // Dispatch details card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    'Challan Date:',
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                   ),
                                 ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: InkWell(
-                                  onTap: () async {
-                                    final picked = await showDatePicker(
-                                      context: context,
-                                      initialDate: _challanDate,
-                                      firstDate: DateTime(2020),
-                                      lastDate: DateTime(2035),
-                                    );
-                                    if (picked != null) {
-                                      setState(() => _challanDate = picked);
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: AppColors.border),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          DateFormat('dd/MM/yyyy')
-                                              .format(_challanDate),
-                                          style: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
+                                Expanded(
+                                  flex: 3,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _challanDate,
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2035),
+                                      );
+                                      if (picked != null) {
+                                        setState(() => _challanDate = picked);
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            DateFormat('dd/MM/yyyy').format(_challanDate),
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
-                                        ),
-                                        const Icon(
-                                          Icons.calendar_today,
-                                          size: 14,
-                                          color: AppColors.primary,
-                                        ),
-                                      ],
+                                          const Icon(Icons.calendar_today, size: 14, color: AppColors.primary),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'Ref No. (Quotation):',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  quotationNo,
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 13,
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (salesOrder.vehicleNumber != null &&
-                              salesOrder.vehicleNumber!.isNotEmpty) ...[
+                              ],
+                            ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
                                 const Expanded(
                                   flex: 2,
                                   child: Text(
-                                    'Vehicle No:',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
+                                    'Ref No. (Quotation):',
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 3,
                                   child: Text(
-                                    salesOrder.vehicleNumber!,
+                                    quotationNo,
                                     style: const TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 13,
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    'Vehicle Number:',
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextField(
+                                    controller: _vehicleNumberController,
+                                    decoration: InputDecoration(
+                                      hintText: 'e.g. MH 12 AB 1234',
+                                      isDense: true,
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    'Shipping / Transport:',
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextField(
+                                    controller: _shippingCompanyController,
+                                    decoration: InputDecoration(
+                                      hintText: 'e.g. VRL Logistics / Self',
+                                      isDense: true,
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    'Delivery Taken By:',
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () => _openSelectDeliveryPersonSheet(context),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: Colors.grey.shade400),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    _selectedDeliveryPerson != null && _selectedDeliveryPerson!.isNotEmpty
+                                                        ? _selectedDeliveryPerson!
+                                                        : 'Select person...',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 12.5,
+                                                      fontWeight: _selectedDeliveryPerson != null && _selectedDeliveryPerson!.isNotEmpty
+                                                          ? FontWeight.w600
+                                                          : FontWeight.normal,
+                                                      color: _selectedDeliveryPerson != null && _selectedDeliveryPerson!.isNotEmpty
+                                                          ? AppColors.textPrimary
+                                                          : Colors.grey.shade500,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const Icon(Icons.arrow_drop_down, color: Colors.grey, size: 20),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      if (isAdmin) ...[
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: const Icon(Icons.tune_outlined, size: 20, color: AppColors.primary),
+                                          tooltip: 'Manage List (Admins only)',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: _openManageDeliveryPersonsDialog,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Items Section Header with Add Button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'Challan Items',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '${_items.length}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _openAddInventoryItemSheet(context),
+                            icon: const Icon(Icons.add_shopping_cart, size: 14),
+                            label: const Text('+ Add from Inventory', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              minimumSize: const Size(60, 30),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Section title
-                    const Text(
-                      'Line Item Remarks / Serial Numbers',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Remarks will be printed directly beneath the item name in the Delivery Challan PDF.',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Line items list with remark input
-                    ...salesOrder.lineItems.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final item = entry.value;
-                      final controller = _remarkControllers[idx]!;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Items strictly from inventory. Rates and amounts are not printed on delivery challans.',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11.5,
+                          color: AppColors.textSecondary,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (_items.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          alignment: Alignment.center,
+                          child: Column(
+                            children: [
+                              Icon(Icons.inventory_2_outlined, size: 36, color: Colors.grey.shade400),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'No items in this challan yet.',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                              ),
+                              const SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                onPressed: () => _openAddInventoryItemSheet(context),
+                                icon: const Icon(Icons.add, size: 14),
+                                label: const Text('Add Items from Inventory'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ..._items.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final item = entry.value;
+                          final remarkCtrl = _remarkControllers[idx]!;
+                          final qtyCtrl = _qtyControllers[idx]!;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.border),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '#${idx + 1}',
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primary,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '#${idx + 1}',
+                                        style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    item.description,
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.name,
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF1F5F9),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                                ),
+                                                child: Text(
+                                                  'Unit: ${item.uom}',
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Inter',
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF475569),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (item.requiredQty != null) ...[
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFEFF6FF),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                                                  ),
+                                                  child: Text(
+                                                    'Req: ${item.requiredQty!.toInt()} ${item.uom}',
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Color(0xFF1D4ED8),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 19),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _removeItem(idx),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Qty: ${item.qty == item.qty.roundToDouble() ? item.qty.toInt() : item.qty} ${item.uom.toUpperCase()}',
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary,
+                                const SizedBox(height: 10),
+
+                                // Quantity Controls (+ & -)
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Dispatch Qty:',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: AppColors.background,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          InkWell(
+                                            onTap: () => _updateItemQty(idx, -1),
+                                            child: const Padding(
+                                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              child: Icon(Icons.remove, size: 16, color: AppColors.textPrimary),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 48,
+                                            child: TextField(
+                                              controller: qtyCtrl,
+                                              keyboardType: TextInputType.number,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              decoration: const InputDecoration(
+                                                isDense: true,
+                                                border: InputBorder.none,
+                                                contentPadding: EdgeInsets.symmetric(vertical: 4),
+                                              ),
+                                              onChanged: (val) {
+                                                final parsed = double.tryParse(val.trim());
+                                                if (parsed != null && parsed > 0) {
+                                                  item.qty = parsed;
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                          InkWell(
+                                            onTap: () => _updateItemQty(idx, 1),
+                                            child: const Padding(
+                                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              child: Icon(Icons.add, size: 16, color: AppColors.primary),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+
+                                // Optional Remark field
+                                TextField(
+                                  controller: remarkCtrl,
+                                  decoration: InputDecoration(
+                                    hintText: 'Remark / Serial number (optional)',
+                                    hintStyle: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: AppColors.background,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: const BorderSide(color: AppColors.border),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: const BorderSide(color: AppColors.border),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: controller,
-                              decoration: InputDecoration(
-                                isDense: true,
-                                hintText: 'e.g. Sr. No- 860025101802003 or note',
-                                hintStyle: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                                prefixIcon: const Icon(
-                                  Icons.edit_note,
-                                  size: 18,
-                                  color: AppColors.primary,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                filled: true,
-                                fillColor: AppColors.surfaceVariant,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey.shade300),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey.shade300),
-                                ),
-                              ),
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 12.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-
-              // Bottom generate button
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: AppColors.border),
+                          );
+                        }),
+                    ],
                   ),
                 ),
-                child: SizedBox(
+
+                const SizedBox(height: 12),
+
+                // Generate Challan Button
+                SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
-                    onPressed: _isGenerating
-                        ? null
-                        : () => _generateChallan(pipeline, salesOrder),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 2,
+                    ),
+                    onPressed: _isGenerating ? null : () => _generateChallan(pipeline),
                     icon: _isGenerating
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.picture_as_pdf_outlined, size: 20),
                     label: Text(
-                      _isGenerating
-                          ? 'Generating PDF...'
-                          : 'GENERATE DELIVERY CHALLAN',
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                      _isGenerating ? 'Generating Challan PDF...' : 'Generate Delivery Challan',
+                      style: const TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
         loading: () => const Center(
           child: Padding(
-            padding: EdgeInsets.all(40),
-            child: CircularProgressIndicator(color: AppColors.primary),
+            padding: EdgeInsets.all(32),
+            child: CircularProgressIndicator(),
           ),
         ),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Error loading deal: $e'),
-          ),
+        error: (err, _) => Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Error loading pipeline: $err'),
         ),
       ),
     );
