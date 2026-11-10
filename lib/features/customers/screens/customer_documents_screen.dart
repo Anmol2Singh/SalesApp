@@ -1,6 +1,8 @@
 // lib/features/customers/screens/customer_documents_screen.dart
 
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -605,6 +607,7 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
   final _titleController = TextEditingController();
   String? _selectedFilePath;
   String? _selectedFileName;
+  Uint8List? _selectedFileBytes;
   int _selectedFileSize = 0;
   String _fileType = 'pdf'; // 'pdf' or 'image'
   bool _isUploading = false;
@@ -622,15 +625,17 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
         allowedExtensions: type == 'pdf' ? ['pdf'] : null,
       );
 
-      if (files.isNotEmpty && files.first.path != null) {
-        final filePath = files.first.path!;
-        final name = files.first.name;
-        final file = File(filePath);
-        final size = await file.length();
+      if (files.isNotEmpty) {
+        final picked = files.first;
+        final filePath = picked.path;
+        final name = picked.name;
+        final bytes = await picked.readAsBytes();
+        final size = bytes.length;
 
         setState(() {
           _selectedFilePath = filePath;
           _selectedFileName = name;
+          _selectedFileBytes = bytes;
           _selectedFileSize = size;
           _fileType = type;
           if (_titleController.text.trim().isEmpty) {
@@ -664,7 +669,7 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
       return;
     }
 
-    if (_selectedFilePath == null) {
+    if (_selectedFileName == null && _selectedFilePath == null && _selectedFileBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select an Image or PDF file to upload'),
@@ -674,20 +679,15 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
       return;
     }
 
-    final file = File(_selectedFilePath!);
-    if (!file.existsSync()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selected file could not be found'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
+    Uint8List? fileBytes = _selectedFileBytes;
+    if (fileBytes == null && !kIsWeb && _selectedFilePath != null) {
+      final file = File(_selectedFilePath!);
+      if (file.existsSync()) {
+        fileBytes = await file.readAsBytes();
+      }
     }
 
-    final fileBytes = await file.readAsBytes();
-    if (fileBytes.isEmpty) {
+    if (fileBytes == null || fileBytes.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

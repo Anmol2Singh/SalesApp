@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -79,11 +81,14 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
       allowedExtensions: ['json'],
     );
 
-    if (files.isNotEmpty && files.first.path != null) {
+    if (files.isNotEmpty) {
+      final picked = files.first;
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) return;
+
       setState(() => _isRestoring = true);
       try {
-        final file = File(files.first.path!);
-        final content = await file.readAsString();
+        final content = utf8.decode(bytes);
         final Map<String, dynamic> data = jsonDecode(content);
 
         final projectsList = data['projects'] as List<dynamic>? ?? [];

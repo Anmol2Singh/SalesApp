@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' hide Border, BorderStyle;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -96,9 +97,10 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
       allowedExtensions: ['xlsx', 'xls', 'csv'],
     );
 
-    if (files.isNotEmpty && files.first.path != null) {
-      final path = files.first.path!;
-      final bytes = File(path).readAsBytesSync();
+    if (files.isNotEmpty) {
+      final picked = files.first;
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) return;
       final excel = Excel.decodeBytes(bytes);
 
       final List<Map<String, dynamic>> records = [];
@@ -135,7 +137,7 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
       }
 
       setState(() {
-        _selectedFileName = files.first.name;
+        _selectedFileName = picked.name;
         _parsedRecords = records;
       });
     }

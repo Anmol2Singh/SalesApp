@@ -779,6 +779,89 @@ class ExcelService {
     }
   }
 
+  static Future<void> downloadInventoryTemplate(
+    BuildContext context, {
+    List<Product>? products,
+  }) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Inventory_Items'];
+    excel.setDefaultSheet('Inventory_Items');
+
+    final headers = [
+      'Item Name',
+      'Under Product Category',
+      'HSN / SAC Code',
+      'Unit (UOM)',
+      'Default Price (₹)',
+      'Warranty (Months)',
+    ];
+
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      );
+    }
+
+    final sampleProductName = (products != null && products.isNotEmpty) ? products.first.name : 'Heat Pump';
+
+    final sampleRows = [
+      [
+        'Heat Pump 4kW Outdoor Unit',
+        sampleProductName,
+        '84186990',
+        'NOS',
+        '85000',
+        '24',
+      ],
+      [
+        'GI Pressurized Tank 300Ltr',
+        sampleProductName,
+        '73090090',
+        'NOS',
+        '35000',
+        '12',
+      ],
+      [
+        'Circulation Pump 0.5 HP',
+        sampleProductName,
+        '84137010',
+        'NOS',
+        '8500',
+        '12',
+      ],
+    ];
+
+    for (int r = 0; r < sampleRows.length; r++) {
+      final row = r + 1;
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(sampleRows[r][0]);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(sampleRows[r][1]);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(sampleRows[r][2]);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(sampleRows[r][3]);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = DoubleCellValue(double.tryParse(sampleRows[r][4]) ?? 0);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = IntCellValue(int.tryParse(sampleRows[r][5]) ?? 12);
+    }
+
+    final fileBytes = excel.save();
+    if (fileBytes == null) throw Exception('Failed to generate template file');
+
+    const fileName = 'Inventory_Import_Template.xlsx';
+
+    if (context.mounted) {
+      ExportPreviewDialog.show(
+        context,
+        title: 'Download Inventory Import Template',
+        fileName: fileName,
+        headers: headers,
+        rows: sampleRows,
+        fileBytes: fileBytes,
+      );
+    }
+  }
+
   static Future<void> exportProducts(BuildContext context, List<Product> products) async {
     final excel = Excel.createExcel();
     final sheet = excel['Products'];

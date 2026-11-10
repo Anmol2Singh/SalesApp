@@ -1,6 +1,7 @@
 import '../providers/app_config_provider.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 
@@ -96,6 +97,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 ),
               ]
             : [
+                IconButton(
+                  icon: const Icon(Icons.file_download_outlined, color: Colors.white),
+                  tooltip: 'Download Template',
+                  onPressed: () {
+                    final products = ref.read(productsProvider).valueOrNull ?? [];
+                    ExcelService.downloadInventoryTemplate(context, products: products);
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.upload_file, color: Colors.white),
                   tooltip: 'Import Excel',
@@ -2677,18 +2686,66 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   }
 
   Future<void> _importExcel(BuildContext context, WidgetRef ref) async {
+    bool dialogShown = false;
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['xlsx'],
+        allowedExtensions: ['xlsx', 'xls'],
       );
 
-      if (files.isEmpty || files.single.path == null) {
+      if (files.isEmpty) {
         return;
       }
 
-      final file = File(files.single.path!);
-      final bytes = await file.readAsBytes();
+      final pickedFile = files.first;
+      final bytes = await pickedFile.readAsBytes();
+
+      if (bytes.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read the selected Excel file.'), backgroundColor: AppColors.error),
+          );
+        }
+        return;
+      }
+
+      // Show non-dismissible loading dialog while importing
+      if (context.mounted) {
+        dialogShown = true;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: Center(
+              child: Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(strokeWidth: 3),
+                      SizedBox(height: 20),
+                      Text(
+                        'Importing Inventory Items...',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Please wait, parsing & updating items...',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
       final excel = Excel.decodeBytes(bytes);
 
       final supabase = ref.read(supabaseClientProvider);
@@ -2714,12 +2771,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         final sheet = excel.tables[table];
         if (sheet == null) continue;
 
-        int nameCol = 0;
+        int nameCol = -1;
         int underProductCol = -1;
-        int hsnCol = 1;
-        int unitCol = 2;
-        int priceCol = 3;
-        int warrantyCol = 4;
+        int hsnCol = -1;
+        int unitCol = -1;
+        int priceCol = -1;
+        int warrantyCol = -1;
 
         bool isFirstRow = true;
         for (var row in sheet.rows) {
@@ -2728,31 +2785,58 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             // Parse headers to locate columns dynamically if headers exist
             for (int i = 0; i < row.length; i++) {
               final header = row[i]?.value?.toString().toLowerCase().trim() ?? '';
-              if (header.contains('under product') || header.contains('product category')) {
+              if (header.isEmpty) continue;
+
+              final isIdOrCode = header == 'id' ||
+                  header.contains('item id') ||
+                  header.contains('item code') ||
+                  header.contains('sr no') ||
+                  header.contains('sr.') ||
+                  header == '#';
+
+              if (header.contains('under product') || header.contains('product category') || header.contains('category')) {
                 underProductCol = i;
-              } else if (header.contains('item') || header.contains('name')) {
-                nameCol = i;
+              } else if (!isIdOrCode && (header.contains('item name') || header.contains('product name') || header.contains('material') || header == 'item' || header == 'name' || header.contains('description'))) {
+                // If nameCol not yet identified, or if this header explicitly contains 'name'
+                if (nameCol == -1 || header.contains('name')) {
+                  nameCol = i;
+                }
               } else if (header.contains('hsn') || header.contains('sac')) {
                 hsnCol = i;
               } else if (header.contains('unit') || header.contains('uom')) {
                 unitCol = i;
-              } else if (header.contains('price') || header.contains('cost') || header.contains('₹')) {
+              } else if (header.contains('price') || header.contains('cost') || header.contains('rate') || header.contains('amount') || header.contains('₹')) {
                 priceCol = i;
               } else if (header.contains('warranty')) {
                 warrantyCol = i;
               }
             }
+
+            // Fallback column positions if headers weren't found
+            if (nameCol == -1) {
+              final firstHeader = row.isNotEmpty ? row[0]?.value?.toString().toLowerCase().trim() ?? '' : '';
+              if (row.length > 1 && (firstHeader == '#' || firstHeader.contains('id') || firstHeader.contains('sr'))) {
+                nameCol = 1;
+              } else {
+                nameCol = 0;
+              }
+            }
+            if (underProductCol == -1 && row.length > (nameCol == 0 ? 1 : 2)) underProductCol = (nameCol == 0) ? 1 : 2;
+            if (hsnCol == -1 && row.length > (nameCol == 0 ? 2 : 3)) hsnCol = (nameCol == 0) ? 2 : 3;
+            if (unitCol == -1 && row.length > (nameCol == 0 ? 3 : 4)) unitCol = (nameCol == 0) ? 3 : 4;
+            if (priceCol == -1 && row.length > (nameCol == 0 ? 4 : 5)) priceCol = (nameCol == 0) ? 4 : 5;
+            if (warrantyCol == -1 && row.length > (nameCol == 0 ? 5 : 6)) warrantyCol = (nameCol == 0) ? 5 : 6;
             continue;
           }
 
           if (row.isEmpty) continue;
 
-          final itemNameCell = row.length > nameCol ? row[nameCol]?.value : null;
+          final itemNameCell = (nameCol >= 0 && row.length > nameCol) ? row[nameCol]?.value : null;
           final underProductCell = underProductCol >= 0 && row.length > underProductCol ? row[underProductCol]?.value : null;
-          final hsnCell = row.length > hsnCol ? row[hsnCol]?.value : null;
-          final unitCell = row.length > unitCol ? row[unitCol]?.value : null;
-          final priceCell = row.length > priceCol ? row[priceCol]?.value : null;
-          final warrantyCell = row.length > warrantyCol ? row[warrantyCol]?.value : null;
+          final hsnCell = (hsnCol >= 0 && row.length > hsnCol) ? row[hsnCol]?.value : null;
+          final unitCell = (unitCol >= 0 && row.length > unitCol) ? row[unitCol]?.value : null;
+          final priceCell = (priceCol >= 0 && row.length > priceCol) ? row[priceCol]?.value : null;
+          final warrantyCell = (warrantyCol >= 0 && row.length > warrantyCol) ? row[warrantyCol]?.value : null;
 
           final itemName = itemNameCell?.toString().trim();
           if (itemName == null || itemName.isEmpty) continue;
@@ -2833,6 +2917,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         ref.invalidate(inventoryProvider);
       }
 
+      // Dismiss loading dialog before showing result
+      if (dialogShown && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogShown = false;
+      }
+
       if (context.mounted) {
         final linkedMsg = modifiedProductIds.isNotEmpty ? ' Linked to ${modifiedProductIds.length} products.' : '';
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2843,6 +2933,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         );
       }
     } catch (e) {
+      if (dialogShown && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        dialogShown = false;
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Import Error: $e'), backgroundColor: AppColors.error),

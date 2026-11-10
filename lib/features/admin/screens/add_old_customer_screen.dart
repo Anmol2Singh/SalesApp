@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +55,8 @@ class AddOldCustomerScreen extends ConsumerStatefulWidget {
   const AddOldCustomerScreen({super.key});
 
   @override
-  ConsumerState<AddOldCustomerScreen> createState() => _AddOldCustomerScreenState();
+  ConsumerState<AddOldCustomerScreen> createState() =>
+      _AddOldCustomerScreenState();
 }
 
 class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
@@ -89,7 +92,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error downloading template: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error downloading template: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
@@ -127,7 +132,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting old customers: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error exporting old customers: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -142,15 +149,17 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
         allowedExtensions: ['xlsx', 'xls'],
       );
 
-      if (files.isEmpty || files.first.path == null) return;
+      if (files.isEmpty) return;
 
-      final file = File(files.first.path!);
-      final bytes = await file.readAsBytes();
+      final picked = files.first;
+      final bytes = await picked.readAsBytes();
 
       if (bytes.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to read selected Excel file.'), backgroundColor: AppColors.error),
+            const SnackBar(
+                content: Text('Unable to read selected Excel file.'),
+                backgroundColor: AppColors.error),
           );
         }
         return;
@@ -161,7 +170,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No valid rows found in Excel. Please check column headers or use the provided template.'),
+              content: Text(
+                  'No valid rows found in Excel. Please check column headers or use the provided template.'),
               backgroundColor: AppColors.warning,
             ),
           );
@@ -195,7 +205,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
             'notes': r['notes'],
             'products': <Map<String, dynamic>>[],
           };
-        } else if (cSinceDate.isNotEmpty && (consolidated[key]!['customer_since'] as String? ?? '').isEmpty) {
+        } else if (cSinceDate.isNotEmpty &&
+            (consolidated[key]!['customer_since'] as String? ?? '').isEmpty) {
           consolidated[key]!['customer_since'] = cSinceDate;
         }
 
@@ -207,32 +218,43 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           );
 
           // Normalize items to inventory item names if matching
-          final normalizedItems = pItems.map((it) {
-            return _inventoryItemNames.firstWhere(
-              (inv) => inv.trim().toLowerCase() == it.trim().toLowerCase(),
-              orElse: () => it.trim(),
-            );
-          }).where((it) => it.isNotEmpty).toList();
+          final normalizedItems = pItems
+              .map((it) {
+                return _inventoryItemNames.firstWhere(
+                  (inv) => inv.trim().toLowerCase() == it.trim().toLowerCase(),
+                  orElse: () => it.trim(),
+                );
+              })
+              .where((it) => it.isNotEmpty)
+              .toList();
 
-          final List<Map<String, dynamic>> prods = consolidated[key]!['products'];
-          final existingProdIdx = prods.indexWhere((p) => (p['name'] as String? ?? '').toLowerCase() == matchedProd.toLowerCase());
+          final List<Map<String, dynamic>> prods =
+              consolidated[key]!['products'];
+          final existingProdIdx = prods.indexWhere((p) =>
+              (p['name'] as String? ?? '').toLowerCase() ==
+              matchedProd.toLowerCase());
           if (existingProdIdx >= 0) {
-            final existingItems = List<Map<String, dynamic>>.from(prods[existingProdIdx]['items'] as List? ?? []);
-            final existingNames = existingItems.map((it) => it['name']?.toString() ?? '').toList();
+            final existingItems = List<Map<String, dynamic>>.from(
+                prods[existingProdIdx]['items'] as List? ?? []);
+            final existingNames = existingItems
+                .map((it) => it['name']?.toString() ?? '')
+                .toList();
             for (final it in normalizedItems) {
               if (!existingNames.contains(it)) {
                 existingItems.add({'name': it, 'qty': 1});
               }
             }
             prods[existingProdIdx]['items'] = existingItems;
-            if (pPurchaseDate.isNotEmpty && prods[existingProdIdx]['purchase_date'] == null) {
+            if (pPurchaseDate.isNotEmpty &&
+                prods[existingProdIdx]['purchase_date'] == null) {
               prods[existingProdIdx]['purchase_date'] = pPurchaseDate;
             }
           } else {
             prods.add({
               'name': matchedProd,
               if (pPurchaseDate.isNotEmpty) 'purchase_date': pPurchaseDate,
-              'items': normalizedItems.map((it) => {'name': it, 'qty': 1}).toList(),
+              'items':
+                  normalizedItems.map((it) => {'name': it, 'qty': 1}).toList(),
             });
           }
         }
@@ -241,7 +263,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
       if (consolidated.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No valid customer data to import.'), backgroundColor: AppColors.warning),
+            const SnackBar(
+                content: Text('No valid customer data to import.'),
+                backgroundColor: AppColors.warning),
           );
         }
         return;
@@ -253,7 +277,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               const Icon(Icons.file_upload_outlined, color: AppColors.primary),
@@ -274,7 +299,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                 const SizedBox(height: 10),
                 const Text(
                   'They will be added as Old Customers with their respective products and items.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style:
+                      TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 14),
                 ConstrainedBox(
@@ -285,12 +311,18 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final c = consolidated.values.elementAt(i);
-                      final prods = (c['products'] as List).map((p) => p['name']).join(', ');
+                      final prods = (c['products'] as List)
+                          .map((p) => p['name'])
+                          .join(', ');
                       return ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
-                        title: Text(c['customer_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        subtitle: Text('Phone: ${c['phone']} • Products: ${prods.isNotEmpty ? prods : 'None'}', style: const TextStyle(fontSize: 11)),
+                        title: Text(c['customer_name'] ?? '',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Text(
+                            'Phone: ${c['phone']} • Products: ${prods.isNotEmpty ? prods : 'None'}',
+                            style: const TextStyle(fontSize: 11)),
                       );
                     },
                   ),
@@ -298,7 +330,10 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                 if (consolidated.length > 10)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text('+ ${consolidated.length - 10} more customer(s)...', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                    child: Text(
+                        '+ ${consolidated.length - 10} more customer(s)...',
+                        style: const TextStyle(
+                            fontSize: 11, fontStyle: FontStyle.italic)),
                   ),
               ],
             ),
@@ -339,7 +374,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
 
         final oldCustMeta = {
           'products': prods,
-          if (entry['customer_since'] != null && (entry['customer_since'] as String).isNotEmpty)
+          if (entry['customer_since'] != null &&
+              (entry['customer_since'] as String).isNotEmpty)
             'customer_since': entry['customer_since'],
         };
         final metaJson = '[OLD_CUSTOMER_DATA:${jsonEncode(oldCustMeta)}]';
@@ -358,34 +394,55 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
             String updatedNotes = fullNotes;
             if (existingNotes.contains('[OLD_CUSTOMER_DATA:')) {
               try {
-                final sIdx = existingNotes.indexOf('[OLD_CUSTOMER_DATA:') + '[OLD_CUSTOMER_DATA:'.length;
+                final sIdx = existingNotes.indexOf('[OLD_CUSTOMER_DATA:') +
+                    '[OLD_CUSTOMER_DATA:'.length;
                 final eIdx = existingNotes.lastIndexOf(']');
                 if (eIdx > sIdx) {
-                  final prevDecoded = jsonDecode(existingNotes.substring(sIdx, eIdx)) as Map<String, dynamic>;
-                  final prevProds = List<Map<String, dynamic>>.from(prevDecoded['products'] as List? ?? []);
-                  if (prevDecoded['customer_since'] == null && entry['customer_since'] != null && (entry['customer_since'] as String).isNotEmpty) {
+                  final prevDecoded =
+                      jsonDecode(existingNotes.substring(sIdx, eIdx))
+                          as Map<String, dynamic>;
+                  final prevProds = List<Map<String, dynamic>>.from(
+                      prevDecoded['products'] as List? ?? []);
+                  if (prevDecoded['customer_since'] == null &&
+                      entry['customer_since'] != null &&
+                      (entry['customer_since'] as String).isNotEmpty) {
                     prevDecoded['customer_since'] = entry['customer_since'];
                   }
                   for (final newP in prods) {
-                    final idx = prevProds.indexWhere((p) => (p['name'] as String? ?? '').toLowerCase() == (newP['name'] as String? ?? '').toLowerCase());
+                    final idx = prevProds.indexWhere((p) =>
+                        (p['name'] as String? ?? '').toLowerCase() ==
+                        (newP['name'] as String? ?? '').toLowerCase());
                     if (idx >= 0) {
-                      final prevItems = (prevProds[idx]['items'] as List? ?? []).map((it) => it is Map ? it['name']?.toString() ?? '' : it.toString()).toList();
+                      final prevItems = (prevProds[idx]['items'] as List? ?? [])
+                          .map((it) => it is Map
+                              ? it['name']?.toString() ?? ''
+                              : it.toString())
+                          .toList();
                       for (final it in (newP['items'] as List? ?? [])) {
-                        final itName = it is Map ? it['name']?.toString() ?? '' : it.toString();
+                        final itName = it is Map
+                            ? it['name']?.toString() ?? ''
+                            : it.toString();
                         if (!prevItems.contains(itName)) {
                           (prevProds[idx]['items'] as List).add(it);
                         }
                       }
-                      if (newP['purchase_date'] != null && prevProds[idx]['purchase_date'] == null) {
+                      if (newP['purchase_date'] != null &&
+                          prevProds[idx]['purchase_date'] == null) {
                         prevProds[idx]['purchase_date'] = newP['purchase_date'];
                       }
                     } else {
                       prevProds.add(Map<String, dynamic>.from(newP as Map));
                     }
                   }
-                  final mergedMeta = '[OLD_CUSTOMER_DATA:${jsonEncode(prevDecoded)}]';
-                  final prefixNotes = existingNotes.substring(0, existingNotes.indexOf('[OLD_CUSTOMER_DATA:')).trim();
-                  updatedNotes = prefixNotes.isNotEmpty ? '$prefixNotes\n$mergedMeta' : mergedMeta;
+                  final mergedMeta =
+                      '[OLD_CUSTOMER_DATA:${jsonEncode(prevDecoded)}]';
+                  final prefixNotes = existingNotes
+                      .substring(
+                          0, existingNotes.indexOf('[OLD_CUSTOMER_DATA:'))
+                      .trim();
+                  updatedNotes = prefixNotes.isNotEmpty
+                      ? '$prefixNotes\n$mergedMeta'
+                      : mergedMeta;
                 }
               } catch (_) {}
             }
@@ -421,7 +478,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✓ Successfully imported $importedCount Old Customers from Excel!'),
+            content: Text(
+                '✓ Successfully imported $importedCount Old Customers from Excel!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -429,14 +487,15 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error importing Excel: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error importing Excel: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
       if (mounted) setState(() => _isProcessingExcel = false);
     }
   }
-
 
   void _addNewProduct() {
     setState(() {
@@ -466,11 +525,11 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
   void _addItemToProduct(int productIndex) {
     setState(() {
       _products[productIndex].items.add(
-        _ComponentItemEntry(
-          nameController: TextEditingController(),
-          qtyController: TextEditingController(text: '1'),
-        ),
-      );
+            _ComponentItemEntry(
+              nameController: TextEditingController(),
+              qtyController: TextEditingController(text: '1'),
+            ),
+          );
     });
   }
 
@@ -540,7 +599,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
   void _openProductPicker(int productIndex) {
     if (_catalogProducts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Loading sell products list, please wait...')),
+        const SnackBar(
+            content: Text('Loading sell products list, please wait...')),
       );
       return;
     }
@@ -583,7 +643,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                 color: const Color(0xFF6D28D9).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF6D28D9), size: 20),
+                              child: const Icon(Icons.shopping_bag_outlined,
+                                  color: Color(0xFF6D28D9), size: 20),
                             ),
                             const SizedBox(width: 10),
                             Column(
@@ -600,7 +661,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                 ),
                                 Text(
                                   '${filtered.length} products available',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
@@ -620,8 +683,10 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       autofocus: true,
                       decoration: InputDecoration(
                         hintText: 'Search sell products by name or category...',
-                        hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
+                        hintStyle:
+                            const TextStyle(fontSize: 13, color: Colors.grey),
+                        prefixIcon:
+                            const Icon(Icons.search, color: Color(0xFF6D28D9)),
                         suffixIcon: searchQuery.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
@@ -632,18 +697,22 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             : null,
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF6D28D9), width: 1.5),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF6D28D9), width: 1.5),
                         ),
                       ),
                       onChanged: (val) {
@@ -657,21 +726,28 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.search_off, size: 48, color: Colors.grey),
+                                const Icon(Icons.search_off,
+                                    size: 48, color: Colors.grey),
                                 const SizedBox(height: 8),
                                 Text(
                                   'No sell products match "$searchQuery"',
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                  style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13),
                                 ),
                               ],
                             ),
                           )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1, indent: 56),
                             itemBuilder: (context, idx) {
                               final p = filtered[idx];
-                              final isSelected = productEntry.nameController.text.trim().toLowerCase() ==
+                              final isSelected = productEntry
+                                      .nameController.text
+                                      .trim()
+                                      .toLowerCase() ==
                                   (p['name'] as String).trim().toLowerCase();
 
                               return ListTile(
@@ -680,35 +756,47 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                   height: 36,
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? const Color(0xFF6D28D9).withOpacity(0.15)
+                                        ? const Color(0xFF6D28D9)
+                                            .withOpacity(0.15)
                                         : const Color(0xFFF1F5F9),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
                                     Icons.inventory_2_outlined,
                                     size: 20,
-                                    color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF64748B),
+                                    color: isSelected
+                                        ? const Color(0xFF6D28D9)
+                                        : const Color(0xFF64748B),
                                   ),
                                 ),
                                 title: Text(
                                   p['name'] as String,
                                   style: TextStyle(
                                     fontFamily: 'Inter',
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w600,
                                     fontSize: 14,
-                                    color: isSelected ? const Color(0xFF6D28D9) : const Color(0xFF1E293B),
+                                    color: isSelected
+                                        ? const Color(0xFF6D28D9)
+                                        : const Color(0xFF1E293B),
                                   ),
                                 ),
                                 subtitle: Text(
                                   p['category'] as String,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary),
                                 ),
                                 trailing: isSelected
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF6D28D9), size: 20)
-                                    : const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                                    ? const Icon(Icons.check_circle,
+                                        color: Color(0xFF6D28D9), size: 20)
+                                    : const Icon(Icons.arrow_forward_ios,
+                                        size: 14, color: Colors.grey),
                                 onTap: () {
                                   setState(() {
-                                    productEntry.nameController.text = p['name'] as String;
+                                    productEntry.nameController.text =
+                                        p['name'] as String;
                                   });
                                   Navigator.pop(ctx);
                                 },
@@ -728,7 +816,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
   void _openInventoryItemPicker(int productIndex, int itemIndex) {
     if (_inventoryItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Loading inventory items, please wait...')),
+        const SnackBar(
+            content: Text('Loading inventory items, please wait...')),
       );
       return;
     }
@@ -773,7 +862,10 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                 color: const Color(0xFF059669).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.precision_manufacturing_outlined, color: Color(0xFF059669), size: 20),
+                              child: const Icon(
+                                  Icons.precision_manufacturing_outlined,
+                                  color: Color(0xFF059669),
+                                  size: 20),
                             ),
                             const SizedBox(width: 10),
                             Column(
@@ -790,7 +882,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                 ),
                                 Text(
                                   '${filtered.length} inventory items available',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
@@ -810,8 +904,10 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       autofocus: true,
                       decoration: InputDecoration(
                         hintText: 'Search inventory items by name or HSN...',
-                        hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF059669)),
+                        hintStyle:
+                            const TextStyle(fontSize: 13, color: Colors.grey),
+                        prefixIcon:
+                            const Icon(Icons.search, color: Color(0xFF059669)),
                         suffixIcon: searchQuery.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
@@ -822,18 +918,22 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             : null,
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF059669), width: 1.5),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF059669), width: 1.5),
                         ),
                       ),
                       onChanged: (val) {
@@ -847,21 +947,27 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.search_off, size: 48, color: Colors.grey),
+                                const Icon(Icons.search_off,
+                                    size: 48, color: Colors.grey),
                                 const SizedBox(height: 8),
                                 Text(
                                   'No inventory items match "$searchQuery"',
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                  style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13),
                                 ),
                               ],
                             ),
                           )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1, indent: 56),
                             itemBuilder: (context, idx) {
                               final item = filtered[idx];
-                              final isSelected = itemEntry.nameController.text.trim().toLowerCase() ==
+                              final isSelected = itemEntry.nameController.text
+                                      .trim()
+                                      .toLowerCase() ==
                                   (item['name'] as String).trim().toLowerCase();
 
                               return ListTile(
@@ -870,35 +976,47 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                   height: 36,
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? const Color(0xFF059669).withOpacity(0.15)
+                                        ? const Color(0xFF059669)
+                                            .withOpacity(0.15)
                                         : const Color(0xFFF1F5F9),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
                                     Icons.build_outlined,
                                     size: 20,
-                                    color: isSelected ? const Color(0xFF059669) : const Color(0xFF64748B),
+                                    color: isSelected
+                                        ? const Color(0xFF059669)
+                                        : const Color(0xFF64748B),
                                   ),
                                 ),
                                 title: Text(
                                   item['name'] as String,
                                   style: TextStyle(
                                     fontFamily: 'Inter',
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w600,
                                     fontSize: 14,
-                                    color: isSelected ? const Color(0xFF059669) : const Color(0xFF1E293B),
+                                    color: isSelected
+                                        ? const Color(0xFF059669)
+                                        : const Color(0xFF1E293B),
                                   ),
                                 ),
                                 subtitle: Text(
                                   'HSN: ${item['hsn_sac'] ?? "—"} • UOM: ${item['uom'] ?? "NOS"}',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary),
                                 ),
                                 trailing: isSelected
-                                    ? const Icon(Icons.check_circle, color: Color(0xFF059669), size: 20)
-                                    : const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                                    ? const Icon(Icons.check_circle,
+                                        color: Color(0xFF059669), size: 20)
+                                    : const Icon(Icons.arrow_forward_ios,
+                                        size: 14, color: Colors.grey),
                                 onTap: () {
                                   setState(() {
-                                    itemEntry.nameController.text = item['name'] as String;
+                                    itemEntry.nameController.text =
+                                        item['name'] as String;
                                   });
                                   Navigator.pop(ctx);
                                 },
@@ -939,10 +1057,12 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
       final pName = p.nameController.text.trim();
       if (pName.isNotEmpty) {
         if (_catalogProductNames.isNotEmpty &&
-            !_catalogProductNames.any((n) => n.trim().toLowerCase() == pName.toLowerCase())) {
+            !_catalogProductNames
+                .any((n) => n.trim().toLowerCase() == pName.toLowerCase())) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('"$pName" is not in the Sell Products list. Please select from the list.'),
+              content: Text(
+                  '"$pName" is not in the Sell Products list. Please select from the list.'),
               backgroundColor: AppColors.error,
             ),
           );
@@ -953,10 +1073,12 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           final itName = it.nameController.text.trim();
           if (itName.isNotEmpty &&
               _inventoryItemNames.isNotEmpty &&
-              !_inventoryItemNames.any((n) => n.trim().toLowerCase() == itName.toLowerCase())) {
+              !_inventoryItemNames
+                  .any((n) => n.trim().toLowerCase() == itName.toLowerCase())) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('"$itName" is not in the Inventory. Please select from the inventory list.'),
+                content: Text(
+                    '"$itName" is not in the Inventory. Please select from the inventory list.'),
                 backgroundColor: AppColors.error,
               ),
             );
@@ -966,7 +1088,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
           if (itName.isNotEmpty && (qVal == null || qVal <= 0)) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Please enter a valid integer quantity for "$itName".'),
+                content: Text(
+                    'Please enter a valid integer quantity for "$itName".'),
                 backgroundColor: AppColors.error,
               ),
             );
@@ -981,7 +1104,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
     if (!hasValidProduct) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one Product from the Sell Products list.'),
+          content: Text(
+              'Please select at least one Product from the Sell Products list.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -1024,7 +1148,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
 
       final metadataJson = '[OLD_CUSTOMER_DATA:${jsonEncode(oldCustomerData)}]';
       final rawNotes = _notesController.text.trim();
-      final fullNotes = rawNotes.isNotEmpty ? '$rawNotes\n$metadataJson' : metadataJson;
+      final fullNotes =
+          rawNotes.isNotEmpty ? '$rawNotes\n$metadataJson' : metadataJson;
 
       final cleanName = _companyController.text.trim();
       final cleanContact = _contactPersonController.text.trim();
@@ -1147,7 +1272,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 22),
+                      const Icon(Icons.info_outline,
+                          color: Color(0xFF2563EB), size: 22),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -1185,7 +1311,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
 
                 // Excel Quick Bar
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -1206,10 +1333,12 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.table_chart_outlined, color: Color(0xFF059669), size: 18),
+                            child: const Icon(Icons.table_chart_outlined,
+                                color: Color(0xFF059669), size: 18),
                           ),
                           const SizedBox(width: 8),
                           const Expanded(
@@ -1226,10 +1355,14 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                           TextButton.icon(
                             style: TextButton.styleFrom(
                               visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                             ),
-                            icon: const Icon(Icons.download_outlined, size: 16, color: Color(0xFF6366F1)),
-                            label: const Text('Template', style: TextStyle(fontSize: 12, color: Color(0xFF6366F1))),
+                            icon: const Icon(Icons.download_outlined,
+                                size: 16, color: Color(0xFF6366F1)),
+                            label: const Text('Template',
+                                style: TextStyle(
+                                    fontSize: 12, color: Color(0xFF6366F1))),
                             onPressed: _downloadTemplate,
                           ),
                         ],
@@ -1244,14 +1377,21 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFF10B981)),
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  side: const BorderSide(
+                                      color: Color(0xFF10B981)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
                                 ),
-                                icon: const Icon(Icons.upload_file, size: 18, color: Color(0xFF059669)),
+                                icon: const Icon(Icons.upload_file,
+                                    size: 18, color: Color(0xFF059669)),
                                 label: const Text(
                                   'Import Excel',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF059669)),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF059669)),
                                 ),
                                 onPressed: _importFromExcel,
                               ),
@@ -1260,14 +1400,21 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFF3B82F6)),
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  side: const BorderSide(
+                                      color: Color(0xFF3B82F6)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
                                 ),
-                                icon: const Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF2563EB)),
+                                icon: const Icon(Icons.file_download_outlined,
+                                    size: 18, color: Color(0xFF2563EB)),
                                 label: const Text(
                                   'Export All',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2563EB)),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF2563EB)),
                                 ),
                                 onPressed: _exportOldCustomers,
                               ),
@@ -1287,13 +1434,17 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                   children: [
                     TextFormField(
                       controller: _companyController,
-                      decoration: _inputDecoration('Customer / Company Name *', Icons.business),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter customer or company name' : null,
+                      decoration: _inputDecoration(
+                          'Customer / Company Name *', Icons.business),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Please enter customer or company name'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _contactPersonController,
-                      decoration: _inputDecoration('Contact Person (Optional)', Icons.person),
+                      decoration: _inputDecoration(
+                          'Contact Person (Optional)', Icons.person),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -1303,10 +1454,14 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(10),
                       ],
-                      decoration: _inputDecoration('Mobile Number (For App Login & Complaints) *', Icons.phone),
+                      decoration: _inputDecoration(
+                          'Mobile Number (For App Login & Complaints) *',
+                          Icons.phone),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Please enter mobile number';
-                        if (v.trim().length != 10) return 'Please enter a valid 10-digit mobile number';
+                        if (v == null || v.trim().isEmpty)
+                          return 'Please enter mobile number';
+                        if (v.trim().length != 10)
+                          return 'Please enter a valid 10-digit mobile number';
                         return null;
                       },
                     ),
@@ -1314,20 +1469,26 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: _inputDecoration('Email (Optional)', Icons.email_outlined),
+                      decoration: _inputDecoration(
+                          'Email (Optional)', Icons.email_outlined),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _addressController,
                       maxLines: 2,
-                      decoration: _inputDecoration('Installation / Site Address *', Icons.location_on_outlined),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter site/installation address' : null,
+                      decoration: _inputDecoration(
+                          'Installation / Site Address *',
+                          Icons.location_on_outlined),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Please enter site/installation address'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _gstController,
                       textCapitalization: TextCapitalization.characters,
-                      decoration: _inputDecoration('GSTIN (Optional)', Icons.receipt_long_outlined),
+                      decoration: _inputDecoration(
+                          'GSTIN (Optional)', Icons.receipt_long_outlined),
                     ),
                     const SizedBox(height: 12),
                     InkWell(
@@ -1344,15 +1505,21 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       },
                       borderRadius: BorderRadius.circular(10),
                       child: InputDecorator(
-                        decoration: _inputDecoration('Customer Since Date *', Icons.calendar_month_outlined),
+                        decoration: _inputDecoration('Customer Since Date *',
+                            Icons.calendar_month_outlined),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              DateFormat('dd MMM yyyy').format(_customerSinceDate),
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              DateFormat('dd MMM yyyy')
+                                  .format(_customerSinceDate),
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1E293B)),
                             ),
-                            const Icon(Icons.arrow_drop_down, color: Color(0xFF6D28D9)),
+                            const Icon(Icons.arrow_drop_down,
+                                color: Color(0xFF6D28D9)),
                           ],
                         ),
                       ),
@@ -1380,10 +1547,13 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     TextButton.icon(
                       onPressed: _addNewProduct,
                       icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Product', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      label: const Text('Add Product',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
                       style: TextButton.styleFrom(
                         foregroundColor: const Color(0xFF6D28D9),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -1391,7 +1561,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                ...List.generate(_products.length, (pIdx) => _buildProductCard(pIdx)),
+                ...List.generate(
+                    _products.length, (pIdx) => _buildProductCard(pIdx)),
 
                 const SizedBox(height: 16),
 
@@ -1403,7 +1574,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     TextFormField(
                       controller: _notesController,
                       maxLines: 3,
-                      decoration: _inputDecoration('Enter any historical installation or warranty notes...', null),
+                      decoration: _inputDecoration(
+                          'Enter any historical installation or warranty notes...',
+                          null),
                     ),
                   ],
                 ),
@@ -1416,7 +1589,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     backgroundColor: const Color(0xFF6D28D9),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 2,
                   ),
                   onPressed: _isSaving ? null : _handleSave,
@@ -1424,7 +1598,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
                         )
                       : const Text(
                           'Save Old Customer',
@@ -1475,7 +1650,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       color: const Color(0xFF6D28D9).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF6D28D9), size: 18),
+                    child: const Icon(Icons.inventory_2_outlined,
+                        color: Color(0xFF6D28D9), size: 18),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -1491,7 +1667,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
               ),
               if (_products.length > 1)
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  icon: const Icon(Icons.delete_outline,
+                      color: Colors.red, size: 20),
                   tooltip: 'Remove Product',
                   onPressed: () => _removeProduct(productIndex),
                 ),
@@ -1514,7 +1691,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                 children: [
                   if (productEntry.nameController.text.isNotEmpty)
                     IconButton(
-                      icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                      icon:
+                          const Icon(Icons.clear, size: 18, color: Colors.grey),
                       tooltip: 'Clear',
                       visualDensity: VisualDensity.compact,
                       onPressed: () {
@@ -1535,7 +1713,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
               if (v == null || v.trim().isEmpty) {
                 return 'Please select a Product from Sell Products list';
               }
-              final match = _catalogProductNames.any((n) => n.trim().toLowerCase() == v.trim().toLowerCase());
+              final match = _catalogProductNames
+                  .any((n) => n.trim().toLowerCase() == v.trim().toLowerCase());
               if (!match && _catalogProductNames.isNotEmpty) {
                 return 'Product must be chosen strictly from Sell Products list';
               }
@@ -1559,18 +1738,22 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
             },
             borderRadius: BorderRadius.circular(10),
             child: InputDecorator(
-              decoration: _inputDecoration('Product Purchase Date', Icons.event_available_outlined),
+              decoration: _inputDecoration(
+                  'Product Purchase Date', Icons.event_available_outlined),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     productEntry.purchaseDate != null
-                        ? DateFormat('dd MMM yyyy').format(productEntry.purchaseDate!)
+                        ? DateFormat('dd MMM yyyy')
+                            .format(productEntry.purchaseDate!)
                         : 'Select purchase date...',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: productEntry.purchaseDate != null ? const Color(0xFF1E293B) : Colors.grey.shade500,
+                      color: productEntry.purchaseDate != null
+                          ? const Color(0xFF1E293B)
+                          : Colors.grey.shade500,
                     ),
                   ),
                   const Icon(Icons.arrow_drop_down, color: Color(0xFF6D28D9)),
@@ -1603,11 +1786,14 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                   _openInventoryItemPicker(productIndex, newIndex);
                 },
                 icon: const Icon(Icons.add, size: 14),
-                label: const Text('Add Item', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                label: const Text('Add Item',
+                    style:
+                        TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF6D28D9),
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 ),
               ),
             ],
@@ -1627,7 +1813,10 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     alignment: Alignment.center,
                     child: Text(
                       '${itemIndex + 1}.',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                          fontSize: 12),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -1635,21 +1824,28 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                     child: TextFormField(
                       controller: itemEntry.nameController,
                       readOnly: true,
-                      onTap: () => _openInventoryItemPicker(productIndex, itemIndex),
+                      onTap: () =>
+                          _openInventoryItemPicker(productIndex, itemIndex),
                       decoration: InputDecoration(
                         hintText: 'Tap to select item from Inventory *',
-                        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        hintStyle: TextStyle(
+                            color: Colors.grey.shade400, fontSize: 13),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                         isDense: true,
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
-                        prefixIcon: const Icon(Icons.precision_manufacturing_outlined, size: 18, color: Color(0xFF059669)),
+                        prefixIcon: const Icon(
+                            Icons.precision_manufacturing_outlined,
+                            size: 18,
+                            color: Color(0xFF059669)),
                         suffixIcon: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (itemEntry.nameController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.clear, size: 16, color: Colors.grey),
+                                icon: const Icon(Icons.clear,
+                                    size: 16, color: Colors.grey),
                                 tooltip: 'Clear',
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () {
@@ -1659,10 +1855,12 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                                 },
                               ),
                             IconButton(
-                              icon: const Icon(Icons.search, size: 18, color: Color(0xFF059669)),
+                              icon: const Icon(Icons.search,
+                                  size: 18, color: Color(0xFF059669)),
                               tooltip: 'Search Inventory',
                               visualDensity: VisualDensity.compact,
-                              onPressed: () => _openInventoryItemPicker(productIndex, itemIndex),
+                              onPressed: () => _openInventoryItemPicker(
+                                  productIndex, itemIndex),
                             ),
                           ],
                         ),
@@ -1676,14 +1874,16 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF059669)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF059669)),
                         ),
                       ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) {
                           return 'Please select an item from Inventory';
                         }
-                        final match = _inventoryItemNames.any((n) => n.trim().toLowerCase() == v.trim().toLowerCase());
+                        final match = _inventoryItemNames.any((n) =>
+                            n.trim().toLowerCase() == v.trim().toLowerCase());
                         if (!match && _inventoryItemNames.isNotEmpty) {
                           return 'Must be strictly from Inventory';
                         }
@@ -1702,7 +1902,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                       decoration: InputDecoration(
                         labelText: 'Qty',
                         labelStyle: const TextStyle(fontSize: 12),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 10),
                         isDense: true,
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
@@ -1716,7 +1917,8 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF059669)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF059669)),
                         ),
                       ),
                       validator: (v) {
@@ -1730,9 +1932,11 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
                   if (productEntry.items.length > 1) ...[
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                      icon:
+                          const Icon(Icons.close, size: 18, color: Colors.grey),
                       tooltip: 'Remove',
-                      onPressed: () => _removeItemFromProduct(productIndex, itemIndex),
+                      onPressed: () =>
+                          _removeItemFromProduct(productIndex, itemIndex),
                     ),
                   ],
                 ],
@@ -1798,7 +2002,9 @@ class _AddOldCustomerScreenState extends ConsumerState<AddOldCustomerScreen> {
   InputDecoration _inputDecoration(String label, IconData? icon) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: icon != null ? Icon(icon, size: 20, color: const Color(0xFF6D28D9)) : null,
+      prefixIcon: icon != null
+          ? Icon(icon, size: 20, color: const Color(0xFF6D28D9))
+          : null,
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
       border: OutlineInputBorder(

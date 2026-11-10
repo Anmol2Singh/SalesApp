@@ -13,6 +13,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/app_company.dart';
@@ -873,7 +875,7 @@ class ProductCatalogScreen extends ConsumerWidget {
       allowedExtensions: ['pdf'],
     );
 
-    if (files.isEmpty || files.first.path == null) return;
+    if (files.isEmpty) return;
     final file = files.first;
 
     if (context.mounted) {
@@ -883,7 +885,11 @@ class ProductCatalogScreen extends ConsumerWidget {
     }
 
     try {
-      final bytes = await File(file.path!).readAsBytes();
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
+        throw Exception('Could not read PDF bytes');
+      }
+
       final supabase = ref.read(supabaseClientProvider);
       final filename = 'brochure_${product.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
