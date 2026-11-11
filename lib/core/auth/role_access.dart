@@ -83,31 +83,30 @@ class RoleAccess {
     ]);
   }
 
-  /// Quotation & Sales Order view access: Admins, Sales Head, Sales Executive, Manager
+  /// Quotation & Sales Order view access: Admins, Sales Head, Sales Executive, Manager, Service Head, BOQ
   static bool canViewQuotationAndSalesOrder(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
       UserRole.admin,
       UserRole.manager,
       UserRole.salesHead,
       UserRole.sales,
+      UserRole.serviceHead,
+      UserRole.boq,
     ]);
   }
 
-  /// Site Track management (Material Ready / Dispatched): BOQ staff, Service Head, Admin, Manager
+  /// Site Track management (Material Ready / Dispatched): Sales Head and Admin
   static bool canManageSiteTrack(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
       UserRole.admin,
-      UserRole.manager,
-      UserRole.boq,
-      UserRole.serviceHead,
+      UserRole.salesHead,
     ]);
   }
 
-  /// Factory Track management (Factory Ready / Dispatched): Factory staff, Admin, Manager
+  /// Factory Track management (Factory Ready / Dispatched): Factory staff and Admin
   static bool canManageFactoryTrack(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
       UserRole.admin,
-      UserRole.manager,
       UserRole.factory,
     ]);
   }

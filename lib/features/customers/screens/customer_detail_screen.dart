@@ -19,7 +19,6 @@ import '../../../core/widgets/breadcrumbs.dart';
 import '../../../core/services/record_edit_permissions.dart';
 import '../../daily_tasks/widgets/customer_tasks_sheet.dart';
 import '../../project_manager/providers/pm_providers.dart';
-import '../../sales_order/widgets/delivery_challan_modal.dart';
 import '../services/customer_documents_service.dart';
 import 'customer_documents_screen.dart';
 import '../../../core/models/customer_document.dart';
@@ -409,12 +408,6 @@ class CustomerDetailScreen extends ConsumerWidget {
                 );
               }
 
-              final dealsWithSalesOrder = pipelines
-                  .where((p) =>
-                      (p.hasSalesOrder == true) ||
-                      (p.currentStep.index >= PipelineStep.salesOrder.index))
-                  .toList();
-
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -435,13 +428,6 @@ class CustomerDetailScreen extends ConsumerWidget {
                           AppRoutes.pipelineDetail.replaceAll(':id', p.id)),
                     ),
                   ),
-                  if (dealsWithSalesOrder.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    _DeliveryChallanSection(
-                      customer: customer,
-                      deals: dealsWithSalesOrder,
-                    ),
-                  ],
                 ],
               );
             },
@@ -1255,9 +1241,6 @@ class _PipelineItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canChallan = (pipeline.hasSalesOrder == true) ||
-        (pipeline.currentStep.index >= PipelineStep.salesOrder.index);
-
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1321,198 +1304,7 @@ class _PipelineItem extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
-                if (canChallan)
-                  InkWell(
-                    onTap: () {
-                      DeliveryChallanModal.show(
-                        context,
-                        pipelineId: pipeline.id,
-                        customer: customer,
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.local_shipping_outlined,
-                            size: 13,
-                            color: AppColors.primary,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'DELIVERY CHALLAN',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DeliveryChallanSection extends StatelessWidget {
-  final Customer customer;
-  final List<SalesPipelineSummary> deals;
-
-  const _DeliveryChallanSection({
-    required this.customer,
-    required this.deals,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (deals.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 4, bottom: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.local_shipping_outlined,
-              color: AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'DELIVERY CHALLAN',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                Text(
-                  deals.length == 1
-                      ? 'Deal: ${deals.first.productName}'
-                      : '${deals.length} deals with completed sales order',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 11,
-                    color: AppColors.textSecondary.withValues(alpha: 0.9),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: () {
-              if (deals.length == 1) {
-                DeliveryChallanModal.show(
-                  context,
-                  pipelineId: deals.first.id,
-                  customer: customer,
-                );
-              } else {
-                _showPickDealDialog(context);
-              }
-            },
-            icon: const Icon(Icons.print_outlined, size: 14),
-            label: const Text(
-              'Generate Challan',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11.5,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPickDealDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select Deal for Delivery Challan',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...deals.map(
-              (d) => ListTile(
-                leading: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
-                title: Text(d.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('Status: ${d.currentStep.displayName}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  DeliveryChallanModal.show(
-                    context,
-                    pipelineId: d.id,
-                    customer: customer,
-                  );
-                },
-              ),
             ),
           ],
         ),

@@ -28,6 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isOfficeLogin = false;
+  bool _acceptedTerms = false;
 
   // Customer Login state
   final _phoneController = TextEditingController();
@@ -37,7 +38,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _rememberMe = false;
 
   @override
   void initState() {
@@ -111,6 +111,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleCustomerLogin() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_acceptedTerms) {
+      ToastService.show(
+        context,
+        'Please accept the Terms & Conditions and Privacy Policy to proceed.',
+        type: ToastType.warning,
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -407,11 +416,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'By continuing, you agree to our Terms & Privacy Policy',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: subtitleCol,
+                  GestureDetector(
+                    onTap: () => _showTermsDialog(context),
+                    child: Text(
+                      'Terms & Conditions • Privacy Policy',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: subtitleCol,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -544,7 +557,79 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        // Terms & Conditions acceptance with Checkbox
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: _acceptedTerms,
+                onChanged: (val) => setState(() => _acceptedTerms = val ?? false),
+                activeColor: const Color(0xFF7C3AED),
+                checkColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _acceptedTerms = !_acceptedTerms),
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: subtitleCol,
+                      fontFamily: 'Inter',
+                      height: 1.35,
+                    ),
+                    children: [
+                      const TextSpan(text: 'I agree to the '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: GestureDetector(
+                          onTap: () => _showTermsDialog(context),
+                          child: const Text(
+                            'Terms & Conditions',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF7C3AED),
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const TextSpan(text: ' and '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: GestureDetector(
+                          onTap: () => _showTermsDialog(context),
+                          child: const Text(
+                            'Privacy Policy',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF7C3AED),
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
         GradientButton(
           label: 'Send OTP',
           isLoading: _isLoading,
@@ -712,32 +797,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           },
           onFieldSubmitted: (_) => _handleOfficeLogin(),
         ),
-        const SizedBox(height: 12),
-        // Remember me
-        Row(
-          children: [
-            Transform.scale(
-              scale: 0.9,
-              child: Checkbox(
-                value: _rememberMe,
-                onChanged: (val) => setState(() => _rememberMe = val ?? false),
-                activeColor: cust_colors.AppColors.primary,
-                checkColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-            Text(
-              'Remember me',
+        const SizedBox(height: 16),
+        // Terms & Conditions mention (No checkbox for office login)
+        Center(
+          child: RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 12,
                 color: subtitleCol,
+                fontFamily: 'Inter',
+                height: 1.35,
               ),
+              children: [
+                const TextSpan(text: 'By signing in, you agree to our '),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: GestureDetector(
+                    onTap: () => _showTermsDialog(context),
+                    child: const Text(
+                      'Terms & Conditions',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF7C3AED),
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+                const TextSpan(text: ' & '),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: GestureDetector(
+                    onTap: () => _showTermsDialog(context),
+                    child: const Text(
+                      'Privacy Policy',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF7C3AED),
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
         GradientButton(
           label: 'Sign In',
           isLoading: _isLoading,
@@ -768,6 +879,115 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showTermsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.gavel_rounded, color: Color(0xFF7C3AED), size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Terms & Conditions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Standard Business Application Terms of Service & Privacy Policy',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                _buildTermsSection(
+                  title: '1. Acceptance of Terms',
+                  content:
+                      'By accessing and using the IZYHEAT application, you agree to be bound by these Terms of Service, applicable commercial agreements, and privacy standards. If you do not agree to these terms, you must not log in or use the application.',
+                ),
+                _buildTermsSection(
+                  title: '2. User Accounts & Verification',
+                  content:
+                      'Customer access is authenticated via One-Time Password (OTP) dispatched to your registered mobile number. Corporate and office staff accounts are authenticated via corporate credentials and role-based permissions. You agree to safeguard your credentials and prevent unauthorized access.',
+                ),
+                _buildTermsSection(
+                  title: '3. Scope of Service & Commercial Proposals',
+                  content:
+                      'All generated quotations, price estimates, delivery challans, and service tickets are subject to inventory verification, formal review, and written confirmation. Quoted rates, taxes, and delivery timelines are governed by final authorized order documentation.',
+                ),
+                _buildTermsSection(
+                  title: '4. Data Privacy & Confidentiality',
+                  content:
+                      'Customer details, site survey notes, financial estimates, and transaction logs are stored securely and used solely to fulfill orders, schedule site maintenance, and process billing. Your confidential information is never shared or sold to third-party entities.',
+                ),
+                _buildTermsSection(
+                  title: '5. Authorized Usage & Security',
+                  content:
+                      'Users agree not to disrupt app services, attempt unauthorized privilege escalation across sales pipelines or administrative modules, or tamper with digital records. Violations may result in immediate access revocation.',
+                ),
+                _buildTermsSection(
+                  title: '6. Support & Contact',
+                  content:
+                      'For service requests, warranty claims, or billing queries, please contact your designated IZYHEAT sales or customer support representative.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('I Understand', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTermsSection({required String title, required String content}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E1B4B)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            content,
+            style: const TextStyle(fontSize: 12, height: 1.4, color: Colors.black87),
+          ),
+        ],
+      ),
     );
   }
 }

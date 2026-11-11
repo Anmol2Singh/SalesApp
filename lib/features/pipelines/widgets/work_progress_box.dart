@@ -32,6 +32,7 @@ import '../../quotation_generator/models/qg_noc_document.dart';
 import '../../quotation_generator/models/qg_noc_builder_state.dart';
 import '../../quotation_generator/services/pdf_noc_builder.dart';
 import '../../quotation_generator/services/qg_noc_extractor.dart';
+import '../../quotation/services/quotation_pdf_launcher.dart';
 
 /// Helper service for Work Progress metadata persistence & live evaluations.
 class WorkProgressService {
@@ -158,9 +159,15 @@ class WorkProgressService {
     final currentNotes = res?['notes']?.toString() ?? '';
     final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
 
-    if (factoryReady != null) currentMeta['factory_ready'] = factoryReady;
+    if (factoryReady != null) {
+      currentMeta['factory_ready'] = factoryReady;
+      if (!factoryReady) currentMeta['factory_dispatched'] = false;
+    }
     if (factoryDispatched != null) currentMeta['factory_dispatched'] = factoryDispatched;
-    if (siteReady != null) currentMeta['site_ready'] = siteReady;
+    if (siteReady != null) {
+      currentMeta['site_ready'] = siteReady;
+      if (!siteReady) currentMeta['site_dispatched'] = false;
+    }
     if (siteDispatched != null) currentMeta['site_dispatched'] = siteDispatched;
 
     // If both tracks are dispatched, mark overall dispatched
@@ -168,6 +175,8 @@ class WorkProgressService {
     final bool sDisp = currentMeta['site_dispatched'] == true;
     if (fDisp && sDisp) {
       currentMeta['dispatched'] = true;
+    } else {
+      currentMeta['dispatched'] = false;
     }
 
     final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
@@ -438,70 +447,15 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
   Future<void> _viewQuotationPdf() async {
     final quot = widget.pipeline.quotation;
     if (quot == null) return;
-    final supabase = ref.read(supabaseClientProvider);
-
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      final cust = widget.pipeline.customer ??
-          Customer(
-            id: 'cust',
-            companyName: quot.customerName ?? 'Customer',
-            phone: quot.customerPhone ?? '',
-            address: quot.billingAddress ?? '',
-            createdBy: '',
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-      final product = widget.pipeline.product ??
-          Product(
-            id: 'prod',
-            name: quot.lineItems.isNotEmpty ? quot.lineItems.first.description : 'Product',
-            category: 'Solar',
-            baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
-            isActive: true,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-      Map<String, dynamic> templateConfig = {};
-      try {
-        final res = await supabase.from('pdf_templates').select().eq('document_type', 'quotation').single();
-        templateConfig = res['template_config'] as Map<String, dynamic>;
-      } catch (_) {}
-
-      final bytes = await PdfService.generateQuotationPdf(
-        quotation: quot,
-        customer: cust,
-        product: product,
-        templateConfig: templateConfig,
-      );
-
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PdfPreviewScreen(
-              pdfBytes: bytes,
-              fileName: 'Quotation_${quot.quotationNumber.replaceAll('/', '_')}.pdf',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
+    await QuotationPdfLauncher.showFormatSelectionAndLaunch(
+      context: context,
+      ref: ref,
+      quotation: quot,
+      customer: widget.pipeline.customer,
+      product: widget.pipeline.product,
+      leadOrDealTitle: widget.pipeline.product?.name ?? widget.pipeline.customer?.companyName,
+      salesmanName: widget.pipeline.createdByProfile?.fullName ?? quot.salesman,
+    );
   }
 
   Future<void> _viewSalesOrderPdf() async {
@@ -510,6 +464,41 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     final cust = widget.pipeline.customer;
     if (cust == null) return;
     final supabase = ref.read(supabaseClientProvider);
+
+    final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
+    final hasCommercial = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead);
+    final hasTechnical = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead);
+    final hasProduction = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory);
+
+    String? variant;
+    final availableCount = (hasCommercial ? 1 : 0) + (hasTechnical ? 1 : 0) + (hasProduction ? 1 : 0);
+    if (availableCount > 1) {
+      variant = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Select PDF Variant'),
+          content: const Text(
+            'Choose the variant of Sales Order you want to view:',
+            style: TextStyle(fontFamily: 'Inter'),
+          ),
+          actions: [
+            if (hasCommercial)
+              TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
+            if (hasTechnical)
+              TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
+            if (hasProduction)
+              TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
+          ],
+        ),
+      );
+      if (variant == null) return;
+    } else if (hasTechnical) {
+      variant = 'technical';
+    } else if (hasProduction) {
+      variant = 'production';
+    } else {
+      variant = 'commercial';
+    }
 
     try {
       showDialog(
@@ -540,7 +529,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         customer: cust,
         product: product,
         templateConfig: templateConfig,
-        variant: 'commercial',
+        variant: variant,
       );
 
       if (mounted) Navigator.pop(context);
@@ -874,6 +863,51 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     }
   }
 
+  Future<bool> _showConfirmRevertDialog({
+    required String title,
+    required String message,
+    required String confirmText,
+  }) async {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: [
+            const Icon(Icons.help_outline, color: AppColors.warning, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+    return res ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final pipeline = widget.pipeline;
@@ -1158,19 +1192,59 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                   step2Title: 'Ready',
                   step2Done: factoryOrderReady,
                   step2Active: factoryBoqDone && !factoryOrderReady,
+                  onTapStep2: (factoryOrderReady && !factoryDispatched && canManageFactoryTrack)
+                      ? () async {
+                          final confirm = await _showConfirmRevertDialog(
+                            title: 'Unmark Factory Ready?',
+                            message: 'Are you sure you want to revert factory status back to unready?',
+                            confirmText: 'Unmark Ready',
+                          );
+                          if (confirm) {
+                            final supabase = ref.read(supabaseClientProvider);
+                            await WorkProgressService.updateTrackStatus(supabase, pipeline.id, factoryReady: false);
+                            ref.invalidate(pipelineDetailProvider(pipeline.id));
+                          }
+                        }
+                      : null,
                   step3Title: 'Dispatched',
                   step3Done: factoryDispatched,
                   step3Active: factoryOrderReady && !factoryDispatched,
+                  onTapStep3: (factoryDispatched && canManageFactoryTrack)
+                      ? () async {
+                          final confirm = await _showConfirmRevertDialog(
+                            title: 'Unmark Factory Dispatched?',
+                            message: 'Are you sure you want to revert factory dispatch status back to ready?',
+                            confirmText: 'Unmark Dispatched',
+                          );
+                          if (confirm) {
+                            final supabase = ref.read(supabaseClientProvider);
+                            await WorkProgressService.updateTrackStatus(supabase, pipeline.id, factoryDispatched: false);
+                            ref.invalidate(pipelineDetailProvider(pipeline.id));
+                          }
+                        }
+                      : null,
+                  showAction: factoryBoqDone,
                   actionButtonText: factoryDispatched
-                      ? 'Factory Dispatched ✓'
+                      ? 'Factory Dispatched ✓ (Tap to Unmark)'
                       : (factoryOrderReady
                           ? (hasDeliveryChallan ? 'Mark Factory Dispatched' : 'Mark Factory Dispatched (Challan Req.)')
                           : 'Mark Factory Ready'),
                   isActionDone: factoryDispatched,
-                  onAction: factoryDispatched
+                  onAction: !canManageFactoryTrack
                       ? null
-                      : (!canManageFactoryTrack
-                          ? null
+                      : (factoryDispatched
+                          ? () async {
+                              final confirm = await _showConfirmRevertDialog(
+                                title: 'Unmark Factory Dispatched?',
+                                message: 'Are you sure you want to revert factory dispatch status back to ready?',
+                                confirmText: 'Unmark Dispatched',
+                              );
+                              if (confirm) {
+                                final supabase = ref.read(supabaseClientProvider);
+                                await WorkProgressService.updateTrackStatus(supabase, pipeline.id, factoryDispatched: false);
+                                ref.invalidate(pipelineDetailProvider(pipeline.id));
+                              }
+                            }
                           : (!factoryOrderReady
                               ? () async {
                                   final supabase = ref.read(supabaseClientProvider);
@@ -1184,6 +1258,20 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                                       ref.invalidate(pipelineDetailProvider(pipeline.id));
                                     }
                                   : null))),
+                  onRevertReady: (factoryOrderReady && !factoryDispatched && canManageFactoryTrack)
+                      ? () async {
+                          final confirm = await _showConfirmRevertDialog(
+                            title: 'Unmark Factory Ready?',
+                            message: 'Are you sure you want to revert factory status back to unready?',
+                            confirmText: 'Unmark Ready',
+                          );
+                          if (confirm) {
+                            final supabase = ref.read(supabaseClientProvider);
+                            await WorkProgressService.updateTrackStatus(supabase, pipeline.id, factoryReady: false);
+                            ref.invalidate(pipelineDetailProvider(pipeline.id));
+                          }
+                        }
+                      : null,
                 ),
 
                 const SizedBox(height: 12),
@@ -1198,19 +1286,59 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                   step2Title: 'Ready',
                   step2Done: siteReady,
                   step2Active: siteBoqDone && !siteReady,
+                  onTapStep2: (siteReady && !siteDispatched && canManageSiteTrack)
+                      ? () async {
+                          final confirm = await _showConfirmRevertDialog(
+                            title: 'Unmark Material Ready?',
+                            message: 'Are you sure you want to revert site material status back to unready?',
+                            confirmText: 'Unmark Ready',
+                          );
+                          if (confirm) {
+                            final supabase = ref.read(supabaseClientProvider);
+                            await WorkProgressService.updateTrackStatus(supabase, pipeline.id, siteReady: false);
+                            ref.invalidate(pipelineDetailProvider(pipeline.id));
+                          }
+                        }
+                      : null,
                   step3Title: 'Dispatched',
                   step3Done: siteDispatched,
                   step3Active: siteReady && !siteDispatched,
+                  onTapStep3: (siteDispatched && canManageSiteTrack)
+                      ? () async {
+                          final confirm = await _showConfirmRevertDialog(
+                            title: 'Unmark Material Dispatched?',
+                            message: 'Are you sure you want to revert site dispatch status back to ready?',
+                            confirmText: 'Unmark Dispatched',
+                          );
+                          if (confirm) {
+                            final supabase = ref.read(supabaseClientProvider);
+                            await WorkProgressService.updateTrackStatus(supabase, pipeline.id, siteDispatched: false);
+                            ref.invalidate(pipelineDetailProvider(pipeline.id));
+                          }
+                        }
+                      : null,
+                  showAction: siteBoqDone,
                   actionButtonText: siteDispatched
-                      ? 'Material Dispatched ✓'
+                      ? 'Material Dispatched ✓ (Tap to Unmark)'
                       : (siteReady
                           ? (hasDeliveryChallan ? 'Mark Material Dispatched' : 'Mark Material Dispatched (Challan Req.)')
                           : 'Mark Material Ready'),
                   isActionDone: siteDispatched,
-                  onAction: siteDispatched
+                  onAction: !canManageSiteTrack
                       ? null
-                      : (!canManageSiteTrack
-                          ? null
+                      : (siteDispatched
+                          ? () async {
+                              final confirm = await _showConfirmRevertDialog(
+                                title: 'Unmark Material Dispatched?',
+                                message: 'Are you sure you want to revert site dispatch status back to ready?',
+                                confirmText: 'Unmark Dispatched',
+                              );
+                              if (confirm) {
+                                final supabase = ref.read(supabaseClientProvider);
+                                await WorkProgressService.updateTrackStatus(supabase, pipeline.id, siteDispatched: false);
+                                ref.invalidate(pipelineDetailProvider(pipeline.id));
+                              }
+                            }
                           : (!siteReady
                               ? () async {
                                   final supabase = ref.read(supabaseClientProvider);
@@ -1224,6 +1352,20 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                                       ref.invalidate(pipelineDetailProvider(pipeline.id));
                                     }
                                   : null))),
+                  onRevertReady: (siteReady && !siteDispatched && canManageSiteTrack)
+                      ? () async {
+                          final confirm = await _showConfirmRevertDialog(
+                            title: 'Unmark Material Ready?',
+                            message: 'Are you sure you want to revert site material status back to unready?',
+                            confirmText: 'Unmark Ready',
+                          );
+                          if (confirm) {
+                            final supabase = ref.read(supabaseClientProvider);
+                            await WorkProgressService.updateTrackStatus(supabase, pipeline.id, siteReady: false);
+                            ref.invalidate(pipelineDetailProvider(pipeline.id));
+                          }
+                        }
+                      : null,
                 ),
 
                 const SizedBox(height: 12),
@@ -1315,22 +1457,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     )
-                  : (step4InstallDone
-                      ? ElevatedButton.icon(
-                          onPressed: _generateNoc,
-                          icon: const Icon(Icons.verified_outlined, size: 14),
-                          label: const Text('Generate NOC Certificate', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF286B37),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        )
-                      : const Text(
-                          'Unlocks automatically once customer installation is resolved/closed.',
-                          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-                        )),
+                  : Text(
+                      step4InstallDone
+                          ? 'Ready to be generated.'
+                          : 'Unlocks automatically once customer installation is resolved/closed.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: step4InstallDone ? const Color(0xFF059669) : AppColors.textSecondary,
+                        fontWeight: step4InstallDone ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -1566,12 +1702,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     required String step2Title,
     required bool step2Done,
     required bool step2Active,
+    VoidCallback? onTapStep2,
     required String step3Title,
     required bool step3Done,
     required bool step3Active,
+    VoidCallback? onTapStep3,
+    required bool showAction,
     required String actionButtonText,
     required bool isActionDone,
     VoidCallback? onAction,
+    VoidCallback? onRevertReady,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1628,46 +1768,85 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             children: [
               _buildMiniStep(step1Title, step1Done, false),
               _buildMiniLine(step1Done),
-              _buildMiniStep(step2Title, step2Done, step2Active),
+              _buildMiniStep(step2Title, step2Done, step2Active, onTap: onTapStep2),
               _buildMiniLine(step2Done),
-              _buildMiniStep(step3Title, step3Done, step3Active),
+              _buildMiniStep(step3Title, step3Done, step3Active, onTap: onTapStep3),
             ],
           ),
 
           const SizedBox(height: 12),
 
-          // Action Button
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isActionDone ? const Color(0xFFECFDF5) : const Color(0xFF2563EB),
-                foregroundColor: isActionDone ? const Color(0xFF059669) : Colors.white,
-                disabledBackgroundColor: const Color(0xFFF1F5F9),
-                disabledForegroundColor: const Color(0xFF94A3B8),
-                elevation: (isActionDone || onAction == null) ? 0 : 1,
-                side: isActionDone
-                    ? const BorderSide(color: Color(0xFF10B981))
-                    : (onAction == null ? BorderSide(color: Colors.grey.shade300) : BorderSide.none),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          // Action Button Area
+          if (!showAction)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: const [
+                  Icon(Icons.lock_outline, size: 13, color: Color(0xFF94A3B8)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Step locked until BOQ is completed.',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 11.5, color: Color(0xFF94A3B8)),
+                  ),
+                ],
               ),
-              onPressed: onAction,
-              child: Text(
-                actionButtonText,
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+            )
+          else ...[
+            SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isActionDone ? const Color(0xFFECFDF5) : const Color(0xFF2563EB),
+                  foregroundColor: isActionDone ? const Color(0xFF059669) : Colors.white,
+                  disabledBackgroundColor: const Color(0xFFF1F5F9),
+                  disabledForegroundColor: const Color(0xFF94A3B8),
+                  elevation: (isActionDone || onAction == null) ? 0 : 1,
+                  side: isActionDone
+                      ? const BorderSide(color: Color(0xFF10B981))
+                      : (onAction == null ? BorderSide(color: Colors.grey.shade300) : BorderSide.none),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: onAction,
+                child: Text(
+                  actionButtonText,
+                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-          ),
+            if (onRevertReady != null) ...[
+              const SizedBox(height: 4),
+              Center(
+                child: InkWell(
+                  onTap: onRevertReady,
+                  borderRadius: BorderRadius.circular(4),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.undo, size: 12, color: Color(0xFF64748B)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Unmark Ready?',
+                          style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF64748B), decoration: TextDecoration.underline),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMiniStep(String label, bool isDone, bool isActive) {
+  Widget _buildMiniStep(String label, bool isDone, bool isActive, {VoidCallback? onTap}) {
     Widget icon;
     if (isDone) {
       icon = Container(
@@ -1701,7 +1880,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       );
     }
 
-    return Column(
+    final column = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         icon,
@@ -1717,6 +1896,18 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         ),
       ],
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: column,
+        ),
+      );
+    }
+    return column;
   }
 
   Widget _buildMiniLine(bool isDone) {

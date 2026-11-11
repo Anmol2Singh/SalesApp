@@ -1889,6 +1889,29 @@ class PdfQuotationBuilder {
             ),
           ],
         ),
+        if (q.remarks != null && q.remarks!.trim().isNotEmpty) ...[
+          pw.SizedBox(height: 3),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 6),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 0.6),
+              color: PdfColor.fromHex('#F8F9FA'),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Remark : ',
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                pw.Expanded(
+                  child: pw.Text(q.remarks!,
+                      style: const pw.TextStyle(fontSize: 7.5)),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -2493,6 +2516,29 @@ class PdfQuotationBuilder {
             ),
           ],
         ),
+        if (quotation.remarks != null && quotation.remarks!.trim().isNotEmpty) ...[
+          pw.SizedBox(height: 3),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 6),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 0.6),
+              color: PdfColor.fromHex('#F8F9FA'),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Remark : ',
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                pw.Expanded(
+                  child: pw.Text(quotation.remarks!,
+                      style: const pw.TextStyle(fontSize: 7.5)),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

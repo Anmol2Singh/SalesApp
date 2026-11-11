@@ -76,6 +76,7 @@ class GeneratorQuotation {
 
   final int? discountAmount;
   final String? specialOfferLabel;
+  final String? remarks;
 
   // Payment splits
   final int paymentSplitAdvance;
@@ -146,6 +147,7 @@ class GeneratorQuotation {
     required this.grandTotal,
     this.discountAmount,
     this.specialOfferLabel,
+    this.remarks,
     this.paymentSplitAdvance = 70,
     this.paymentSplitDelivery = 20,
     this.paymentSplitCommissioning = 10,
@@ -440,6 +442,7 @@ class GeneratorQuotation {
       grandTotal: grandTotal ?? this.grandTotal,
       discountAmount: discountAmount ?? this.discountAmount,
       specialOfferLabel: specialOfferLabel ?? this.specialOfferLabel,
+      remarks: remarks ?? this.remarks,
       paymentSplitAdvance: paymentSplitAdvance ?? this.paymentSplitAdvance,
       paymentSplitDelivery: paymentSplitDelivery ?? this.paymentSplitDelivery,
       paymentSplitCommissioning: paymentSplitCommissioning ?? this.paymentSplitCommissioning,
@@ -531,6 +534,7 @@ class GeneratorQuotation {
       'grandTotal': grandTotal,
       'discount_amount': discountAmount,
       'special_offer_label': specialOfferLabel,
+      'remarks': remarks,
       'payment_split_advance': paymentSplitAdvance,
       'paymentSplitAdvance': paymentSplitAdvance,
       'payment_split_delivery': paymentSplitDelivery,
@@ -744,6 +748,7 @@ class GeneratorQuotation {
       grandTotal: grandTotal,
       discountAmount: (json['discount_amount'] as num?)?.toInt(),
       specialOfferLabel: json['special_offer_label'] as String?,
+      remarks: json['remarks'] as String?,
       paymentSplitAdvance: (json['payment_split_advance'] as num?)?.toInt() ?? 70,
       paymentSplitDelivery: (json['payment_split_delivery'] as num?)?.toInt() ?? 20,
       paymentSplitCommissioning: (json['payment_split_commissioning'] as num?)?.toInt() ?? 10,

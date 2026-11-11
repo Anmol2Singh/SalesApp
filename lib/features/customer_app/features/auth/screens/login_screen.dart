@@ -20,6 +20,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   String _selectedCountryCode = '+91';
+  bool _acceptedTerms = false;
 
   @override
   void dispose() {
@@ -29,6 +30,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _sendOtp([OtpChannel channel = OtpChannel.sms]) async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_acceptedTerms) {
+      ToastService.show(
+        context,
+        'Please accept the Terms & Conditions and Privacy Policy to proceed.',
+        type: ToastType.warning,
+      );
+      return;
+    }
     
     setState(() => _isLoading = true);
     try {
@@ -210,7 +220,79 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
+                          // Terms acceptance with Checkbox
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Checkbox(
+                                  value: _acceptedTerms,
+                                  onChanged: (val) => setState(() => _acceptedTerms = val ?? false),
+                                  activeColor: const Color(0xFF7C3AED),
+                                  checkColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _acceptedTerms = !_acceptedTerms),
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: AppColors.textSecondary,
+                                        fontFamily: 'Inter',
+                                        height: 1.35,
+                                      ),
+                                      children: [
+                                        const TextSpan(text: 'I agree to the '),
+                                        WidgetSpan(
+                                          alignment: PlaceholderAlignment.baseline,
+                                          baseline: TextBaseline.alphabetic,
+                                          child: GestureDetector(
+                                            onTap: () => _showTermsDialog(context),
+                                            child: const Text(
+                                              'Terms & Conditions',
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                color: Color(0xFF00E5FF),
+                                                fontWeight: FontWeight.bold,
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const TextSpan(text: ' and '),
+                                        WidgetSpan(
+                                          alignment: PlaceholderAlignment.baseline,
+                                          baseline: TextBaseline.alphabetic,
+                                          child: GestureDetector(
+                                            onTap: () => _showTermsDialog(context),
+                                            child: const Text(
+                                              'Privacy Policy',
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                color: Color(0xFF00E5FF),
+                                                fontWeight: FontWeight.bold,
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
                           GradientButton(
                             label: 'Get OTP via SMS',
                             isLoading: _isLoading,
@@ -249,13 +331,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'By continuing, you agree to our Terms & Privacy Policy',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                    textAlign: TextAlign.center,
+                  GestureDetector(
+                    onTap: () => _showTermsDialog(context),
+                    child: Text(
+                      'Terms & Conditions • Privacy Policy',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            decoration: TextDecoration.underline,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -263,6 +349,111 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showTermsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgSecondary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.gavel_rounded, color: Color(0xFF00E5FF), size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Terms & Conditions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Standard Customer Application Terms of Service & Privacy Policy',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                _buildTermsSection(
+                  title: '1. Acceptance of Terms',
+                  content:
+                      'By accessing and using the IZYHEAT customer portal, you agree to these Terms and Conditions and our Privacy Policy. If you do not agree, you cannot proceed with login.',
+                ),
+                _buildTermsSection(
+                  title: '2. Phone & OTP Verification',
+                  content:
+                      'Access requires authentication via a One-Time Password (OTP) dispatched to your registered phone number. You are responsible for safeguarding your verification credentials.',
+                ),
+                _buildTermsSection(
+                  title: '3. Service Requests & Warranty',
+                  content:
+                      'Service inquiries, equipment tickets, and warranty status tracked in this app are subject to terms outlined in your formal purchase agreement and technician inspection.',
+                ),
+                _buildTermsSection(
+                  title: '4. Privacy & Data Handling',
+                  content:
+                      'Your personal details and site addresses are utilized solely to coordinate installations, dispatch field engineers, and provide product support. Data is kept strictly confidential.',
+                ),
+                _buildTermsSection(
+                  title: '5. Support & Assistance',
+                  content:
+                      'For immediate support with heating and solar systems, please contact our helpline or submit a service request through the portal.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('I Understand', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTermsSection({required String title, required String content}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00E5FF)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            content,
+            style: const TextStyle(fontSize: 12, height: 1.4, color: Colors.white70),
+          ),
+        ],
       ),
     );
   }

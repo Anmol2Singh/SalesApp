@@ -1,5 +1,6 @@
 import '../../quotation_generator/services/qg_drafts_service.dart';
 import '../../quotation_generator/services/qg_boom_barrier_drafts_service.dart';
+import '../../quotation/services/quotation_pdf_launcher.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/pipeline.dart';
+import '../../../core/models/profile.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/quotation.dart';
@@ -351,335 +353,445 @@ class _PipelineDetailContent extends ConsumerWidget {
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          // Header card
-          _HeaderCard(pipeline: pipeline),
-          const SizedBox(height: 16),
-          // Approval Alert Banner (when quotation pending approval)
-          if (pipeline.quotation?.status == QuotationStatus.pendingApproval) ...[
-            _ApprovalAlertBanner(
-              pipeline: pipeline,
-              canApprove: profile?.roles.any((r) => r.canApproveQuotations) ?? false,
-            ),
-            const SizedBox(height: 16),
-          ]
-          // Rejection Feedback Banner (when quotation rejected)
-          else if (pipeline.quotation?.status == QuotationStatus.rejected) ...[
-            _RejectionFeedbackBanner(pipeline: pipeline),
-            const SizedBox(height: 16),
-          ]
-          // Suspended Banner (only for non-rejection suspension)
-          else if (pipeline.status == PipelineStatus.suspended) ...[
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.warning_amber_rounded, color: AppColors.error),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 1000;
+            final showRightCards = isDealCompleted &&
+                (profile?.roles.contains(UserRole.admin) == true ||
+                    profile?.roles.contains(UserRole.sales) == true ||
+                    profile?.roles.contains(UserRole.manager) == true ||
+                    profile?.roles.contains(UserRole.salesHead) == true);
+
+            final banners = _buildBanners(pipeline, profile, isDealCompleted);
+            final dealProgressTracker = _buildDealProgressTracker(context, ref, pipeline, profile, isDealCompleted);
+            final stepCards = _buildStepCards(pipeline, userRole);
+            final rightCards = _buildRightCards(pipeline);
+
+            if (!isWide) {
+              // Mobile / narrow view: original single column stack
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _HeaderCard(pipeline: pipeline),
+                      const SizedBox(height: 16),
+                      ...banners,
+                      WorkProgressBox(pipeline: pipeline),
+                      const SizedBox(height: 16),
+                      dealProgressTracker,
+                      const SizedBox(height: 16),
+                      ...stepCards,
+                      if (showRightCards) ...[
+                        const SizedBox(height: 16),
+                        ...rightCards,
+                      ],
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // Desktop / wide screen: 3-section layout
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (banners.isNotEmpty) ...[
+                      ...banners,
+                    ],
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Deal Suspended',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.error,
+                        // Left section: Customer detail card + Work progress
+                        Expanded(
+                          flex: showRightCards ? 4 : 5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _HeaderCard(pipeline: pipeline),
+                              const SizedBox(height: 16),
+                              WorkProgressBox(pipeline: pipeline),
+                            ],
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'This deal has been suspended and cannot be proceeded further.',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            color: AppColors.textPrimary,
+                        const SizedBox(width: 16),
+                        // Middle section: Deal progress + 5 steps
+                        Expanded(
+                          flex: showRightCards ? 5 : 6,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              dealProgressTracker,
+                              const SizedBox(height: 16),
+                              ...stepCards,
+                            ],
                           ),
                         ),
+                        // Right section: AMC, Warranty, NOC (if available)
+                        if (showRightCards) ...[
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: rightCards,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (isDealCompleted) ...[
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock, color: AppColors.success),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          '🔒 Deal 100% Complete',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.success,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'This deal is completed and locked from further edits.',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          // Work Progress Box
-          WorkProgressBox(pipeline: pipeline),
-          const SizedBox(height: 16),
-          // Step tracker (Deal Progress)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Deal Progress',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                StepTrackerWidget(
-                  productId: pipeline.productId,
-                  currentStep: () {
-                    final roles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-                    final isBoqOnly = roles.contains(UserRole.boq) &&
-                        !roles.contains(UserRole.admin) &&
-                        !roles.contains(UserRole.manager) &&
-                        !roles.contains(UserRole.salesHead) &&
-                        !roles.contains(UserRole.factory) &&
-                        !roles.contains(UserRole.purchase);
-                    if (isBoqOnly) {
-                      return pipeline.boq != null ? PipelineStep.factoryOrder : PipelineStep.boq;
-                    }
-                    return isDealCompleted ? PipelineStep.completed : pipeline.currentStep;
-                  }(),
-                  stepsConfig: pipeline.stepsConfig,
-                  pdfUrls: {
-                    if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.sales || profile?.primaryRole == UserRole.salesHead) ...{
-                      PipelineStep.quotation: (pipeline.quotation != null && ((profile?.roles.any((r) => r.canApproveQuotations) ?? false) || pipeline.quotation?.status == QuotationStatus.confirmed)) ? 'available' : null,
-                      PipelineStep.salesOrder: pipeline.salesOrder != null ? 'available' : null,
-                      PipelineStep.boq: pipeline.boq != null ? 'available' : null,
-                      PipelineStep.factoryOrder: pipeline.factoryOrder != null ? 'available' : null,
-                      PipelineStep.purchaseOrder: pipeline.purchaseOrder != null ? 'available' : null,
-                    } else ...{
-                      if ((profile?.primaryRole == UserRole.boq || (profile?.roles.contains(UserRole.boq) ?? false) || (profile?.roles.contains(UserRole.serviceHead) ?? false)) && pipeline.boq != null)
-                        PipelineStep.boq: 'available',
-                      if (profile?.primaryRole == UserRole.factory && pipeline.factoryOrder != null)
-                        PipelineStep.factoryOrder: 'available',
-                      if (profile?.primaryRole == UserRole.purchase && pipeline.purchaseOrder != null)
-                        PipelineStep.purchaseOrder: 'available',
-                    }
-                  },
-                  onStepTap: (step) async {
-                    final canApproveQuotes = profile?.roles.any((r) => r.canApproveQuotations) ?? false;
-                    if (step == PipelineStep.quotation && !canApproveQuotes && pipeline.quotation?.status != QuotationStatus.confirmed) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Quotation PDF is locked until approved by Sales Head / Admin.'),
-                          backgroundColor: AppColors.warning,
-                        ),
-                      );
-                      return;
-                    }
-
-                    bool isAvailable = false;
-                    switch (step) {
-                      case PipelineStep.quotation:
-                        isAvailable = pipeline.quotation != null;
-                        break;
-                      case PipelineStep.salesOrder:
-                        isAvailable = pipeline.salesOrder != null;
-                        break;
-                      case PipelineStep.boq:
-                        isAvailable = pipeline.boq != null;
-                        break;
-                      case PipelineStep.factoryOrder:
-                        isAvailable = pipeline.factoryOrder != null;
-                        break;
-                      case PipelineStep.purchaseOrder:
-                        isAvailable = pipeline.purchaseOrder != null;
-                        break;
-                      default:
-                        break;
-                    }
-                    
-                    final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-                    final isAllowed = (userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead) || userRoles.contains(UserRole.manager) || userRoles.contains(UserRole.serviceHead)) ||
-                        (userRoles.contains(UserRole.factory) && step == PipelineStep.factoryOrder) ||
-                        (userRoles.contains(UserRole.purchase) && step == PipelineStep.purchaseOrder) ||
-                        ((userRoles.contains(UserRole.boq) || userRoles.contains(UserRole.serviceHead)) && step == PipelineStep.boq);
-
-                    if (isAvailable && isAllowed) {
-                      String? variant;
-                      if (step == PipelineStep.salesOrder) {
-                        variant = await showDialog<String>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Select PDF Variant'),
-                            content: const Text(
-                              'Choose the variant of Sales Order you want to view:',
-                              style: TextStyle(fontFamily: 'Inter'),
-                            ),
-                            actions: () {
-                              final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
-                              return [
-                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
-                                  TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
-                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead))
-                                  TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
-                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
-                                  TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
-                                if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
-                                  TextButton(onPressed: () => Navigator.pop(ctx, 'challan'), child: const Text('Delivery Challan')),
-                              ];
-                            }(),
-                          ),
-                        );
-                        if (variant == null) return;
-                        if (variant == 'challan') {
-                          if (!context.mounted) return;
-                          if (pipeline.customer != null) {
-                            DeliveryChallanModal.show(
-                              context,
-                              pipelineId: pipeline.id,
-                              customer: pipeline.customer!,
-                            );
-                          }
-                          return;
-                        }
-                      }
-
-                      if (!context.mounted) return;
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (ctx) => const Center(
-                          child: CircularProgressIndicator(color: AppColors.primary),
-                        ),
-                      );
-                      try {
-                        final bytes = await _generatePdfOnTheFly(ref, pipeline, step, variant: variant);
-                        if (context.mounted) Navigator.pop(context);
-                        if (context.mounted) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => PdfPreviewScreen(
-                                pdfBytes: bytes,
-                                fileName: _getStepPdfFileName(pipeline, step, variant: variant),
-                              ),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) Navigator.pop(context);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to open PDF: $e'),
-                              backgroundColor: AppColors.error,
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Step action cards
-          _StepActionCard(
-            step: PipelineStep.quotation,
-            pipeline: pipeline,
-            userRole: userRole,
-          ),
-          const SizedBox(height: 10),
-          _StepActionCard(
-            step: PipelineStep.salesOrder,
-            pipeline: pipeline,
-            userRole: userRole,
-          ),
-          const SizedBox(height: 10),
-          _StepActionCard(
-            step: PipelineStep.boq,
-            pipeline: pipeline,
-            userRole: userRole,
-          ),
-          const SizedBox(height: 10),
-          _StepActionCard(
-            step: PipelineStep.factoryOrder,
-            pipeline: pipeline,
-            userRole: userRole,
-          ),
-          const SizedBox(height: 10),
-          _StepActionCard(
-            step: PipelineStep.purchaseOrder,
-            pipeline: pipeline,
-            userRole: userRole,
-          ),
-          const SizedBox(height: 16),
-          if (isDealCompleted && (profile?.roles.contains(UserRole.admin) == true || profile?.roles.contains(UserRole.sales) == true || profile?.roles.contains(UserRole.manager) == true || profile?.roles.contains(UserRole.salesHead) == true)) ...[
-            _AmcActionCard(pipeline: pipeline),
-            const SizedBox(height: 12),
-            _WarrantyCardActionCard(pipeline: pipeline),
-            if (kQgNocEnabled) ...[
-              const SizedBox(height: 12),
-              _NocActionCard(pipeline: pipeline),
-            ],
-          ],
-            const SizedBox(height: 40),
-          ],
+              ),
+            );
+          },
         ),
       ),
-    ),
-  ),
-);
+    );
+  }
+
+  List<Widget> _buildBanners(SalesPipeline pipeline, Profile? profile, bool isDealCompleted) {
+    return [
+      if (pipeline.quotation?.status == QuotationStatus.pendingApproval) ...[
+        _ApprovalAlertBanner(
+          pipeline: pipeline,
+          canApprove: profile?.roles.any((r) => r.canApproveQuotations) ?? false,
+        ),
+        const SizedBox(height: 16),
+      ] else if (pipeline.quotation?.status == QuotationStatus.rejected) ...[
+        _RejectionFeedbackBanner(pipeline: pipeline),
+        const SizedBox(height: 16),
+      ] else if (pipeline.status == PipelineStatus.suspended) ...[
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.error.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: AppColors.error),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Deal Suspended',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.error,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'This deal has been suspended and cannot be proceeded further.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (isDealCompleted) ...[
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.success.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.lock, color: AppColors.success),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      '🔒 Deal 100% Complete',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'This deal is completed and locked from further edits.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    ];
+  }
+
+  Widget _buildDealProgressTracker(
+    BuildContext context,
+    WidgetRef ref,
+    SalesPipeline pipeline,
+    Profile? profile,
+    bool isDealCompleted,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Deal Progress',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          StepTrackerWidget(
+            productId: pipeline.productId,
+            currentStep: () {
+              final roles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+              final isBoqOnly = roles.contains(UserRole.boq) &&
+                  !roles.contains(UserRole.admin) &&
+                  !roles.contains(UserRole.manager) &&
+                  !roles.contains(UserRole.salesHead) &&
+                  !roles.contains(UserRole.factory) &&
+                  !roles.contains(UserRole.purchase);
+              if (isBoqOnly) {
+                return pipeline.boq != null ? PipelineStep.factoryOrder : PipelineStep.boq;
+              }
+              return isDealCompleted ? PipelineStep.completed : pipeline.currentStep;
+            }(),
+            stepsConfig: pipeline.stepsConfig,
+            pdfUrls: {
+              if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.sales || profile?.primaryRole == UserRole.salesHead) ...{
+                PipelineStep.quotation: (pipeline.quotation != null && ((profile?.roles.any((r) => r.canApproveQuotations) ?? false) || pipeline.quotation?.status == QuotationStatus.confirmed)) ? 'available' : null,
+                PipelineStep.salesOrder: pipeline.salesOrder != null ? 'available' : null,
+                PipelineStep.boq: pipeline.boq != null ? 'available' : null,
+                PipelineStep.factoryOrder: pipeline.factoryOrder != null ? 'available' : null,
+                PipelineStep.purchaseOrder: pipeline.purchaseOrder != null ? 'available' : null,
+              } else ...{
+                if ((profile?.primaryRole == UserRole.boq || (profile?.roles.contains(UserRole.boq) ?? false) || (profile?.roles.contains(UserRole.serviceHead) ?? false)) && pipeline.boq != null)
+                  PipelineStep.boq: 'available',
+                if ((profile?.primaryRole == UserRole.boq || (profile?.roles.contains(UserRole.boq) ?? false) || (profile?.roles.contains(UserRole.serviceHead) ?? false)) && pipeline.salesOrder != null)
+                  PipelineStep.salesOrder: 'available',
+                if (profile?.primaryRole == UserRole.factory && pipeline.factoryOrder != null)
+                  PipelineStep.factoryOrder: 'available',
+                if (profile?.primaryRole == UserRole.purchase && pipeline.purchaseOrder != null)
+                  PipelineStep.purchaseOrder: 'available',
+              }
+            },
+            onStepTap: (step) async {
+              final canApproveQuotes = profile?.roles.any((r) => r.canApproveQuotations) ?? false;
+              if (step == PipelineStep.quotation && !canApproveQuotes && pipeline.quotation?.status != QuotationStatus.confirmed) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Quotation PDF is locked until approved by Sales Head / Admin.'),
+                    backgroundColor: AppColors.warning,
+                  ),
+                );
+                return;
+              }
+
+              if (step == PipelineStep.quotation) {
+                if (pipeline.quotation != null) {
+                  await QuotationPdfLauncher.showFormatSelectionAndLaunch(
+                    context: context,
+                    ref: ref,
+                    quotation: pipeline.quotation!,
+                    customer: pipeline.customer,
+                    product: pipeline.product,
+                    leadOrDealTitle: pipeline.product?.name ?? pipeline.customer?.companyName,
+                    salesmanName: pipeline.createdByProfile?.fullName ?? pipeline.quotation?.salesman,
+                  );
+                }
+                return;
+              }
+
+              bool isAvailable = false;
+              switch (step) {
+                case PipelineStep.quotation:
+                  isAvailable = pipeline.quotation != null;
+                  break;
+                case PipelineStep.salesOrder:
+                  isAvailable = pipeline.salesOrder != null;
+                  break;
+                case PipelineStep.boq:
+                  isAvailable = pipeline.boq != null;
+                  break;
+                case PipelineStep.factoryOrder:
+                  isAvailable = pipeline.factoryOrder != null;
+                  break;
+                case PipelineStep.purchaseOrder:
+                  isAvailable = pipeline.purchaseOrder != null;
+                  break;
+                default:
+                  break;
+              }
+
+              final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+              final isAllowed = (userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead) || userRoles.contains(UserRole.manager) || userRoles.contains(UserRole.serviceHead)) ||
+                  (userRoles.contains(UserRole.factory) && step == PipelineStep.factoryOrder) ||
+                  (userRoles.contains(UserRole.purchase) && step == PipelineStep.purchaseOrder) ||
+                  ((userRoles.contains(UserRole.boq) || userRoles.contains(UserRole.serviceHead)) && (step == PipelineStep.boq || step == PipelineStep.salesOrder));
+
+              if (isAvailable && isAllowed) {
+                String? variant;
+                if (step == PipelineStep.salesOrder) {
+                  final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
+                  final hasCommercial = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead);
+                  final hasTechnical = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead);
+                  final hasProduction = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory);
+
+                  final availableCount = (hasCommercial ? 1 : 0) + (hasTechnical ? 1 : 0) + (hasProduction ? 1 : 0);
+                  if (availableCount > 1) {
+                    variant = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Select PDF Variant'),
+                        content: const Text(
+                          'Choose the variant of Sales Order you want to view:',
+                          style: TextStyle(fontFamily: 'Inter'),
+                        ),
+                        actions: [
+                          if (hasCommercial)
+                            TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
+                          if (hasTechnical)
+                            TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
+                          if (hasProduction)
+                            TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
+                        ],
+                      ),
+                    );
+                    if (variant == null) return;
+                  } else if (hasTechnical) {
+                    variant = 'technical';
+                  } else if (hasProduction) {
+                    variant = 'production';
+                  } else {
+                    variant = 'commercial';
+                  }
+                }
+
+                if (!context.mounted) return;
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  ),
+                );
+                try {
+                  final bytes = await _generatePdfOnTheFly(ref, pipeline, step, variant: variant);
+                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PdfPreviewScreen(
+                          pdfBytes: bytes,
+                          fileName: _getStepPdfFileName(pipeline, step, variant: variant),
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to open PDF: $e'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildStepCards(SalesPipeline pipeline, UserRole? userRole) {
+    return [
+      _StepActionCard(
+        step: PipelineStep.quotation,
+        pipeline: pipeline,
+        userRole: userRole,
+      ),
+      const SizedBox(height: 10),
+      _StepActionCard(
+        step: PipelineStep.salesOrder,
+        pipeline: pipeline,
+        userRole: userRole,
+      ),
+      const SizedBox(height: 10),
+      _StepActionCard(
+        step: PipelineStep.boq,
+        pipeline: pipeline,
+        userRole: userRole,
+      ),
+      const SizedBox(height: 10),
+      _StepActionCard(
+        step: PipelineStep.factoryOrder,
+        pipeline: pipeline,
+        userRole: userRole,
+      ),
+      const SizedBox(height: 10),
+      _StepActionCard(
+        step: PipelineStep.purchaseOrder,
+        pipeline: pipeline,
+        userRole: userRole,
+      ),
+    ];
+  }
+
+  List<Widget> _buildRightCards(SalesPipeline pipeline) {
+    return [
+      _AmcActionCard(pipeline: pipeline),
+      const SizedBox(height: 12),
+      _WarrantyCardActionCard(pipeline: pipeline),
+      if (kQgNocEnabled) ...[
+        const SizedBox(height: 12),
+        _NocActionCard(pipeline: pipeline),
+      ],
+    ];
   }
 }
 
@@ -930,7 +1042,7 @@ class _StepActionCard extends ConsumerWidget {
           }
           break;
         case PipelineStep.salesOrder:
-          isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead);
+          isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead) || roles.contains(UserRole.serviceHead) || roles.contains(UserRole.boq);
           break;
         case PipelineStep.boq:
           isPdfVisible = roles.contains(UserRole.boq) || roles.contains(UserRole.serviceHead);
@@ -1076,6 +1188,28 @@ class _StepActionCard extends ConsumerWidget {
                   if (hasData && isPdfVisible) ...[
                     InkWell(
                       onTap: () async {
+                        if (step == PipelineStep.quotation) {
+                          if (pipeline.quotation != null) {
+                            await QuotationPdfLauncher.showFormatSelectionAndLaunch(
+                              context: context,
+                              ref: ref,
+                              quotation: pipeline.quotation!,
+                              customer: pipeline.customer,
+                              product: pipeline.product,
+                              leadOrDealTitle: pipeline.product?.name ?? pipeline.customer?.companyName,
+                              salesmanName: pipeline.createdByProfile?.fullName ?? pipeline.quotation?.salesman,
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('PDF data not available for this step.'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
                         bool isAvailable = false;
                         switch (step) {
                           case PipelineStep.quotation:
@@ -1108,40 +1242,38 @@ class _StepActionCard extends ConsumerWidget {
 
                         String? variant;
                         if (step == PipelineStep.salesOrder) {
-                          variant = await showDialog<String>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Select PDF Variant'),
-                              content: const Text(
-                                'Choose the variant of Sales Order you want to view:',
-                                style: TextStyle(fontFamily: 'Inter'),
-                              ),
-                              actions: () {
-                                final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
-                                return [
-                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead))
+                          final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
+                          final hasCommercial = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead);
+                          final hasTechnical = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead);
+                          final hasProduction = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory);
+
+                          final availableCount = (hasCommercial ? 1 : 0) + (hasTechnical ? 1 : 0) + (hasProduction ? 1 : 0);
+                          if (availableCount > 1) {
+                            variant = await showDialog<String>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Select PDF Variant'),
+                                content: const Text(
+                                  'Choose the variant of Sales Order you want to view:',
+                                  style: TextStyle(fontFamily: 'Inter'),
+                                ),
+                                actions: [
+                                  if (hasCommercial)
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
-                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead))
+                                  if (hasTechnical)
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
-                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory))
+                                  if (hasProduction)
                                     TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
-                                  if (currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.salesHead))
-                                    TextButton(onPressed: () => Navigator.pop(ctx, 'challan'), child: const Text('Delivery Challan')),
-                                ];
-                              }(),
-                            ),
-                          );
-                          if (variant == null) return;
-                          if (variant == 'challan') {
-                            if (!context.mounted) return;
-                            if (pipeline.customer != null) {
-                              DeliveryChallanModal.show(
-                                context,
-                                pipelineId: pipeline.id,
-                                customer: pipeline.customer!,
-                              );
-                            }
-                            return;
+                                ],
+                              ),
+                            );
+                            if (variant == null) return;
+                          } else if (hasTechnical) {
+                            variant = 'technical';
+                          } else if (hasProduction) {
+                            variant = 'production';
+                          } else {
+                            variant = 'commercial';
                           }
                         } else if (step == PipelineStep.boq) {
                           variant = await showDialog<String>(

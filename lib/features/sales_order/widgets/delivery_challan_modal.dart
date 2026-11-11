@@ -25,7 +25,8 @@ class _ChallanItemRow {
   String name;
   String uom; // Fixed from inventory (NOS, Mtr, Set, etc.)
   double qty; // Selected quantity (min 1)
-  double? requiredQty; // Track main quantity if fetched from Quote / BOQ
+  double? requiredQty; // Total required quantity from SO or BOQ
+  double sentQty; // Quantity already delivered in previous challans
   String? remark; // Note / serial number
 
   _ChallanItemRow({
@@ -33,8 +34,11 @@ class _ChallanItemRow {
     this.uom = 'NOS',
     required this.qty,
     this.requiredQty,
+    this.sentQty = 0.0,
     this.remark,
   });
+
+  double get pendingQty => ((requiredQty ?? qty) - sentQty).clamp(0.0, 999999.0);
 }
 
 class DeliveryChallanModal extends ConsumerStatefulWidget {
@@ -81,7 +85,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   final Map<int, TextEditingController> _remarkControllers = {};
   final Map<int, TextEditingController> _qtyControllers = {};
 
-  String _currentSource = 'quotation'; // 'quotation' or 'boq' or 'custom'
+  String _currentSource = 'sales_order'; // 'sales_order', 'boq', 'both', or 'custom'
   bool _initialized = false;
   bool _isGenerating = false;
 
@@ -436,6 +440,26 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     }
   }
 
+  Map<String, double> _getAlreadySentMap(SalesPipeline pipeline) {
+    final existingChallans = WorkProgressService.getDeliveryChallans(pipeline);
+    final map = <String, double>{};
+    for (final ch in existingChallans) {
+      final items = ch['items'];
+      if (items is List) {
+        for (final it in items) {
+          if (it is Map) {
+            final name = (it['name'] ?? '').toString().trim().toLowerCase();
+            final qty = (it['qty'] as num?)?.toDouble() ?? 0.0;
+            if (name.isNotEmpty) {
+              map[name] = (map[name] ?? 0.0) + qty;
+            }
+          }
+        }
+      }
+    }
+    return map;
+  }
+
   void _initFromPipeline(SalesPipeline pipeline) {
     if (_initialized) return;
     _initialized = true;
@@ -448,28 +472,50 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
       _shippingCompanyController.text = so.shippingCompany ?? '';
     }
 
-    if (pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
-      _loadFromQuotation(pipeline);
+    if (so != null && so.lineItems.isNotEmpty) {
+      _loadFromSalesOrder(pipeline);
     } else if (pipeline.boq != null && pipeline.boq!.items.isNotEmpty) {
       _loadFromBoq(pipeline);
-    } else if (so != null && so.lineItems.isNotEmpty) {
+    } else if (pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
       _loadFromSalesOrder(pipeline);
     }
   }
 
-  void _loadFromQuotation(SalesPipeline pipeline) {
+  void _loadFromSalesOrder(SalesPipeline pipeline) {
     setState(() {
-      _currentSource = 'quotation';
+      _currentSource = 'sales_order';
       _items.clear();
-      final qItems = pipeline.quotation?.lineItems ?? [];
-      for (final item in qItems) {
-        _items.add(_ChallanItemRow(
-          name: item.description,
-          uom: item.uom.isNotEmpty ? item.uom : 'NOS',
-          qty: item.qty > 0 ? item.qty : 1.0,
-          requiredQty: item.qty > 0 ? item.qty : 1.0,
-          remark: null,
-        ));
+      final alreadySent = _getAlreadySentMap(pipeline);
+      if (pipeline.salesOrder != null && pipeline.salesOrder!.lineItems.isNotEmpty) {
+        for (final item in pipeline.salesOrder!.lineItems) {
+          final req = item.qty > 0 ? item.qty : 1.0;
+          final sent = alreadySent[item.description.trim().toLowerCase()] ?? 0.0;
+          final pending = (req - sent).clamp(0.0, req);
+          final defaultQty = pending > 0 ? pending : 1.0;
+          _items.add(_ChallanItemRow(
+            name: item.description,
+            uom: item.uom.isNotEmpty ? item.uom : 'NOS',
+            qty: defaultQty,
+            requiredQty: req,
+            sentQty: sent,
+            remark: item.remark,
+          ));
+        }
+      } else if (pipeline.quotation != null) {
+        for (final item in pipeline.quotation!.lineItems) {
+          final req = item.qty > 0 ? item.qty : 1.0;
+          final sent = alreadySent[item.description.trim().toLowerCase()] ?? 0.0;
+          final pending = (req - sent).clamp(0.0, req);
+          final defaultQty = pending > 0 ? pending : 1.0;
+          _items.add(_ChallanItemRow(
+            name: item.description,
+            uom: item.uom.isNotEmpty ? item.uom : 'NOS',
+            qty: defaultQty,
+            requiredQty: req,
+            sentQty: sent,
+            remark: null,
+          ));
+        }
       }
       _syncControllers();
     });
@@ -479,13 +525,19 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     setState(() {
       _currentSource = 'boq';
       _items.clear();
+      final alreadySent = _getAlreadySentMap(pipeline);
       final boqItems = pipeline.boq?.items ?? [];
       for (final item in boqItems) {
+        final req = item.qty > 0 ? item.qty : 1.0;
+        final sent = alreadySent[item.component.trim().toLowerCase()] ?? 0.0;
+        final pending = (req - sent).clamp(0.0, req);
+        final defaultQty = pending > 0 ? pending : 1.0;
         _items.add(_ChallanItemRow(
           name: item.component,
           uom: item.unit.isNotEmpty ? item.unit : 'NOS',
-          qty: item.qty > 0 ? item.qty : 1.0,
-          requiredQty: item.qty > 0 ? item.qty : 1.0,
+          qty: defaultQty,
+          requiredQty: req,
+          sentQty: sent,
           remark: item.remarks,
         ));
       }
@@ -493,20 +545,77 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     });
   }
 
-  void _loadFromSalesOrder(SalesPipeline pipeline) {
+  void _loadFromBoth(SalesPipeline pipeline) {
     setState(() {
-      _currentSource = 'so';
+      _currentSource = 'both';
       _items.clear();
-      final soItems = pipeline.salesOrder?.lineItems ?? [];
-      for (final item in soItems) {
-        _items.add(_ChallanItemRow(
-          name: item.description,
-          uom: item.uom.isNotEmpty ? item.uom : 'NOS',
-          qty: item.qty > 0 ? item.qty : 1.0,
-          requiredQty: item.qty > 0 ? item.qty : 1.0,
-          remark: item.remark,
-        ));
+      final alreadySent = _getAlreadySentMap(pipeline);
+      final Map<String, _ChallanItemRow> combined = {};
+
+      // 1. Sales order items
+      if (pipeline.salesOrder != null && pipeline.salesOrder!.lineItems.isNotEmpty) {
+        for (final item in pipeline.salesOrder!.lineItems) {
+          final key = item.description.trim().toLowerCase();
+          final req = item.qty > 0 ? item.qty : 1.0;
+          final sent = alreadySent[key] ?? 0.0;
+          final pending = (req - sent).clamp(0.0, req);
+          combined[key] = _ChallanItemRow(
+            name: item.description,
+            uom: item.uom.isNotEmpty ? item.uom : 'NOS',
+            qty: pending > 0 ? pending : 1.0,
+            requiredQty: req,
+            sentQty: sent,
+            remark: item.remark,
+          );
+        }
+      } else if (pipeline.quotation != null) {
+        for (final item in pipeline.quotation!.lineItems) {
+          final key = item.description.trim().toLowerCase();
+          final req = item.qty > 0 ? item.qty : 1.0;
+          final sent = alreadySent[key] ?? 0.0;
+          final pending = (req - sent).clamp(0.0, req);
+          combined[key] = _ChallanItemRow(
+            name: item.description,
+            uom: item.uom.isNotEmpty ? item.uom : 'NOS',
+            qty: pending > 0 ? pending : 1.0,
+            requiredQty: req,
+            sentQty: sent,
+            remark: null,
+          );
+        }
       }
+
+      // 2. BOQ items
+      final boqItems = pipeline.boq?.items ?? [];
+      for (final item in boqItems) {
+        final key = item.component.trim().toLowerCase();
+        final req = item.qty > 0 ? item.qty : 1.0;
+        final sent = alreadySent[key] ?? 0.0;
+
+        if (combined.containsKey(key)) {
+          final existing = combined[key]!;
+          final totalReq = (existing.requiredQty ?? existing.qty) + req;
+          final pending = (totalReq - sent).clamp(0.0, totalReq);
+          existing.requiredQty = totalReq;
+          existing.sentQty = sent;
+          existing.qty = pending > 0 ? pending : 1.0;
+          if (item.remarks != null && item.remarks!.isNotEmpty) {
+            existing.remark = existing.remark != null ? '${existing.remark}; ${item.remarks}' : item.remarks;
+          }
+        } else {
+          final pending = (req - sent).clamp(0.0, req);
+          combined[key] = _ChallanItemRow(
+            name: item.component,
+            uom: item.unit.isNotEmpty ? item.unit : 'NOS',
+            qty: pending > 0 ? pending : 1.0,
+            requiredQty: req,
+            sentQty: sent,
+            remark: item.remarks,
+          );
+        }
+      }
+
+      _items.addAll(combined.values);
       _syncControllers();
     });
   }
@@ -801,7 +910,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         customer: widget.customer,
         product: product,
         templateConfig: templateConfig,
-        quotationNumber: pipeline.baseQuotationNumber,
+        quotationNumber: baseDocRef.isNotEmpty ? baseDocRef : pipeline.baseQuotationNumber,
         challanDate: _challanDate,
         customLineItems: customLineItems,
         customChallanNumber: challanNo,
@@ -824,6 +933,8 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           'qty': it.qty,
           'uom': it.uom,
           'required_qty': it.requiredQty,
+          'sent_qty': it.sentQty,
+          'pending_qty': it.pendingQty,
           'remark': it.remark,
         }).toList(),
         'created_at': DateTime.now().toIso8601String(),
@@ -883,9 +994,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         data: (pipeline) {
           _initFromPipeline(pipeline);
 
-          final quotationNo = pipeline.baseQuotationNumber.isNotEmpty
-              ? pipeline.baseQuotationNumber
-              : (pipeline.quotation?.quotationNumber ?? '-');
+          final salesOrderNo = pipeline.salesOrder?.salesOrderNumber.isNotEmpty == true
+              ? pipeline.salesOrder!.salesOrderNumber
+              : (pipeline.baseQuotationNumber.isNotEmpty
+                  ? pipeline.baseQuotationNumber
+                  : (pipeline.quotation?.quotationNumber ?? '-'));
 
           final existingChallans = WorkProgressService.getDeliveryChallans(pipeline);
 
@@ -986,7 +1099,10 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                 const SizedBox(height: 12),
 
                 // Source selection pills
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     const Text(
                       'Source:',
@@ -997,20 +1113,18 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                         color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     ChoiceChip(
-                      label: const Text('From Quotation', style: TextStyle(fontSize: 12)),
-                      selected: _currentSource == 'quotation',
+                      label: const Text('From Sales Order', style: TextStyle(fontSize: 12)),
+                      selected: _currentSource == 'sales_order',
                       onSelected: (selected) {
-                        if (selected) _loadFromQuotation(pipeline);
+                        if (selected) _loadFromSalesOrder(pipeline);
                       },
                       selectedColor: const Color(0xFFDBEAFE),
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: _currentSource == 'quotation' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                        color: _currentSource == 'sales_order' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     ChoiceChip(
                       label: const Text('From BOQ', style: TextStyle(fontSize: 12)),
                       selected: _currentSource == 'boq',
@@ -1021,6 +1135,18 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: _currentSource == 'boq' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                      ),
+                    ),
+                    ChoiceChip(
+                      label: const Text('From Both', style: TextStyle(fontSize: 12)),
+                      selected: _currentSource == 'both',
+                      onSelected: (selected) {
+                        if (selected) _loadFromBoth(pipeline);
+                      },
+                      selectedColor: const Color(0xFFDBEAFE),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _currentSource == 'both' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -1097,14 +1223,14 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                                 const Expanded(
                                   flex: 2,
                                   child: Text(
-                                    'Ref No. (Quotation):',
+                                    'Ref No. (Sales Order):',
                                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 3,
                                   child: Text(
-                                    quotationNo,
+                                    salesOrderNo,
                                     style: const TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 13,
@@ -1380,7 +1506,10 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                                             ),
                                           ),
                                           const SizedBox(height: 2),
-                                          Row(
+                                          Wrap(
+                                            spacing: 6,
+                                            runSpacing: 4,
+                                            crossAxisAlignment: WrapCrossAlignment.center,
                                             children: [
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -1399,8 +1528,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                                                   ),
                                                 ),
                                               ),
-                                              if (item.requiredQty != null) ...[
-                                                const SizedBox(width: 6),
+                                              if (item.requiredQty != null)
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                                   decoration: BoxDecoration(
@@ -1409,12 +1537,49 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                                                     border: Border.all(color: const Color(0xFFBFDBFE)),
                                                   ),
                                                   child: Text(
-                                                    'Req: ${item.requiredQty!.toInt()} ${item.uom}',
+                                                    'Req: ${item.requiredQty == item.requiredQty!.roundToDouble() ? item.requiredQty!.toInt() : item.requiredQty} ${item.uom}',
                                                     style: const TextStyle(
                                                       fontFamily: 'Inter',
                                                       fontSize: 10.5,
                                                       fontWeight: FontWeight.bold,
                                                       color: Color(0xFF1D4ED8),
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (item.sentQty > 0) ...[
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF0FDF4),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: const Color(0xFF86EFAC)),
+                                                  ),
+                                                  child: Text(
+                                                    'Sent: ${item.sentQty == item.sentQty.roundToDouble() ? item.sentQty.toInt() : item.sentQty}',
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Color(0xFF166534),
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: item.pendingQty > 0 ? const Color(0xFFFEF3C7) : const Color(0xFFF1F5F9),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(
+                                                      color: item.pendingQty > 0 ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    'Pending: ${item.pendingQty == item.pendingQty.roundToDouble() ? item.pendingQty.toInt() : item.pendingQty} ${item.uom}',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: item.pendingQty > 0 ? const Color(0xFFB45309) : const Color(0xFF64748B),
                                                     ),
                                                   ),
                                                 ),

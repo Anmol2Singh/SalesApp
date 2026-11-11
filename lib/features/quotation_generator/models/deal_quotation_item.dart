@@ -55,6 +55,7 @@ class DealQuotationItem {
   final String? approvedBy;
   final DateTime? approvedAt;
   final String? approverName;
+  final String? remarks;
 
   const DealQuotationItem({
     required this.id,
@@ -94,6 +95,7 @@ class DealQuotationItem {
     this.approvedBy,
     this.approvedAt,
     this.approverName,
+    this.remarks,
   });
 
   bool get isConfirmed {
@@ -298,6 +300,7 @@ class DealQuotationItem {
       approvedBy: appBy,
       approvedAt: appAt,
       approverName: appName,
+      remarks: row['remarks'] as String? ?? 'Being Quotation Generated',
     );
   }
 
@@ -306,6 +309,7 @@ class DealQuotationItem {
     String? finalizedPdfPath,
     String? finalizedRefNo,
     DateTime? finalizedAt,
+    String? remarks,
   }) {
     return DealQuotationItem(
       id: id,
@@ -342,6 +346,10 @@ class DealQuotationItem {
       finalizedPdfPath: finalizedPdfPath ?? this.finalizedPdfPath,
       finalizedRefNo: finalizedRefNo ?? this.finalizedRefNo,
       finalizedAt: finalizedAt ?? this.finalizedAt,
+      approvedBy: approvedBy,
+      approvedAt: approvedAt,
+      approverName: approverName,
+      remarks: remarks ?? this.remarks,
     );
   }
 }

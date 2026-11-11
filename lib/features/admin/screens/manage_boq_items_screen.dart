@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/models/inventory_item.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../providers/manage_boq_items_provider.dart';
@@ -296,6 +297,7 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -303,148 +305,156 @@ class _ManageBoqItemsScreenState extends ConsumerState<ManageBoqItemsScreen> {
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final filteredItems = allItems.where((item) {
-              return item.itemName.toLowerCase().contains(searchQuery.toLowerCase());
-            }).toList();
+            return Consumer(
+              builder: (context, ref, _) {
+                final boqItems = ref.watch(productBoqItemsProvider(productId)).valueOrNull ?? [];
+                final Map<String, ProductBoqItem> addedByInvId = {};
+                final Map<String, ProductBoqItem> addedByName = {};
+                for (final bi in boqItems) {
+                  if (bi.inventoryItemId != null && bi.inventoryItemId!.isNotEmpty) {
+                    addedByInvId[bi.inventoryItemId!] = bi;
+                  }
+                  addedByName[bi.itemName.trim().toLowerCase()] = bi;
+                }
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.75,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                bool isItemAdded(InventoryItem it) {
+                  return addedByInvId.containsKey(it.id) || addedByName.containsKey(it.itemName.trim().toLowerCase());
+                }
+
+                ProductBoqItem? getAddedBoqItem(InventoryItem it) {
+                  return addedByInvId[it.id] ?? addedByName[it.itemName.trim().toLowerCase()];
+                }
+
+                final filteredItems = allItems.where((item) {
+                  final q = searchQuery.toLowerCase().trim();
+                  if (q.isEmpty) return true;
+                  return item.itemName.toLowerCase().contains(q) ||
+                      (item.hsnSac != null && item.hsnSac!.toLowerCase().contains(q));
+                }).toList();
+
+                // Sort: already added items come to the top, then alphabetically
+                filteredItems.sort((a, b) {
+                  final aAdded = isItemAdded(a);
+                  final bAdded = isItemAdded(b);
+                  if (aAdded && !bAdded) return -1;
+                  if (!aAdded && bAdded) return 1;
+                  return a.itemName.toLowerCase().compareTo(b.itemName.toLowerCase());
+                });
+
+                return Container(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Select Item from Inventory',
-                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Select Item from Inventory',
+                            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx),
+                      const SizedBox(height: 8),
+                      TextField(
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: 'Search inventory items...',
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                        onChanged: (val) {
+                          setModalState(() => searchQuery = val);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: filteredItems.isEmpty
+                            ? Center(
+                                child: Text(
+                                  searchQuery.isEmpty ? 'No inventory items available.' : 'No items match "$searchQuery"',
+                                  style: const TextStyle(color: AppColors.textSecondary),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: filteredItems.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, idx) {
+                                  final invItem = filteredItems[idx];
+                                  final isChecked = isItemAdded(invItem);
+                                  final uom = (invItem.uom != null && invItem.uom!.isNotEmpty) ? invItem.uom! : 'NOS';
+
+                                  return CheckboxListTile(
+                                    value: isChecked,
+                                    activeColor: AppColors.primary,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                    title: Text(
+                                      invItem.itemName,
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontWeight: isChecked ? FontWeight.bold : FontWeight.w600,
+                                        color: isChecked ? AppColors.primary : AppColors.textPrimary,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    subtitle: Text('Unit: $uom', style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                                    onChanged: (bool? newVal) async {
+                                      final supabase = ref.read(supabaseClientProvider);
+                                      if (newVal == true) {
+                                        try {
+                                          await supabase.from('product_boq_items').insert({
+                                            'product_id': productId,
+                                            'item_name': invItem.itemName,
+                                            'inventory_item_id': invItem.id,
+                                            'default_unit': uom,
+                                          });
+                                          ref.invalidate(productBoqItemsProvider(productId));
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Error adding item: $e'), backgroundColor: AppColors.error),
+                                            );
+                                          }
+                                        }
+                                      } else {
+                                        final existingBoqItem = getAddedBoqItem(invItem);
+                                        if (existingBoqItem != null) {
+                                          try {
+                                            await supabase.from('product_boq_items').delete().eq('id', existingBoqItem.id);
+                                            ref.invalidate(productBoqItemsProvider(productId));
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('Error removing item: $e'), backgroundColor: AppColors.error),
+                                              );
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Search inventory items...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (val) {
-                      setModalState(() => searchQuery = val);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: filteredItems.isEmpty
-                      ? Center(
-                          child: Text(
-                            searchQuery.isEmpty ? 'No inventory items available.' : 'No items match "$searchQuery"',
-                            style: const TextStyle(color: AppColors.textSecondary),
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: filteredItems.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, idx) {
-                            final invItem = filteredItems[idx];
-                            return ListTile(
-                              title: Text(
-                                invItem.itemName,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Text('Unit: ${invItem.uom ?? "NOS"}'),
-                              trailing: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  _promptAddDetailsAndSave(productId, invItem.itemName, invItem.id, invItem.uom ?? 'NOS');
-                                },
-                                child: const Text('Add', style: TextStyle(color: Colors.white)),
-                              ),
-                            );
-                          },
-                        ),
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
       },
-    );
-  }
-
-  void _promptAddDetailsAndSave(
-    String productId,
-    String itemName,
-    String inventoryItemId,
-    String defaultUom,
-  ) {
-    final unitController = TextEditingController(text: defaultUom);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('Configure "$itemName"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: unitController,
-                decoration: const InputDecoration(labelText: 'Default Unit (e.g. NOS, MTR, SET)'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                try {
-                  final supabase = ref.read(supabaseClientProvider);
-                  await supabase.from('product_boq_items').insert({
-                    'product_id': productId,
-                    'item_name': itemName,
-                    'inventory_item_id': inventoryItemId,
-                    'default_unit': unitController.text.trim().isEmpty ? 'NOS' : unitController.text.trim(),
-                  });
-                  ref.invalidate(productBoqItemsProvider(productId));
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Added "$itemName" to BOQ template.'), backgroundColor: AppColors.success),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error adding BOQ item: $e'), backgroundColor: AppColors.error),
-                    );
-                  }
-                }
-              },
-              child: const Text('Save to BOQ', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

@@ -96,6 +96,7 @@ class QgProposalDraft {
   String? stampImagePath;
   String? bannerImagePath;
   String? productImagePath;
+  String? remarks;
 
   DateTime draftUpdatedAt;
 
@@ -154,6 +155,7 @@ class QgProposalDraft {
     this.stampImagePath,
     this.bannerImagePath,
     this.productImagePath,
+    this.remarks,
     DateTime? draftUpdatedAt,
   }) : draftUpdatedAt = draftUpdatedAt ?? DateTime.now();
 
@@ -405,6 +407,7 @@ class QgProposalDraft {
       warrantyTankYears: tankMat == 'Enamel' ? 15 : 5,
       validityDays: 7,
       tcItem4Status: 'Included',
+      remarks: q.remarks ?? 'Being Quotation Generated',
     );
   }
 
@@ -491,6 +494,7 @@ class QgProposalDraft {
       'stampImagePath': stampImagePath,
       'bannerImagePath': bannerImagePath,
       'productImagePath': productImagePath,
+      'remarks': remarks,
       'draftUpdatedAt': draftUpdatedAt.toIso8601String(),
     };
   }
@@ -556,6 +560,7 @@ class QgProposalDraft {
       stampImagePath: map['stampImagePath'] as String?,
       bannerImagePath: map['bannerImagePath'] as String?,
       productImagePath: map['productImagePath'] as String?,
+      remarks: map['remarks'] as String?,
       draftUpdatedAt: DateTime.tryParse(map['draftUpdatedAt']?.toString() ?? '') ?? DateTime.now(),
     );
   }
@@ -939,6 +944,7 @@ class QgProposalDraft {
       ],
       coverImagePath: coverImagePath,
       bannerImagePath: bannerImagePath,
+      remarks: remarks ?? 'Being Quotation Generated',
       productImagePaths: [
         if (productImagePath != null && productImagePath!.isNotEmpty)
           productImagePath!
