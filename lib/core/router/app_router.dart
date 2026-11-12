@@ -84,7 +84,6 @@ import '../../features/dashboard/screens/product_interests_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_quick_call_remark_screen.dart';
 import '../../features/project_manager/presentation/screens/pm_daily_transactions_screen.dart';
 import '../../features/assigned_work/presentation/screens/assigned_work_screen.dart';
-import '../auth/role_access.dart';
 import '../widgets/app_not_found_screen.dart';
 import '../../features/sales_order/screens/sales_order_resolver_screen.dart';
 
@@ -350,15 +349,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             }
           }
 
-          // Guard pure Technician: redirect Coordinator screens to Technician Dashboard
-          final isPureTechnician = profile.roles.contains(UserRole.technician) &&
+          // Guard Technician: cannot access Field Operations / Coordinator / Management screens
+          final isTechUser = profile.roles.contains(UserRole.technician) &&
               !isAdminOrManager &&
               !isServiceHead &&
-              !profile.roles.contains(UserRole.complaints);
-          if (isPureTechnician &&
+              !profile.roles.contains(UserRole.complaints) &&
+              !profile.roles.contains(UserRole.installation);
+          if (isTechUser &&
               (location == AppRoutes.complaintsDashboard ||
                   location == AppRoutes.assignTechnician ||
-                  location == '/complaints/technicians')) {
+                  location == '/complaints/technicians' ||
+                  location.startsWith('/installations') ||
+                  location.startsWith('/amc') ||
+                  location == AppRoutes.serviceHistory)) {
             return AppRoutes.technicianDashboard;
           }
 
@@ -412,6 +415,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           return ProductDetailScreen(productId: productId);
         },
       ),
+      GoRoute(
+        path: '/amc_avail',
+        builder: (context, state) => AmcAvailScreen(
+          initialProductId: state.uri.queryParameters['productId'],
+          mode: state.uri.queryParameters['mode'],
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) {
           return CustomerAppShell(child: child);
@@ -436,13 +446,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/support',
             builder: (context, state) => const SupportScreen(),
-          ),
-          GoRoute(
-            path: '/amc_avail',
-            builder: (context, state) => AmcAvailScreen(
-              initialProductId: state.uri.queryParameters['productId'],
-              mode: state.uri.queryParameters['mode'],
-            ),
           ),
           GoRoute(
             path: '/request_product',

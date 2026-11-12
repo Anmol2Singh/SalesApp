@@ -605,6 +605,7 @@ class _AddDocumentSheet extends ConsumerStatefulWidget {
 
 class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
   final _titleController = TextEditingController();
+  String? _titleError;
   String? _selectedFilePath;
   String? _selectedFileName;
   Uint8List? _selectedFileBytes;
@@ -640,8 +641,14 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
           _fileType = type;
           if (_titleController.text.trim().isEmpty) {
             final dotIdx = name.lastIndexOf('.');
-            _titleController.text =
-                dotIdx > 0 ? name.substring(0, dotIdx) : name;
+            final base = dotIdx > 0 ? name.substring(0, dotIdx) : name;
+            // Clean up special characters for suggested title so user gets a clean default
+            final cleanSuggested = base
+                .replaceAll(RegExp(r'[^a-zA-Z0-9_\-\s]'), ' ')
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .trim();
+            _titleController.text = cleanSuggested.isNotEmpty ? cleanSuggested : base;
+            _titleError = null;
           }
         });
       }
@@ -660,6 +667,7 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
   Future<void> _upload() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
+      setState(() => _titleError = 'Please enter a title for the document');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a title for the document'),
@@ -668,6 +676,22 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
       );
       return;
     }
+
+    // Disallow special characters in document title
+    // Allowed: letters, numbers, spaces, hyphens, underscores
+    final disallowedSpecialChars = RegExp(r'[#\$%^&*+=<>?/\\|~!@{}|;:"`\[\]]');
+    if (disallowedSpecialChars.hasMatch(title)) {
+      setState(() => _titleError = 'Special characters (#, \$, %, etc.) are not allowed in document title');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Special characters are not allowed in document title'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _titleError = null);
 
     if (_selectedFileName == null && _selectedFilePath == null && _selectedFileBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -789,9 +813,13 @@ class _AddDocumentSheetState extends ConsumerState<_AddDocumentSheet> {
                 hintText: 'e.g. Site Agreement, Electricity Bill, Aadhaar',
                 prefixIcon:
                     const Icon(Icons.title_outlined, color: AppColors.primary),
+                errorText: _titleError,
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
+              onChanged: (_) {
+                if (_titleError != null) setState(() => _titleError = null);
+              },
             ),
             const SizedBox(height: 16),
 

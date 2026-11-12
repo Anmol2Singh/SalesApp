@@ -11,6 +11,7 @@ import 'complaints_leaderboard_screen.dart';
 import '../data/models/complaint_model.dart';
 import '../../../features/installations/providers/installations_provider.dart';
 import '../../../features/installations/data/models/installation_model.dart';
+import '../../../features/notifications/providers/notifications_provider.dart';
 import '../../../core/widgets/network_status_chip.dart';
 
 class TechnicianDashboardScreen extends ConsumerWidget {
@@ -80,10 +81,13 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     }).toList();
 
     final myActiveTasks = assignedComplaints
-        .where((c) => c.status == 'assigned' || c.status == 'in_progress')
+        .where((c) =>
+            c.status.toLowerCase() != 'closed' &&
+            c.status.toLowerCase() != 'resolved' &&
+            c.status.toLowerCase() != 'completed')
         .toList();
     final activeTask = myActiveTasks.isNotEmpty ? myActiveTasks.first : null;
-    final recentComplaints = assignedComplaints.take(5).toList();
+    final recentComplaints = myActiveTasks.take(5).toList();
 
     final installations = ref.watch(installationsProvider);
     final assignedInstallations = installations.where((i) {
@@ -98,12 +102,12 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     
     final myActiveInstallations = assignedInstallations
         .where((i) =>
-            i.status == 'assigned' ||
-            i.status == 'in_progress' ||
-            i.status == 'pending' ||
-            i.status == 'scheduled')
+            i.status.toLowerCase() != 'completed' &&
+            i.status.toLowerCase() != 'closed' &&
+            i.status.toLowerCase() != 'resolved' &&
+            i.status.toLowerCase() != 'cancelled')
         .toList();
-    final recentInstallations = assignedInstallations.take(5).toList();
+    final recentInstallations = myActiveInstallations.take(5).toList();
 
     final isWide = MediaQuery.of(context).size.width >= 800;
 
@@ -286,6 +290,34 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                 ),
               ),
               actions: [
+                Consumer(
+                  builder: (context, ref, _) {
+                    final unreadCount = ref.watch(unreadNotificationCountProvider).value ?? 0;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                          tooltip: 'Notifications',
+                          onPressed: () => context.push(AppRoutes.notifications),
+                        ),
+                        if (unreadCount > 0)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFEF4444),
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   tooltip: 'Refresh',
@@ -382,24 +414,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      // Quick Action 2: Installations
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          context,
-                          title: 'Installations',
-                          subtitle: '${myActiveInstallations.length} assigned',
-                          icon: Icons.build_circle_outlined,
-                          color: const Color(0xFF0D9488),
-                          isDark: isDark,
-                          onTap: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      // Quick Action 3: Assigned Work
+                      // Quick Action 2: Assigned Work
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
@@ -411,8 +426,12 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           onTap: () => context.push(AppRoutes.assignedWork),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      // Quick Action 4: Daily Tasks
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Quick Action 3: Daily Tasks
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
@@ -424,12 +443,8 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           onTap: () => context.push(AppRoutes.dailyTasks),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      // Quick Action 5: Leaderboard
+                      const SizedBox(width: 10),
+                      // Quick Action 4: Leaderboard
                       Expanded(
                         child: _buildQuickActionButton(
                           context,
@@ -446,19 +461,6 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                               ),
                             );
                           },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Quick Action 6: New Complaint
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          context,
-                          title: 'New Complaint',
-                          subtitle: 'Register ticket',
-                          icon: Icons.add_circle_outline,
-                          color: const Color(0xFF2563EB),
-                          isDark: isDark,
-                          onTap: () => context.push('/complaints/book'),
                         ),
                       ),
                     ],
@@ -573,7 +575,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                     const SizedBox(height: 20),
                   ],
 
-                  // 3. Section: My Assigned Complaints (Recent 5 only)
+                  // 3. Section: My Assigned Complaints (Active only)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -597,7 +599,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'View All (${assignedComplaints.length})',
+                              'View All (${myActiveTasks.length})',
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 13,
@@ -613,7 +615,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
 
-                  if (assignedComplaints.isEmpty) ...[
+                  if (myActiveTasks.isEmpty) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -627,7 +629,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           Icon(Icons.assignment_turned_in_outlined, size: 36, color: Colors.grey),
                           SizedBox(height: 6),
                           Text(
-                            'No Complaints Assigned',
+                            'No Active Complaints',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontWeight: FontWeight.bold,
@@ -636,7 +638,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'You currently have no complaints assigned to your roster.',
+                            'You currently have no active complaints assigned.',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               color: Colors.grey,
@@ -648,7 +650,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                       ),
                     ),
                   ] else ...[
-                    // Recent 5 list
+                    // Recent 5 active list
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -659,7 +661,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                       },
                     ),
 
-                    if (assignedComplaints.length > 5) ...[
+                    if (myActiveTasks.length > 5) ...[
                       const SizedBox(height: 8),
                       Center(
                         child: OutlinedButton.icon(
@@ -671,7 +673,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           ),
                           icon: const Icon(Icons.list_alt, size: 16, color: Color(0xFF6D28D9)),
                           label: Text(
-                            'See all ${assignedComplaints.length} tasks in My Tasks',
+                            'See all ${myActiveTasks.length} active complaints in My Tasks',
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               color: Color(0xFF6D28D9),
@@ -685,7 +687,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   ],
                   const SizedBox(height: 16),
                   
-                  // --- INSTALLATIONS SECTION ---
+                  // --- INSTALLATIONS SECTION (Active only) ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -710,7 +712,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'View All (${assignedInstallations.length})',
+                              'View All (${myActiveInstallations.length})',
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 13,
@@ -726,7 +728,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
 
-                  if (assignedInstallations.isEmpty) ...[
+                  if (myActiveInstallations.isEmpty) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -740,7 +742,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           Icon(Icons.handyman, size: 36, color: Colors.grey),
                           SizedBox(height: 6),
                           Text(
-                            'No Installations Assigned',
+                            'No Active Installations',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontWeight: FontWeight.bold,
@@ -749,7 +751,7 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'You currently have no installations assigned to your roster.',
+                            'You currently have no active installations assigned.',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               color: Colors.grey,
@@ -770,6 +772,30 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                         return _buildInstallationTile(context, i, isDark);
                       },
                     ),
+
+                    if (myActiveInstallations.length > 5) ...[
+                      const SizedBox(height: 8),
+                      Center(
+                        child: OutlinedButton.icon(
+                          onPressed: () => context.push('${AppRoutes.technicianTasks}?tab=installations'),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: const Color(0xFF2563EB).withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          ),
+                          icon: const Icon(Icons.build_circle_outlined, size: 16, color: Color(0xFF2563EB)),
+                          label: Text(
+                            'See all ${myActiveInstallations.length} active installations in My Tasks',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF2563EB),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 110),
                 ]),

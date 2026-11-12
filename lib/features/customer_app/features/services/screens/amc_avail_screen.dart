@@ -214,11 +214,11 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: cardBg,
-        elevation: 0.5,
-        foregroundColor: textPrimary,
+        backgroundColor: const Color(0xFF1E1B4B),
+        elevation: 0,
+        foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => context.pop(),
         ),
         title: Text(
@@ -227,11 +227,11 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
               : (widget.mode == 'upgrade'
                   ? 'Upgrade AMC Plan'
                   : 'Avail Annual Maintenance (AMC)'),
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.bold,
             fontSize: 18,
-            color: textPrimary,
+            color: Colors.white,
           ),
         ),
         centerTitle: true,
@@ -662,7 +662,7 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
                     ],
                   ),
                   const Divider(height: 20),
-                  _buildSummaryRow('Base Plan Rate', '₹$_ratePerYear / year',
+                  _buildSummaryRow('Base Plan Rate', '₹${NumberFormat('#,##,###').format(_ratePerYear)} / year',
                       textSecondary, textPrimary),
                   const SizedBox(height: 6),
                   _buildSummaryRow(
@@ -856,7 +856,7 @@ class _AmcAvailScreenState extends ConsumerState<AmcAvailScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '₹${plan.ratePerYear.toInt()}/yr',
+              '₹${NumberFormat('#,##,###').format(plan.ratePerYear)}/yr',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 14,

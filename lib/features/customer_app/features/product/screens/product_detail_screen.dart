@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +20,7 @@ import 'package:salesapp/features/customer_app/shared/widgets/toast_service.dart
 import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
 import 'package:http/http.dart' as http;
 import 'package:salesapp/core/widgets/pdf_preview_screen.dart';
+import 'package:salesapp/core/utils/currency_helper.dart';
 import 'product_booking_confirmed_screen.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
@@ -36,7 +38,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   bool _isBooking = false;
   String? _bookingStatus; // null, 'requested', 'pending', 'accepted'
   int _currentImageIndex = 0;
-  final PageController _imagePageController = PageController();
+  final PageController _imagePageController = PageController(initialPage: 5000);
 
   @override
   void initState() {
@@ -102,7 +104,337 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     );
   }
 
-  Future<void> _handleBookNow(Product product) async {
+  void _openFullScreenImageViewer(BuildContext context, List<String> images, int initialIndex) {
+    if (images.isEmpty) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierDismissible: true,
+        barrierColor: Colors.black.withOpacity(0.92),
+        pageBuilder: (ctx, anim, secAnim) {
+          int pageIdx = initialIndex;
+          final pageController = PageController(initialPage: initialIndex);
+
+          return StatefulBuilder(
+            builder: (context, setViewerState) {
+              return Scaffold(
+                backgroundColor: Colors.black.withOpacity(0.92),
+                body: SafeArea(
+                  child: Stack(
+                    children: [
+                      // Interactive Zoomable PageView
+                      PageView.builder(
+                        controller: pageController,
+                        itemCount: images.length,
+                        physics: const BouncingScrollPhysics(),
+                        onPageChanged: (i) => setViewerState(() => pageIdx = i),
+                        itemBuilder: (context, i) {
+                          return Center(
+                            child: InteractiveViewer(
+                              minScale: 0.8,
+                              maxScale: 4.0,
+                              child: ImageWithFallback(
+                                imageUrl: images[i],
+                                fit: BoxFit.contain,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      // Top Bar
+                      Positioned(
+                        top: 10,
+                        left: 16,
+                        right: 16,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Text(
+                                '${pageIdx + 1} / ${images.length}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            ClipOval(
+                              child: Material(
+                                color: Colors.black.withOpacity(0.6),
+                                child: IconButton(
+                                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Left/Right Navigation Chevrons
+                      if (images.length > 1) ...[
+                        if (pageIdx > 0)
+                          Positioned(
+                            left: 16,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: IconButton(
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.black54,
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.chevron_left_rounded, size: 36),
+                                onPressed: () {
+                                  pageController.previousPage(
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        if (pageIdx < images.length - 1)
+                          Positioned(
+                            right: 16,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: IconButton(
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.black54,
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.chevron_right_rounded, size: 36),
+                                onPressed: () {
+                                  pageController.nextPage(
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  void _showCapacitySelectionSheet(BuildContext context, Product product) {
+    // 1. Resolve available capacities
+    List<String> capacities = List<String>.from(product.capacities);
+    
+    // Fallback based on category / product name if capacities not yet defined
+    if (capacities.isEmpty) {
+      final name = product.productName.toLowerCase();
+      final cat = product.category.toLowerCase();
+      if (name.contains('heat pump') || cat.contains('heat_pump')) {
+        capacities = ['4KW', '8KW', '10KW', '12KW', '18KW', '58KW'];
+      } else if (name.contains('boom barrier') || cat.contains('barrier')) {
+        capacities = ['IZ-2001', 'IZ-2026'];
+      } else if (name.contains('water heater') || name.contains('swh') || cat.contains('boiler')) {
+        capacities = ['100 LPD', '150 LPD', '200 LPD', '250 LPD', '300 LPD', '500 LPD'];
+      } else {
+        capacities = ['Standard Sizing', 'Commercial / High Capacity'];
+      }
+    }
+
+    String selectedCap = capacities.first;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final sheetBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+            final textCol = isDark ? Colors.white : AppColors.textPrimaryLight;
+            final subCol = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+            final borderCol = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              decoration: BoxDecoration(
+                color: sheetBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.straighten_rounded, color: Color(0xFFD97706), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Select Capacity / Size',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: textCol,
+                                ),
+                              ),
+                              Text(
+                                product.productName,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Choose from available capacities for this product. Our engineering and sales team will contact you with sizing recommendations and proposal.',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        color: subCol,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: capacities.map((cap) {
+                        final isSel = selectedCap == cap;
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            setSheetState(() => selectedCap = cap);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSel
+                                  ? const Color(0xFF1E1B4B)
+                                  : (isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC)),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSel ? const Color(0xFFF59E0B) : borderCol,
+                                width: isSel ? 2 : 1,
+                              ),
+                              boxShadow: isSel
+                                  ? [
+                                      BoxShadow(
+                                        color: const Color(0xFF1E1B4B).withOpacity(0.25),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isSel ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                  size: 18,
+                                  color: isSel ? const Color(0xFFF59E0B) : subCol,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  cap,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                    color: isSel ? Colors.white : textCol,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: GradientButton(
+                        label: 'Confirm & Book ($selectedCap)',
+                        isLoading: _isBooking,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _handleBookNow(product, selectedCapacity: selectedCap);
+                        },
+                        icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _handleBookNow(Product product, {String? selectedCapacity}) async {
     if (_isBooking) return;
     setState(() => _isBooking = true);
 
@@ -212,6 +544,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       if (phone.isEmpty) phone = '+91 9876543210';
 
       final inquiryId = 'INQ-${DateTime.now().year}-${(DateTime.now().millisecondsSinceEpoch % 9000) + 1000}';
+      final modelWithCap = (selectedCapacity != null && selectedCapacity.isNotEmpty)
+          ? '$selectedCapacity • ${product.modelNumber}'
+          : product.modelNumber;
 
       // 1. Save to local SharedPreferences cache
       try {
@@ -226,8 +561,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           'customer_phone': phone,
           'product_id': product.productId,
           'product_name': product.productName,
-          'model_number': product.modelNumber,
+          'model_number': modelWithCap,
           'category': product.category,
+          'selected_capacity': selectedCapacity,
           'created_at': DateTime.now().toIso8601String(),
           'status': 'requested',
         };
@@ -243,7 +579,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           'customer_phone': phone,
           'product_id': product.productId,
           'product_name': product.productName,
-          'model_number': product.modelNumber,
+          'model_number': modelWithCap,
           'status': 'requested',
           'created_at': DateTime.now().toIso8601String(),
         });
@@ -257,8 +593,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           'name': name,
           'phone': phone,
           'source': 'Customer Product Interest',
-          'requirement': 'Respected customer has shown interest in following product: ${product.productName} (${product.modelNumber})',
-          'notes': 'Booked via Customer Portal ($inquiryId)',
+          'requirement': 'Respected customer has shown interest in following product: ${product.productName} ($modelWithCap)',
+          'notes': 'Booked via Customer Portal ($inquiryId)${selectedCapacity != null ? " - Capacity: $selectedCapacity" : ""}',
           'status': 'new',
           'created_at': DateTime.now().toIso8601String(),
         });
@@ -278,7 +614,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               await supabase.from('notifications').insert({
                 'user_id': s['id'],
                 'title': 'New Customer Product Interest 🛒',
-                'body': 'Respected customer $name ($phone) has shown interest in following product: ${product.productName} (${product.modelNumber}). Our sales will contact them shortly.',
+                'body': 'Respected customer $name ($phone) has shown interest in following product: ${product.productName} (${selectedCapacity != null ? "Capacity: $selectedCapacity, " : ""}Model: ${product.modelNumber}). Our sales will contact them shortly.',
                 'type': 'product_interest',
                 'created_at': DateTime.now().toIso8601String(),
               });
@@ -632,48 +968,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           }
           final isPurchased = purchasedAsync.value?.any((p) => p.productId == product.productId) ?? false;
 
-          // Beautiful network URLs based on category if assets don't load
-          String getCategoryImageUrl(String category) {
-            switch (category.toLowerCase()) {
-              case 'boiler':
-                return 'https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop';
-              case 'heat_pump':
-                return 'https://images.unsplash.com/photo-1621905252507-b354bc25edac?w=800&auto=format&fit=crop';
-              case 'thermostat':
-                return 'https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop';
-              default:
-                return 'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=800&auto=format&fit=crop';
-            }
-          }
-
-          final imageUrl = product.imageUrl.startsWith('assets/')
-              ? getCategoryImageUrl(product.category)
-              : product.imageUrl;
-
           final isAmcExpired = product.amcStatus == 'expired';
           final isWarrantyExpired = product.warrantyExpiryDate.isBefore(
             DateTime.now(),
           );
 
           final List<String> displayImages = [];
-          if (product.imageUrls.isNotEmpty) {
-            displayImages.addAll(product.imageUrls);
-          } else if (imageUrl.isNotEmpty) {
-            displayImages.add(imageUrl);
-          }
-
-          // If unpurchased catalog item has only 1 image, add showcase perspectives so customer can slide
-          if (!isPurchased && displayImages.length <= 1) {
-            if (product.category.toLowerCase().contains('heat_pump')) {
-              displayImages.add('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop');
-              displayImages.add('https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=800&auto=format&fit=crop');
-            } else if (product.category.toLowerCase().contains('boiler')) {
-              displayImages.add('https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop');
-              displayImages.add('https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop');
-            } else {
-              displayImages.add('https://images.unsplash.com/photo-1509391365360-2e959784a276?w=800&auto=format&fit=crop');
-              displayImages.add('https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop');
+          for (final u in product.imageUrls) {
+            final clean = u.trim();
+            if (clean.isNotEmpty && !displayImages.contains(clean)) {
+              displayImages.add(clean);
             }
+          }
+          final singleClean = product.imageUrl.trim();
+          if (singleClean.isNotEmpty && !displayImages.contains(singleClean)) {
+            displayImages.insert(0, singleClean);
           }
 
           final Widget imageSection = Stack(
@@ -685,27 +994,112 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   width: double.infinity,
                   child: displayImages.length > 1
                       ? PageView.builder(
+                          physics: const BouncingScrollPhysics(),
                           controller: _imagePageController,
-                          itemCount: displayImages.length,
+                          itemCount: 10000,
                           onPageChanged: (idx) {
-                            setState(() => _currentImageIndex = idx);
+                            setState(() => _currentImageIndex = idx % displayImages.length);
                           },
                           itemBuilder: (ctx, i) {
-                            return ImageWithFallback(
-                              imageUrl: displayImages[i],
-                              fit: BoxFit.cover,
+                            final realIdx = i % displayImages.length;
+                            return InkWell(
+                              onTap: () => _openFullScreenImageViewer(context, displayImages, realIdx),
+                              child: ImageWithFallback(
+                                imageUrl: displayImages[realIdx],
+                                category: product.category,
+                                fit: BoxFit.cover,
+                              ),
                             );
                           },
                         )
-                      : ImageWithFallback(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.cover,
+                      : InkWell(
+                          onTap: displayImages.isNotEmpty
+                              ? () => _openFullScreenImageViewer(context, displayImages, 0)
+                              : null,
+                          child: ImageWithFallback(
+                            imageUrl: displayImages.isNotEmpty ? displayImages.first : '',
+                            category: product.category,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                 ),
               ),
               // Blur & Darken Overlay on Image
               Positioned.fill(
-                child: Container(color: Colors.black.withOpacity(0.35)),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.4),
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.55),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Fullscreen tap hint
+              Positioned(
+                bottom: 14,
+                right: 16,
+                child: InkWell(
+                  onTap: () => _openFullScreenImageViewer(context, displayImages, _currentImageIndex),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'View Full',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Category badge on top-right of image
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 10,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1B4B).withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_getCategoryIcon(product.category), color: AppColors.accent, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        product.category.replaceAll('_', ' ').toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               // Back arrow overlaid
               Positioned(
@@ -713,14 +1107,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 left: 16,
                 child: ClipOval(
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                     child: Container(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withOpacity(0.35),
                       child: IconButton(
                         icon: const Icon(
                           Icons.arrow_back_ios_new_rounded,
                           color: Colors.white,
-                          size: 20,
+                          size: 18,
                         ),
                         onPressed: () => context.pop(),
                       ),
@@ -731,23 +1125,49 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               // Sliding Dots Indicator when multiple images available
               if (displayImages.length > 1)
                 Positioned(
-                  bottom: 12,
+                  bottom: 14,
                   left: 0,
                   right: 0,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      displayImages.length,
-                      (i) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentImageIndex == i ? 22 : 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: _currentImageIndex == i
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(4),
+                  child: Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(
+                              displayImages.length,
+                              (i) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic,
+                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                width: _currentImageIndex == i ? 22 : 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: _currentImageIndex == i
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.4),
+                                  borderRadius: BorderRadius.circular(4),
+                                  boxShadow: _currentImageIndex == i
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.white.withOpacity(0.5),
+                                            blurRadius: 4,
+                                            spreadRadius: 1,
+                                          )
+                                        ]
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -762,293 +1182,474 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Product Identity Block
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.productName,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Model: ${product.modelNumber}',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                              if (isPurchased)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: const Color(0xFF10B981).withOpacity(0.25),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        product.productName,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .displayLarge
-                                            ?.copyWith(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                                            ),
+                                      Icon(
+                                        Icons.check_circle_outline_rounded,
+                                        size: 13,
+                                        color: Color(0xFF059669),
                                       ),
-                                      const SizedBox(height: 4),
+                                      SizedBox(width: 4),
                                       Text(
-                                        isPurchased
-                                            ? 'Model: ${product.modelNumber} • S/N: ${product.serialNumber}'
-                                            : 'Model: ${product.modelNumber}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: isDark ? AppColors.textSecondary : AppColors.textSecondaryLight,
-                                            ),
+                                        'Installed & Active',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF059669),
+                                        ),
                                       ),
                                     ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Technical Specs',
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.primary.withOpacity(0.1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 22),
+                      onPressed: () => _showTechnicalSpecificationsSheet(context, product),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Protection Highlights (Warranty & AMC)
+                Row(
+                  children: [
+                    // Warranty Card
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isWarrantyExpired
+                                ? [const Color(0xFFFEF2F2), const Color(0xFFFEE2E2)]
+                                : [const Color(0xFFECFDF5), const Color(0xFFD1FAE5)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isWarrantyExpired ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.verified_user_rounded,
+                                  size: 18,
+                                  color: isWarrantyExpired ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Warranty',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: isWarrantyExpired ? const Color(0xFF991B1B) : const Color(0xFF065F46),
+                                    ),
                                   ),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(12),
+                                    color: isWarrantyExpired ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Icon(
-                                    _getCategoryIcon(product.category),
-                                    color: AppColors.accent,
-                                    size: 24,
+                                  child: Text(
+                                    isPurchased ? (isWarrantyExpired ? 'EXPIRED' : 'ACTIVE') : 'STANDARD',
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-
-                            const SizedBox(height: 24),
-
-                            // Details Grid (2-column layout)
+                            const SizedBox(height: 8),
                             Text(
-                              'Specifications & Coverages',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                              isPurchased
+                                  ? (isWarrantyExpired
+                                      ? 'Expired on ${DateFormat('dd MMM yyyy').format(product.warrantyExpiryDate)}'
+                                      : 'Valid till ${DateFormat('dd MMM yyyy').format(product.warrantyExpiryDate)}')
+                                  : '1 Year Manufacturer Warranty',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: isWarrantyExpired ? const Color(0xFFB91C1C) : const Color(0xFF047857),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // AMC Card
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: product.amcStatus == 'active'
+                                ? [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)]
+                                : (product.amcStatus == 'expired'
+                                    ? [const Color(0xFFFFFBEB), const Color(0xFFFEF3C7)]
+                                    : [const Color(0xFFF8FAFC), const Color(0xFFF1F5F9)]),
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: product.amcStatus == 'active'
+                                ? const Color(0xFF93C5FD)
+                                : (product.amcStatus == 'expired' ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0)),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.health_and_safety_rounded,
+                                  size: 18,
+                                  color: product.amcStatus == 'active'
+                                      ? const Color(0xFF2563EB)
+                                      : (product.amcStatus == 'expired' ? const Color(0xFFD97706) : const Color(0xFF64748B)),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    product.amcStatus == 'active' ? 'AMC Availed' : 'AMC Plan',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: product.amcStatus == 'active'
+                                          ? const Color(0xFF1E40AF)
+                                          : (product.amcStatus == 'expired' ? const Color(0xFF92400E) : const Color(0xFF334155)),
+                                    ),
                                   ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: product.amcStatus == 'active'
+                                        ? const Color(0xFF2563EB)
+                                        : (product.amcStatus == 'expired' ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8)),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    product.amcStatus == 'active' ? 'AVAILED ✓' : product.amcStatus.toUpperCase(),
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              product.amcStatus == 'active'
+                                  ? (product.amcExpiryDate != null
+                                      ? '1 Year Duration • Valid till ${DateFormat('dd MMM yyyy').format(product.amcExpiryDate!)}'
+                                      : '1 Year Duration • Active Protection')
+                                  : (product.amcStatus == 'expired' ? 'Contract Expired' : 'Not Subscribed'),
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: product.amcStatus == 'active'
+                                    ? const Color(0xFF1D4ED8)
+                                    : (product.amcStatus == 'expired' ? const Color(0xFFB45309) : const Color(0xFF64748B)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 22),
+
+                // Specifications & Details Section
+                Text(
+                  'Specifications & Details',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                GlassCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  borderRadius: 16,
+                  child: Column(
+                    children: [
+                      if (isPurchased) ...[
+                        if (product.modelNumber.isNotEmpty && product.modelNumber != 'HVAC' && product.modelNumber != 'COMMERCIAL') ...[
+                          _buildSpecTile(
+                            icon: Icons.precision_manufacturing_outlined,
+                            label: 'Purchased Equipment / Model',
+                            value: product.modelNumber,
+                            iconColor: const Color(0xFF6366F1),
+                          ),
+                          const Divider(height: 16),
+                        ],
+                        _buildSpecTile(
+                          icon: Icons.calendar_today_outlined,
+                          label: 'Purchased Date',
+                          value: DateFormat('dd MMM yyyy').format(product.purchasedDate),
+                          iconColor: const Color(0xFF3B82F6),
+                        ),
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.storefront_outlined,
+                          label: 'Seller / Dealer',
+                          value: product.sellerName.isNotEmpty ? product.sellerName : 'IZYHEAT Industry',
+                          iconColor: const Color(0xFF10B981),
+                        ),
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.shield_outlined,
+                          label: 'Warranty Coverage Window',
+                          value: '${DateFormat('dd MMM yyyy').format(product.warrantyStartDate ?? product.purchasedDate)}  –  ${DateFormat('dd MMM yyyy').format(product.warrantyExpiryDate)}',
+                          iconColor: const Color(0xFF8B5CF6),
+                        ),
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Order / Amount Paid',
+                          value: formatIndianCurrency(product.amountPaid, includeDecimals: true),
+                          iconColor: const Color(0xFFF59E0B),
+                        ),
+                      ] else ...[
+                        _buildSpecTile(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'Availability Status',
+                          value: 'In Stock & Ready for Dispatch',
+                          iconColor: const Color(0xFF10B981),
+                        ),
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.factory_outlined,
+                          label: 'Manufacturer',
+                          value: 'IZYHEAT Solar Industry',
+                          iconColor: const Color(0xFF3B82F6),
+                        ),
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.currency_rupee,
+                          label: 'Base Pricing',
+                          value: formatIndianCurrency(product.amountPaid, includeDecimals: true),
+                          iconColor: const Color(0xFFF59E0B),
+                        ),
+                      ],
+                      if (isPurchased && product.installationAddress != null && product.installationAddress!.isNotEmpty) ...[
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.location_on_outlined,
+                          label: 'Installation Location',
+                          value: product.installationAddress!.replaceAll(RegExp(r'[ \t]+'), ' ').replaceAll(RegExp(r'\n\s*\n'), '\n').trim(),
+                          iconColor: const Color(0xFFEF4444),
+                        ),
+                      ],
+                      if (isPurchased && product.amcStatus != 'none') ...[
+                        const Divider(height: 16),
+                        _buildSpecTile(
+                          icon: Icons.fact_check_outlined,
+                          label: 'AMC Visits Track',
+                          value: '${product.numberOfVisitsIncluded} Included  •  ${product.numberOfVisitsCompleted} Completed  •  ${(product.numberOfVisitsIncluded - product.numberOfVisitsCompleted).clamp(0, 999)} Remaining',
+                          iconColor: const Color(0xFF06B6D4),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Included Equipment & Quotation Items Purchased
+                () {
+                  final effectivePurchasedItems = List<String>.from(product.includedItems);
+                  if (effectivePurchasedItems.isEmpty && product.modelNumber.isNotEmpty && product.modelNumber != 'HVAC' && product.modelNumber != 'COMMERCIAL') {
+                    effectivePurchasedItems.add(product.modelNumber);
+                  }
+
+                  if (effectivePurchasedItems.isEmpty) return const SizedBox.shrink();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          const Icon(Icons.checklist_rtl_rounded, color: Color(0xFF6D28D9), size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Quotation Items / Components Purchased',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                                ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEDE9FE),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${effectivePurchasedItems.length} items',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF6D28D9),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      GlassCard(
+                        padding: const EdgeInsets.all(16),
+                        borderRadius: 16,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Equipment and accessories supplied with this installation (as listed in quotation & sales records):',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white60 : Colors.grey.shade600,
+                              ),
                             ),
                             const SizedBox(height: 12),
-                            GridView.count(
-                              crossAxisCount: 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              childAspectRatio: 1.6,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              children: [
-                                if (isPurchased) ...[
-                                  _buildGridCard(
-                                    'Purchased Date',
-                                    DateFormat('dd MMM yyyy').format(product.purchasedDate),
-                                  ),
-                                  _buildGridCard(
-                                    'Seller / Dealer',
-                                    product.sellerName,
-                                  ),
-                                ] else ...[
-                                  _buildGridCard(
-                                    'Availability',
-                                    'In Stock',
-                                  ),
-                                  _buildGridCard(
-                                    'Manufacturer',
-                                    'IZYHEAT Solar',
-                                  ),
-                                ],
-                                _buildGridCard(
-                                  'Warranty Status',
-                                  isPurchased ? (isWarrantyExpired ? 'Expired' : 'Active') : '1 Year Standard',
-                                  chip: StatusChip(
-                                    label: isPurchased ? (isWarrantyExpired ? 'Expired' : 'Active ✓') : 'Standard ✓',
-                                    status: isPurchased ? (isWarrantyExpired ? 'danger' : 'success') : 'success',
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  ),
-                                ),
-                                if (isPurchased) ...[
-                                  _buildGridCard(
-                                    'Warranty Start',
-                                    DateFormat('dd MMM yyyy').format(product.warrantyStartDate ?? product.purchasedDate),
-                                  ),
-                                  _buildGridCard(
-                                    'Warranty End',
-                                    DateFormat('dd MMM yyyy').format(product.warrantyExpiryDate),
-                                  ),
-                                ],
-                                if (isPurchased)
-                                  _buildGridCard(
-                                    'AMC Contract',
-                                    product.amcStatus.toUpperCase(),
-                                    chip: StatusChip(
-                                      label: product.amcStatus.toUpperCase(),
-                                      status: product.amcStatus == 'active'
-                                          ? 'success'
-                                          : (product.amcStatus == 'expired' ? 'danger' : 'info'),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    ),
-                                  )
-                                else
-                                  _buildGridCard(
-                                    'AMC Support',
-                                    'Available',
-                                    chip: const StatusChip(
-                                      label: 'AVAILABLE',
-                                      status: 'success',
-                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            ...effectivePurchasedItems.map((item) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
                                     ),
                                   ),
-                                _buildGridCard(
-                                  isPurchased ? 'Amount Paid' : 'Base Price',
-                                  'INR ${product.amountPaid.toStringAsFixed(2)}',
-                                ),
-                                if (isPurchased && product.amcExpiryDate != null)
-                                  _buildGridCard(
-                                    'AMC Expires',
-                                    DateFormat('dd MMM yyyy').format(product.amcExpiryDate!),
-                                  ),
-                                if (isPurchased && product.amcStatus != 'none') ...[
-                                  _buildGridCard(
-                                    'AMC Visits Included',
-                                    '${product.numberOfVisitsIncluded} Visits',
-                                  ),
-                                  _buildGridCard(
-                                    'AMC Visits Done',
-                                    '${product.numberOfVisitsCompleted} Visits',
-                                  ),
-                                  _buildGridCard(
-                                    'AMC Visits Remaining',
-                                    '${(product.numberOfVisitsIncluded - product.numberOfVisitsCompleted).clamp(0, 999)} Visits',
-                                  ),
-                                ],
-                              ],
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            if (isPurchased) ...[
-                              const SizedBox(height: 24),
-
-                              // Address
-                              Text(
-                                'Installation Location',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              GlassCard(
-                                padding: const EdgeInsets.all(16),
-                                borderRadius: 16,
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_outlined,
-                                      color: AppColors.accent,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        product.installationAddress != null && product.installationAddress!.isNotEmpty
-                                            ? product.installationAddress!
-                                            : 'Address recorded during order / installation',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                              color: isDark ? AppColors.textPrimary : AppColors.textPrimaryLight,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              // Included Equipment & Quotation Items Purchased
-                              if (product.includedItems.isNotEmpty) ...[
-                                const SizedBox(height: 24),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.checklist_rtl_rounded, color: Color(0xFF6D28D9), size: 20),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Quotation Items / Components Purchased',
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: isDark ? Colors.white : AppColors.textPrimaryLight,
-                                          ),
-                                    ),
-                                    const Spacer(),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEDE9FE),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${product.includedItems.length} items',
-                                        style: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF6D28D9).withOpacity(0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.check_circle_rounded,
+                                          size: 16,
                                           color: Color(0xFF6D28D9),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                GlassCard(
-                                  padding: const EdgeInsets.all(16),
-                                  borderRadius: 16,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Equipment and accessories supplied with this installation (as listed in quotation & sales records):',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          item,
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                            color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(height: 12),
-                                      ...product.includedItems.map((item) {
-                                        return Padding(
-                                          padding: const EdgeInsets.only(bottom: 8.0),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.all(4),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF6D28D9).withOpacity(0.12),
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.check_circle_rounded,
-                                                    size: 16,
-                                                    color: Color(0xFF6D28D9),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Text(
-                                                    item,
-                                                    style: TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      fontWeight: FontWeight.w600,
-                                                      fontSize: 13,
-                                                      color: isDark ? Colors.white : const Color(0xFF1E293B),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      }),
                                     ],
                                   ),
                                 ),
-                              ],
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }(),
 
                               if (isPurchased && (product.amcVisits.isNotEmpty || product.amcStatus == 'active')) ...[
                                 const SizedBox(height: 24),
@@ -1151,7 +1752,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                               const SizedBox(height: 24),
 
                               // AMC Renewal Banner
-                              if (isAmcExpired)
+                              if (isPurchased && isAmcExpired) ...[
                                 Container(
                                   padding: const EdgeInsets.all(20),
                                   decoration: BoxDecoration(
@@ -1209,56 +1810,140 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             ] else if (isPurchased && product.amcStatus == 'none') ...[
                               const SizedBox(height: 24),
                               Container(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(22),
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
+                                  gradient: const LinearGradient(
                                     colors: [
-                                      AppColors.primary,
-                                      AppColors.accent,
+                                      Color(0xFF0F172A),
+                                      Color(0xFF1E1B4B),
+                                      Color(0xFF312E81),
                                     ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(22),
                                   border: Border.all(
-                                    color: AppColors.primary.withOpacity(0.3),
-                                    width: 1,
+                                    color: const Color(0xFFF59E0B).withOpacity(0.4),
+                                    width: 1.2,
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF1E1B4B).withOpacity(0.35),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Row(
+                                    Row(
                                       children: [
-                                        Icon(
-                                          Icons.star_rounded,
-                                          color: AppColors.accent,
-                                          size: 24,
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF59E0B).withOpacity(0.2),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.shield_outlined,
+                                            color: Color(0xFFF59E0B),
+                                            size: 24,
+                                          ),
                                         ),
-                                        SizedBox(width: 10),
-                                        Text(
-                                          'Annual Maintenance Program',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
+                                        const SizedBox(width: 12),
+                                        const Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Annual Maintenance Program',
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                              SizedBox(height: 2),
+                                              Text(
+                                                'Certified Protection & Upkeep Plans',
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  color: Color(0xFFFBBF24),
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 12),
                                     Text(
-                                      'Get 24/7 priority support, free annual cleaning, parts replacement discount, and guaranteed service turnaround within 24 hours.',
+                                      'Get 24/7 priority support, free periodic cleaning visits, discounts on spare parts, and guaranteed turnaround within 24 hours.',
                                       style: TextStyle(
+                                        fontFamily: 'Inter',
                                         fontSize: 13,
+                                        height: 1.4,
                                         color: Colors.white.withOpacity(0.9),
                                       ),
                                     ),
-                                    const SizedBox(height: 16),
-                                    GradientButton(
-                                      label: 'Avail AMC Now',
-                                      isLoading: _isRenewing,
-                                      onTap: () => _requestAmc(product),
+                                    const SizedBox(height: 14),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      children: [
+                                        _buildAmcFeaturePill(Icons.check_circle_rounded, 'Free Service Visits'),
+                                        _buildAmcFeaturePill(Icons.discount_rounded, 'Parts Discount'),
+                                        _buildAmcFeaturePill(Icons.speed_rounded, 'Priority SLA'),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    InkWell(
+                                      onTap: () {
+                                        context.push('/amc_avail?productId=' + product.productId);
+                                      },
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(14),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFFF59E0B).withOpacity(0.4),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: const Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 20),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Avail AMC Protection Now',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            SizedBox(width: 6),
+                                            Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1303,21 +1988,23 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  '${product.amcPlanTitle ?? 'Standard'} AMC Active',
+                                                  'AMC Availed • ${product.amcPlanTitle ?? 'Standard'} Plan',
                                                   style: const TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 15,
                                                     color: Color(0xFF065F46),
                                                   ),
                                                 ),
-                                                if (product.amcExpiryDate != null)
-                                                  Text(
-                                                    'Coverage valid until ${DateFormat('dd MMM yyyy').format(product.amcExpiryDate!)}',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: isDark ? Colors.white70 : const Color(0xFF047857),
-                                                    ),
+                                                Text(
+                                                  product.amcExpiryDate != null
+                                                      ? '1 Year Duration (Valid till ${DateFormat('dd MMM yyyy').format(product.amcExpiryDate!)})'
+                                                      : '1 Year Duration (Active Protection)',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isDark ? Colors.white70 : const Color(0xFF047857),
                                                   ),
+                                                ),
                                               ],
                                             ),
                                           ],
@@ -1535,7 +2222,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                 label: _isBooking
                                     ? 'Registering...'
                                     : (isAccepted ? 'Book More' : (isRequested ? 'Requested' : 'Book Now')),
-                                onTap: _isBooking ? () {} : () => _handleBookNow(product),
+                                onTap: _isBooking ? () {} : () => _showCapacitySelectionSheet(context, product),
                                 icon: _isBooking
                                     ? const SizedBox(
                                         width: 18,
@@ -1622,7 +2309,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       flex: 4,
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
-                        child: imageSection,
+                        child: _buildDesktopImageGallery(context, displayImages, product),
                       ),
                     ),
                     Expanded(
@@ -1673,6 +2360,143 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     );
   }
 
+  Widget _buildDesktopImageGallery(BuildContext context, List<String> displayImages, Product product) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderCol = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Breadcrumb / Back Navigation Bar
+          Row(
+            children: [
+              IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
+                onPressed: () => context.pop(),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Product Details',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF94A3B8)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  product.productName,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Vertical Column of multiple product images (top, beneath it, beneath it)
+          if (displayImages.isEmpty)
+            Container(
+              height: 260,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: borderCol, width: 1.2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: ImageWithFallback(
+                  imageUrl: '',
+                  category: product.category,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+          else
+            ...displayImages.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final url = entry.value;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: borderCol, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  children: [
+                    InkWell(
+                      onTap: () => _openFullScreenImageViewer(context, displayImages, idx),
+                      child: ImageWithFallback(
+                        imageUrl: url,
+                        category: product.category,
+                        fit: BoxFit.cover,
+                        height: 260,
+                        width: double.infinity,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 10,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 15),
+                            const SizedBox(width: 4),
+                            Text(
+                              'View Full (${idx + 1}/${displayImages.length})',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
       case 'boiler':
@@ -1719,6 +2543,94 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAmcFeaturePill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFFFBBF24)),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? iconColor,
+    Color? valueColor,
+    Widget? trailing,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (iconColor ?? AppColors.primary).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: iconColor ?? AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5,
+                    color: subtitleColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor ?? textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing,
         ],
       ),
     );

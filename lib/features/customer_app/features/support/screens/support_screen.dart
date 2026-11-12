@@ -167,17 +167,60 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text(
-          'Contact Us & Support',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-            fontFamily: 'Inter',
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Contact Us & Support',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF22C55E).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF22C55E).withOpacity(0.5),
+                  width: 1,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.headset_mic_rounded, color: Color(0xFF4ADE80), size: 12),
+                  SizedBox(width: 4),
+                  Text(
+                    'Helpdesk',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4ADE80),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        backgroundColor: scaffoldBg,
+        backgroundColor: const Color(0xFF1E1B4B),
+        foregroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
+            tooltip: 'Refresh Support Info',
+            onPressed: () => ref.refresh(companyContactProvider.future),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.refresh(companyContactProvider.future),

@@ -13,6 +13,7 @@ import '../models/user_role.dart';
 import '../models/quotation.dart';
 import '../utils/financial_year_helper.dart';
 import '../../features/pipelines/providers/pipelines_provider.dart';
+import '../../features/pipelines/widgets/work_progress_box.dart';
 import '../providers/supabase_provider.dart';
 
 class PipelineCard extends ConsumerWidget {
@@ -167,7 +168,17 @@ class PipelineCard extends ConsumerWidget {
     final currentStepNum = _getStepNumber(pipeline);
     final currentStepName = _getStepName(pipeline);
     final completedStepsCount = _getCompletedStepsCount(pipeline);
-    final isCompleted = pipeline.status == PipelineStatus.completed || completedStepsCount == 5;
+
+    final workStageAsync = ref.watch(pipelineWorkStageProvider(pipeline));
+    final workStage = workStageAsync.valueOrNull;
+
+    final isAllDealStepsDone = completedStepsCount == 5;
+    final isWorkCompleted = workStage == 'Completed';
+    final isBoth100 = isAllDealStepsDone && isWorkCompleted && pipeline.status == PipelineStatus.completed;
+    final isWorkPending = isAllDealStepsDone && !isWorkCompleted;
+    final pendingWorkStage = (workStage != null && workStage != 'Completed')
+        ? workStage
+        : 'In Progress';
 
     return InkWell(
       onTap: () => context.push(
@@ -370,7 +381,9 @@ class PipelineCard extends ConsumerWidget {
                           currentStep: pipeline.currentStep,
                           requiresApproval: requiresApproval,
                           completedStepsCount: completedStepsCount,
-                          isCompleted: isCompleted,
+                          isCompleted: isBoth100,
+                          isWorkPending: isWorkPending,
+                          pendingWorkStage: pendingWorkStage,
                         ),
 
                         const SizedBox(height: 8),
@@ -527,6 +540,8 @@ class PipelineCard extends ConsumerWidget {
     required bool requiresApproval,
     required int completedStepsCount,
     required bool isCompleted,
+    required bool isWorkPending,
+    required String pendingWorkStage,
   }) {
     final stageColor = isCompleted ? const Color(0xFF10B981) : _getStepColor(currentStep);
 
@@ -624,7 +639,32 @@ class PipelineCard extends ConsumerWidget {
                 color: Colors.grey.shade600,
               ),
             ),
-            if (isCompleted)
+            if (completedStepsCount == 5 && isWorkPending)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.pending_actions_outlined, size: 11, color: Color(0xFFD97706)),
+                    const SizedBox(width: 3),
+                    Text(
+                      'Work Pending ($pendingWorkStage)',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFD97706),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (isCompleted)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                 decoration: BoxDecoration(

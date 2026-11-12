@@ -20,7 +20,7 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   final bool _isAdmin;
 
   int _page = 0;
-  static const int _pageSize = 20;
+  static const int _pageSize = 25;
   bool _hasMore = true;
   bool _isLoading = false;
   String _stepFilter = '';
@@ -203,6 +203,118 @@ final pipelinesNotifierProvider =
     profile?.id,
     canViewAll,
   );
+});
+
+class DealCounts {
+  final int needsAction;
+  final int active;
+  final int completed;
+
+  const DealCounts({
+    required this.needsAction,
+    required this.active,
+    required this.completed,
+  });
+}
+
+/// Global accurate counts provider for deal tabs
+final dealCountsProvider = FutureProvider<DealCounts>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final profile = ref.watch(currentProfileProvider);
+  final canViewAll = profile?.primaryRole.canViewAllPipelines == true ||
+      profile?.roles.any((r) => r.canViewAllPipelines) == true;
+
+  try {
+    if (canViewAll) {
+      // 1. Direct exact count queries on Supabase - lightning fast, exact, unlimited scale
+      final activeRes = await supabase
+          .from('sales_pipelines')
+          .select()
+          .isFilter('deleted_at', null)
+          .neq('status', 'completed')
+          .count(CountOption.exact);
+
+      final completedRes = await supabase
+          .from('sales_pipelines')
+          .select()
+          .isFilter('deleted_at', null)
+          .eq('status', 'completed')
+          .count(CountOption.exact);
+
+      int needsAction = 0;
+      try {
+        final naRes = await supabase
+            .from('quotations')
+            .select()
+            .eq('status', 'pending_approval')
+            .count(CountOption.exact);
+        needsAction = naRes.count;
+      } catch (_) {}
+
+      return DealCounts(
+        needsAction: needsAction,
+        active: activeRes.count,
+        completed: completedRes.count,
+      );
+    }
+
+    // 2. Scoped query for non-admin/assigned users
+    var query = supabase
+        .from('sales_pipelines')
+        .select('id, status, quotations(id, status)')
+        .isFilter('deleted_at', null);
+
+    if (!canViewAll && profile?.id != null) {
+      List<String> assignedCustomerIds = [];
+      try {
+        final custRes = await supabase
+            .from('customers')
+            .select('id')
+            .eq('assigned_to', profile!.id);
+        assignedCustomerIds = (custRes as List)
+            .map((c) => c['id']?.toString() ?? '')
+            .where((id) => id.isNotEmpty)
+            .toList();
+      } catch (_) {}
+
+      if (assignedCustomerIds.isNotEmpty) {
+        final idList = assignedCustomerIds.join(',');
+        query = query.or('created_by.eq.${profile!.id},customer_id.in.($idList)');
+      } else {
+        query = query.eq('created_by', profile!.id);
+      }
+    }
+
+    final rows = await query;
+    int needsAction = 0;
+    int active = 0;
+    int completed = 0;
+
+    for (final r in (rows as List)) {
+      final status = r['status']?.toString();
+      final quote = r['quotations'] ?? r['quotation'];
+      String? quoteStatus;
+      if (quote is List && quote.isNotEmpty) {
+        quoteStatus = (quote.first as Map)['status']?.toString();
+      } else if (quote is Map) {
+        quoteStatus = quote['status']?.toString();
+      }
+
+      if (quoteStatus == 'pending_approval') {
+        needsAction++;
+      }
+      if (status == 'completed') {
+        completed++;
+      } else {
+        active++;
+      }
+    }
+
+    return DealCounts(needsAction: needsAction, active: active, completed: completed);
+  } catch (e) {
+    debugPrint('dealCountsProvider error: $e');
+    return const DealCounts(needsAction: 0, active: 0, completed: 0);
+  }
 });
 
 // Single pipeline detail

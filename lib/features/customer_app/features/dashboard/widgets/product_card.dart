@@ -8,20 +8,15 @@ import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/features/service_request/screens/service_booking_flow.dart';
 
-ImageProvider _getProductImageProvider(String url, [String? category]) {
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return NetworkImage(url);
+ImageProvider? _getProductImageProvider(String url) {
+  final clean = url.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return NetworkImage(clean);
   }
-  final cat = (category ?? '').toLowerCase();
-  if (cat.contains('boiler')) {
-    return const NetworkImage('https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop');
+  if (clean.startsWith('assets/')) {
+    return AssetImage(clean);
   }
-  if (cat.contains('thermostat')) {
-    return const NetworkImage('https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop');
-  }
-  return const NetworkImage(
-    'https://images.unsplash.com/photo-1621905252507-b354bc25edac?w=800&auto=format&fit=crop',
-  );
+  return null;
 }
 
 Widget _buildProductThumbnail(Product product) {
@@ -114,9 +109,15 @@ class HeroProductCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => context.push('/product/${product.productId}'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           // 1. Top Badges Strip
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -303,92 +304,6 @@ class HeroProductCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // 2a. Purchased Components / Quotation Items Strip
-          if (product.includedItems.isNotEmpty) ...[
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF5F3FF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFF6D28D9).withOpacity(0.2),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6D28D9).withOpacity(0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.checklist_rtl_rounded, size: 14, color: Color(0xFF6D28D9)),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Purchased Items / Components (${product.includedItems.length})',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : const Color(0xFF1E293B),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: product.includedItems.map((item) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF6D28D9).withOpacity(0.18) : Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF8B5CF6).withOpacity(0.3) : const Color(0xFFDDD6FE),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF6D28D9)),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                item,
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? const Color(0xFFDDD6FE) : const Color(0xFF4C1D95),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-          ],
 
           // 2b. Active AMC Banner with "Extend Year" and "Upgrade Plan" options
           if (isAmcActive) ...[
@@ -585,7 +500,9 @@ class HeroProductCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 }
 
@@ -599,16 +516,20 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAmcActive = product.amcStatus.toLowerCase() == 'active';
 
+    final imgProvider = _getProductImageProvider(product.imageUrl);
+
     return Container(
       width: 220,
       height: 270,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: AppColors.primary.withOpacity(0.08),
-        image: DecorationImage(
-          image: _getProductImageProvider(product.imageUrl, product.category),
-          fit: BoxFit.cover,
-        ),
+        image: imgProvider != null
+            ? DecorationImage(
+                image: imgProvider,
+                fit: BoxFit.cover,
+              )
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.12),
@@ -621,6 +542,25 @@ class ProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
+            if (imgProvider == null)
+              Positioned.fill(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.solar_power_rounded,
+                      color: Colors.white.withOpacity(0.18),
+                      size: 64,
+                    ),
+                  ),
+                ),
+              ),
             // Dark gradient overlay for readability
             Positioned.fill(
               child: Container(
@@ -773,16 +713,20 @@ class AdvProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imgProvider = _getProductImageProvider(product.imageUrl);
+
     return Container(
       width: 200,
       height: 270,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: AppColors.primary.withOpacity(0.08),
-        image: DecorationImage(
-          image: _getProductImageProvider(product.imageUrl, product.category),
-          fit: BoxFit.cover,
-        ),
+        image: imgProvider != null
+            ? DecorationImage(
+                image: imgProvider,
+                fit: BoxFit.cover,
+              )
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),
@@ -795,6 +739,25 @@ class AdvProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
+            if (imgProvider == null)
+              Positioned.fill(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.solar_power_rounded,
+                      color: Colors.white.withOpacity(0.18),
+                      size: 64,
+                    ),
+                  ),
+                ),
+              ),
             // Dark gradient overlay
             Positioned.fill(
               child: Container(

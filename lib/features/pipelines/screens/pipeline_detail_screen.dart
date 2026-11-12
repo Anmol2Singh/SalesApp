@@ -21,11 +21,9 @@ import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/utils/financial_year_helper.dart';
-import '../../../core/widgets/breadcrumbs.dart';
 import '../../amc/providers/amc_provider.dart';
 import '../../../core/models/amc_contract.dart';
 import '../../quotation/providers/quotation_provider.dart';
-import '../../sales_order/widgets/delivery_challan_modal.dart';
 import '../../quotation_generator/config/qg_noc_flags.dart';
 import '../../quotation_generator/data/qg_noc_repository.dart';
 import '../../quotation_generator/models/qg_noc_document.dart';
@@ -77,7 +75,23 @@ class PipelineDetailScreen extends ConsumerWidget {
             else if (pipelineAsync.valueOrNull != null && _checkAllStepsCompleted(pipelineAsync.valueOrNull!))
               TextButton.icon(
                 onPressed: () async {
+                  final pipe = pipelineAsync.valueOrNull!;
                   final db = ref.read(supabaseClientProvider);
+                  final isWorkDone = await WorkProgressService.isWorkProgressComplete(
+                    supabase: db,
+                    pipeline: pipe,
+                  );
+                  if (!isWorkDone) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Cannot mark deal complete: Both work progress and deal progress must reach 100%.'),
+                          backgroundColor: Color(0xFFD97706),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   await db.from('sales_pipelines').update({
                     'current_step': 'completed',
                     'status': 'completed',
@@ -145,47 +159,29 @@ class PipelineDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Breadcrumbs(
-            items: [
-              BreadcrumbItem(
-                label: 'Dashboard',
-                route: profile != null
-                    ? getRoleHome(profile.primaryRole)
-                    : AppRoutes.salesDashboard,
+      body: pipelineAsync.when(
+        data: (pipeline) => _PipelineDetailContent(
+          pipeline: pipeline,
+          userRole: profile?.primaryRole,
+        ),
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.textSecondary),
+              const SizedBox(height: 12),
+              Text('Error: $e'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(pipelineDetailProvider(pipelineId)),
+                child: const Text('Retry'),
               ),
-              BreadcrumbItem(label: 'Deals', route: AppRoutes.pipelines),
-              BreadcrumbItem(label: 'Deal Detail'),
             ],
           ),
-          Expanded(
-            child: pipelineAsync.when(
-              data: (pipeline) => _PipelineDetailContent(
-                pipeline: pipeline,
-                userRole: profile?.primaryRole,
-              ),
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: AppColors.textSecondary),
-                    const SizedBox(height: 12),
-                    Text('Error: $e'),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () => ref.invalidate(pipelineDetailProvider(pipelineId)),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -316,20 +312,71 @@ bool _checkAllStepsCompleted(SalesPipeline pipeline) {
       pipeline.purchaseOrder != null;
 }
 
-class _PipelineDetailContent extends ConsumerWidget {
+final workProgressCompleteProvider = FutureProvider.family<bool, String>((ref, pipelineId) async {
+  final pipeline = await ref.watch(pipelineDetailProvider(pipelineId).future);
+  final supabase = ref.read(supabaseClientProvider);
+  return WorkProgressService.isWorkProgressComplete(
+    supabase: supabase,
+    pipeline: pipeline,
+  );
+});
+
+class _PipelineDetailContent extends ConsumerStatefulWidget {
   final SalesPipeline pipeline;
   final UserRole? userRole;
 
   const _PipelineDetailContent({required this.pipeline, this.userRole});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(currentProfileProvider);
-    final allStepsFilled = _checkAllStepsCompleted(pipeline);
-    final isDealCompleted = pipeline.status == PipelineStatus.completed || allStepsFilled;
+  ConsumerState<_PipelineDetailContent> createState() => _PipelineDetailContentState();
+}
 
-    // Automatically sync completed status to DB if all steps are completed
-    if (allStepsFilled && pipeline.status != PipelineStatus.completed) {
+class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> {
+  late final ScrollController _leftScrollController;
+  late final ScrollController _middleScrollController;
+  late final ScrollController _rightScrollController;
+  bool? _liveWorkProgressComplete;
+
+  @override
+  void initState() {
+    super.initState();
+    _leftScrollController = ScrollController();
+    _middleScrollController = ScrollController();
+    _rightScrollController = ScrollController();
+  }
+
+  void _onWorkProgressEvaluated(bool isComplete) {
+    if (_liveWorkProgressComplete != isComplete) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _liveWorkProgressComplete = isComplete;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _leftScrollController.dispose();
+    _middleScrollController.dispose();
+    _rightScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pipeline = widget.pipeline;
+    final userRole = widget.userRole;
+    final profile = ref.watch(currentProfileProvider);
+    final allDealStepsFilled = _checkAllStepsCompleted(pipeline);
+    final asyncWorkDone = ref.watch(workProgressCompleteProvider(pipeline.id)).valueOrNull ?? false;
+    final isWorkProgress100 = _liveWorkProgressComplete ?? asyncWorkDone;
+    final isDealCompleted = allDealStepsFilled && isWorkProgress100;
+
+    // Automatically sync completed status to DB ONLY after BOTH work and deal progress reach 100%
+    if (isDealCompleted && pipeline.status != PipelineStatus.completed) {
       Future.microtask(() async {
         try {
           final db = ref.read(supabaseClientProvider);
@@ -340,45 +387,59 @@ class _PipelineDetailContent extends ConsumerWidget {
           ref.invalidate(pipelineDetailProvider(pipeline.id));
         } catch (_) {}
       });
+    } else if (!isDealCompleted && pipeline.status == PipelineStatus.completed) {
+      // Revert premature completed status in DB if work progress is not 100%
+      Future.microtask(() async {
+        try {
+          final db = ref.read(supabaseClientProvider);
+          await db.from('sales_pipelines').update({
+            'status': 'in_progress',
+          }).eq('id', pipeline.id);
+          ref.invalidate(pipelineDetailProvider(pipeline.id));
+        } catch (_) {}
+      });
     }
 
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: () async {
-        ref.invalidate(pipelineDetailProvider(pipeline.id));
-        await ref.read(pipelineDetailProvider(pipeline.id).future);
-        ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
-        ref.invalidate(pendingQuotationsProvider);
-      },
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 1000;
-            final showRightCards = isDealCompleted &&
-                (profile?.roles.contains(UserRole.admin) == true ||
-                    profile?.roles.contains(UserRole.sales) == true ||
-                    profile?.roles.contains(UserRole.manager) == true ||
-                    profile?.roles.contains(UserRole.salesHead) == true);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 1000;
+        final showRightCards = isDealCompleted &&
+            (profile?.roles.contains(UserRole.admin) == true ||
+                profile?.roles.contains(UserRole.sales) == true ||
+                profile?.roles.contains(UserRole.manager) == true ||
+                profile?.roles.contains(UserRole.salesHead) == true);
 
-            final banners = _buildBanners(pipeline, profile, isDealCompleted);
-            final dealProgressTracker = _buildDealProgressTracker(context, ref, pipeline, profile, isDealCompleted);
-            final stepCards = _buildStepCards(pipeline, userRole);
-            final rightCards = _buildRightCards(pipeline);
+        final banners = _buildBanners(pipeline, profile, isDealCompleted);
+        final dealProgressTracker = _buildDealProgressTracker(context, ref, pipeline, profile, isDealCompleted);
+        final stepCards = _buildStepCards(pipeline, userRole);
+        final rightCards = _buildRightCards(pipeline);
 
-            if (!isWide) {
-              // Mobile / narrow view: original single column stack
-              return Center(
+        if (!isWide) {
+          // Mobile / narrow view: original single column stack
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () async {
+              ref.invalidate(pipelineDetailProvider(pipeline.id));
+              await ref.read(pipelineDetailProvider(pipeline.id).future);
+              ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
+              ref.invalidate(pendingQuotationsProvider);
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1000),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _HeaderCard(pipeline: pipeline),
+                      _HeaderCard(pipeline: pipeline, isCompleted: isDealCompleted),
                       const SizedBox(height: 16),
                       ...banners,
-                      WorkProgressBox(pipeline: pipeline),
+                      WorkProgressBox(
+                        pipeline: pipeline,
+                        onProgressEvaluated: _onWorkProgressEvaluated,
+                      ),
                       const SizedBox(height: 16),
                       dealProgressTracker,
                       const SizedBox(height: 16),
@@ -391,68 +452,103 @@ class _PipelineDetailContent extends ConsumerWidget {
                     ],
                   ),
                 ),
-              );
-            }
+              ),
+            ),
+          );
+        }
 
-            // Desktop / wide screen: 3-section layout
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1600),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (banners.isNotEmpty) ...[
-                      ...banners,
-                    ],
-                    Row(
+        // Desktop / wide screen: 3 independently scrollable columns layout
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1600),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (banners.isNotEmpty) ...banners,
+                  Expanded(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left section: Customer detail card + Work progress
+                        // Left section: Customer detail card + Work progress (scrolls independently)
                         Expanded(
                           flex: showRightCards ? 4 : 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _HeaderCard(pipeline: pipeline),
-                              const SizedBox(height: 16),
-                              WorkProgressBox(pipeline: pipeline),
-                            ],
+                          child: Scrollbar(
+                            controller: _leftScrollController,
+                            thumbVisibility: false,
+                            child: SingleChildScrollView(
+                              controller: _leftScrollController,
+                              physics: const ClampingScrollPhysics(),
+                              padding: const EdgeInsets.only(right: 8, bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _HeaderCard(pipeline: pipeline, isCompleted: isDealCompleted),
+                                  const SizedBox(height: 16),
+                                  WorkProgressBox(
+                                    pipeline: pipeline,
+                                    onProgressEvaluated: _onWorkProgressEvaluated,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        // Middle section: Deal progress + 5 steps
+                        const SizedBox(width: 8),
+                        // Middle section: Deal progress + 5 steps (scrolls independently)
                         Expanded(
                           flex: showRightCards ? 5 : 6,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              dealProgressTracker,
-                              const SizedBox(height: 16),
-                              ...stepCards,
-                            ],
+                          child: Scrollbar(
+                            controller: _middleScrollController,
+                            thumbVisibility: false,
+                            child: SingleChildScrollView(
+                              controller: _middleScrollController,
+                              physics: const ClampingScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    dealProgressTracker,
+                                    const SizedBox(height: 16),
+                                    ...stepCards,
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                        // Right section: AMC, Warranty, NOC (if available)
+                        // Right section: AMC, Warranty, NOC (if available, scrolls independently)
                         if (showRightCards) ...[
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 8),
                           Expanded(
                             flex: 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: rightCards,
+                            child: Scrollbar(
+                              controller: _rightScrollController,
+                              thumbVisibility: false,
+                              child: SingleChildScrollView(
+                                controller: _rightScrollController,
+                                physics: const ClampingScrollPhysics(),
+                                padding: const EdgeInsets.only(left: 8, bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: rightCards,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ],
                     ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -807,8 +903,9 @@ String _getDealProductName(SalesPipeline pipeline) {
 
 class _HeaderCard extends StatelessWidget {
   final SalesPipeline pipeline;
+  final bool isCompleted;
 
-  const _HeaderCard({required this.pipeline});
+  const _HeaderCard({required this.pipeline, this.isCompleted = false});
 
   @override
   Widget build(BuildContext context) {
@@ -860,7 +957,7 @@ class _HeaderCard extends StatelessWidget {
                     child: Text(
                       isPendingApproval
                           ? '⚠️ Needs Approval'
-                          : ((_checkAllStepsCompleted(pipeline) || pipeline.status == PipelineStatus.completed)
+                          : (isCompleted
                               ? 'Completed (100%)'
                               : pipeline.status.displayName),
                       style: const TextStyle(
@@ -1640,7 +1737,11 @@ String _getStepPdfFileName(SalesPipeline pipeline, PipelineStep step, {String? v
       break;
     case PipelineStep.salesOrder:
       if (pipeline.salesOrder?.salesOrderNumber != null && pipeline.salesOrder!.salesOrderNumber.isNotEmpty) {
-        final base = pipeline.salesOrder!.salesOrderNumber.replaceAll('/', '_');
+        final formattedSo = PdfService.formatSalesOrderNumber(
+          pipeline.salesOrder!.salesOrderNumber,
+          pipeline.salesOrder?.orderDate ?? pipeline.createdAt,
+        );
+        final base = formattedSo.replaceAll('/', '_');
         return variant == 'production' ? '${base}_Production.pdf' : '$base.pdf';
       }
       break;

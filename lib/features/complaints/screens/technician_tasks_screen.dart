@@ -11,6 +11,7 @@ import '../data/models/complaint_model.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/installations/providers/installations_provider.dart';
 import '../../../features/installations/data/models/installation_model.dart';
+import '../../../features/notifications/providers/notifications_provider.dart';
 
 class TechnicianTasksScreen extends ConsumerStatefulWidget {
   final int initialTab;
@@ -22,6 +23,7 @@ class TechnicianTasksScreen extends ConsumerStatefulWidget {
 
 class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
   final TextEditingController _searchController = TextEditingController();
+  late final PageController _pageController;
   String _selectedFilter = 'All';
   late int _selectedTab;
 
@@ -29,10 +31,12 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab;
+    _pageController = PageController(initialPage: widget.initialTab);
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -163,27 +167,55 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
       return s == 'closed' || s == 'resolved' || s == 'completed';
     }).length;
 
-    // Filter by status pill
-    var filtered = currentList.where((c) {
-      final s = c.status.toLowerCase();
-      if (_selectedFilter == 'Active') return s == 'assigned' || s == 'pending' || s == 'scheduled' || s == 'open';
-      if (_selectedFilter == 'In Progress') return s == 'in_progress';
-      if (_selectedFilter == 'Pending Appr.') return s == 'pending_approval';
-      if (_selectedFilter == 'Completed') return s == 'closed' || s == 'resolved' || s == 'completed';
-      return true; // 'All'
-    }).toList();
-
-    // Filter by search query
-    final query = _searchController.text.trim().toLowerCase();
-    if (query.isNotEmpty) {
-      filtered = filtered.where((c) {
-        return c.ticketNumber.toLowerCase().contains(query) ||
-            c.title.toLowerCase().contains(query) ||
-            c.customerName.toLowerCase().contains(query) ||
-            c.customerAddress.toLowerCase().contains(query) ||
-            (c.productName?.toLowerCase().contains(query) ?? false);
+    // Filter complaints & installations for PageView sliding tabs
+    List<Complaint> filterComplaints(List<Complaint> source) {
+      var list = source.where((c) {
+        final s = c.status.toLowerCase();
+        if (_selectedFilter == 'Active') return s == 'assigned' || s == 'pending' || s == 'scheduled' || s == 'open';
+        if (_selectedFilter == 'In Progress') return s == 'in_progress';
+        if (_selectedFilter == 'Pending Appr.') return s == 'pending_approval';
+        if (_selectedFilter == 'Completed') return s == 'closed' || s == 'resolved' || s == 'completed';
+        return true;
       }).toList();
+
+      final query = _searchController.text.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        list = list.where((c) {
+          return c.ticketNumber.toLowerCase().contains(query) ||
+              c.title.toLowerCase().contains(query) ||
+              c.customerName.toLowerCase().contains(query) ||
+              c.customerAddress.toLowerCase().contains(query) ||
+              (c.productName?.toLowerCase().contains(query) ?? false);
+        }).toList();
+      }
+      return list;
     }
+
+    List<Installation> filterInstallations(List<Installation> source) {
+      var list = source.where((i) {
+        final s = i.status.toLowerCase();
+        if (_selectedFilter == 'Active') return s == 'assigned' || s == 'pending' || s == 'scheduled' || s == 'open';
+        if (_selectedFilter == 'In Progress') return s == 'in_progress';
+        if (_selectedFilter == 'Pending Appr.') return s == 'pending_approval';
+        if (_selectedFilter == 'Completed') return s == 'closed' || s == 'resolved' || s == 'completed';
+        return true;
+      }).toList();
+
+      final query = _searchController.text.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        list = list.where((i) {
+          return i.ticketNumber.toLowerCase().contains(query) ||
+              i.title.toLowerCase().contains(query) ||
+              i.customerName.toLowerCase().contains(query) ||
+              i.customerAddress.toLowerCase().contains(query) ||
+              (i.productName?.toLowerCase().contains(query) ?? false);
+        }).toList();
+      }
+      return list;
+    }
+
+    final filteredComplaints = filterComplaints(assignedComplaints);
+    final filteredInstallations = filterInstallations(assignedInstallations);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
@@ -233,6 +265,34 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
           ],
         ),
         actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final unreadCount = ref.watch(unreadNotificationCountProvider).value ?? 0;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                    tooltip: 'Notifications',
+                    onPressed: () => context.push(AppRoutes.notifications),
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh',
@@ -297,71 +357,110 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
               ),
             ),
 
-            // Tab Toggle
+            // Tab Toggle with Smooth Sliding Animation
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              height: 48,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E293B) : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _selectedTab = 0;
-                        _selectedFilter = 'All'; // reset filter on tab switch
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _selectedTab == 0 ? (isDark ? const Color(0xFF334155) : Colors.white) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: _selectedTab == 0
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                              : [],
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Complaints',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.w500,
-                            color: _selectedTab == 0 ? (isDark ? Colors.white : Colors.black) : Colors.grey.shade600,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tabWidth = constraints.maxWidth / 2;
+                  return Stack(
+                    children: [
+                      // Animated sliding pill indicator
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOutCubic,
+                        left: _selectedTab == 0 ? 0 : tabWidth,
+                        top: 0,
+                        bottom: 0,
+                        width: tabWidth,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF334155) : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _selectedTab = 1;
-                        _selectedFilter = 'All'; // reset filter on tab switch
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _selectedTab == 1 ? (isDark ? const Color(0xFF334155) : Colors.white) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: _selectedTab == 1
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                              : [],
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Installations',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w500,
-                            color: _selectedTab == 1 ? (isDark ? Colors.white : Colors.black) : Colors.grey.shade600,
+                      // Tab Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () {
+                                if (_selectedTab == 0) return;
+                                setState(() {
+                                  _selectedTab = 0;
+                                  _selectedFilter = 'All';
+                                });
+                                _pageController.animateToPage(
+                                  0,
+                                  duration: const Duration(milliseconds: 320),
+                                  curve: Curves.easeInOutCubic,
+                                );
+                              },
+                              child: Center(
+                                child: Text(
+                                  'Complaints',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 14,
+                                    color: _selectedTab == 0
+                                        ? (isDark ? Colors.white : Colors.black87)
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          Expanded(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () {
+                                if (_selectedTab == 1) return;
+                                setState(() {
+                                  _selectedTab = 1;
+                                  _selectedFilter = 'All';
+                                });
+                                _pageController.animateToPage(
+                                  1,
+                                  duration: const Duration(milliseconds: 320),
+                                  curve: Curves.easeInOutCubic,
+                                );
+                              },
+                              child: Center(
+                                child: Text(
+                                  'Installations',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 14,
+                                    color: _selectedTab == 1
+                                        ? (isDark ? Colors.white : Colors.black87)
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -388,66 +487,86 @@ class _TechnicianTasksScreenState extends ConsumerState<TechnicianTasksScreen> {
               ),
             ),
 
-            // Task List
+            // Task List with Horizontal Sliding PageView
             Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.assignment_turned_in_outlined,
-                              size: 56,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _searchController.text.isNotEmpty
-                                  ? 'No matching tasks'
-                                  : (_selectedFilter == 'All'
-                                      ? 'No ${_selectedTab == 0 ? 'Complaints' : 'Installations'} Assigned'
-                                      : 'No $_selectedFilter tasks'),
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _searchController.text.isNotEmpty
-                                  ? 'Try changing your search keywords or filter'
-                                  : 'Assigned jobs will appear here in real-time.',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                color: Colors.grey.shade500,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, idx) {
-                        final c = filtered[idx];
-                        if (_selectedTab == 0) {
-                          return _buildTaskCard(c as Complaint, isDark);
-                        } else {
-                          return _buildInstallationCard(c as Installation, isDark);
-                        }
-                      },
-                    ),
+              child: PageView(
+                controller: _pageController,
+                physics: const BouncingScrollPhysics(),
+                onPageChanged: (idx) {
+                  setState(() {
+                    _selectedTab = idx;
+                    _selectedFilter = 'All';
+                  });
+                },
+                children: [
+                  _buildTaskList(filteredComplaints, 0, isDark),
+                  _buildTaskList(filteredInstallations, 1, isDark),
+                ],
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTaskList(List<dynamic> items, int tabIndex, bool isDark) {
+    if (items.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.assignment_turned_in_outlined,
+                size: 56,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _searchController.text.isNotEmpty
+                    ? 'No matching tasks'
+                    : (_selectedFilter == 'All'
+                        ? 'No ${tabIndex == 0 ? 'Complaints' : 'Installations'} Assigned'
+                        : 'No $_selectedFilter tasks'),
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _searchController.text.isNotEmpty
+                    ? 'Try changing your search keywords or filter'
+                    : 'Assigned jobs will appear here in real-time.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  color: Colors.grey.shade500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
+      itemCount: items.length,
+      itemBuilder: (context, idx) {
+        final item = items[idx];
+        if (tabIndex == 0) {
+          return _buildTaskCard(item as Complaint, isDark);
+        } else {
+          return _buildInstallationCard(item as Installation, isDark);
+        }
+      },
     );
   }
 

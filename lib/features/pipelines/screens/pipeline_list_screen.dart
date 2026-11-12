@@ -41,6 +41,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
   int _selectedTabIndex = 1;
   String _quickFilter =
       'all'; // 'all', 'needs_approval', 'quotation', 'boq', 'factory_order'
+  DealCounts? _lastKnownCounts;
 
   @override
   void initState() {
@@ -87,6 +88,11 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
   @override
   Widget build(BuildContext context) {
     ref.watch(dealsStreamProvider);
+    final countsAsync = ref.watch(dealCountsProvider);
+    if (countsAsync.hasValue && countsAsync.value != null) {
+      _lastKnownCounts = countsAsync.value;
+    }
+    final counts = countsAsync.valueOrNull ?? _lastKnownCounts;
     final pipelinesAsync = ref.watch(pipelinesNotifierProvider);
     final profile = ref.watch(currentProfileProvider);
     final canViewAll = profile?.primaryRole == UserRole.admin ||
@@ -175,8 +181,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Refresh',
-              onPressed: () =>
-                  ref.read(pipelinesNotifierProvider.notifier).refresh(),
+              onPressed: () {
+                ref.invalidate(dealCountsProvider);
+                ref.read(pipelinesNotifierProvider.notifier).refresh();
+              },
             ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
@@ -243,7 +251,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
       ),
       body: RefreshIndicator(
         color: AppColors.primary,
-        onRefresh: () => ref.read(pipelinesNotifierProvider.notifier).refresh(),
+        onRefresh: () async {
+          ref.invalidate(dealCountsProvider);
+          await ref.read(pipelinesNotifierProvider.notifier).refresh();
+        },
         child: CustomScrollView(
           key: const PageStorageKey('pipeline_custom_scroll_view'),
           controller: _scrollController,
@@ -251,19 +262,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
           slivers: [
             // Segmented Control Tabs & Quick Filter Chips
             pipelinesAsync.maybeWhen(
-              data: (rawPipelines) {
-                final allPipelines =
-                    rawPipelines.where(isDealVisibleForUser).toList();
-                final needsActionCount = allPipelines
-                    .where((p) =>
-                        p.quotation?.status == QuotationStatus.pendingApproval)
-                    .length;
-                final activeCount = allPipelines
-                    .where((p) => p.status != PipelineStatus.completed)
-                    .length;
-                final completedCount = allPipelines
-                    .where((p) => p.status == PipelineStatus.completed)
-                    .length;
+              data: (_) {
+                final needsActionCount = counts?.needsAction ?? 0;
+                final activeCount = counts?.active ?? 0;
+                final completedCount = counts?.completed ?? 0;
 
                 return SliverToBoxAdapter(
                   child: Padding(

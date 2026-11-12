@@ -16,7 +16,6 @@ import '../../pipelines/providers/pipelines_provider.dart';
 import '../../pipelines/widgets/work_progress_box.dart';
 import '../../complaints/providers/complaints_provider.dart';
 import '../../complaints/data/models/complaint_model.dart';
-import '../../../core/models/user_role.dart';
 import '../../../core/auth/role_access.dart';
 
 class _ChallanItemRow {
@@ -86,6 +85,14 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   String _currentSource = 'sales_order'; // 'sales_order', 'boq', 'both', or 'custom'
   bool _initialized = false;
   bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCustomDeliveryPersons();
+    // Prefetch technicians immediately so they are cached before the user taps "Select person..."
+    ref.read(availableTechniciansProvider.future).catchError((_) => <TechnicianInfo>[]);
+  }
 
   @override
   void dispose() {
@@ -249,9 +256,18 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     );
   }
 
-  Future<void> _openSelectDeliveryPersonSheet(BuildContext context) async {
-    final techsAsync = ref.read(availableTechniciansProvider);
-    final List<TechnicianInfo> techs = techsAsync.value ?? [];
+  Future<void> _openSelectDeliveryPersonSheet() async {
+    List<TechnicianInfo> techs = [];
+    try {
+      final techsAsync = ref.read(availableTechniciansProvider);
+      if (techsAsync.hasValue && techsAsync.value != null && techsAsync.value!.isNotEmpty) {
+        techs = techsAsync.value!;
+      } else {
+        techs = await ref.read(availableTechniciansProvider.future);
+      }
+    } catch (_) {
+      techs = [];
+    }
     final List<Map<String, String>> allOptions = [];
 
     for (final t in techs) {
@@ -290,7 +306,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
             }).toList();
 
             return Container(
-              height: MediaQuery.of(context).size.height * 0.75,
+              height: MediaQuery.of(dialogCtx).size.height * 0.75,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,11 +505,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           final req = item.qty > 0 ? item.qty : 1.0;
           final sent = alreadySent[item.description.trim().toLowerCase()] ?? 0.0;
           final pending = (req - sent).clamp(0.0, req);
-          final defaultQty = pending > 0 ? pending : 1.0;
+          if (pending <= 0) continue; // Don't show items with zero pending quantity
           _items.add(_ChallanItemRow(
             name: item.description,
             uom: item.uom.isNotEmpty ? item.uom : 'NOS',
-            qty: defaultQty,
+            qty: pending,
             requiredQty: req,
             sentQty: sent,
             remark: item.remark,
@@ -504,11 +520,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           final req = item.qty > 0 ? item.qty : 1.0;
           final sent = alreadySent[item.description.trim().toLowerCase()] ?? 0.0;
           final pending = (req - sent).clamp(0.0, req);
-          final defaultQty = pending > 0 ? pending : 1.0;
+          if (pending <= 0) continue; // Don't show items with zero pending quantity
           _items.add(_ChallanItemRow(
             name: item.description,
             uom: item.uom.isNotEmpty ? item.uom : 'NOS',
-            qty: defaultQty,
+            qty: pending,
             requiredQty: req,
             sentQty: sent,
             remark: null,
@@ -529,11 +545,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         final req = item.qty > 0 ? item.qty : 1.0;
         final sent = alreadySent[item.component.trim().toLowerCase()] ?? 0.0;
         final pending = (req - sent).clamp(0.0, req);
-        final defaultQty = pending > 0 ? pending : 1.0;
+        if (pending <= 0) continue; // Don't show items with zero pending quantity
         _items.add(_ChallanItemRow(
           name: item.component,
           uom: item.unit.isNotEmpty ? item.unit : 'NOS',
-          qty: defaultQty,
+          qty: pending,
           requiredQty: req,
           sentQty: sent,
           remark: item.remarks,
@@ -557,10 +573,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           final req = item.qty > 0 ? item.qty : 1.0;
           final sent = alreadySent[key] ?? 0.0;
           final pending = (req - sent).clamp(0.0, req);
+          if (pending <= 0) continue;
           combined[key] = _ChallanItemRow(
             name: item.description,
             uom: item.uom.isNotEmpty ? item.uom : 'NOS',
-            qty: pending > 0 ? pending : 1.0,
+            qty: pending,
             requiredQty: req,
             sentQty: sent,
             remark: item.remark,
@@ -572,10 +589,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           final req = item.qty > 0 ? item.qty : 1.0;
           final sent = alreadySent[key] ?? 0.0;
           final pending = (req - sent).clamp(0.0, req);
+          if (pending <= 0) continue;
           combined[key] = _ChallanItemRow(
             name: item.description,
             uom: item.uom.isNotEmpty ? item.uom : 'NOS',
-            qty: pending > 0 ? pending : 1.0,
+            qty: pending,
             requiredQty: req,
             sentQty: sent,
             remark: null,
@@ -602,10 +620,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           }
         } else {
           final pending = (req - sent).clamp(0.0, req);
+          if (pending <= 0) continue;
           combined[key] = _ChallanItemRow(
             name: item.component,
             uom: item.unit.isNotEmpty ? item.unit : 'NOS',
-            qty: pending > 0 ? pending : 1.0,
+            qty: pending,
             requiredQty: req,
             sentQty: sent,
             remark: item.remarks,
@@ -613,7 +632,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         }
       }
 
-      _items.addAll(combined.values);
+      _items.addAll(combined.values.where((it) => it.pendingQty > 0));
       _syncControllers();
     });
   }
@@ -695,8 +714,8 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
 
       final so = pipeline.salesOrder;
       final baseDocRef = so?.salesOrderNumber.isNotEmpty == true
-          ? so!.salesOrderNumber
-          : pipeline.baseQuotationNumber;
+          ? PdfService.formatSalesOrderNumber(so!.salesOrderNumber, so.orderDate)
+          : (pipeline.baseQuotationNumber.isNotEmpty ? pipeline.baseQuotationNumber : 'IZY/SO/0001');
       final baseChallanNo = PdfService.formatDeliveryChallanNumber(baseDocRef, _challanDate);
 
       final nextSuffix = (existingCount + 1).toString().padLeft(2, '0');
@@ -853,11 +872,19 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         data: (pipeline) {
           _initFromPipeline(pipeline);
 
-          final salesOrderNo = pipeline.salesOrder?.salesOrderNumber.isNotEmpty == true
+          final rawSalesOrderNo = pipeline.salesOrder?.salesOrderNumber.isNotEmpty == true
               ? pipeline.salesOrder!.salesOrderNumber
               : (pipeline.baseQuotationNumber.isNotEmpty
                   ? pipeline.baseQuotationNumber
                   : (pipeline.quotation?.quotationNumber ?? '-'));
+          final salesOrderNo = rawSalesOrderNo != '-'
+              ? (pipeline.salesOrder?.salesOrderNumber.isNotEmpty == true
+                  ? PdfService.formatSalesOrderNumber(
+                      rawSalesOrderNo,
+                      pipeline.salesOrder?.orderDate ?? pipeline.createdAt,
+                    )
+                  : rawSalesOrderNo)
+              : '-';
 
           final existingChallans = WorkProgressService.getDeliveryChallans(pipeline);
 
@@ -1168,7 +1195,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                                     children: [
                                       Expanded(
                                         child: InkWell(
-                                          onTap: () => _openSelectDeliveryPersonSheet(context),
+                                          onTap: _openSelectDeliveryPersonSheet,
                                           child: Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                             decoration: BoxDecoration(

@@ -509,7 +509,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                       ? AppRoutes.adminDashboard
                       : ((isManager || (roles.contains(UserRole.salesHead) && !roles.any((r) => r == UserRole.boq || r == UserRole.factory || r == UserRole.purchase || r == UserRole.complaints || r == UserRole.installation)))
                           ? AppRoutes.salesDashboard
-                          : (isPureTechnician
+                          : ((isPureTechnician || (isTechnician && !hasAdminOrManager && !isServiceHead))
                               ? AppRoutes.technicianDashboard
                               : AppRoutes.unifiedDashboard)),
                   label: 'Dashboard',
@@ -677,7 +677,9 @@ class _AppShellState extends ConsumerState<AppShell> {
 
                 // 5. Field Operations & Service Group (Expandable)
                 if ((hasAdminOrManager || hasComplaints || hasInstallations) &&
-                    !hasAccounts) ...[
+                    !hasAccounts &&
+                    !isPureTechnician &&
+                    (!isTechnician || hasAdminOrManager || isServiceHead)) ...[
                   _buildGroupHeader(
                     label: 'Field Operations & Service',
                     icon: isFieldOpsActive
@@ -2008,7 +2010,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       return uniqueItems.values.toList();
     }
 
-    // 0.6 Technician navigation (Strictly 3 tabs whenever on technician routes or for pure technicians)
+    // 0.6 Technician navigation
     if (!isWide && (isTechnicianRoute || isPureTechnician || (isTechnician && !hasAdminOrManager && !isServiceHead))) {
       addItem(const _NavItem(
           route: AppRoutes.technicianDashboard,

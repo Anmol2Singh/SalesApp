@@ -72,6 +72,9 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
           .single();
       _pipeline = SalesPipeline.fromJson(pipelineData);
       _product = _pipeline!.product;
+      if (_product != null) {
+        ref.read(productBoqItemsProvider(_product!.id));
+      }
 
       // Load confirmed quotation (for extra specs, references, etc.)
       final quotationData = await supabase
@@ -370,18 +373,35 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
     }
   }
 
-  void _openMasterBoqListSheet(String targetScope) {
+  Future<void> _openMasterBoqListSheet(String targetScope) async {
     if (_product == null) return;
-    final boqMasterItemsAsync = ref.read(productBoqItemsProvider(_product!.id));
-    final masterItems = boqMasterItemsAsync.valueOrNull ?? [];
-
-    if (masterItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No master BOQ items configured for ${_product!.name}. You can add them in Admin Panel -> Manage BOQ Items.'),
-          backgroundColor: AppColors.warning,
+    List<ProductBoqItem> masterItems = [];
+    final currentVal = ref.read(productBoqItemsProvider(_product!.id)).valueOrNull;
+    if (currentVal != null) {
+      masterItems = currentVal;
+    } else {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
+      try {
+        masterItems = await ref.read(productBoqItemsProvider(_product!.id).future);
+      } catch (_) {}
+      if (mounted) Navigator.pop(context);
+    }
+
+    if (masterItems.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No master BOQ items configured for ${_product!.name}. You can add them in Admin Panel -> Manage BOQ Items.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
       return;
     }
 
@@ -398,12 +418,14 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
         .toList();
 
     if (availableMasterItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('All available master BOQ items are already in ${otherScope == 'company' ? 'Company Scope' : 'Customer Scope'}.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('All available master BOQ items are already in ${otherScope == 'company' ? 'Company Scope' : 'Customer Scope'}.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
       return;
     }
 
@@ -416,6 +438,8 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
 
     final selectedItemIds = <String>{};
     String searchQuery = '';
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,

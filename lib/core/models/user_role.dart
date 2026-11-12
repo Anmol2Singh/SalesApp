@@ -149,15 +149,13 @@ enum UserRole {
       this == UserRole.manager ||
       this == UserRole.serviceHead ||
       this == UserRole.installation ||
-      this == UserRole.salesHead ||
-      this == UserRole.technician;
+      this == UserRole.salesHead;
 
   bool get canAccessComplaints =>
       this == UserRole.admin ||
       this == UserRole.manager ||
       this == UserRole.serviceHead ||
-      this == UserRole.complaints ||
-      this == UserRole.technician;
+      this == UserRole.complaints;
 
   bool get canAccessBoq =>
       this == UserRole.admin ||

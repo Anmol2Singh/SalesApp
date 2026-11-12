@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../../core/router/app_router.dart';
 import 'package:salesapp/features/customer_app/data/repositories/app_repositories.dart';
 import '../../../core/widgets/logout_helper.dart';
 

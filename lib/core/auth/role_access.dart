@@ -35,7 +35,7 @@ class RoleAccess {
     return roles.any((r) => targetRoles.contains(r));
   }
 
-  /// Installation Module access: Installation staff, Service Head, Manager, Admin, Technician
+  /// Installation Module access: Installation staff, Service Head, Manager, Admin
   static bool canAccessInstallation(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
       UserRole.admin,
@@ -43,18 +43,16 @@ class RoleAccess {
       UserRole.serviceHead,
       UserRole.installation,
       UserRole.salesHead,
-      UserRole.technician,
     ]);
   }
 
-  /// Complaints Module access: Complaints staff, Service Head, Manager, Admin, Technician
+  /// Complaints Module access: Complaints staff, Service Head, Manager, Admin
   static bool canAccessComplaints(dynamic profileOrRoles) {
     return hasAnyRole(profileOrRoles, [
       UserRole.admin,
       UserRole.manager,
       UserRole.serviceHead,
       UserRole.complaints,
-      UserRole.technician,
     ]);
   }
 

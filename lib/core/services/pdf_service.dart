@@ -1659,7 +1659,23 @@ class PdfService {
     final clean = raw.trim();
     final fy = FinancialYearHelper.getFinancialYearCode(date);
     if (clean.isEmpty) return 'IZY/SO/$fy/00001';
+
+    // If clean starts with IZY/SO/
     if (clean.startsWith('IZY/SO/')) {
+      final sub = clean.substring(7); // text after 'IZY/SO/'
+      final subParts = sub.split('/');
+      if (subParts.length == 2) {
+        // Check if inverted: e.g. '00027/26-27'
+        if (RegExp(r'^\d+$').hasMatch(subParts[0]) && !RegExp(r'^\d+$').hasMatch(subParts[1])) {
+          final seq = subParts[0].padLeft(5, '0');
+          final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[1]) ? subParts[1] : fy;
+          return 'IZY/SO/$targetFy/$seq';
+        } else if (!RegExp(r'^\d+$').hasMatch(subParts[0]) && RegExp(r'^\d+$').hasMatch(subParts[1])) {
+          final seq = subParts[1].padLeft(5, '0');
+          final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[0]) ? subParts[0] : fy;
+          return 'IZY/SO/$targetFy/$seq';
+        }
+      }
       return FinancialYearHelper.formatDocumentNumber(clean, date);
     }
 
@@ -1668,10 +1684,12 @@ class PdfService {
       final parts = clean.split('/');
       if (RegExp(r'^\d+$').hasMatch(parts[0])) {
         final seq = parts[0].padLeft(5, '0');
-        return 'IZY/SO/$fy/$seq';
+        final targetFy = parts.length > 1 && RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[1]) ? parts[1] : fy;
+        return 'IZY/SO/$targetFy/$seq';
       } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
         final seq = parts[1].padLeft(5, '0');
-        return 'IZY/SO/$fy/$seq';
+        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[0]) ? parts[0] : fy;
+        return 'IZY/SO/$targetFy/$seq';
       }
     }
 
@@ -1750,7 +1768,9 @@ class PdfService {
         ),
         build: (context) => [
           // Shipping metadata card
-          if (variant != 'production') ...[
+          // For Factory (production) and BOQ (technical) variants, Customer Name & Address table
+          // is placed first, followed immediately by Destination & Expected Dispatch with no spacing in between.
+          if (variant != 'production' && variant != 'technical') ...[
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
               columnWidths: {
@@ -1805,8 +1825,196 @@ class PdfService {
                 ),
               ],
             ),
+            pw.SizedBox(height: 12),
+
+            // Bill To and Shipped To Addresses
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1),
+                1: const pw.FlexColumnWidth(1),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Customer Name & Billing Address',
+                          style: pw.TextStyle(
+                              fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Shipping Address',
+                          style: pw.TextStyle(
+                              fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                pw.TableRow(
+                  children: [
+                    // Billing Address Cell
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(_cleanText(customer.companyName),
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              _cleanText(salesOrder.billingAddress ??
+                                  customer.address),
+                              style: const pw.TextStyle(fontSize: 8)),
+                          if (customer.gstNumber != null &&
+                              customer.gstNumber!.isNotEmpty)
+                            pw.Text(
+                                'GSTIN : ${_cleanText(customer.gstNumber)}  State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold)),
+                          if (customer.phone != null &&
+                              customer.phone!.isNotEmpty)
+                            pw.Text('Phone : ${_cleanText(customer.phone)}',
+                                style: const pw.TextStyle(fontSize: 8)),
+                          if (salesOrder.partyContactPerson != null &&
+                              salesOrder.partyContactPerson!.isNotEmpty)
+                            pw.Text(
+                                'Party Contact Person : ${_cleanText(salesOrder.partyContactPerson)}',
+                                style: const pw.TextStyle(fontSize: 8)),
+                        ],
+                      ),
+                    ),
+                    // Shipping Address Cell
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(_cleanText(customer.companyName),
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              _cleanText(salesOrder.shippingAddress ??
+                                  customer.address),
+                              style: const pw.TextStyle(fontSize: 8)),
+                          if (customer.gstNumber != null &&
+                              customer.gstNumber!.isNotEmpty)
+                            pw.Text(
+                                'State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold)),
+                          pw.SizedBox(height: 10),
+                          if (salesOrder.salesman != null &&
+                              salesOrder.salesman!.isNotEmpty)
+                            pw.Text(
+                                'Salesman : ${_cleanText(salesOrder.salesman)}',
+                                style: const pw.TextStyle(fontSize: 8)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 12),
           ] else ...[
-            // Production View metadata: Destination and Expected Dispatch Date
+            // In Factory & BOQ sales order (Production & Site):
+            // 1. Customer Name & Billing Address / Shipping Address Table
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1),
+                1: const pw.FlexColumnWidth(1),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Customer Name & Billing Address',
+                          style: pw.TextStyle(
+                              fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text('Shipping Address',
+                          style: pw.TextStyle(
+                              fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                pw.TableRow(
+                  children: [
+                    // Billing Address Cell
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(_cleanText(customer.companyName),
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              _cleanText(salesOrder.billingAddress ??
+                                  customer.address),
+                              style: const pw.TextStyle(fontSize: 8)),
+                          if (customer.gstNumber != null &&
+                              customer.gstNumber!.isNotEmpty)
+                            pw.Text(
+                                'GSTIN : ${_cleanText(customer.gstNumber)}  State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold)),
+                          if (customer.phone != null &&
+                              customer.phone!.isNotEmpty)
+                            pw.Text('Phone : ${_cleanText(customer.phone)}',
+                                style: const pw.TextStyle(fontSize: 8)),
+                          if (salesOrder.partyContactPerson != null &&
+                              salesOrder.partyContactPerson!.isNotEmpty)
+                            pw.Text(
+                                'Party Contact Person : ${_cleanText(salesOrder.partyContactPerson)}',
+                                style: const pw.TextStyle(fontSize: 8)),
+                        ],
+                      ),
+                    ),
+                    // Shipping Address Cell
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(_cleanText(customer.companyName),
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              _cleanText(salesOrder.shippingAddress ??
+                                  customer.address),
+                              style: const pw.TextStyle(fontSize: 8)),
+                          if (customer.gstNumber != null &&
+                              customer.gstNumber!.isNotEmpty)
+                            pw.Text(
+                                'State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold)),
+                          pw.SizedBox(height: 10),
+                          if (salesOrder.salesman != null &&
+                              salesOrder.salesman!.isNotEmpty)
+                            pw.Text(
+                                'Salesman : ${_cleanText(salesOrder.salesman)}',
+                                style: const pw.TextStyle(fontSize: 8)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // 2. Destination & Expected Dispatch Table beneath customer name & billing address table, NO spacing in between!
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
               columnWidths: {
@@ -1827,102 +2035,8 @@ class PdfService {
                 ),
               ],
             ),
+            pw.SizedBox(height: 12),
           ],
-          pw.SizedBox(height: 12),
-
-          // Bill To and Shipped To Addresses (Visible across all Sales Order variants including Production/Factory)
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(1),
-              1: const pw.FlexColumnWidth(1),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                children: [
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Customer Name & Billing Address',
-                        style: pw.TextStyle(
-                            fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Shipping Address',
-                        style: pw.TextStyle(
-                            fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
-                  ),
-                ],
-              ),
-              pw.TableRow(
-                children: [
-                  // Billing Address Cell
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(_cleanText(customer.companyName),
-                            style: pw.TextStyle(
-                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        pw.Text(
-                            _cleanText(salesOrder.billingAddress ??
-                                customer.address),
-                            style: const pw.TextStyle(fontSize: 8)),
-                        if (customer.gstNumber != null &&
-                            customer.gstNumber!.isNotEmpty)
-                          pw.Text(
-                              'GSTIN : ${_cleanText(customer.gstNumber)}  State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
-                              style: pw.TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: pw.FontWeight.bold)),
-                        if (customer.phone != null &&
-                            customer.phone!.isNotEmpty)
-                          pw.Text('Phone : ${_cleanText(customer.phone)}',
-                              style: const pw.TextStyle(fontSize: 8)),
-                        if (salesOrder.partyContactPerson != null &&
-                            salesOrder.partyContactPerson!.isNotEmpty)
-                          pw.Text(
-                              'Party Contact Person : ${_cleanText(salesOrder.partyContactPerson)}',
-                              style: const pw.TextStyle(fontSize: 8)),
-                      ],
-                    ),
-                  ),
-                  // Shipping Address Cell
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(_cleanText(customer.companyName),
-                            style: pw.TextStyle(
-                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                        pw.Text(
-                            _cleanText(salesOrder.shippingAddress ??
-                                customer.address),
-                            style: const pw.TextStyle(fontSize: 8)),
-                        if (customer.gstNumber != null &&
-                            customer.gstNumber!.isNotEmpty)
-                          pw.Text(
-                              'State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
-                              style: pw.TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 10),
-                        if (salesOrder.salesman != null &&
-                            salesOrder.salesman!.isNotEmpty)
-                          pw.Text(
-                              'Salesman : ${_cleanText(salesOrder.salesman)}',
-                              style: const pw.TextStyle(fontSize: 8)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 12),
 
           // Line items table
           _buildSalesOrderItemsTable(salesOrder, variant),
@@ -2055,21 +2169,39 @@ class PdfService {
     final clean = raw.trim();
     final fy = FinancialYearHelper.getFinancialYearCode(date);
     if (clean.isEmpty) return 'IZY/DC/$fy/00001';
-    if (clean.startsWith('IZY/DC/')) {
-      return FinancialYearHelper.formatDocumentNumber(clean, date);
+
+    String base = clean;
+    if (base.startsWith('IZY/SO/')) {
+      base = base.replaceFirst('IZY/SO/', '');
+    } else if (base.startsWith('IZY/DC/')) {
+      base = base.replaceFirst('IZY/DC/', '');
     }
-    if (clean.startsWith('IZY/SO/')) {
-      return clean.replaceFirst('IZY/SO/', 'IZY/DC/');
+
+    final subParts = base.split('/');
+    if (subParts.length == 2) {
+      if (RegExp(r'^\d+$').hasMatch(subParts[0]) && !RegExp(r'^\d+$').hasMatch(subParts[1])) {
+        // Inverted: "00027/26-27"
+        final seq = subParts[0].padLeft(5, '0');
+        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[1]) ? subParts[1] : fy;
+        return 'IZY/DC/$targetFy/$seq';
+      } else if (!RegExp(r'^\d+$').hasMatch(subParts[0]) && RegExp(r'^\d+$').hasMatch(subParts[1])) {
+        // Standard: "26-27/00027"
+        final seq = subParts[1].padLeft(5, '0');
+        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[0]) ? subParts[0] : fy;
+        return 'IZY/DC/$targetFy/$seq';
+      }
     }
 
     if (clean.contains('/')) {
       final parts = clean.split('/');
       if (RegExp(r'^\d+$').hasMatch(parts[0])) {
         final seq = parts[0].padLeft(5, '0');
-        return 'IZY/DC/$fy/$seq';
+        final targetFy = parts.length > 1 && RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[1]) ? parts[1] : fy;
+        return 'IZY/DC/$targetFy/$seq';
       } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
         final seq = parts[1].padLeft(5, '0');
-        return 'IZY/DC/$fy/$seq';
+        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[0]) ? parts[0] : fy;
+        return 'IZY/DC/$targetFy/$seq';
       }
     }
 

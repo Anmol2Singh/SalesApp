@@ -114,12 +114,9 @@ class MainDashboard extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: scaffoldBg,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
               SliverAppBar(
                 expandedHeight: 180,
                 pinned: true,
@@ -296,68 +293,9 @@ class MainDashboard extends ConsumerWidget {
                 ],
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 14.0),
+                padding: const EdgeInsets.fromLTRB(20.0, 18.0, 20.0, 14.0),
                 sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                  // Date Range Filters
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _CustomerFilterChip(
-                            label: 'Today',
-                            selected: currentFilter == 'today',
-                            onSelected: () => ref
-                                .read(customerDashboardTimeFilterProvider
-                                    .notifier)
-                                .state = 'today',
-                          ),
-                          const SizedBox(width: 8),
-                          _CustomerFilterChip(
-                            label: 'This Week',
-                            selected: currentFilter == 'week',
-                            onSelected: () => ref
-                                .read(customerDashboardTimeFilterProvider
-                                    .notifier)
-                                .state = 'week',
-                          ),
-                          const SizedBox(width: 8),
-                          _CustomerFilterChip(
-                            label: 'This Month',
-                            selected: currentFilter == 'month',
-                            onSelected: () => ref
-                                .read(customerDashboardTimeFilterProvider
-                                    .notifier)
-                                .state = 'month',
-                          ),
-                          const SizedBox(width: 8),
-                          _CustomerFilterChip(
-                            label: 'This Year',
-                            selected: currentFilter == 'year',
-                            onSelected: () => ref
-                                .read(customerDashboardTimeFilterProvider
-                                    .notifier)
-                                .state = 'year',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // 2x2 Stats Grid
-                  _buildCustomerStatsGrid(
-                    context,
-                    ref,
-                    activeSystemsCount,
-                    activeAmcCount,
-                    complaintsCount,
-                    invoicesCount,
-                  ),
-
-                  const SizedBox(height: 16),
-
                   // [B] MY PURCHASED PRODUCTS
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -593,8 +531,6 @@ class MainDashboard extends ConsumerWidget {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 

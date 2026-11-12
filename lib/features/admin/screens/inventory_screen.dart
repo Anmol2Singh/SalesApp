@@ -80,7 +80,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             animation: _tabController.animation ?? _tabController,
             builder: (context, _) {
               final animVal = _tabController.animation?.value ?? _tabController.index.toDouble();
-              final isProducts = animVal.round() == 0;
+              final isProducts = animVal.round() == 2;
               return AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 switchInCurve: Curves.easeOutCubic,
@@ -174,10 +174,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 14),
           tabs: const [
             Tab(
-              icon: Icon(Icons.sell_outlined, size: 20),
-              text: 'Sell Products',
-            ),
-            Tab(
               icon: Icon(Icons.inventory_2_outlined, size: 20),
               text: 'Items',
             ),
@@ -185,15 +181,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               icon: Icon(Icons.list_alt_outlined, size: 20),
               text: 'Supplementary',
             ),
+            Tab(
+              icon: Icon(Icons.sell_outlined, size: 20),
+              text: 'Sell Products',
+            ),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildSellProductsTab(),
           _buildItemsTab(inventoryAsync),
           _buildSupplementaryTab(),
+          _buildSellProductsTab(),
         ],
       ),
       floatingActionButton: AnimatedBuilder(
@@ -227,38 +227,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             },
             child: activeTab == 0
                 ? FloatingActionButton.extended(
-                    key: const ValueKey('fab_products'),
+                    key: const ValueKey('fab_items'),
                     heroTag: null,
-                    tooltip: isProductAddUnlocked
-                        ? 'Add Product'
-                        : 'Product creation is locked. Enable in Admin > Configuration to add products.',
-                    backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
-                    onPressed: () {
-                      if (!isProductAddUnlocked) {
-                        _showProductAddLockedDialog(context);
-                      } else {
-                        _showAddProductDialog(context);
-                      }
-                    },
-                    icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
-                    label: Text(
-                      isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
-                      style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                    onPressed: () => _showAddItemDialog(context, ref),
+                    backgroundColor: AppColors.primary,
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: const Text(
+                      'Add Item',
+                      style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
                     ),
                   )
                 : (activeTab == 1
                     ? FloatingActionButton.extended(
-                        key: const ValueKey('fab_items'),
-                        heroTag: null,
-                        onPressed: () => _showAddItemDialog(context, ref),
-                        backgroundColor: AppColors.primary,
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        label: const Text(
-                          'Add Item',
-                          style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    : FloatingActionButton.extended(
                         key: const ValueKey('fab_supp'),
                         heroTag: null,
                         onPressed: () => _showAddSupplementaryDialog(context, ref),
@@ -267,6 +247,26 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         label: const Text(
                           'Add Supplementary',
                           style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    : FloatingActionButton.extended(
+                        key: const ValueKey('fab_products'),
+                        heroTag: null,
+                        tooltip: isProductAddUnlocked
+                            ? 'Add Product'
+                            : 'Product creation is locked. Enable in Admin > Configuration to add products.',
+                        backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+                        onPressed: () {
+                          if (!isProductAddUnlocked) {
+                            _showProductAddLockedDialog(context);
+                          } else {
+                            _showAddProductDialog(context);
+                          }
+                        },
+                        icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+                        label: Text(
+                          isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
+                          style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
                         ),
                       )),
           );

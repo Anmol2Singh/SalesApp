@@ -41,14 +41,54 @@ class BookingsListScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text(
-          'My Complaints',
-          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'My Complaints',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 10),
+            requestsAsync.maybeWhen(
+              data: (reqs) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${reqs.length}',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              orElse: () => const SizedBox.shrink(),
+            ),
+          ],
         ),
-        backgroundColor: scaffoldBg,
+        backgroundColor: const Color(0xFF1E1B4B),
+        foregroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
+            tooltip: 'Refresh Complaints',
+            onPressed: () => ref.invalidate(serviceRequestsProvider),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
+      floatingActionButtonLocation: const _CustomBottomFabLocation(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openBookingFlow(context),
         backgroundColor: AppColors.primary,
@@ -1199,5 +1239,17 @@ class BookingsListScreen extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+class _CustomBottomFabLocation extends StandardFabLocation
+    with FabEndOffsetX, FabFloatOffsetY {
+  const _CustomBottomFabLocation();
+
+  @override
+  double getOffsetY(ScaffoldPrelayoutGeometry scaffoldGeometry, double adjustment) {
+    return scaffoldGeometry.scaffoldSize.height -
+        scaffoldGeometry.floatingActionButtonSize.height -
+        16.0;
   }
 }

@@ -596,7 +596,8 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       templateConfig: templateConfig,
     );
 
-    final String cleanOrderNum = so.salesOrderNumber.replaceAll('/', '_');
+    final String formattedSoNum = PdfService.formatSalesOrderNumber(so.salesOrderNumber, so.orderDate);
+    final String cleanOrderNum = formattedSoNum.replaceAll('/', '_');
     final String fileName = variant == 'production' ? '${cleanOrderNum}_Production.pdf' : '$cleanOrderNum.pdf';
     return (bytes: bytes, fileName: fileName);
   }
@@ -873,7 +874,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                             color: AppColors.textSecondary)),
                     if (_existingSalesOrder != null)
                       Text(
-                        'Order No: ${_existingSalesOrder!.salesOrderNumber}',
+                        'Order No: ${PdfService.formatSalesOrderNumber(_existingSalesOrder!.salesOrderNumber, _existingSalesOrder!.orderDate)}',
                         style: const TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 12,

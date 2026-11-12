@@ -46,6 +46,41 @@ class CustomerDocumentsService {
     }
   }
 
+  /// Sanitizes any uploaded file name so that special characters (like #, ?, %, spaces,
+  /// brackets, etc.) are converted to safe characters, preventing Supabase Storage InvalidKey errors.
+  static String sanitizeFileName(String fileName, {String? fallbackExt}) {
+    String name = fileName.trim();
+    if (name.isEmpty) return 'document.${fallbackExt ?? "pdf"}';
+
+    // Separate extension if present
+    String ext = '';
+    final lastDot = name.lastIndexOf('.');
+    if (lastDot > 0 && lastDot < name.length - 1) {
+      ext = name.substring(lastDot).toLowerCase();
+      name = name.substring(0, lastDot);
+    } else {
+      ext = '.${fallbackExt ?? "pdf"}'.toLowerCase();
+    }
+
+    // Sanitize extension: only alphanumeric and dot
+    ext = ext.replaceAll(RegExp(r'[^a-zA-Z0-9.]'), '');
+
+    // Replace any character not in [a-zA-Z0-9_-] with '_'
+    name = name.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+
+    // Collapse multiple consecutive underscores
+    name = name.replaceAll(RegExp(r'_+'), '_');
+
+    // Remove leading and trailing underscores or hyphens
+    name = name.replaceAll(RegExp(r'^[_\\-]+|[_\\-]+$'), '');
+
+    if (name.isEmpty) {
+      name = 'document';
+    }
+
+    return '$name$ext';
+  }
+
   /// Uploads a document (PDF or image) to Supabase Storage and records metadata.
   static Future<CustomerDocument> uploadDocument({
     required SupabaseClient supabase,
@@ -58,7 +93,7 @@ class CustomerDocumentsService {
     await ensureBucket(supabase);
 
     final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : (fileType == 'pdf' ? 'pdf' : 'jpg');
-    final cleanFileName = fileName.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
+    final cleanFileName = sanitizeFileName(fileName, fallbackExt: ext);
     final uniqueId = const Uuid().v4();
     final storagePath = '$customerId/${uniqueId}_$cleanFileName';
 

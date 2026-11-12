@@ -1,5 +1,6 @@
 import 'dart:math';
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -297,6 +298,263 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     );
   }
 
+  static const List<Map<String, String>> diagnosticErrorCodes = [
+    {'code': 'E01', 'title': 'No Heating / Low Water Temp', 'desc': 'Water not reaching desired temperature setpoint'},
+    {'code': 'E02', 'title': 'Water Leakage Detected', 'desc': 'Water dripping or pooling near joints, pipes, or valves'},
+    {'code': 'E03', 'title': 'Low Water Pressure / Flow Fault', 'desc': 'Inlet water pressure is below operating limit'},
+    {'code': 'E04', 'title': 'High Pressure Protection (HP)', 'desc': 'Compressor discharge high pressure safety switch tripped'},
+    {'code': 'E05', 'title': 'Low Refrigerant / Low Pressure (LP)', 'desc': 'Refrigerant circuit pressure low or potential leak'},
+    {'code': 'E06', 'title': 'Water Flow Switch Failure', 'desc': 'No circulation detected through the heat exchanger'},
+    {'code': 'E07', 'title': 'Compressor Overload / Overheat', 'desc': 'Motor thermal overload protector tripped'},
+    {'code': 'E08', 'title': 'Inlet Water Sensor Fault', 'desc': 'Inlet temp sensor open, short-circuit, or disconnected'},
+    {'code': 'E09', 'title': 'Outlet Water Sensor Fault', 'desc': 'Outlet temp sensor open, short-circuit, or disconnected'},
+    {'code': 'E10', 'title': 'Ambient Temperature Sensor Fault', 'desc': 'Outdoor air sensor reading abnormal'},
+    {'code': 'E11', 'title': 'Evaporator Coil Sensor Fault', 'desc': 'Defrost / coil temperature sensor open or short'},
+    {'code': 'E12', 'title': 'Exhaust Gas Sensor Fault', 'desc': 'Discharge line temperature sensor abnormal'},
+    {'code': 'E13', 'title': 'Display / PCB Communication Error', 'desc': 'Communication failure between controller and main board'},
+    {'code': 'E14', 'title': 'Phase Sequence / Power Fault', 'desc': 'Reverse phase, missing phase, or abnormal 3-phase power'},
+    {'code': 'E15', 'title': 'Antifreeze Protection Active', 'desc': 'Freeze prevention mode engaged in low temperature'},
+    {'code': 'E16', 'title': 'Fan Motor Abnormal Current', 'desc': 'Fan motor blocked, overloaded, or damaged'},
+    {'code': 'E17', 'title': '4-Way Valve Fault (Defrost)', 'desc': 'Reversing valve malfunction during heating or defrost cycle'},
+    {'code': 'E18', 'title': 'EEV Valve Fault', 'desc': 'Electronic expansion valve drive error'},
+    {'code': 'E19', 'title': 'Supply Voltage Abnormal', 'desc': 'Voltage is out of safe range (<180V or >260V)'},
+    {'code': 'E20', 'title': 'Earth Leakage / MCB Tripping', 'desc': 'Breaker or ELCM trips when power is turned on'},
+    {'code': 'E21', 'title': 'Abnormal Noise or Vibration', 'desc': 'Unusual rattle or vibration from compressor or fan'},
+    {'code': 'E99', 'title': 'Other / General Maintenance', 'desc': 'General service, descaling, or inspection needed'},
+  ];
+
+  void _openSearchableErrorCodePicker() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final contentBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final borderCol = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filteredCodes = diagnosticErrorCodes.where((item) {
+              final q = searchQuery.toLowerCase().trim();
+              if (q.isEmpty) return true;
+              return item['code']!.toLowerCase().contains(q) ||
+                  item['title']!.toLowerCase().contains(q) ||
+                  item['desc']!.toLowerCase().contains(q);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: BoxDecoration(
+                color: contentBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFFD97706), size: 18),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Select Error / Diagnostic Code',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: textColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    child: TextField(
+                      autofocus: false,
+                      style: TextStyle(color: textColor, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Search by error code or symptom (e.g. E01, leakage, temp)...',
+                        hintStyle: TextStyle(color: subtitleColor, fontSize: 13),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFFF59E0B)),
+                        suffixIcon: searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 18),
+                                onPressed: () {
+                                  setModalState(() => searchQuery = '');
+                                },
+                              )
+                            : null,
+                        fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF8FAFC),
+                        filled: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: borderCol),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: borderCol),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setModalState(() => searchQuery = val);
+                      },
+                    ),
+                  ),
+                  const Divider(height: 12),
+                  Expanded(
+                    child: filteredCodes.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.search_off_rounded, size: 40, color: subtitleColor),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'No matching error code found',
+                                    style: TextStyle(color: subtitleColor, fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'You can select E99 - Other or describe the issue below',
+                                    style: TextStyle(color: subtitleColor.withOpacity(0.8), fontSize: 12),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            itemCount: filteredCodes.length,
+                            separatorBuilder: (_, __) => Divider(height: 1, color: borderCol.withOpacity(0.5)),
+                            itemBuilder: (context, idx) {
+                              final item = filteredCodes[idx];
+                              final isSelected = _errorCodeController.text.contains(item['code']!);
+                              return ListTile(
+                                dense: true,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                tileColor: isSelected
+                                    ? const Color(0xFFFEF3C7).withOpacity(isDark ? 0.2 : 0.6)
+                                    : Colors.transparent,
+                                leading: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(0xFFF59E0B)
+                                        : (isDark ? Colors.white10 : const Color(0xFFF1F5F9)),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    item['code']!,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                    ),
+                                  ),
+                                ),
+                                title: Text(
+                                  item['title']!,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                    fontSize: 13.5,
+                                    color: textColor,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  item['desc']!,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 11.5,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                                trailing: isSelected
+                                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFFD97706), size: 18)
+                                    : null,
+                                onTap: () {
+                                  setState(() {
+                                    _errorCodeController.text = '${item['code']} - ${item['title']}';
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPhotoThumbnail(String url) {
+    if (url.startsWith('data:')) {
+      try {
+        final commaIdx = url.indexOf(',');
+        if (commaIdx != -1) {
+          final bytes = base64Decode(url.substring(commaIdx + 1));
+          return Image.memory(bytes, fit: BoxFit.cover, width: 78, height: 78);
+        }
+      } catch (_) {}
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      width: 78,
+      height: 78,
+      errorBuilder: (ctx, err, stack) => const Center(
+        child: Icon(Icons.broken_image_rounded, size: 24, color: Colors.grey),
+      ),
+    );
+  }
+
   Future<void> _pickPhotoFromSource(ImageSource source) async {
     try {
       final XFile? image = await _imagePicker.pickImage(source: source, imageQuality: 70);
@@ -304,17 +562,31 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
       setState(() => _isLoading = true);
 
-      final file = File(image.path);
-      final fileExt = image.name.split('.').last;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final bytes = await image.readAsBytes();
+      final fileExt = image.name.contains('.') ? image.name.split('.').last : 'jpg';
+      final fileName = 'complaint_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
-      final supabase = Supabase.instance.client;
-      await supabase.storage.from('complaint-photos').upload(fileName, file);
-
-      final imageUrl = supabase.storage.from('complaint-photos').getPublicUrl(fileName);
+      String uploadedUrl = '';
+      try {
+        final supabase = Supabase.instance.client;
+        await supabase.storage.from('complaint-photos').uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: image.mimeType ?? 'image/$fileExt',
+            upsert: true,
+          ),
+        );
+        uploadedUrl = supabase.storage.from('complaint-photos').getPublicUrl(fileName);
+      } catch (storageError) {
+        debugPrint('Supabase complaint-photos uploadBinary fallback to data URI: $storageError');
+        final base64String = base64Encode(bytes);
+        final mime = image.mimeType ?? 'image/jpeg';
+        uploadedUrl = 'data:$mime;base64,$base64String';
+      }
 
       setState(() {
-        _uploadedPhotos.add(imageUrl);
+        _uploadedPhotos.add(uploadedUrl);
         _isLoading = false;
       });
 
@@ -363,22 +635,17 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     final contentBg = isDark ? AppColors.bgSecondary : Colors.white;
     final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
 
-    return Scaffold(
-      backgroundColor: scaffoldBg.withOpacity(0.95),
-      body: Container(
-        height: MediaQuery.of(context).size.height * 0.92,
-        margin: EdgeInsets.only(top: MediaQuery.of(context).size.height * 0.08),
-        decoration: BoxDecoration(
-          color: contentBg,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          border: Border(
-            top: BorderSide(color: borderCol, width: 1),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: contentBg,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
         ),
-        child: Column(
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
           children: [
             // Top Stepper Header Bar
             _buildStepperHeader(),
@@ -405,18 +672,20 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
   Widget _buildStepperHeader() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final contentBg = isDark ? AppColors.bgSecondary : Colors.white;
+    final contentBg = isDark ? const Color(0xFF1E293B) : Colors.white;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
-    final scaffoldBg = isDark ? AppColors.bgPrimary : AppColors.bgPrimaryLight;
+    final borderCol = isDark ? Colors.white10 : const Color(0xFFE2E8F0);
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+
+    final stepLabels = ['Diagnosis & Symptom', 'Coverage Details', 'Service Location'];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       decoration: BoxDecoration(
         color: contentBg,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
         ),
         border: Border(
           bottom: BorderSide(color: borderCol, width: 1),
@@ -427,21 +696,55 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Request Service',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1B4B).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
                     ),
+                    child: const Icon(Icons.handyman_rounded, color: Color(0xFF1E1B4B), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Request Service',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: textColor,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      Text(
+                        'Step $_currentStep of 3 • ${stepLabels[_currentStep.clamp(1, 3) - 1]}',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: subtitleColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                style: IconButton.styleFrom(
+                  backgroundColor: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 18),
                 onPressed: () => context.pop(),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Visual Stepper Steps Indicator
+          const SizedBox(height: 16),
+          // Visual Stepper Steps Indicator with labels
           Row(
             children: List.generate(3, (index) {
               final stepNum = index + 1;
@@ -451,38 +754,51 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
               return Expanded(
                 child: Row(
                   children: [
-                    Container(
-                      width: 28,
-                      height: 28,
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: isCompleted
-                            ? AppColors.success
+                            ? const Color(0xFF10B981)
                             : (isActive
-                                  ? AppColors.primary
-                                  : scaffoldBg),
+                                ? const Color(0xFF1E1B4B)
+                                : (isDark ? Colors.white10 : const Color(0xFFF1F5F9))),
                         border: Border.all(
-                          color: isActive
-                              ? AppColors.accent
-                              : borderCol,
-                          width: 1.5,
+                          color: isCompleted
+                              ? const Color(0xFF10B981)
+                              : (isActive
+                                  ? const Color(0xFFF59E0B)
+                                  : borderCol),
+                          width: isActive ? 2 : 1,
                         ),
+                        boxShadow: isActive
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF1E1B4B).withOpacity(0.2),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
                       ),
                       child: Center(
                         child: isCompleted
                             ? const Icon(
-                                Icons.check,
-                                size: 16,
+                                Icons.check_rounded,
+                                size: 18,
                                 color: Colors.white,
                               )
                             : Text(
                                 '$stepNum',
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
                                   fontWeight: FontWeight.bold,
                                   color: isActive
                                       ? Colors.white
-                                      : AppColors.textSecondary,
+                                      : subtitleColor,
                                 ),
                               ),
                       ),
@@ -490,10 +806,14 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                     if (index < 2)
                       Expanded(
                         child: Container(
-                          height: 2,
-                          color: isCompleted
-                              ? AppColors.success
-                              : borderCol,
+                          height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 6),
+                          decoration: BoxDecoration(
+                            color: isCompleted
+                                ? const Color(0xFF10B981)
+                                : (isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
                   ],
@@ -523,41 +843,85 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   // STEP 1: Issue Description
   Widget _buildStep1(List<Product> allProducts) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final contentBg = isDark ? AppColors.bgSecondary : Colors.white;
+    final contentBg = isDark ? const Color(0xFF1E293B) : Colors.white;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
+    final borderCol = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
     final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Select Affected Product',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-            fontSize: 16,
-          ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.heat_pump_rounded, color: Color(0xFF2563EB), size: 16),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Select Affected Product',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             color: contentBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderCol),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderCol, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
               value: _selectedProductId,
               dropdownColor: contentBg,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
               items: allProducts.map((p) {
                 return DropdownMenuItem(
                   value: p.productId,
-                  child: Text(
-                    '${p.productName} (${p.modelNumber})',
-                    style: TextStyle(color: textColor),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.solar_power_outlined, size: 16, color: Color(0xFF1E293B)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${p.productName} (${p.modelNumber})',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }).toList(),
@@ -568,123 +932,204 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 22),
 
-        Text(
-          'Error / Symptom Code (Optional)',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _errorCodeController,
-          style: TextStyle(color: textColor),
-          decoration: InputDecoration(
-            hintText: 'e.g. E-01, High Temp Warning, Pressure Drop...',
-            hintStyle: TextStyle(color: subtitleColor),
-            prefixIcon: const Icon(Icons.qr_code_outlined, color: AppColors.accent),
-            fillColor: contentBg,
-            filled: true,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderCol),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.accent),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              'E01 - Not Heating',
-              'E02 - Leakage Detected',
-              'E03 - Low Pressure',
-              'E04 - Thermostat Error',
-              'E05 - Power Tripping',
-            ].map((code) => Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ActionChip(
-                label: Text(code, style: TextStyle(fontSize: 11, color: textColor)),
-                backgroundColor: contentBg,
-                side: BorderSide(color: borderCol),
-                onPressed: () {
-                  setState(() => _errorCodeController.text = code);
-                },
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
               ),
-            )).toList(),
+              child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFFD97706), size: 16),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Diagnostic / Error Code (Optional)',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: _openSearchableErrorCodePicker,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: contentBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _errorCodeController.text.isNotEmpty ? const Color(0xFFF59E0B) : borderCol,
+                width: _errorCodeController.text.isNotEmpty ? 1.5 : 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.grid_view_rounded, color: Color(0xFFF59E0B), size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _errorCodeController.text.isNotEmpty
+                      ? Text(
+                          _errorCodeController.text,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : Text(
+                          'Tap to search & select error code (e.g. E01, E02...)',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: subtitleColor,
+                            fontSize: 13.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                ),
+                if (_errorCodeController.text.isNotEmpty)
+                  InkWell(
+                    onTap: () => setState(() => _errorCodeController.clear()),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(Icons.cancel_rounded, size: 18, color: subtitleColor),
+                    ),
+                  )
+                else
+                  Icon(Icons.arrow_drop_down_rounded, color: subtitleColor, size: 24),
+              ],
+            ),
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 22),
 
-        Text(
-          'Issue Details',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-            fontSize: 16,
-          ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.edit_note_rounded, color: Color(0xFF7C3AED), size: 16),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Issue Details',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         TextField(
           controller: _descriptionController,
           maxLines: 4,
           maxLength: 300,
-          style: TextStyle(color: textColor),
+          style: TextStyle(fontFamily: 'Inter', color: textColor, fontSize: 14),
           decoration: InputDecoration(
             hintText:
                 'Please describe the problem in detail (e.g. error code shown, noise frequency, leakage quantity)...',
-            hintStyle: TextStyle(color: subtitleColor),
+            hintStyle: TextStyle(fontFamily: 'Inter', color: subtitleColor, fontSize: 13.5),
             fillColor: contentBg,
             filled: true,
+            contentPadding: const EdgeInsets.all(16),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderCol),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: borderCol, width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.accent),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFF1E1B4B), width: 1.8),
             ),
           ),
+          onChanged: (_) => setState(() {}),
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
 
-        Text(
-          'Attach Photos (Optional)',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-            fontSize: 15,
-          ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.add_a_photo_rounded, color: Color(0xFF059669), size: 16),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Attach Photos (Optional)',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
             InkWell(
               onTap: _showPhotoSourceSheet,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               child: Container(
-                width: 72,
-                height: 72,
+                width: 78,
+                height: 78,
                 decoration: BoxDecoration(
                   color: contentBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: borderCol,
-                    style: BorderStyle.values[1],
-                  ), // Dashed
+                    color: const Color(0xFFF59E0B),
+                    width: 1.5,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.add_a_photo_outlined,
-                  color: AppColors.accent,
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.camera_alt_outlined,
+                      color: Color(0xFFD97706),
+                      size: 26,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Add Photo',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFB45309),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -692,22 +1137,64 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             // Photo Preview Row
             Expanded(
               child: SizedBox(
-                height: 72,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _uploadedPhotos.length,
-                  itemBuilder: (context, idx) => Container(
-                    width: 72,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      image: DecorationImage(
-                        image: NetworkImage(_uploadedPhotos[idx]),
-                        fit: BoxFit.cover,
+                height: 78,
+                child: _uploadedPhotos.isEmpty
+                    ? Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: borderCol),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Attach photos to help our technicians diagnose quickly',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: subtitleColor,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _uploadedPhotos.length,
+                        itemBuilder: (context, idx) => Stack(
+                          children: [
+                            Container(
+                              width: 78,
+                              height: 78,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: borderCol),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: _buildPhotoThumbnail(_uploadedPhotos[idx]),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 14,
+                              child: InkWell(
+                                onTap: () => setState(() => _uploadedPhotos.removeAt(idx)),
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, color: Colors.white, size: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -872,35 +1359,68 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
         ),
         const SizedBox(height: 12),
 
-        // Map Placeholder
+        // Location / Map Container
         Container(
-          height: 180,
+          height: 150,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: contentBg,
+            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: borderCol),
-            image: const DecorationImage(
-              image: NetworkImage(
-                'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&auto=format&fit=crop',
-              ),
-              fit: BoxFit.cover,
-              opacity: 0.6,
-            ),
           ),
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white24,
+          child: Stack(
+            children: [
+              // Grid pattern effect
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.1,
+                  child: GridPaper(
+                    color: AppColors.primary,
+                    divisions: 1,
+                    subdivisions: 1,
+                  ),
+                ),
               ),
-              child: const Icon(
-                Icons.my_location,
-                color: AppColors.accent,
-                size: 28,
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.primary.withOpacity(0.12),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5),
+                      ),
+                      child: const Icon(
+                        Icons.location_on_rounded,
+                        color: AppColors.primary,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Service Dispatch Location',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Technician will be routed to the address below',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: subtitleColor,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
 

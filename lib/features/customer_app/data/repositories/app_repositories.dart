@@ -119,17 +119,7 @@ class MockAuthRepository implements AuthRepository {
 }
 
 String _getDefaultProductImage(String category) {
-  final cat = category.toLowerCase();
-  if (cat.contains('barrier') || cat.contains('access')) {
-    return 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=800&auto=format&fit=crop';
-  }
-  if (cat.contains('boiler') || cat.contains('water heater') || cat.contains('swh')) {
-    return 'https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=800&auto=format&fit=crop';
-  }
-  if (cat.contains('thermostat')) {
-    return 'https://images.unsplash.com/photo-1545259742-b4fd8fea67e4?w=800&auto=format&fit=crop';
-  }
-  return 'https://images.unsplash.com/photo-1621905252507-b354bc25edac?w=800&auto=format&fit=crop';
+  return '';
 }
 
 class MockCustomerRepository implements CustomerRepository {
@@ -214,9 +204,7 @@ class MockCustomerRepository implements CustomerRepository {
       issueCategory: 'Leak Detected',
       issueDescription:
           'There is water dripping from the main outer radiator valve unit.',
-      photoUrls: [
-        'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400',
-      ],
+      photoUrls: const [],
       scheduledDate: DateTime.now(), // Today
       timeSlot: '2–5 PM',
       technicianId: 'tech_1',
@@ -1002,8 +990,8 @@ class SupabaseCustomerRepository implements CustomerRepository {
                 product_id,
                 products (id, name, category, image_urls, brochure_urls),
                 customers (id, address, company_name, customer_name),
-                sales_orders (shipping_address),
-                quotations (grand_total),
+                sales_orders (shipping_address, line_items, grand_total, status),
+                quotations (grand_total, line_items, quotation_number, status),
                 warranty_cards (start_date, end_date)
               ''')
               .inFilter('customer_id', allCustomerIds.toList())
@@ -1013,7 +1001,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           try {
             response = await _supabase
                 .from('sales_pipelines')
-                .select('*, products(*), customers(*)')
+                .select('*, products(*), customers(*), sales_orders(*), quotations(*), warranty_cards(*)')
                 .inFilter('customer_id', allCustomerIds.toList())
                 .or('status.eq.completed,current_step.eq.completed');
           } catch (_) {
@@ -1027,7 +1015,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
         try {
           final allPipes = await _supabase
               .from('sales_pipelines')
-              .select('id, created_at, customer_id, status, current_step, product_id, products(*), customers(*)')
+              .select('id, created_at, customer_id, status, current_step, product_id, products(*), customers(*), sales_orders(*), quotations(*), warranty_cards(*)')
               .or('status.eq.completed,current_step.eq.completed');
           final matchingPipes = <Map<String, dynamic>>[];
           for (final p in (allPipes as List? ?? [])) {
@@ -1132,33 +1120,72 @@ class SupabaseCustomerRepository implements CustomerRepository {
         // Quote & Sales Order data
         Map<String, dynamic>? quoteData;
         if (item['quotations'] is List && (item['quotations'] as List).isNotEmpty) {
-          final firstQ = (item['quotations'] as List).first;
-          if (firstQ is Map) quoteData = Map<String, dynamic>.from(firstQ);
+          final qList = (item['quotations'] as List).whereType<Map>().toList();
+          final withItems = qList.firstWhere(
+            (q) => q['line_items'] != null && (q['line_items'] as List? ?? []).isNotEmpty,
+            orElse: () => qList.first,
+          );
+          quoteData = Map<String, dynamic>.from(withItems);
         } else if (item['quotations'] is Map) {
           quoteData = Map<String, dynamic>.from(item['quotations'] as Map);
         }
 
         Map<String, dynamic>? soData;
         if (item['sales_orders'] is List && (item['sales_orders'] as List).isNotEmpty) {
-          final firstSo = (item['sales_orders'] as List).first;
-          if (firstSo is Map) soData = Map<String, dynamic>.from(firstSo);
+          final sList = (item['sales_orders'] as List).whereType<Map>().toList();
+          final withItems = sList.firstWhere(
+            (s) => s['line_items'] != null && (s['line_items'] as List? ?? []).isNotEmpty,
+            orElse: () => sList.first,
+          );
+          soData = Map<String, dynamic>.from(withItems);
         } else if (item['sales_orders'] is Map) {
           soData = Map<String, dynamic>.from(item['sales_orders'] as Map);
         }
 
+        // Direct query fallback for quotation if not yet loaded with line_items
+        if (quoteData == null || quoteData['line_items'] == null) {
+          try {
+            final qRes = await _supabase
+                .from('quotations')
+                .select('grand_total, line_items, quotation_number, status')
+                .eq('pipeline_id', pipelineId)
+                .order('created_at', ascending: false)
+                .limit(1)
+                .maybeSingle();
+            if (qRes != null) {
+              quoteData = Map<String, dynamic>.from(qRes);
+            }
+          } catch (_) {}
+        }
+
         String? lineItemDesc;
-        if (quoteData != null && quoteData['line_items'] is List && (quoteData['line_items'] as List).isNotEmpty) {
-          final firstLi = (quoteData['line_items'] as List).first;
-          if (firstLi is Map) {
-            lineItemDesc = firstLi['description'] as String?;
+        void findFirstItemDesc(dynamic rawItems) {
+          if (lineItemDesc != null && lineItemDesc!.isNotEmpty) return;
+          if (rawItems == null) return;
+          List list = [];
+          if (rawItems is List) {
+            list = rawItems;
+          } else if (rawItems is String && rawItems.trim().isNotEmpty) {
+            try {
+              list = jsonDecode(rawItems) as List;
+            } catch (_) {}
+          }
+          for (final it in list) {
+            if (it is Map) {
+              final desc = (it['description'] ?? it['item_name'] ?? it['name'] ?? '').toString().trim();
+              if (desc.isNotEmpty) {
+                lineItemDesc = desc;
+                break;
+              }
+            } else if (it is String && it.trim().isNotEmpty) {
+              lineItemDesc = it.trim();
+              break;
+            }
           }
         }
-        if (lineItemDesc == null && soData != null && soData['line_items'] is List && (soData['line_items'] as List).isNotEmpty) {
-          final firstSoLi = (soData['line_items'] as List).first;
-          if (firstSoLi is Map) {
-            lineItemDesc = firstSoLi['description'] as String?;
-          }
-        }
+
+        findFirstItemDesc(quoteData?['line_items']);
+        findFirstItemDesc(soData?['line_items']);
 
         final productName = productData['name'] as String? 
             ?? lineItemDesc 
@@ -1173,10 +1200,12 @@ class SupabaseCustomerRepository implements CustomerRepository {
             ?? (productData['category'] as String?)
             ?? productName;
         final String category = resolvedProductType;
-        final modelNumber = (productData['model_number'] as String?) 
-            ?? (matchedCatalog?['category'] as String?)?.toUpperCase()
-            ?? (productData['category'] as String?)?.toUpperCase() 
-            ?? 'COMMERCIAL';
+        final modelNumber = (lineItemDesc != null && lineItemDesc!.isNotEmpty)
+            ? lineItemDesc!
+            : ((productData['model_number'] as String?) 
+                ?? (matchedCatalog?['category'] as String?)?.toUpperCase()
+                ?? (productData['category'] as String?)?.toUpperCase() 
+                ?? 'COMMERCIAL');
         
         var imgList = List<String>.from(productData['image_urls'] ?? []);
         if (imgList.isEmpty && matchedCatalog != null) {
@@ -1231,7 +1260,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
               .maybeSingle();
           if (amcRes != null) {
             final rawStatus = amcRes['status'] as String? ?? 'interested';
-            amcStatus = (rawStatus == 'active') ? 'active' : (rawStatus == 'expired' ? 'expired' : 'none');
+            amcStatus = (rawStatus == 'active' || rawStatus == 'pending_setup') ? 'active' : (rawStatus == 'expired' ? 'expired' : 'none');
             final amcEndDateStr = amcRes['end_date'] as String?;
             if (amcEndDateStr != null) {
               amcExpiryDate = DateTime.tryParse(amcEndDateStr);
@@ -1263,7 +1292,16 @@ class SupabaseCustomerRepository implements CustomerRepository {
               final n = (it['name'] ?? it['item_name'] ?? it['description'] ?? '').toString().trim();
               final q = it['qty'] ?? it['quantity'];
               if (n.isNotEmpty) {
-                final str = (q != null && q.toString().isNotEmpty) ? '$n (Qty: $q)' : n;
+                String qStr = '';
+                if (q != null) {
+                  final numVal = num.tryParse(q.toString());
+                  if (numVal != null) {
+                    qStr = numVal % 1 == 0 ? numVal.toInt().toString() : numVal.toString();
+                  } else {
+                    qStr = q.toString().trim();
+                  }
+                }
+                final str = (qStr.isNotEmpty && qStr != '0') ? '$n (Qty: $qStr)' : n;
                 if (!extractedItems.contains(str)) extractedItems.add(str);
               }
             } else if (it is String && it.trim().isNotEmpty) {
@@ -1275,6 +1313,10 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
         extractFromRawItems(quoteData?['line_items']);
         extractFromRawItems(soData?['line_items']);
+
+        if (extractedItems.isEmpty && lineItemDesc != null && lineItemDesc!.isNotEmpty) {
+          extractedItems.add(lineItemDesc!);
+        }
 
         // Strict verification: only genuinely purchased/completed systems are displayed
         final pStatus = (item['status'] as String? ?? '').toLowerCase();
@@ -1324,7 +1366,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           for (final amc in (allAmc as List? ?? [])) {
             final amcPipeId = amc['pipeline_id'] as String?;
             final rawStatus = amc['status'] as String? ?? 'interested';
-            final statusStr = (rawStatus == 'active') ? 'active' : (rawStatus == 'expired' ? 'expired' : 'none');
+            final statusStr = (rawStatus == 'active' || rawStatus == 'pending_setup') ? 'active' : (rawStatus == 'expired' ? 'expired' : 'none');
             final amcEndDate = DateTime.tryParse(amc['end_date'] ?? '');
             final amcNum = amc['amc_number'] as String?;
             final visitsIncluded = amc['number_of_visits_included'] as int? ?? 0;
@@ -1473,8 +1515,8 @@ class SupabaseCustomerRepository implements CustomerRepository {
                           productId: 'old_cust_${custId}_$pIdx',
                           productName: pName,
                           modelNumber: pName.toUpperCase(),
-                          imageUrl: firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(cat),
-                          imageUrls: imgList.isNotEmpty ? imgList : [firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(cat)],
+                          imageUrl: firstImg,
+                          imageUrls: imgList,
                           purchasedDate: productPurchaseDate,
                           sellerName: 'IZYHEAT Industry',
                           amountPaid: 0.0,
@@ -1618,13 +1660,15 @@ class SupabaseCustomerRepository implements CustomerRepository {
 
         final imgList = List<String>.from(p['image_urls'] ?? []);
         final String firstImg = imgList.isNotEmpty ? imgList.first : '';
+        final baseSpecs = p['base_specs'] as Map<String, dynamic>?;
+        final caps = (baseSpecs?['capacities'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
         advertisementProducts.add(Product(
           productId: prodId,
           productName: p['name'] as String? ?? 'IZYHEAT System',
           modelNumber: p['model_number'] as String? ?? p['category'] as String? ?? 'IZY-01',
-          imageUrl: firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(p['category']?.toString() ?? ''),
-          imageUrls: imgList.isNotEmpty ? imgList : [firstImg.isNotEmpty ? firstImg : _getDefaultProductImage(p['category']?.toString() ?? '')],
+          imageUrl: firstImg,
+          imageUrls: imgList,
           purchasedDate: DateTime.now().add(const Duration(days: 3650)), // Far future to mark as NOT purchased
           sellerName: 'IZYHEAT Store',
           amountPaid: (p['base_price'] as num?)?.toDouble() ?? 0.0,
@@ -1634,6 +1678,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           serialNumber: p['hsn_code'] ?? p['id'],
           category: p['category'] as String? ?? 'other',
           brochureUrls: (p['brochure_urls'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [],
+          capacities: caps,
         ));
       }
       return advertisementProducts;
@@ -1914,31 +1959,52 @@ class SupabaseCustomerRepository implements CustomerRepository {
     // 3. Fetch finalized quotations for products purchased by customer (Tax Invoices)
     try {
       final List<dynamic> quotRows = [];
+      final List<String> customerPipeIds = [];
+      final Set<String> validCustomerNames = {};
 
-      // Query by pipelines
+      if (sessionName != null && sessionName.trim().isNotEmpty) {
+        validCustomerNames.add(sessionName.trim().toLowerCase());
+      }
+
+      // Query customer names & pipelines
       if (allCustomerIds.isNotEmpty) {
+        try {
+          final custNamesRes = await _supabase
+              .from('customers')
+              .select('customer_name, company_name, contact_person')
+              .inFilter('id', allCustomerIds.toList());
+          for (final r in (custNamesRes as List? ?? [])) {
+            final cn = (r['customer_name'] as String?)?.trim().toLowerCase();
+            final comp = (r['company_name'] as String?)?.trim().toLowerCase();
+            final cp = (r['contact_person'] as String?)?.trim().toLowerCase();
+            if (cn != null && cn.isNotEmpty) validCustomerNames.add(cn);
+            if (comp != null && comp.isNotEmpty) validCustomerNames.add(comp);
+            if (cp != null && cp.isNotEmpty) validCustomerNames.add(cp);
+          }
+        } catch (_) {}
+
         try {
           final pipeRows = await _supabase
               .from('sales_pipelines')
               .select('id, customer_id')
               .inFilter('customer_id', allCustomerIds.toList());
-          final pipeIds = (pipeRows as List).map((p) => p['id'] as String).toList();
-          if (pipeIds.isNotEmpty) {
+          customerPipeIds.addAll((pipeRows as List).map((p) => p['id'] as String));
+          if (customerPipeIds.isNotEmpty) {
             final qByPipe = await _supabase
                 .from('quotations')
-                .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final')
-                .inFilter('pipeline_id', pipeIds);
+                .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final, deleted_at')
+                .inFilter('pipeline_id', customerPipeIds);
             quotRows.addAll(qByPipe);
           }
         } catch (_) {}
       }
 
-      // Query by phone
-      if (last10.isNotEmpty) {
+      // Query by phone (only if not already resolved via pipelines)
+      if (last10.isNotEmpty && customerPipeIds.isEmpty) {
         try {
           final qByPhone = await _supabase
               .from('quotations')
-              .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final')
+              .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final, deleted_at')
               .or('customer_phone.eq.$cleanDigits,customer_phone.ilike.%$last10');
           for (final q in (qByPhone as List? ?? [])) {
             if (!quotRows.any((existing) => existing['id'] == q['id'])) {
@@ -1948,12 +2014,12 @@ class SupabaseCustomerRepository implements CustomerRepository {
         } catch (_) {}
       }
 
-      // Query by customer name (e.g. Akhilesh)
-      if (sessionName != null && sessionName.trim().isNotEmpty) {
+      // Query by customer name
+      if (sessionName != null && sessionName.trim().isNotEmpty && customerPipeIds.isEmpty) {
         try {
           final qByName = await _supabase
               .from('quotations')
-              .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final')
+              .select('id, quotation_number, customer_name, customer_phone, grand_total, line_items, created_at, order_date, status, pipeline_id, is_final, deleted_at')
               .ilike('customer_name', '%${sessionName.trim()}%');
           for (final q in (qByName as List? ?? [])) {
             if (!quotRows.any((existing) => existing['id'] == q['id'])) {
@@ -1964,9 +2030,31 @@ class SupabaseCustomerRepository implements CustomerRepository {
       }
 
       for (final q in quotRows) {
+        if (q['deleted_at'] != null) continue;
+
         final status = q['status']?.toString().toLowerCase() ?? '';
         final isFinal = q['is_final'] == true || status == 'confirmed' || status == 'won' || status == 'approved' || status == 'completed';
         if (!isFinal) continue;
+
+        final qCustName = (q['customer_name'] as String? ?? '').trim().toLowerCase();
+        final qPipeId = q['pipeline_id'] as String?;
+
+        // Strict customer isolation
+        if (customerPipeIds.isNotEmpty) {
+          if (qPipeId != null && !customerPipeIds.contains(qPipeId)) continue;
+          if (qPipeId == null) {
+            final isMatch = validCustomerNames.any((vn) => vn == qCustName || vn.contains(qCustName) || qCustName.contains(vn));
+            if (!isMatch) continue;
+          }
+        } else if (validCustomerNames.isNotEmpty) {
+          final isMatch = validCustomerNames.any((vn) => vn == qCustName || vn.contains(qCustName) || qCustName.contains(vn));
+          if (!isMatch) continue;
+        }
+
+        // Never show Le Meridian test quotations to other customers
+        if (qCustName.contains('meridian') && !validCustomerNames.any((vn) => vn.contains('meridian'))) {
+          continue;
+        }
 
         final qId = q['id'] as String;
         if (allInvoices.any((inv) => inv.invoiceId == qId)) continue;
@@ -1994,7 +2082,7 @@ class SupabaseCustomerRepository implements CustomerRepository {
           lineItems.add({'name': 'Solar / Heat Pump Equipment', 'qty': 1, 'price': grandTotal});
         }
 
-        final title = mainProductName.isNotEmpty ? 'Proforma Invoice - $mainProductName' : 'Proforma Invoice #$invNum';
+        final title = mainProductName.isNotEmpty ? mainProductName : 'Tax Invoice #$invNum';
 
         allInvoices.add(Invoice(
           invoiceId: qId,
@@ -2243,13 +2331,20 @@ class SupabaseCustomerRepository implements CustomerRepository {
       final custName = customerData['customer_name'] ?? customerData['contact_person'] ?? 'Customer';
       final custPhone = customerData['phone'] ?? '';
 
-      final productData = await _supabase
-          .from('products')
-          .select('name, model_number')
-          .eq('id', productId)
-          .single();
-      final prodName = productData['name'] ?? 'Product';
-      final modelNo = productData['model_number'] ?? '';
+      String prodName = 'Product';
+      String modelNo = '';
+      try {
+        final productData = await _supabase
+            .from('products')
+            .select('name, base_specs')
+            .eq('id', productId)
+            .maybeSingle();
+        if (productData != null) {
+          prodName = productData['name']?.toString() ?? 'Product';
+          final baseSpecs = productData['base_specs'] as Map<String, dynamic>?;
+          modelNo = baseSpecs?['model_number']?.toString() ?? '';
+        }
+      } catch (_) {}
 
       final staffResponse = await _supabase
           .from('profiles')

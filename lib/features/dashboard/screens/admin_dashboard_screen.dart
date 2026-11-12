@@ -23,6 +23,23 @@ import '../../../core/widgets/logout_helper.dart';
 
 final dashboardTimeFilterProvider = StateProvider<String>((ref) => 'month');
 
+DateTime _getFilterStartDate(String filter) {
+  final now = DateTime.now();
+  switch (filter) {
+    case 'today':
+      return DateTime(now.year, now.month, now.day);
+    case 'week':
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      return DateTime(monday.year, monday.month, monday.day);
+    case 'month':
+      return DateTime(now.year, now.month, 1);
+    case 'year':
+      return DateTime(now.year, 1, 1);
+    default:
+      return DateTime(now.year, now.month, 1);
+  }
+}
+
 final dashboardStatsProvider =
     FutureProvider<Map<String, dynamic>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
@@ -112,15 +129,55 @@ class AdminDashboardScreen extends ConsumerWidget {
     final complaints = ref.watch(complaintsProvider);
     final currentFilter = ref.watch(dashboardTimeFilterProvider);
 
-    final activeLeadsCount = leadsAsync.value
-            ?.where((l) =>
+    final startDate = _getFilterStartDate(currentFilter);
+
+    // Period-filtered pipelines based on selected time chip
+    final allPipelines = pipelinesAsync.value ?? [];
+    final periodPipelines = currentFilter == 'year'
+        ? allPipelines
+        : allPipelines.where((p) {
+            return p.createdAt.isAfter(startDate) ||
+                p.createdAt.isAtSameMomentAs(startDate) ||
+                p.updatedAt.isAfter(startDate) ||
+                p.updatedAt.isAtSameMomentAs(startDate);
+          }).toList();
+
+    // Active deals in period
+    final activeDealsInPeriod = periodPipelines.where((p) {
+      return p.status == PipelineStatus.inProgress ||
+          p.status == PipelineStatus.onHold;
+    }).toList();
+
+    // Pipeline revenue for active deals in period
+    final revenueInPeriod = activeDealsInPeriod.fold<double>(
+      0.0,
+      (sum, p) => sum + (p.quotation?.grandTotal ?? 0.0),
+    );
+
+    // Leads in period
+    final allLeads = leadsAsync.value ?? [];
+    final periodLeadsCount = currentFilter == 'year'
+        ? allLeads
+            .where((l) =>
                 l.status.toLowerCase() != 'won' &&
                 l.status.toLowerCase() != 'lost')
-            .length ??
-        0;
-    final liveComplaintsCount = complaints
-        .where((c) => c.status != 'closed' && c.status != 'resolved')
-        .length;
+            .length
+        : allLeads.where((l) {
+            return l.createdAt.isAfter(startDate) ||
+                l.createdAt.isAtSameMomentAs(startDate) ||
+                l.updatedAt.isAfter(startDate) ||
+                l.updatedAt.isAtSameMomentAs(startDate);
+          }).length;
+
+    // Complaints in period
+    final periodComplaintsCount = currentFilter == 'year'
+        ? complaints
+            .where((c) => c.status != 'closed' && c.status != 'resolved')
+            .length
+        : complaints.where((c) {
+            return c.createdAt.isAfter(startDate) ||
+                c.createdAt.isAtSameMomentAs(startDate);
+          }).length;
 
     final rawName = profile?.fullName.trim() ?? '';
     final displayName = rawName.isNotEmpty
@@ -369,20 +426,34 @@ class AdminDashboardScreen extends ConsumerWidget {
                           .toDouble(),
                     };
 
+                    final displayActiveDeals = pipelinesAsync.value != null
+                        ? activeDealsInPeriod.length
+                        : (stats['active_deals'] ?? stats['active_pipelines'] ?? 0);
+                    final displayRevenue = pipelinesAsync.value != null
+                        ? revenueInPeriod
+                        : (stats['revenue_in_pipeline'] as num? ?? 0.0).toDouble();
+                    final displayLeads = leadsAsync.value != null
+                        ? periodLeadsCount
+                        : (stats['customer_leads'] ?? 0);
+                    final displayComplaints = complaints.isNotEmpty
+                        ? periodComplaintsCount
+                        : (stats['service_complaints'] ?? 0);
+
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _StatsGrid(
-                          stats: stats,
-                          customerLeadsCount: activeLeadsCount,
-                          serviceComplaintsCount: liveComplaintsCount > 0
-                              ? liveComplaintsCount
-                              : (stats['service_complaints'] ?? 0),
+                          activeDeals: displayActiveDeals,
+                          pipelineRevenue: displayRevenue,
+                          customerLeadsCount: displayLeads,
+                          serviceComplaintsCount: displayComplaints,
                         ),
                         const SizedBox(height: 12),
                         _TrendChartCard(
                           data: trendMap,
-                          pipelines: pipelinesAsync.value ?? [],
+                          pipelines: pipelinesAsync.value != null
+                              ? periodPipelines
+                              : (pipelinesAsync.value ?? []),
                         ),
                       ],
                     );
@@ -584,21 +655,20 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _StatsGrid extends StatelessWidget {
-  final Map<String, dynamic> stats;
+  final int activeDeals;
+  final double pipelineRevenue;
   final int customerLeadsCount;
   final int serviceComplaintsCount;
 
   const _StatsGrid({
-    required this.stats,
+    required this.activeDeals,
+    required this.pipelineRevenue,
     required this.customerLeadsCount,
     required this.serviceComplaintsCount,
   });
 
   @override
   Widget build(BuildContext context) {
-    final revenue = (stats['revenue_in_pipeline'] as num? ?? 0).toDouble();
-    final activeDeals = stats['active_deals'] ?? stats['active_pipelines'] ?? 0;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth >= 800 ? 4 : 2;
@@ -622,7 +692,7 @@ class _StatsGrid extends StatelessWidget {
             ),
             _StatCard(
               title: 'Pipeline\nRevenue',
-              value: _formatCompactRevenue(revenue),
+              value: _formatCompactRevenue(pipelineRevenue),
               icon: Icons.currency_rupee,
               color: const Color(0xFF10B981),
               onTap: () => context.go(AppRoutes.pipelines),
@@ -1212,9 +1282,9 @@ class _RecentPipelineTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: badgeColor.withOpacity(0.1),
+                color: badgeColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: badgeColor.withOpacity(0.3)),
+                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
               ),
               child: Text(
                 stepName,
@@ -1249,6 +1319,14 @@ class _TrendChartCard extends StatefulWidget {
 class _TrendChartCardState extends State<_TrendChartCard> {
   String _viewMode = 'stages'; // 'stages' or 'trend'
   int? _selectedStageIndex;
+
+  @override
+  void didUpdateWidget(covariant _TrendChartCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pipelines != widget.pipelines) {
+      _selectedStageIndex = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1366,17 +1444,20 @@ class _TrendChartCardState extends State<_TrendChartCard> {
                     const SizedBox(height: 2),
                     Text(
                       _viewMode == 'stages'
-                          ? (_selectedStageIndex != null
+                          ? (_selectedStageIndex != null &&
+                                  _selectedStageIndex! < stages.length
                               ? '${stages[_selectedStageIndex!]['name']}: ${stages[_selectedStageIndex!]['count']} deals (${totalDeals > 0 ? ((stages[_selectedStageIndex!]['count'] as int) / totalDeals * 100).toStringAsFixed(0) : 0}%)'
                               : '$totalDeals total deals • $activeDeals in progress')
                           : 'Created vs. completed deal trajectory',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 11.5,
-                        fontWeight: _selectedStageIndex != null
+                        fontWeight: (_selectedStageIndex != null &&
+                                _selectedStageIndex! < stages.length)
                             ? FontWeight.w600
                             : FontWeight.normal,
-                        color: _selectedStageIndex != null
+                        color: (_selectedStageIndex != null &&
+                                _selectedStageIndex! < stages.length)
                             ? (stages[_selectedStageIndex!]['color'] as Color)
                             : (isDark
                                 ? Colors.grey.shade400

@@ -12,12 +12,9 @@ import '../../../core/models/pipeline.dart';
 import '../../../core/auth/role_access.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
-import '../../../core/models/quotation.dart';
 import '../../../core/models/sales_order.dart';
 import '../../../core/models/factory_order.dart';
-import '../../../core/models/purchase_order.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
@@ -25,8 +22,6 @@ import '../../../core/utils/financial_year_helper.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../providers/pipelines_provider.dart';
 import '../../sales_order/widgets/delivery_challan_modal.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../../core/auth/role_access.dart';
 import '../../quotation_generator/data/qg_noc_repository.dart';
 import '../../quotation_generator/models/qg_noc_document.dart';
 import '../../quotation_generator/models/qg_noc_builder_state.dart';
@@ -288,15 +283,102 @@ class WorkProgressService {
     } catch (_) {}
     return false;
   }
+
+  /// Checks whether all 5 operational phases of Work Progress are 100% completed:
+  /// 1. Quotation done
+  /// 2. Sales Order done
+  /// 3. Material & Dispatch done (factory or site dispatched, or challans recorded)
+  /// 4. Installation completed (ticket resolved or closed)
+  /// 5. NOC certificate document generated
+  static Future<bool> isWorkProgressComplete({
+    required SupabaseClient supabase,
+    required SalesPipeline pipeline,
+  }) async {
+    // 1. Quotation
+    if (pipeline.quotation == null) return false;
+
+    // 2. Sales Order
+    if (pipeline.salesOrder == null) return false;
+
+    // 3. Material & Dispatch
+    final meta = parseProgressMeta(pipeline);
+    final bool factoryDispatched = meta['factory_dispatched'] == true;
+    final deliveryChallans = getDeliveryChallans(pipeline);
+    final bool siteDispatched = meta['site_dispatched'] == true || deliveryChallans.isNotEmpty;
+    if (!factoryDispatched && !siteDispatched) return false;
+
+    // 4. Installation
+    final isInstallDone = await isInstallationComplete(supabase, pipeline.customerId, pipeline.id);
+    if (!isInstallDone) return false;
+
+    // 5. NOC
+    try {
+      final nocList = await QgNocRepository.instance.getDocumentsForPipeline(pipeline.id);
+      if (nocList.isEmpty) return false;
+    } catch (_) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /// Evaluates which operational phase in Work Progress is currently active/pending.
+  /// E.g. 'Dispatch', 'Installation', 'NOC', or 'Completed'.
+  static Future<String> getWorkProgressStage({
+    required SupabaseClient supabase,
+    required SalesPipeline pipeline,
+  }) async {
+    // 1. Quotation
+    if (pipeline.quotation == null) return 'Quotation';
+
+    // 2. Sales Order
+    if (pipeline.salesOrder == null) return 'Sales Order';
+
+    // 3. Material & Dispatch
+    final meta = parseProgressMeta(pipeline);
+    final bool factoryDispatched = meta['factory_dispatched'] == true;
+    final deliveryChallans = getDeliveryChallans(pipeline);
+    final bool siteDispatched = meta['site_dispatched'] == true || deliveryChallans.isNotEmpty;
+    if (!factoryDispatched || !siteDispatched) {
+      if (!factoryDispatched && !siteDispatched) return 'Dispatch';
+      if (!factoryDispatched) return 'Factory Dispatch';
+      return 'Site Dispatch';
+    }
+
+    // 4. Installation
+    final isInstallDone = await isInstallationComplete(supabase, pipeline.customerId, pipeline.id);
+    if (!isInstallDone) {
+      return 'Installation';
+    }
+
+    // 5. NOC
+    try {
+      final nocList = await QgNocRepository.instance.getDocumentsForPipeline(pipeline.id);
+      if (nocList.isEmpty) return 'NOC';
+    } catch (_) {
+      return 'NOC';
+    }
+
+    return 'Completed';
+  }
 }
+
+final pipelineWorkStageProvider = FutureProvider.family<String, SalesPipeline>((ref, pipeline) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  return WorkProgressService.getWorkProgressStage(
+    supabase: supabase,
+    pipeline: pipeline,
+  );
+});
 
 /// Dynamic Work Progress Tracker displaying the 5 core operational phases:
 /// Quote -> Sales Order -> Material & Dispatch -> Install -> NOC
 /// with Factory & Site sub-tracks and a dedicated Delivery Challan generator slot.
 class WorkProgressBox extends ConsumerStatefulWidget {
   final SalesPipeline pipeline;
+  final ValueChanged<bool>? onProgressEvaluated;
 
-  const WorkProgressBox({super.key, required this.pipeline});
+  const WorkProgressBox({super.key, required this.pipeline, this.onProgressEvaluated});
 
   @override
   ConsumerState<WorkProgressBox> createState() => _WorkProgressBoxState();
@@ -379,6 +461,19 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       final noc = nocList.isNotEmpty ? nocList.first : null;
 
       if (mounted) {
+        final meta = WorkProgressService.parseProgressMeta(widget.pipeline);
+        final deliveryChallans = WorkProgressService.getDeliveryChallans(widget.pipeline);
+        final bool factoryDispatched = meta['factory_dispatched'] == true;
+        final bool siteDispatched = meta['site_dispatched'] == true || deliveryChallans.isNotEmpty;
+        final bool step1QuotationDone = widget.pipeline.quotation != null;
+        final bool step2SalesOrderDone = widget.pipeline.salesOrder != null;
+        final bool step3DispatchDone = factoryDispatched || siteDispatched;
+        final bool isAllDone = step1QuotationDone &&
+            step2SalesOrderDone &&
+            step3DispatchDone &&
+            isDone &&
+            (noc != null);
+
         setState(() {
           _isInstallationCreated = isCreated;
           _isInstallationCompleted = isDone;
@@ -388,9 +483,14 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           _isNocCompleted = noc != null;
           _loadingAux = false;
         });
+
+        widget.onProgressEvaluated?.call(isAllDone);
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingAux = false);
+      if (mounted) {
+        setState(() => _loadingAux = false);
+        widget.onProgressEvaluated?.call(false);
+      }
     }
   }
 
@@ -597,12 +697,13 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
       if (mounted) Navigator.pop(context);
       if (mounted) {
+        final formattedSo = PdfService.formatSalesOrderNumber(so.salesOrderNumber, so.orderDate);
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => PdfPreviewScreen(
               pdfBytes: bytes,
-              fileName: 'SalesOrder_${so.salesOrderNumber.replaceAll('/', '_')}.pdf',
+              fileName: '${formattedSo.replaceAll('/', '_')}.pdf',
             ),
           ),
         );
@@ -1236,7 +1337,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                           const Icon(Icons.picture_as_pdf_outlined, size: 14, color: AppColors.primary),
                           const SizedBox(width: 4),
                           Text(
-                            'View SO PDF (${pipeline.salesOrder?.salesOrderNumber ?? ""})',
+                            'View SO PDF (${pipeline.salesOrder != null ? PdfService.formatSalesOrderNumber(pipeline.salesOrder!.salesOrderNumber, pipeline.salesOrder!.orderDate) : ""})',
                             style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primary),
                           ),
                         ],
