@@ -764,7 +764,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.bookInstallation,
-        builder: (context, state) => const BookInstallationScreen(),
+        builder: (context, state) => BookInstallationScreen(
+          initialCustomerId: state.uri.queryParameters['customerId'],
+          initialDealId: state.uri.queryParameters['dealId'],
+        ),
       ),
       GoRoute(
         path: '/installations/details/:id',

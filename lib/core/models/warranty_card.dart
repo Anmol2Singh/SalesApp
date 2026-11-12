@@ -19,11 +19,11 @@ class ProductWarrantyItem {
 
   factory ProductWarrantyItem.fromJson(Map<String, dynamic> json) {
     return ProductWarrantyItem(
-      productName: json['name'] as String? ?? json['product_name'] as String? ?? 'Product',
+      productName: json['name']?.toString() ?? json['product_name']?.toString() ?? 'Product',
       warrantyYears: (json['warranty_years'] as num?)?.toInt() ?? 1,
       warrantyMonths: (json['warranty_months'] as num?)?.toInt() ?? 12,
-      startDate: json['start_date'] != null ? DateTime.tryParse(json['start_date'] as String) : null,
-      endDate: json['end_date'] != null ? DateTime.tryParse(json['end_date'] as String) : null,
+      startDate: json['start_date'] != null ? DateTime.tryParse(json['start_date'].toString()) : null,
+      endDate: json['end_date'] != null ? DateTime.tryParse(json['end_date'].toString()) : null,
     );
   }
 
@@ -98,30 +98,43 @@ class WarrantyCard {
   }
 
   factory WarrantyCard.fromJson(Map<String, dynamic> json) {
+    String? amcDetailsStr;
+    if (json['amc_details'] != null) {
+      if (json['amc_details'] is String) {
+        amcDetailsStr = json['amc_details'] as String;
+      } else {
+        try {
+          amcDetailsStr = jsonEncode(json['amc_details']);
+        } catch (_) {
+          amcDetailsStr = json['amc_details'].toString();
+        }
+      }
+    }
+
     return WarrantyCard(
-      id: json['id'] as String? ?? '',
-      pipelineId: json['pipeline_id'] as String? ?? '',
-      customerId: json['customer_id'] as String? ?? '',
-      warrantyNumber: json['warranty_number'] as String? ?? json['invoice_number'] as String?,
-      invoiceNumber: json['invoice_number'] as String?,
-      amcDetails: json['amc_details'] as String?,
-      customerName: json['customer_name'] as String?,
-      customerPhone: json['customer_phone'] as String?,
-      customerEmail: json['customer_email'] as String?,
-      warrantyYears: json['warranty_years'] as int? ?? 1,
+      id: json['id']?.toString() ?? '',
+      pipelineId: json['pipeline_id']?.toString() ?? '',
+      customerId: json['customer_id']?.toString() ?? '',
+      warrantyNumber: json['warranty_number']?.toString() ?? json['invoice_number']?.toString(),
+      invoiceNumber: json['invoice_number']?.toString(),
+      amcDetails: amcDetailsStr,
+      customerName: json['customer_name']?.toString(),
+      customerPhone: json['customer_phone']?.toString(),
+      customerEmail: json['customer_email']?.toString(),
+      warrantyYears: (json['warranty_years'] as num?)?.toInt() ?? 1,
       startDate: json['start_date'] != null
-          ? DateTime.tryParse(json['start_date'] as String? ?? '')
+          ? DateTime.tryParse(json['start_date'].toString())
           : null,
       endDate: json['end_date'] != null
-          ? DateTime.tryParse(json['end_date'] as String? ?? '')
+          ? DateTime.tryParse(json['end_date'].toString())
           : null,
-      isActivated: json['is_activated'] as bool? ?? false,
-      activatedBy: json['activated_by'] as String?,
+      isActivated: json['is_activated'] == true || json['is_activated'] == 'true' || json['is_activated'] == 1,
+      activatedBy: json['activated_by']?.toString(),
       activatedAt: json['activated_at'] != null
-          ? DateTime.tryParse(json['activated_at'] as String? ?? '')
+          ? DateTime.tryParse(json['activated_at'].toString())
           : null,
       createdAt: json['created_at'] != null
-          ? (DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now())
+          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
     );
   }

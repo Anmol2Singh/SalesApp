@@ -629,8 +629,10 @@ class _LeadDetailScreenState extends ConsumerState<LeadDetailScreen> {
                     const SizedBox(height: 12),
                     _buildDetailRow(
                       Icons.calendar_today_outlined,
-                      'Created Date',
-                      '${lead.createdAt.day.toString().padLeft(2, '0')}/${lead.createdAt.month.toString().padLeft(2, '0')}/${lead.createdAt.year}',
+                      isConverted ? 'Deal Date' : 'Created Date',
+                      isConverted && lead.updatedAt != null
+                          ? '${lead.updatedAt!.day.toString().padLeft(2, '0')}/${lead.updatedAt!.month.toString().padLeft(2, '0')}/${lead.updatedAt!.year}'
+                          : '${lead.createdAt.day.toString().padLeft(2, '0')}/${lead.createdAt.month.toString().padLeft(2, '0')}/${lead.createdAt.year}',
                     ),
                     if (lead.capacity != null && lead.capacity!.isNotEmpty) ...[
                       const SizedBox(height: 12),

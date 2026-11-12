@@ -1348,22 +1348,39 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
       // If no quotation was generated in the lead, start deal at Step 1 ('quotation')
       final String initialStep = quotationIdToLink != null ? 'sales_order' : 'quotation';
 
-      // 4. Auto-create Deal in sales_pipelines
+      // 4. Auto-create Deal in sales_pipelines with current creation timestamp
       String? pipelineId;
       if (productId != null) {
         try {
+          List<Map<String, dynamic>>? steps;
+          try {
+            final wfRes = await _supabase
+                .from('workflow_templates')
+                .select('steps')
+                .eq('product_id', productId)
+                .maybeSingle();
+            if (wfRes != null && wfRes['steps'] is List) {
+              steps = List<Map<String, dynamic>>.from(
+                  (wfRes['steps'] as List).map((e) => Map<String, dynamic>.from(e as Map)));
+            }
+          } catch (_) {}
+
+          final nowIso = DateTime.now().toIso8601String();
           final pipelineRes = await _supabase.from('sales_pipelines').insert({
             'customer_id': customerId,
             'product_id': productId,
             'created_by': _userId,
             'current_step': initialStep,
             'status': 'in_progress',
+            if (steps != null) 'steps_config': steps,
             if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
+            'created_at': nowIso,
+            'updated_at': nowIso,
           }).select().single();
           pipelineId = pipelineRes['id'] as String;
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error inserting sales_pipelines on lead conversion: $e');
+        }
       }
 
       if (pipelineId != null) {
@@ -1377,15 +1394,17 @@ class LeadsNotifier extends StateNotifier<AsyncValue<List<Lead>>> {
         );
       }
 
-      // 5. Link quotation to deal if one existed
+      // 5. Link quotation to deal if one existed & set order_date to current date
       if (quotationIdToLink != null) {
         try {
+          final nowIso = DateTime.now().toIso8601String();
           await _supabase.from('quotations').update({
             'is_final': true,
             'status': 'confirmed',
+            'order_date': nowIso,
             if (pipelineId != null) 'pipeline_id': pipelineId,
             if (productId != null) 'product_id': productId,
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': nowIso,
           }).eq('id', quotationIdToLink);
         } catch (_) {}
       }

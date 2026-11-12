@@ -22,7 +22,14 @@ import '../../../core/widgets/searchable_dropdown.dart';
 import '../../../core/models/pipeline.dart';
 
 class BookInstallationScreen extends ConsumerStatefulWidget {
-  const BookInstallationScreen({super.key});
+  final String? initialCustomerId;
+  final String? initialDealId;
+
+  const BookInstallationScreen({
+    super.key,
+    this.initialCustomerId,
+    this.initialDealId,
+  });
 
   @override
   ConsumerState<BookInstallationScreen> createState() =>
@@ -51,6 +58,31 @@ class _BookInstallationScreenState
 
   final Map<String, TextEditingController> _itemQtyControllers = {};
   Map<String, Map<String, int>> _previousInstalledCounts = {};
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialCustomerId != null && widget.initialCustomerId!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadInitialCustomerAndDeal();
+      });
+    }
+  }
+
+  Future<void> _loadInitialCustomerAndDeal() async {
+    final supabase = ref.read(supabaseClientProvider);
+    try {
+      final custRes = await supabase
+          .from('customers')
+          .select()
+          .eq('id', widget.initialCustomerId!)
+          .maybeSingle();
+      if (custRes != null && mounted) {
+        final cust = Customer.fromJson(custRes);
+        _onCustomerSelected(cust);
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -164,7 +196,13 @@ class _BookInstallationScreenState
       if (mounted) {
         final pipelines = (res as List).map((p) => SalesPipeline.fromJson(p as Map<String, dynamic>)).toList();
         final completedDeals = pipelines
-            .where((p) => p.currentStep == PipelineStep.completed || p.status == PipelineStatus.completed)
+            .where((p) =>
+                p.currentStep == PipelineStep.completed ||
+                p.status == PipelineStatus.completed ||
+                p.id == widget.initialDealId ||
+                (p.stepsConfig != null &&
+                    p.stepsConfig!.isNotEmpty &&
+                    p.stepsConfig!.every((s) => s['is_completed'] == true)))
             .map((p) {
               return {
                 'id': p.id,
@@ -174,9 +212,33 @@ class _BookInstallationScreenState
             })
             .toList();
 
+        Map<String, dynamic>? autoDeal;
+        if (widget.initialDealId != null) {
+          autoDeal = completedDeals.where((d) => d['id'] == widget.initialDealId).firstOrNull;
+          if (autoDeal == null) {
+            // Find in general pipelines list even if not marked completed yet
+            final directPipe = pipelines.where((p) => p.id == widget.initialDealId).firstOrNull;
+            if (directPipe != null) {
+              autoDeal = {
+                'id': directPipe.id,
+                'products': directPipe.product != null ? {'name': directPipe.product!.name, 'id': directPipe.product!.id} : null,
+                'quotations': directPipe.quotation != null ? [{'items': directPipe.quotation!.lineItems.map((i) => i.toJson()).toList()}] : [],
+              };
+              completedDeals.add(autoDeal);
+            }
+          }
+        }
+
         setState(() {
           _customerCompletedDeals = completedDeals;
           _previousInstalledCounts = prevMap;
+          if (autoDeal != null) {
+            _selectedDeal = autoDeal;
+            final prodName = autoDeal['products']?['name'] ?? 'System';
+            _selectedProduct = prodName;
+            _titleController.text = 'Installation: $prodName';
+            _initItemQuantities();
+          }
         });
       }
     } catch (e) {

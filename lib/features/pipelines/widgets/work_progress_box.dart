@@ -216,6 +216,41 @@ class WorkProgressService {
     }).eq('id', pipelineId);
   }
 
+  /// Resolves the installation ticket corresponding strictly to a specific pipeline/deal.
+  /// Prevents cross-contamination when a customer has multiple deals with different tickets.
+  static Map<String, dynamic>? resolveInstallationForPipeline({
+    required List<dynamic> installations,
+    required String pipelineId,
+    required bool customerHasMultipleDeals,
+  }) {
+    // 1. Strict match by tagged Deal ID
+    for (final item in installations) {
+      final m = Map<String, dynamic>.from(item as Map);
+      final notes = (m['notes'] ?? '').toString();
+      final dealMatch = RegExp(r'Deal ID:\s*([a-zA-Z0-9\-]+)').firstMatch(notes);
+      if (dealMatch != null) {
+        final matchedDealId = dealMatch.group(1)?.trim();
+        if (matchedDealId == pipelineId) {
+          return m;
+        }
+      }
+    }
+
+    // 2. Fallback only if the customer has strictly 1 deal AND the ticket is not assigned to a different deal
+    if (!customerHasMultipleDeals) {
+      for (final item in installations) {
+        final m = Map<String, dynamic>.from(item as Map);
+        final notes = (m['notes'] ?? '').toString();
+        final dealMatch = RegExp(r'Deal ID:\s*([a-zA-Z0-9\-]+)').firstMatch(notes);
+        if (dealMatch == null) {
+          return m;
+        }
+      }
+    }
+
+    return null;
+  }
+
   /// Checks whether an installation ticket for this customer & pipeline is completed (resolved or closed).
   static Future<bool> isInstallationComplete(
     SupabaseClient supabase,
@@ -226,16 +261,29 @@ class WorkProgressService {
       final instList = await supabase
           .from('installations')
           .select('id, status, notes, customer_id')
-          .or('customer_id.eq.$customerId,notes.ilike.%Deal ID: $pipelineId%');
+          .eq('customer_id', customerId);
 
-      if (instList.isNotEmpty) {
-        for (final item in instList) {
-          final m = Map<String, dynamic>.from(item as Map);
-          final s = (m['status']?.toString() ?? '').toLowerCase();
-          if (s == 'resolved' || s == 'closed') {
-            return true;
-          }
+      bool hasMultipleDeals = false;
+      try {
+        final dealsRes = await supabase
+            .from('sales_pipelines')
+            .select('id')
+            .eq('customer_id', customerId)
+            .isFilter('deleted_at', null);
+        if ((dealsRes as List).length > 1) {
+          hasMultipleDeals = true;
         }
+      } catch (_) {}
+
+      final ticket = resolveInstallationForPipeline(
+        installations: (instList as List? ?? []),
+        pipelineId: pipelineId,
+        customerHasMultipleDeals: hasMultipleDeals,
+      );
+
+      if (ticket != null) {
+        final s = (ticket['status']?.toString() ?? '').toLowerCase();
+        return s == 'resolved' || s == 'closed';
       }
     } catch (_) {}
     return false;
@@ -286,28 +334,43 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     final pId = widget.pipeline.id;
 
     try {
-      // 1. Check installations
+      // 1. Check installations strictly for this deal / pipeline
       final instList = await supabase
           .from('installations')
           .select('id, ticket_number, status, notes, customer_id')
-          .or('customer_id.eq.$custId,notes.ilike.%Deal ID: $pId%');
+          .eq('customer_id', custId)
+          .order('created_at', ascending: false);
+
+      bool hasMultipleDeals = false;
+      try {
+        final dealsRes = await supabase
+            .from('sales_pipelines')
+            .select('id')
+            .eq('customer_id', custId)
+            .isFilter('deleted_at', null);
+        if ((dealsRes as List).length > 1) {
+          hasMultipleDeals = true;
+        }
+      } catch (_) {}
+
+      final ticket = WorkProgressService.resolveInstallationForPipeline(
+        installations: (instList as List? ?? []),
+        pipelineId: pId,
+        customerHasMultipleDeals: hasMultipleDeals,
+      );
 
       bool isCreated = false;
       bool isDone = false;
       String? tNum;
       String sStatus = 'none';
 
-      if (instList.isNotEmpty) {
+      if (ticket != null) {
         isCreated = true;
-        for (final item in instList) {
-          final m = Map<String, dynamic>.from(item as Map);
-          final s = (m['status']?.toString() ?? '').toLowerCase();
-          tNum = m['ticket_number']?.toString();
-          sStatus = s;
-          if (s == 'resolved' || s == 'closed') {
-            isDone = true;
-            break;
-          }
+        tNum = ticket['ticket_number']?.toString();
+        final s = (ticket['status']?.toString() ?? '').toLowerCase();
+        sStatus = s;
+        if (s == 'resolved' || s == 'closed') {
+          isDone = true;
         }
       }
 
@@ -588,7 +651,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           children: [
             if (_isInstallationCompleted) ...[
               const Text(
-                'Customer installation ticket has been completed and resolved!',
+                'Customer installation ticket for this deal has been completed and resolved!',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
               ),
               const SizedBox(height: 8),
@@ -609,7 +672,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
               ),
             ] else if (_isInstallationCreated) ...[
               const Text(
-                'An installation ticket has been created for this customer, but is not yet marked as resolved/closed.',
+                'An installation ticket has been created for this deal, but is not yet marked as resolved/closed.',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
               ),
               const SizedBox(height: 8),
@@ -630,7 +693,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
               ),
             ] else ...[
               const Text(
-                'No installation ticket found for this customer. To complete this step and unlock NOC, an installation ticket must be created and marked resolved.',
+                'No installation ticket found for this deal. To complete this step and unlock NOC, an installation ticket must be created and marked resolved.',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
               ),
             ],
@@ -638,18 +701,32 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          if (!_isInstallationCreated)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push('${AppRoutes.bookInstallation}?customerId=${widget.pipeline.customerId}&dealId=${widget.pipeline.id}');
+              },
+              child: const Text('Book Installation Ticket'),
+            )
+          else
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.go(AppRoutes.installationsList);
+              },
+              child: const Text('Go to Installations'),
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.go(AppRoutes.installationsList);
-            },
-            child: const Text('Go to Installations'),
-          ),
         ],
       ),
     );

@@ -18,12 +18,13 @@ final warrantyCardProvider = FutureProvider.family<WarrantyCard?, String>((ref, 
         .from('warranty_cards')
         .select()
         .eq('pipeline_id', pipelineId)
-        .maybeSingle();
+        .order('created_at', ascending: false)
+        .limit(1);
 
-    if (data == null) return null;
-    return WarrantyCard.fromJson(data);
-  } catch (e) {
-    // Gracefully fallback if table does not exist or fetch fails
+    if (data == null || (data as List).isEmpty) return null;
+    return WarrantyCard.fromJson(Map<String, dynamic>.from(data.first as Map));
+  } catch (e, stack) {
+    debugPrint('Error fetching warranty card: $e\n$stack');
     return null;
   }
 });
@@ -85,7 +86,10 @@ class _WarrantyCardScreenState extends ConsumerState<WarrantyCardScreen> {
     final canActivate = profile?.primaryRole.canActivateWarrantyCard ?? false;
 
     final pData = pipelineAsync.value;
-    final isCompleted = pData?['status'] == 'completed' || pData?['current_step'] == 'completed';
+    final isCompleted = pData == null ||
+        pData['status'] == 'completed' ||
+        pData['current_step'] == 'completed' ||
+        (pData['steps_config'] is List && (pData['steps_config'] as List).isNotEmpty && (pData['steps_config'] as List).every((s) => s is Map && s['is_completed'] == true));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -672,9 +676,25 @@ class _WarrantyCardScreenState extends ConsumerState<WarrantyCardScreen> {
         'is_activated': false,
       };
 
-      await supabase.from('warranty_cards').insert(payload);
+      // If an existing warranty card already exists for this deal, update it; otherwise insert
+      final existing = await supabase
+          .from('warranty_cards')
+          .select('id')
+          .eq('pipeline_id', widget.pipelineId)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if ((existing as List).isNotEmpty) {
+        final existingId = existing.first['id'];
+        await supabase.from('warranty_cards').update(payload).eq('id', existingId);
+      } else {
+        await supabase.from('warranty_cards').insert(payload);
+      }
+
       ref.invalidate(warrantyCardProvider(widget.pipelineId));
+      await ref.refresh(warrantyCardProvider(widget.pipelineId).future);
       if (mounted) {
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Warranty Card generated successfully!'), backgroundColor: AppColors.success),
         );

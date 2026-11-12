@@ -7,12 +7,10 @@ import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/sales_order.dart';
-import '../../../core/models/inventory_item.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
-import '../../admin/providers/inventory_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../pipelines/widgets/work_progress_box.dart';
@@ -620,146 +618,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     });
   }
 
-  Future<void> _openAddInventoryItemSheet(BuildContext context) async {
-    List<InventoryItem> inventoryItems = ref.read(inventoryProvider).value ?? [];
 
-    if (inventoryItems.isEmpty) {
-      final supabase = ref.read(supabaseClientProvider);
-      try {
-        final res = await supabase.from('inventory_items').select().order('item_name');
-        inventoryItems = (res as List).map((e) => InventoryItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        String searchQuery = '';
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final filtered = inventoryItems.where((it) {
-              final q = searchQuery.toLowerCase().trim();
-              if (q.isEmpty) return true;
-              return it.itemName.toLowerCase().contains(q) ||
-                  (it.hsnSac != null && it.hsnSac!.toLowerCase().contains(q));
-            }).toList();
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.75,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.inventory_2_outlined, color: AppColors.primary, size: 22),
-                          SizedBox(width: 8),
-                          Text(
-                            'Select Item from Inventory',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Search items by name or keyword...',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    ),
-                    onChanged: (val) => setModalState(() => searchQuery = val),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No matching items found in company inventory.',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, idx) {
-                              final it = filtered[idx];
-                              final uom = (it.uom != null && it.uom!.isNotEmpty) ? it.uom! : 'NOS';
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                                  child: const Icon(Icons.widgets_outlined, size: 16, color: AppColors.primary),
-                                ),
-                                title: Text(
-                                  it.itemName,
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13.5,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Unit: $uom',
-                                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-                                ),
-                                trailing: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                    minimumSize: const Size(60, 30),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                  ),
-                                  onPressed: () {
-                                    Navigator.pop(ctx);
-                                    setState(() {
-                                      _items.add(_ChallanItemRow(
-                                        name: it.itemName,
-                                        uom: uom,
-                                        qty: 1.0,
-                                        requiredQty: null,
-                                        remark: null,
-                                      ));
-                                      _syncControllers();
-                                    });
-                                  },
-                                  child: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   void _updateItemQty(int idx, double delta) {
     setState(() {
@@ -1396,23 +1255,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                               ),
                             ],
                           ),
-                          OutlinedButton.icon(
-                            onPressed: () => _openAddInventoryItemSheet(context),
-                            icon: const Icon(Icons.add_shopping_cart, size: 14),
-                            label: const Text('+ Add from Inventory', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              minimumSize: const Size(60, 30),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'Items strictly from inventory. Rates and amounts are not printed on delivery challans.',
+                        'Items fetched from deal orders. Rates and amounts are not printed on delivery challans.',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 11.5,
@@ -1430,19 +1277,8 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                               Icon(Icons.inventory_2_outlined, size: 36, color: Colors.grey.shade400),
                               const SizedBox(height: 8),
                               const Text(
-                                'No items in this challan yet.',
+                                'No items available to dispatch from the selected source.',
                                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                              ),
-                              const SizedBox(height: 8),
-                              ElevatedButton.icon(
-                                onPressed: () => _openAddInventoryItemSheet(context),
-                                icon: const Icon(Icons.add, size: 14),
-                                label: const Text('Add Items from Inventory'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
                               ),
                             ],
                           ),
