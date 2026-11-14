@@ -1139,7 +1139,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
     // Live Step 4: Installation
     final bool step4InstallDone = _isInstallationCompleted;
-    final bool step4InstallActive = (step3DispatchDone || deliveryChallans.isNotEmpty) && !step4InstallDone;
+    final bool step4InstallActive = (step3DispatchDone || _isInstallationCreated) && !step4InstallDone;
 
     // Live Step 5: NOC
     final bool step5NocDone = _isNocCompleted;
@@ -1560,46 +1560,51 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           _buildVerticalNode(
             isCompleted: step4InstallDone,
             isActive: step4InstallActive,
-            isLocked: !step3DispatchDone && deliveryChallans.isEmpty,
+            isLocked: !step3DispatchDone && !_isInstallationCreated,
             title: 'Installation',
             statusText: step4InstallDone
                 ? 'Done'
                 : (_isInstallationCreated
                     ? 'In Progress'
-                    : ((step3DispatchDone || deliveryChallans.isNotEmpty) ? 'Ready' : 'Locked')),
+                    : (step3DispatchDone ? 'Ready' : 'Locked')),
             statusColor: step4InstallDone
                 ? AppColors.success
                 : (_isInstallationCreated
                     ? const Color(0xFFD97706)
-                    : ((step3DispatchDone || deliveryChallans.isNotEmpty) ? const Color(0xFF2563EB) : AppColors.textDisabled)),
-            onTap: _showInstallationDialog,
+                    : (step3DispatchDone ? const Color(0xFF2563EB) : AppColors.textDisabled)),
+            onTap: (step3DispatchDone || _isInstallationCreated) ? _showInstallationDialog : null,
             child: Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 8),
-              child: Row(
-                children: [
-                  if (_isInstallationCreated && _installationTicketNumber != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _installationTicketNumber!,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
-                      ),
+              child: (_isInstallationCreated || step3DispatchDone)
+                  ? Row(
+                      children: [
+                        if (_isInstallationCreated && _installationTicketNumber != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _installationTicketNumber!,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        InkWell(
+                          onTap: _showInstallationDialog,
+                          child: Text(
+                            _isInstallationCreated ? 'View Ticket & Status ➔' : 'Assign / Check Installation ➔',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                          ),
+                        ),
+                      ],
+                    )
+                  : const Text(
+                      'Unlocks automatically once Material & Dispatch step is completed.',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.textDisabled),
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                  InkWell(
-                    onTap: _showInstallationDialog,
-                    child: Text(
-                      _isInstallationCreated ? 'View Ticket & Status ➔' : 'Assign / Check Installation ➔',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
 

@@ -7,6 +7,7 @@ class InventoryItem {
   final String? uom;
   final double price;
   final int warrantyMonths;
+  final double gstRate;
   final DateTime createdAt;
 
   InventoryItem({
@@ -16,6 +17,7 @@ class InventoryItem {
     this.uom,
     this.price = 0.0,
     this.warrantyMonths = 12,
+    this.gstRate = 18.0,
     required this.createdAt,
   });
 
@@ -27,6 +29,7 @@ class InventoryItem {
       uom: json['uom'] as String?,
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       warrantyMonths: (json['warranty_months'] as num?)?.toInt() ?? 12,
+      gstRate: (json['gst_rate'] as num?)?.toDouble() ?? 18.0,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -39,6 +42,7 @@ class InventoryItem {
       'uom': uom,
       'price': price,
       'warranty_months': warrantyMonths,
+      'gst_rate': gstRate,
       'created_at': createdAt.toIso8601String(),
     };
   }

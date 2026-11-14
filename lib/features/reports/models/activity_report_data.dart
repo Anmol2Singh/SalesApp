@@ -7,6 +7,7 @@ class ActivityReportData {
   final List<Map<String, dynamic>> leads;
   final List<Map<String, dynamic>> prospects;
   final List<Map<String, dynamic>> conversions;
+  final List<Map<String, dynamic>> dailyTasks;
 
   ActivityReportData({
     required this.customers,
@@ -17,6 +18,7 @@ class ActivityReportData {
     this.leads = const [],
     this.prospects = const [],
     this.conversions = const [],
+    this.dailyTasks = const [],
   });
 }
 

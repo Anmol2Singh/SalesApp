@@ -520,6 +520,7 @@ class ExcelService {
     }
 
     final summaryRows = [
+      ['Daily Tasks Completed', data.dailyTasks.length.toString(), userName, dateStr],
       ['Prospects Added', data.prospects.length.toString(), userName, dateStr],
       ['Leads Added', data.leads.length.toString(), userName, dateStr],
       ['Lead Communications Logged', data.communications.length.toString(), userName, dateStr],
@@ -533,6 +534,35 @@ class ExcelService {
       for (int c = 0; c < summaryRows[r].length; c++) {
         final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1));
         cell.value = TextCellValue(summaryRows[r][c]);
+      }
+    }
+
+    // Daily Tasks Sheet
+    if (data.dailyTasks.isNotEmpty) {
+      final dtSheet = excel['Daily Tasks'];
+      final dtHeaders = ['Sr. No.', 'Customer / Prospect', 'Task Description', 'Completed At', 'Staff Member', 'Role'];
+      for (int i = 0; i < dtHeaders.length; i++) {
+        final cell = dtSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = TextCellValue(dtHeaders[i]);
+        cell.cellStyle = CellStyle(bold: true, backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'), fontColorHex: ExcelColor.fromHexString('#FFFFFF'));
+      }
+      for (int r = 0; r < data.dailyTasks.length; r++) {
+        final dt = data.dailyTasks[r];
+        final completedAt = dt['completed_at'] != null
+            ? (DateTime.tryParse(dt['completed_at'].toString())?.toLocal())
+            : null;
+        final timeStr = completedAt != null ? _dateFormat.format(completedAt) : '-';
+        final rowData = [
+          (r + 1).toString(),
+          dt['customer_name']?.toString() ?? '-',
+          dt['task_description']?.toString() ?? '-',
+          timeStr,
+          dt['user_name']?.toString() ?? userName,
+          dt['user_role']?.toString() ?? '-',
+        ];
+        for (int c = 0; c < rowData.length; c++) {
+          dtSheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1)).value = TextCellValue(rowData[c]);
+        }
       }
     }
 

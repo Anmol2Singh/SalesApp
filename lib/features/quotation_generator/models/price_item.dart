@@ -44,6 +44,7 @@ class PriceItem {
   final PriceRowType amountType;
   final int numericAmount; // Stored in rupees as integer to prevent float inaccuracies
   final String customText;
+  final double gstPercent;
 
   const PriceItem({
     required this.serialNo,
@@ -56,6 +57,7 @@ class PriceItem {
     this.amountType = PriceRowType.extra,
     this.numericAmount = 0,
     this.customText = '',
+    this.gstPercent = 18.0,
   });
 
   String get displayAmount {
@@ -99,6 +101,7 @@ class PriceItem {
     PriceRowType? amountType,
     int? numericAmount,
     String? customText,
+    double? gstPercent,
   }) {
     return PriceItem(
       serialNo: serialNo ?? this.serialNo,
@@ -111,6 +114,7 @@ class PriceItem {
       amountType: amountType ?? this.amountType,
       numericAmount: numericAmount ?? this.numericAmount,
       customText: customText ?? this.customText,
+      gstPercent: gstPercent ?? this.gstPercent,
     );
   }
 
@@ -125,6 +129,8 @@ class PriceItem {
     'amountType': amountType.name,
     'numericAmount': numericAmount,
     'customText': customText,
+    'gst_percent': gstPercent,
+    'gstPercent': gstPercent,
   };
 
   factory PriceItem.fromJson(Map<String, dynamic> json) {
@@ -139,6 +145,7 @@ class PriceItem {
       amountType: PriceRowType.fromString(json['amountType'] as String? ?? 'extra'),
       numericAmount: (json['numericAmount'] as num? ?? 0).toInt(),
       customText: json['customText'] as String? ?? '',
+      gstPercent: (json['gst_percent'] as num? ?? json['gstPercent'] as num? ?? 18.0).toDouble(),
     );
   }
 

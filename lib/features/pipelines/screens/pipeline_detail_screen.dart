@@ -1692,6 +1692,7 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
         product: product,
         variant: variant ?? 'commercial',
         templateConfig: templateConfig,
+        quotation: pipeline.quotation,
       );
     case PipelineStep.boq:
       if (pipeline.boq == null) throw Exception('BOQ data not found');

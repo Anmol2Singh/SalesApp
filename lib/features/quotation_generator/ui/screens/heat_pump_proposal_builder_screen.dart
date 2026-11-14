@@ -152,6 +152,17 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           _isRestoredFromDraft = false;
         } else {
           _draft = savedDraft;
+          _draft!.items = freshDraft.items;
+          _draft!.supplementaryItems = freshDraft.supplementaryItems;
+          _draft!.subtotal = freshDraft.subtotal;
+          _draft!.supplementarySubtotal = freshDraft.supplementarySubtotal;
+          _draft!.cgstRate = freshDraft.cgstRate;
+          _draft!.sgstRate = freshDraft.sgstRate;
+          _draft!.igstRate = freshDraft.igstRate;
+          _draft!.cgstAmount = freshDraft.cgstAmount;
+          _draft!.sgstAmount = freshDraft.sgstAmount;
+          _draft!.igstAmount = freshDraft.igstAmount;
+          _draft!.grandTotal = freshDraft.grandTotal;
           _isRestoredFromDraft = true;
         }
 

@@ -182,10 +182,12 @@ class QgProposalDraft {
     final parsedItems = q.lineItems.map<ParsedItemResult>((raw) {
       final desc = raw['description']?.toString() ?? '';
       final qty = (raw['qty'] as num?)?.toInt() ?? 1;
-      final rate = (raw['unit_price'] as num?)?.toDouble() ?? 0.0;
-      final amt = (raw['total'] as num?)?.toDouble() ?? 0.0;
+      final rate = (raw['unit_price'] as num? ?? raw['item_rate'] as num? ?? raw['rate'] as num?)?.toDouble() ?? 0.0;
+      final amt = (raw['total'] as num? ?? raw['amount'] as num?)?.toDouble() ?? 0.0;
+      final gst = (raw['gst_percent'] as num? ?? raw['gstPercent'] as num? ?? raw['gst_rate'] as num?)?.toDouble() ?? 18.0;
       final modelId = raw['model_id']?.toString() ?? raw['modelId']?.toString();
-      return QgItemParser.parseLineItem(desc, qty: qty, rate: rate, amount: amt, modelId: modelId);
+      return QgItemParser.parseLineItem(desc, qty: qty, rate: rate, amount: amt, modelId: modelId)
+          .copyWith(gstPercent: gst);
     }).toList();
 
     // 2. Classify items and identify primary Heat Pump line by type
@@ -373,6 +375,7 @@ class QgProposalDraft {
           'qty': (qVal != null && qVal > 0) ? qVal : 1,
           'rate': (st['rate'] as num?)?.toDouble() ?? 0.0,
           'amount': (st['amount'] as num?)?.toDouble() ?? 0.0,
+          'gst_percent': (st['gst_percent'] as num? ?? st['gstPercent'] as num? ?? 18.0).toDouble(),
         };
       }).toList(),
       paymentTerms: List<Map<String, dynamic>>.from(q.paymentTerms),
@@ -806,8 +809,10 @@ class QgProposalDraft {
         amount: it.amount.round(),
         hpKw: it.hpKw?.toDouble(),
         systemLph: it.tankCapacityLitres,
+        gstPercent: it.gstPercent,
         metadata: {
           'type': it.type.name,
+          'gst_percent': it.gstPercent,
           'hpModel': it.hpModel,
           'tankMaterial': it.type == ParsedItemType.tank ? (parsedTank?.material ?? tankMaterial) : it.tankMaterial,
           'isPressurized': it.type == ParsedItemType.tank ? (parsedTank?.isPressurized ?? isTankPressurized) : it.isPressurized,
@@ -838,7 +843,12 @@ class QgProposalDraft {
         rowType = PriceRowType.included;
       }
 
-      final desc = term;
+      final cleanTerm = term
+          .replaceAll(
+              RegExp(r'\s*-\s*(Extra|Included|NA)', caseSensitive: false), '')
+          .trim();
+      final desc = cleanTerm;
+      final suppGst = (supp['gst_percent'] as num? ?? supp['gstPercent'] as num? ?? 18.0).toDouble();
 
       mappedExtraRows.add(PriceItem(
         serialNo: (items.length + i + 1).toString().padLeft(2, '0'),
@@ -848,6 +858,7 @@ class QgProposalDraft {
         amountType: rowType,
         customText: isNa ? 'NA' : '',
         numericAmount: totalNum,
+        gstPercent: suppGst,
       ));
     }
 
@@ -879,6 +890,43 @@ class QgProposalDraft {
         }
       }
     }
+
+    double effectiveGst = cgstAmount + sgstAmount + igstAmount;
+    if (effectiveGst <= 0 && grandTotal > (subtotal + supplementarySubtotal)) {
+      effectiveGst = grandTotal - (subtotal + supplementarySubtotal);
+    }
+    if (effectiveGst <= 0) {
+      double itemGst = 0;
+      for (final it in items) {
+        itemGst += it.amount * (it.gstPercent / 100);
+      }
+      for (final st in supplementaryItems) {
+        final isExtra = (st['type'] ?? '').toString().toLowerCase() == 'extra';
+        if (isExtra) {
+          final amt = (st['amount'] as num?)?.toDouble() ??
+              (((st['rate'] as num?)?.toDouble() ?? 0) *
+                  ((st['qty'] as num?)?.toDouble() ?? 1));
+          final gstP = (st['gst_percent'] as num? ??
+                  st['gstPercent'] as num? ??
+                  18.0)
+              .toDouble();
+          itemGst += amt * (gstP / 100);
+        }
+      }
+      if (itemGst > 0) {
+        effectiveGst = itemGst;
+      }
+    }
+
+    final double effectiveGstPercent = (cgstRate + sgstRate + igstRate) > 0
+        ? (cgstRate + sgstRate + igstRate)
+        : (effectiveGst > 0 && subtotal > 0
+            ? ((effectiveGst / subtotal) * 100)
+            : 18.0);
+
+    final int resolvedGrandTotal = grandTotal > 0
+        ? grandTotal.round()
+        : (subtotal + supplementarySubtotal + effectiveGst).round();
 
     return GeneratorQuotation(
       id: quotationId,
@@ -924,11 +972,11 @@ class QgProposalDraft {
       tankRate: (isAllInOne || isWallMounted) ? 0 : (hasTank ? tankRate.round() : 0),
       priceRows: mappedPriceRows,
       subtotal: subtotal.round(),
-      gstPercent: cgstRate + sgstRate,
-      gstAmount: (cgstAmount + sgstAmount).round(),
-      grossTotal: (subtotal + cgstAmount + sgstAmount).round(),
-      grandTotal: grandTotal.round(),
-      netPayable: grandTotal.round(),
+      gstPercent: effectiveGstPercent,
+      gstAmount: effectiveGst.round(),
+      grossTotal: (subtotal + effectiveGst).round(),
+      grandTotal: resolvedGrandTotal,
+      netPayable: resolvedGrandTotal,
       paymentSplitAdvance: advSplit,
       paymentSplitDelivery: delSplit,
       paymentSplitCommissioning: commSplit,

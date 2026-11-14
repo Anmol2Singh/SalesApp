@@ -56,7 +56,11 @@ class PriceRow {
   final int? ratePerLtr;
   final int? systemRate;
   final int? discountAmount;
+  final double? gstPercent;
   final Map<String, dynamic>? metadata;
+
+  double get effectiveGstPercent =>
+      gstPercent ?? (metadata?['gst_percent'] as num?)?.toDouble() ?? 18.0;
 
   const PriceRow({
     required this.id,
@@ -74,6 +78,7 @@ class PriceRow {
     this.ratePerLtr,
     this.systemRate,
     this.discountAmount,
+    this.gstPercent,
     this.metadata,
   }) : amount = amount ?? (status == PriceRowStatus.priced ? (qty * rate) : 0);
 
@@ -97,6 +102,7 @@ class PriceRow {
     int? ratePerLtr,
     int? systemRate,
     int? discountAmount,
+    double? gstPercent,
     Map<String, dynamic>? metadata,
   }) {
     final newStatus = status ?? this.status;
@@ -120,6 +126,7 @@ class PriceRow {
       ratePerLtr: ratePerLtr ?? this.ratePerLtr,
       systemRate: systemRate ?? this.systemRate,
       discountAmount: discountAmount ?? this.discountAmount,
+      gstPercent: gstPercent ?? this.gstPercent,
       metadata: metadata ?? this.metadata,
     );
   }
@@ -140,6 +147,7 @@ class PriceRow {
         'ratePerLtr': ratePerLtr,
         'systemRate': systemRate,
         'discountAmount': discountAmount,
+        'gst_percent': effectiveGstPercent,
         'metadata': metadata,
       };
 
@@ -172,6 +180,7 @@ class PriceRow {
       ratePerLtr: (json['ratePerLtr'] as num?)?.toInt(),
       systemRate: (json['systemRate'] as num?)?.toInt(),
       discountAmount: (json['discountAmount'] as num?)?.toInt(),
+      gstPercent: (json['gst_percent'] as num? ?? json['gstPercent'] as num?)?.toDouble(),
       metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }

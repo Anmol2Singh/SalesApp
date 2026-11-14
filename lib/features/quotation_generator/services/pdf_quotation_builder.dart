@@ -1440,6 +1440,7 @@ class PdfQuotationBuilder {
           _th('Qty'),
           _th('Rate/\nLiter'),
           _th('System Rate'),
+          _th('GST\n%'),
           _th('AMOUNT'),
         ],
       ),
@@ -1447,6 +1448,7 @@ class PdfQuotationBuilder {
 
     pw.TableRow buildExtraRow(String sr, String desc,
         {String qty = '',
+        String gstStr = '',
         String rateStr = '',
         String amtStr = '',
         bool isExtra = false}) {
@@ -1459,6 +1461,7 @@ class PdfQuotationBuilder {
           _tc(qty, center: true),
           _tc('', center: true),
           _tc(rateStr, center: true),
+          _tc(gstStr, center: true),
           _tc(amtStr.isNotEmpty ? amtStr : (isExtra ? 'Extra' : 'Included'),
               center: true),
         ],
@@ -1589,6 +1592,7 @@ class PdfQuotationBuilder {
               _tc(qtyStr, center: true),
               _tc('', center: true),
               _tc(rateStr, center: true),
+              _tc('${r.effectiveGstPercent.toStringAsFixed(0)}%', center: true),
               _tc(amtStr.isEmpty ? 'Included' : amtStr, center: true),
             ],
           ),
@@ -1644,6 +1648,7 @@ class PdfQuotationBuilder {
             _tc('$hpQty', center: true),
             _tc('', center: true),
             _tc(hpRateStr, center: true),
+            _tc('${q.gstPercent.toStringAsFixed(0)}%', center: true),
             _tc(hpAmountStr.isEmpty ? 'Included' : hpAmountStr, center: true),
           ],
         ),
@@ -1668,6 +1673,7 @@ class PdfQuotationBuilder {
               _tc('', center: true),
               _tc(PriceCalculator.formatIndianCurrency(q.tankRate),
                   center: true),
+              _tc('${q.gstPercent.toStringAsFixed(0)}%', center: true),
               _tc(PriceCalculator.formatIndianCurrency(q.tankRate * tankQty),
                   center: true),
             ],
@@ -1680,19 +1686,19 @@ class PdfQuotationBuilder {
     int supplementaryTotal = 0;
     if (q.extraPriceRows.isNotEmpty) {
       for (final it in q.extraPriceRows) {
-        String desc = it.description.trim();
-        final hadExtraInDesc = desc.toLowerCase().contains('extra');
-        desc = desc
-            .replaceAll(
-                RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '')
-            .trim();
+        String baseDesc = it.description.trim();
         final isExtraSelection = it.amountType == PriceRowType.extra ||
-            hadExtraInDesc ||
+            it.description.toLowerCase().contains('extra') ||
             (it.amountType == PriceRowType.customText &&
                 it.customText.toLowerCase().contains('extra'));
+        baseDesc = baseDesc
+            .replaceAll(
+                RegExp(r'\s*-\s*(Extra|Included|NA)', caseSensitive: false), '')
+            .trim();
         final isCharged = (it.amountType == PriceRowType.extra ||
                 it.amountType == PriceRowType.amount) &&
             it.numericAmount > 0;
+        final desc = baseDesc;
         final amt = isCharged
             ? PriceCalculator.formatIndianCurrency(it.numericAmount)
             : '';
@@ -1714,6 +1720,9 @@ class PdfQuotationBuilder {
           (rowIdx++).toString().padLeft(2, '0'),
           desc,
           qty: qtyStr,
+          gstStr: isCharged
+              ? '${it.gstPercent.toStringAsFixed(0)}%'
+              : (isExtraSelection ? '${it.gstPercent.toStringAsFixed(0)}%' : '-'),
           rateStr: rateStr,
           amtStr: amt,
           isExtra: isExtraSelection,
@@ -1729,17 +1738,25 @@ class PdfQuotationBuilder {
         if (d.contains('tank') || d.contains('storage')) continue;
         if (r.description == '-' || r.description.trim().isEmpty) continue;
 
-        String desc = r.description.trim();
-        final hadExtraInDesc = desc.toLowerCase().contains('extra');
-        desc = desc
+        String baseDesc = r.description.trim();
+        final hadExtraInDesc = baseDesc.toLowerCase().contains('extra');
+        final hadIncludedInDesc = baseDesc.toLowerCase().contains('included');
+        baseDesc = baseDesc
             .replaceAll(
-                RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '')
+                RegExp(r'\s*-\s*(Extra|Included|NA)', caseSensitive: false), '')
             .trim();
         final isExtraSelection =
             r.status == PriceRowStatus.extra || hadExtraInDesc;
         final isCharged = (r.status == PriceRowStatus.extra ||
                 r.status == PriceRowStatus.priced) &&
             r.amount > 0;
+        final isIncluded = !isCharged &&
+            !isExtraSelection &&
+            (r.status == PriceRowStatus.included || hadIncludedInDesc);
+        final termType = (isCharged || isExtraSelection)
+            ? 'Extra'
+            : (isIncluded ? 'Included' : '');
+        final desc = termType.isNotEmpty ? '$baseDesc - $termType' : baseDesc;
         final amt =
             isCharged ? PriceCalculator.formatIndianCurrency(r.amount) : '';
         if (isCharged) {
@@ -1752,6 +1769,7 @@ class PdfQuotationBuilder {
           (rowIdx++).toString().padLeft(2, '0'),
           desc,
           qty: qtyStr,
+          gstStr: isCharged ? '${r.effectiveGstPercent.toStringAsFixed(0)}%' : (isExtraSelection ? '${r.effectiveGstPercent.toStringAsFixed(0)}%' : '-'),
           rateStr: rateStr,
           amtStr: amt,
           isExtra: isExtraSelection,
@@ -1772,13 +1790,14 @@ class PdfQuotationBuilder {
           ),
           columnWidths: {
             0: const pw.FixedColumnWidth(26),
-            1: const pw.FixedColumnWidth(215),
+            1: const pw.FixedColumnWidth(183),
             2: const pw.FixedColumnWidth(42),
             3: const pw.FixedColumnWidth(38),
             4: const pw.FixedColumnWidth(24),
             5: const pw.FixedColumnWidth(42),
             6: const pw.FixedColumnWidth(58),
-            7: const pw.FixedColumnWidth(62),
+            7: const pw.FixedColumnWidth(32),
+            8: const pw.FixedColumnWidth(62),
           },
           children: tableRows,
         ),
@@ -1847,7 +1866,7 @@ class PdfQuotationBuilder {
                   alignment: pw.Alignment.centerRight,
                   padding: const pw.EdgeInsets.symmetric(
                       vertical: 2.5, horizontal: 8),
-                  child: pw.Text('GST 18%',
+                  child: pw.Text('GST Amount',
                       style: pw.TextStyle(
                           fontSize: 8, fontWeight: pw.FontWeight.bold)),
                 ),
@@ -1856,7 +1875,13 @@ class PdfQuotationBuilder {
                   padding: const pw.EdgeInsets.symmetric(
                       vertical: 2.5, horizontal: 4),
                   child: pw.Text(
-                      PriceCalculator.formatIndianCurrency(q.gstAmount),
+                      PriceCalculator.formatIndianCurrency(
+                        q.gstAmount > 0
+                            ? q.gstAmount
+                            : ((q.grandTotal - (q.subtotal + supplementaryTotal)) > 0
+                                ? (q.grandTotal - (q.subtotal + supplementaryTotal)).round()
+                                : 0),
+                      ),
                       style: pw.TextStyle(
                           fontSize: 8, fontWeight: pw.FontWeight.bold)),
                 ),
@@ -2226,18 +2251,20 @@ class PdfQuotationBuilder {
               ? {
                   0: const pw.FixedColumnWidth(26),
                   1: const pw.FlexColumnWidth(3.0),
-                  2: const pw.FixedColumnWidth(32),
+                  2: const pw.FixedColumnWidth(30),
                   3: const pw.FixedColumnWidth(55),
-                  4: const pw.FixedColumnWidth(65),
-                  5: const pw.FixedColumnWidth(70),
+                  4: const pw.FixedColumnWidth(55),
+                  5: const pw.FixedColumnWidth(32),
+                  6: const pw.FixedColumnWidth(65),
                 }
               : {
                   0: const pw.FixedColumnWidth(26),
-                  1: const pw.FlexColumnWidth(3.1),
-                  2: const pw.FixedColumnWidth(35),
+                  1: const pw.FlexColumnWidth(3.0),
+                  2: const pw.FixedColumnWidth(32),
                   3: const pw.FixedColumnWidth(28),
-                  4: const pw.FixedColumnWidth(65),
-                  5: const pw.FixedColumnWidth(70),
+                  4: const pw.FixedColumnWidth(60),
+                  5: const pw.FixedColumnWidth(32),
+                  6: const pw.FixedColumnWidth(65),
                 },
           children: [
             pw.TableRow(
@@ -2249,6 +2276,7 @@ class PdfQuotationBuilder {
                       _th('QTY'),
                       _th('RATE'),
                       _th('DISCOUNT'),
+                      _th('GST\n%'),
                       _th('TOTAL'),
                     ]
                   : [
@@ -2257,6 +2285,7 @@ class PdfQuotationBuilder {
                       _th('UNIT'),
                       _th('QTY'),
                       _th('RATE'),
+                      _th('GST\n%'),
                       _th('TOTAL'),
                     ],
             ),
@@ -2409,6 +2438,7 @@ class PdfQuotationBuilder {
                     _tc('${r.qty}', center: true),
                     _tc(rateStr, center: true),
                     _tc(discStr, center: true),
+                    _tc('${r.effectiveGstPercent.toStringAsFixed(0)}%', center: true),
                     _tc(totalStr, center: true),
                   ],
                 );
@@ -2420,6 +2450,7 @@ class PdfQuotationBuilder {
                     _tc(r.unitLabel ?? 'NOS', center: true),
                     _tc('${r.qty}', center: true),
                     _tc(rateStr, center: true),
+                    _tc('${r.effectiveGstPercent.toStringAsFixed(0)}%', center: true),
                     _tc(totalStr, center: true),
                   ],
                 );
@@ -2431,19 +2462,21 @@ class PdfQuotationBuilder {
               final rowNum = rows.length + idx + 1;
               final srText = rowNum < 10 ? '0$rowNum' : '$rowNum';
 
-              String desc = it.description.trim();
-              final hadExtraInDesc = desc.toLowerCase().contains('extra');
-              desc = desc
+              String baseDesc = it.description.trim();
+              baseDesc = baseDesc
                   .replaceAll(
-                      RegExp(r'\s*-\s*(Extra|Included)', caseSensitive: false), '')
+                      RegExp(r'\s*-\s*(Extra|Included|NA)',
+                          caseSensitive: false),
+                      '')
                   .trim();
               final isExtraSelection = it.amountType == PriceRowType.extra ||
-                  hadExtraInDesc ||
+                  it.description.toLowerCase().contains('extra') ||
                   (it.amountType == PriceRowType.customText &&
                       it.customText.toLowerCase().contains('extra'));
               final isCharged = (it.amountType == PriceRowType.extra ||
                       it.amountType == PriceRowType.amount) &&
                   it.numericAmount > 0;
+              final desc = baseDesc;
               final amt = isCharged
                   ? PriceCalculator.formatIndianCurrency(it.numericAmount,
                       includeSymbol: false)
@@ -2469,6 +2502,13 @@ class PdfQuotationBuilder {
                     _tc(qtyStr, center: true),
                     _tc(rateStr, center: true),
                     _tc('-', center: true),
+                    _tc(
+                        isCharged
+                            ? '${it.gstPercent.toStringAsFixed(0)}%'
+                            : (isExtraSelection
+                                ? '${it.gstPercent.toStringAsFixed(0)}%'
+                                : '-'),
+                        center: true),
                     _tc(amt, center: true),
                   ],
                 );
@@ -2480,6 +2520,13 @@ class PdfQuotationBuilder {
                     _tc('NOS', center: true),
                     _tc(qtyStr, center: true),
                     _tc(rateStr, center: true),
+                    _tc(
+                        isCharged
+                            ? '${it.gstPercent.toStringAsFixed(0)}%'
+                            : (isExtraSelection
+                                ? '${it.gstPercent.toStringAsFixed(0)}%'
+                                : '-'),
+                        center: true),
                     _tc(amt, center: true),
                   ],
                 );
@@ -2506,8 +2553,14 @@ class PdfQuotationBuilder {
               PriceCalculator.formatIndianCurrency(quotation.subtotal),
             ),
             _buildTotalRow(
-              'GST %',
-              PriceCalculator.formatIndianCurrency(quotation.gstAmount),
+              'GST Amount',
+              PriceCalculator.formatIndianCurrency(
+                quotation.gstAmount > 0
+                    ? quotation.gstAmount
+                    : ((quotation.grandTotal - quotation.subtotal) > 0
+                        ? (quotation.grandTotal - quotation.subtotal)
+                        : 0),
+              ),
             ),
             _buildTotalRow(
               'TOTAL',

@@ -283,9 +283,22 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     return state == 'maharashtra' || state == '27' || state == 'mh';
   }
 
-  double get _cgstAmount => _isLocalGst ? _calcSubtotal() * (_cgstRate / 100) : 0.0;
-  double get _sgstAmount => _isLocalGst ? _calcSubtotal() * (_sgstRate / 100) : 0.0;
-  double get _igstAmount => !_isLocalGst ? _calcSubtotal() * ((_cgstRate + _sgstRate) / 100) : 0.0;
+  double get _totalGstAmount {
+    double gstSum = 0;
+    for (final item in _lineItems) {
+      final qty = int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final rate = double.tryParse((item['rate'] as TextEditingController).text.replaceAll(',', '')) ?? 0;
+      final disc = double.tryParse((item['disc_percent'] as TextEditingController).text) ?? 0;
+      final gst = double.tryParse((item['gst_percent'] as TextEditingController?)?.text ?? '18') ?? 18.0;
+      final taxable = (qty * rate) * (1 - disc / 100);
+      gstSum += taxable * (gst / 100);
+    }
+    return gstSum;
+  }
+
+  double get _cgstAmount => _isLocalGst ? _totalGstAmount / 2 : 0.0;
+  double get _sgstAmount => _isLocalGst ? _totalGstAmount / 2 : 0.0;
+  double get _igstAmount => !_isLocalGst ? _totalGstAmount : 0.0;
   double get _unroundedTotal =>
       _calcSubtotal() + _cgstAmount + _sgstAmount + _igstAmount;
   double get _grandTotal => _unroundedTotal.roundToDouble();
@@ -396,10 +409,10 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             const SizedBox(height: 16),
             _SummaryRow('Subtotal', _calcSubtotal()),
             if (_isLocalGst) ...[
-              _SummaryRow('CGST (${_cgstRate.toStringAsFixed(_cgstRate == _cgstRate.roundToDouble() ? 0 : 2)}%)', _cgstAmount),
-              _SummaryRow('SGST (${_sgstRate.toStringAsFixed(_sgstRate == _sgstRate.roundToDouble() ? 0 : 2)}%)', _sgstAmount),
+              _SummaryRow('CGST Amount', _cgstAmount),
+              _SummaryRow('SGST Amount', _sgstAmount),
             ] else ...[
-              _SummaryRow('IGST (${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}%)', _igstAmount),
+              _SummaryRow('IGST Amount', _igstAmount),
             ],
             if (_roundOffAmount.abs() >= 0.005) ...[
               _SummaryRow(
@@ -594,6 +607,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       product: product,
       variant: variant,
       templateConfig: templateConfig,
+      quotation: _quotation,
     );
 
     final String formattedSoNum = PdfService.formatSalesOrderNumber(so.salesOrderNumber, so.orderDate);
@@ -1132,114 +1146,15 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                   _TotalRow(
                       'Subtotal', '₹${currencyFormat.format(_calcSubtotal())}'),
                   const SizedBox(height: 10),
-                  if (enabled) ...[
-                    Row(
-                      children: [
-                        const Text(
-                          'GST Rate:',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<double>(
-                            initialValue: [0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate)
-                                ? (_cgstRate + _sgstRate)
-                                : null,
-                            isDense: true,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              hintText: 'Select GST %',
-                            ),
-                            items: [
-                              const DropdownMenuItem(value: 18.0, child: Text('18% (Standard 9% + 9%)', overflow: TextOverflow.ellipsis)),
-                              const DropdownMenuItem(value: 12.0, child: Text('12% (6% + 6%)', overflow: TextOverflow.ellipsis)),
-                              const DropdownMenuItem(value: 5.0, child: Text('5% (2.5% + 2.5%)', overflow: TextOverflow.ellipsis)),
-                              const DropdownMenuItem(value: 28.0, child: Text('28% (14% + 14%)', overflow: TextOverflow.ellipsis)),
-                              const DropdownMenuItem(value: 0.0, child: Text('0% (Exempted)', overflow: TextOverflow.ellipsis)),
-                              if (![0.0, 5.0, 12.0, 18.0, 28.0].contains(_cgstRate + _sgstRate))
-                                DropdownMenuItem(
-                                  value: _cgstRate + _sgstRate,
-                                  child: Text('${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}% (Custom)', overflow: TextOverflow.ellipsis),
-                                ),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _cgstRate = val / 2;
-                                  _sgstRate = val / 2;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        IconButton(
-                          tooltip: 'Custom GST %',
-                          icon: const Icon(Icons.edit_note, size: 22, color: AppColors.primary),
-                          onPressed: () async {
-                            final totalGst = _cgstRate + _sgstRate;
-                            final customVal = await showDialog<double>(
-                              context: context,
-                              builder: (ctx) {
-                                final controller = TextEditingController(
-                                  text: totalGst.toStringAsFixed(totalGst == totalGst.roundToDouble() ? 0 : 2),
-                                );
-                                return AlertDialog(
-                                  title: const Text('Custom GST Rate (%)'),
-                                  content: TextField(
-                                    controller: controller,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Enter Total GST %',
-                                      suffixText: '%',
-                                    ),
-                                    autofocus: true,
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        final parsed = double.tryParse(controller.text.trim());
-                                        if (parsed != null && parsed >= 0) {
-                                          Navigator.pop(ctx, parsed);
-                                        }
-                                      },
-                                      child: const Text('Apply'),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                            if (customVal != null) {
-                              setState(() {
-                                _cgstRate = customVal / 2;
-                                _sgstRate = customVal / 2;
-                              });
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                  ],
                   if (_isLocalGst) ...[
                     _TotalRow(
-                        'CGST (${_cgstRate.toStringAsFixed(_cgstRate == _cgstRate.roundToDouble() ? 0 : 2)}%)', '₹${currencyFormat.format(_cgstAmount)}'),
+                        'CGST Amount', '₹${currencyFormat.format(_cgstAmount)}'),
                     const SizedBox(height: 4),
                     _TotalRow(
-                        'SGST (${_sgstRate.toStringAsFixed(_sgstRate == _sgstRate.roundToDouble() ? 0 : 2)}%)', '₹${currencyFormat.format(_sgstAmount)}'),
+                        'SGST Amount', '₹${currencyFormat.format(_sgstAmount)}'),
                   ] else ...[
                     _TotalRow(
-                        'IGST (${(_cgstRate + _sgstRate).toStringAsFixed((_cgstRate + _sgstRate) == (_cgstRate + _sgstRate).roundToDouble() ? 0 : 2)}%)', '₹${currencyFormat.format(_igstAmount)}'),
+                        'IGST Amount', '₹${currencyFormat.format(_igstAmount)}'),
                   ],
                   if (_roundOffAmount.abs() >= 0.005) ...[
                     const SizedBox(height: 4),
@@ -1453,9 +1368,15 @@ class _SalesOrderLineItemRow extends StatelessWidget {
               final hsnController = item['hsn_sac'] as TextEditingController;
               final uomController = item['uom'] as TextEditingController;
               final rateController = item['rate'] as TextEditingController;
+              final gstController = item['gst_percent'] as TextEditingController?;
               
               if (hsnController.text.isEmpty) hsnController.text = selection.hsnSac ?? '';
               if (uomController.text.isEmpty) uomController.text = selection.uom ?? '';
+              if (gstController != null) {
+                gstController.text = selection.gstRate.truncateToDouble() == selection.gstRate
+                    ? selection.gstRate.toInt().toString()
+                    : selection.gstRate.toString();
+              }
               if (rateController.text.isEmpty || rateController.text == '0.00' || rateController.text == '0') {
                 rateController.text = InventoryAutocomplete.formatIndianPrice(selection.price);
               }

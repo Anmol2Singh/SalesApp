@@ -45,6 +45,7 @@ class ParsedItemResult {
   final int qty;
   final double rate;
   final double amount;
+  final double gstPercent;
   final String? uom;
   final bool isExtra;
   final bool isIncluded;
@@ -69,6 +70,7 @@ class ParsedItemResult {
     this.qty = 1,
     this.rate = 0.0,
     this.amount = 0.0,
+    this.gstPercent = 18.0,
     this.uom = 'NOS',
     this.isExtra = false,
     this.isIncluded = false,
@@ -95,6 +97,7 @@ class ParsedItemResult {
     int? qty,
     double? rate,
     double? amount,
+    double? gstPercent,
     String? uom,
     bool? isExtra,
     bool? isIncluded,
@@ -119,6 +122,7 @@ class ParsedItemResult {
       qty: qty ?? this.qty,
       rate: rate ?? this.rate,
       amount: amount ?? this.amount,
+      gstPercent: gstPercent ?? this.gstPercent,
       uom: uom ?? this.uom,
       isExtra: isExtra ?? this.isExtra,
       isIncluded: isIncluded ?? this.isIncluded,
@@ -145,6 +149,8 @@ class ParsedItemResult {
       'qty': qty,
       'rate': rate,
       'amount': amount,
+      'gst_percent': gstPercent,
+      'gstPercent': gstPercent,
       'uom': uom,
       'isExtra': isExtra,
       'isIncluded': isIncluded,
@@ -177,6 +183,7 @@ class ParsedItemResult {
       qty: (json['qty'] as num?)?.toInt() ?? 1,
       rate: (json['rate'] as num?)?.toDouble() ?? 0.0,
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      gstPercent: (json['gst_percent'] as num? ?? json['gstPercent'] as num? ?? json['gst_rate'] as num?)?.toDouble() ?? 18.0,
       uom: json['uom'] as String?,
       isExtra: json['isExtra'] as bool? ?? false,
       isIncluded: json['isIncluded'] as bool? ?? false,
@@ -198,6 +205,7 @@ class QgItemParser {
     int qty = 1,
     double rate = 0.0,
     double amount = 0.0,
+    double gstPercent = 18.0,
     String? uom,
     bool isExtra = false,
     bool isIncluded = false,

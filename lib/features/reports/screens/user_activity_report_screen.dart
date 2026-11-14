@@ -274,6 +274,7 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
   List<Map<String, dynamic>> leads = [];
   List<Map<String, dynamic>> prospects = [];
   List<Map<String, dynamic>> conversions = [];
+  List<Map<String, dynamic>> dailyTasks = [];
 
   try {
     final cRes = await customersQuery;
@@ -431,6 +432,23 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
     debugPrint("Error fetching conversions for report: $e");
   }
 
+  // Fetch Daily Tasks
+  try {
+    var dtQuery = supabase
+        .from('daily_tasks')
+        .select('id, customer_name, task_description, completed_at, user_name, user_role, user_id, is_edited, is_deleted')
+        .eq('is_deleted', false)
+        .gte('completed_at', start.toIso8601String())
+        .lte('completed_at', end.toIso8601String());
+    if (!isAll) {
+      dtQuery = dtQuery.eq('user_id', userId);
+    }
+    final dtRes = await dtQuery.order('completed_at', ascending: false);
+    dailyTasks = List<Map<String, dynamic>>.from(dtRes);
+  } catch (e) {
+    debugPrint("Error fetching daily_tasks for report: $e");
+  }
+
   return ActivityReportData(
     customers: customers,
     pipelines: pipelines,
@@ -440,6 +458,7 @@ final activityReportProvider = FutureProvider.autoDispose<ActivityReportData>((r
     leads: leads,
     prospects: prospects,
     conversions: conversions,
+    dailyTasks: dailyTasks,
   );
 });
 
@@ -486,6 +505,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
   }
 
   static const List<Map<String, dynamic>> _reportSections = [
+    {'key': 'daily_tasks', 'title': 'Daily Tasks Completed', 'icon': Icons.task_alt_outlined},
     {'key': 'prospects', 'title': 'Prospects', 'icon': Icons.person_search_outlined},
     {'key': 'leads', 'title': 'Leads', 'icon': Icons.insights_outlined},
     {'key': 'customers', 'title': 'Customers', 'icon': Icons.people_outline},
@@ -784,6 +804,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
         final uLeads = data.leads.where((l) => l['created_by'] == u.id).toList();
         final uProspects = data.prospects.where((p) => p['created_by'] == u.id || p['assigned_to'] == u.id).toList();
         final uConversions = data.conversions.where((c) => c['user_id'] == u.id).toList();
+        final uDailyTasks = data.dailyTasks.where((t) => t['user_id'] == u.id).toList();
 
         return {
           'userName': u.fullName.isNotEmpty ? u.fullName : 'User (${u.id.substring(0, 6)})',
@@ -797,6 +818,7 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
             leads: uLeads,
             prospects: uProspects,
             conversions: uConversions,
+            dailyTasks: uDailyTasks,
           ),
         };
       }).toList();
@@ -1268,7 +1290,8 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                     data.communications.isEmpty &&
                     data.leads.isEmpty &&
                     data.prospects.isEmpty &&
-                    data.conversions.isEmpty;
+                    data.conversions.isEmpty &&
+                    data.dailyTasks.isEmpty;
 
                 if (isEmpty) {
                   return const Center(child: Text('No activity found for the selected period.', style: TextStyle(color: AppColors.textSecondary)));
@@ -1277,6 +1300,21 @@ class _UserActivityReportScreenState extends ConsumerState<UserActivityReportScr
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    if (data.dailyTasks.isNotEmpty) ...[
+                      _buildSection(
+                        'Daily Tasks Completed (${data.dailyTasks.length})',
+                        data.dailyTasks,
+                        (t) => t['customer_name'] ?? 'Task',
+                        (t) {
+                          final desc = t['task_description'] ?? '-';
+                          final time = t['completed_at'] != null
+                              ? DateFormat('hh:mm a').format(DateTime.tryParse(t['completed_at'])?.toLocal() ?? DateTime.now())
+                              : '';
+                          return time.isNotEmpty ? '$desc | $time' : desc;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _buildSection('Customers Added (${data.customers.length})', data.customers, (c) => c['customer_name'] ?? 'Unnamed', (c) => 'Phone: ${c['phone'] ?? '-'} | ID: ${c['id']}'),
                     const SizedBox(height: 16),
                     _buildSection('Deals Created (${data.pipelines.length})', data.pipelines, 

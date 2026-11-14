@@ -19,7 +19,6 @@ import '../../quotation_generator/data/catalog_repository.dart';
 import '../../quotation_generator/models/boom_barrier_proposal_draft.dart';
 import '../../quotation_generator/models/deal_quotation_item.dart';
 import '../../quotation_generator/models/generator_company_settings.dart';
-import '../../quotation_generator/models/heat_pump_model.dart';
 import '../../quotation_generator/models/qg_product_profile.dart';
 import '../../quotation_generator/models/qg_proposal_draft.dart';
 import '../../quotation_generator/providers/quotation_generator_providers.dart';
@@ -357,11 +356,17 @@ class QuotationPdfLauncher {
               supplementarySubtotal: quotation.supplementarySubtotal,
               cgstAmount: quotation.cgstAmount,
               sgstAmount: quotation.sgstAmount,
-              igstAmount: quotation.igstAmount,
+              igstAmount: (quotation.cgstAmount + quotation.sgstAmount + quotation.igstAmount) > 0
+                  ? quotation.igstAmount
+                  : ((quotation.grandTotal > (quotation.subtotal + quotation.supplementarySubtotal))
+                      ? (quotation.grandTotal - (quotation.subtotal + quotation.supplementarySubtotal))
+                      : 0.0),
               grandTotal: quotation.grandTotal,
               cgstRate: quotation.cgstRate,
               sgstRate: quotation.sgstRate,
-              igstRate: 0.0,
+              igstRate: quotation.igstAmount > 0
+                  ? (quotation.cgstRate + quotation.sgstRate)
+                  : (quotation.cgstRate + quotation.sgstRate > 0 ? (quotation.cgstRate + quotation.sgstRate) : 18.0),
               lineItems: quotation.lineItems.map((e) => e.toJson()).toList(),
               supplementaryTerms: quotation.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
               paymentTerms: quotation.paymentTerms ?? const [],
@@ -453,11 +458,17 @@ class QuotationPdfLauncher {
           supplementarySubtotal: quotation.supplementarySubtotal,
           cgstAmount: quotation.cgstAmount,
           sgstAmount: quotation.sgstAmount,
-          igstAmount: quotation.igstAmount,
+          igstAmount: (quotation.cgstAmount + quotation.sgstAmount + quotation.igstAmount) > 0
+              ? quotation.igstAmount
+              : ((quotation.grandTotal > (quotation.subtotal + quotation.supplementarySubtotal))
+                  ? (quotation.grandTotal - (quotation.subtotal + quotation.supplementarySubtotal))
+                  : 0.0),
           grandTotal: quotation.grandTotal,
           cgstRate: quotation.cgstRate,
           sgstRate: quotation.sgstRate,
-          igstRate: quotation.igstAmount > 0 ? (quotation.cgstRate + quotation.sgstRate) : 0.0,
+          igstRate: quotation.igstAmount > 0
+              ? (quotation.cgstRate + quotation.sgstRate)
+              : (quotation.cgstRate + quotation.sgstRate > 0 ? (quotation.cgstRate + quotation.sgstRate) : 18.0),
           lineItems: quotation.lineItems.map((e) => e.toJson()).toList(),
           supplementaryTerms: quotation.supplementaryTerms?.map((e) => e.toJson()).toList() ?? const [],
           paymentTerms: quotation.paymentTerms ?? const [],
@@ -483,7 +494,8 @@ class QuotationPdfLauncher {
             loadedDraft.tankDishThickness != freshDraft.tankDishThickness ||
             loadedDraft.tankInsulation != freshDraft.tankInsulation ||
             loadedDraft.tankCapacityLitres != freshDraft.tankCapacityLitres ||
-            loadedDraft.isTankPressurized != freshDraft.isTankPressurized) {
+            loadedDraft.isTankPressurized != freshDraft.isTankPressurized ||
+            quotation.updatedAt.isAfter(loadedDraft.quotationUpdatedAt)) {
           draft = freshDraft;
         } else {
           draft = loadedDraft;
@@ -505,6 +517,19 @@ class QuotationPdfLauncher {
           draft.hasTank = freshDraft.hasTank;
           draft.tankSpecs = Map<String, String>.from(freshDraft.tankSpecs);
           draft.remarks = freshDraft.remarks;
+
+          // Always synchronize latest items, supplementary items, and financial values from the quotation:
+          draft.items = freshDraft.items;
+          draft.supplementaryItems = freshDraft.supplementaryItems;
+          draft.subtotal = freshDraft.subtotal;
+          draft.supplementarySubtotal = freshDraft.supplementarySubtotal;
+          draft.cgstRate = freshDraft.cgstRate;
+          draft.sgstRate = freshDraft.sgstRate;
+          draft.igstRate = freshDraft.igstRate;
+          draft.cgstAmount = freshDraft.cgstAmount;
+          draft.sgstAmount = freshDraft.sgstAmount;
+          draft.igstAmount = freshDraft.igstAmount;
+          draft.grandTotal = freshDraft.grandTotal;
         }
 
         HeatPumpType hpType = HeatPumpType.domesticCommercial;

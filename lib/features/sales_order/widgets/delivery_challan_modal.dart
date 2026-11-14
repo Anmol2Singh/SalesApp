@@ -540,7 +540,35 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
       _currentSource = 'boq';
       _items.clear();
       final alreadySent = _getAlreadySentMap(pipeline);
-      final boqItems = pipeline.boq?.items ?? [];
+      final boqItems = (pipeline.boq?.items ?? [])
+          .where((item) => item.scope.trim().toLowerCase() != 'customer')
+          .toList();
+      for (final item in boqItems) {
+        final req = item.qty > 0 ? item.qty : 1.0;
+        final sent = alreadySent[item.component.trim().toLowerCase()] ?? 0.0;
+        final pending = (req - sent).clamp(0.0, req);
+        if (pending <= 0) continue; // Don't show items with zero pending quantity
+        _items.add(_ChallanItemRow(
+          name: item.component,
+          uom: item.unit.isNotEmpty ? item.unit : 'NOS',
+          qty: pending,
+          requiredQty: req,
+          sentQty: sent,
+          remark: item.remarks,
+        ));
+      }
+      _syncControllers();
+    });
+  }
+
+  void _loadFromBoqCustomerScope(SalesPipeline pipeline) {
+    setState(() {
+      _currentSource = 'boq_customer';
+      _items.clear();
+      final alreadySent = _getAlreadySentMap(pipeline);
+      final boqItems = (pipeline.boq?.items ?? [])
+          .where((item) => item.scope.trim().toLowerCase() == 'customer')
+          .toList();
       for (final item in boqItems) {
         final req = item.qty > 0 ? item.qty : 1.0;
         final sent = alreadySent[item.component.trim().toLowerCase()] ?? 0.0;
@@ -601,8 +629,10 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         }
       }
 
-      // 2. BOQ items
-      final boqItems = pipeline.boq?.items ?? [];
+      // 2. BOQ items (company scope only)
+      final boqItems = (pipeline.boq?.items ?? [])
+          .where((item) => item.scope.trim().toLowerCase() != 'customer')
+          .toList();
       for (final item in boqItems) {
         final key = item.component.trim().toLowerCase();
         final req = item.qty > 0 ? item.qty : 1.0;
@@ -1021,6 +1051,18 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: _currentSource == 'boq' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                      ),
+                    ),
+                    ChoiceChip(
+                      label: const Text('BOQ - Customer Scope', style: TextStyle(fontSize: 12)),
+                      selected: _currentSource == 'boq_customer',
+                      onSelected: (selected) {
+                        if (selected) _loadFromBoqCustomerScope(pipeline);
+                      },
+                      selectedColor: const Color(0xFFDBEAFE),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _currentSource == 'boq_customer' ? const Color(0xFF1E40AF) : AppColors.textSecondary,
                       ),
                     ),
                     ChoiceChip(
@@ -1566,10 +1608,12 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      disabledForegroundColor: Colors.grey.shade500,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      elevation: 2,
+                      elevation: (_isGenerating || _items.isEmpty) ? 0 : 2,
                     ),
-                    onPressed: _isGenerating ? null : () => _generateChallan(pipeline),
+                    onPressed: (_isGenerating || _items.isEmpty) ? null : () => _generateChallan(pipeline),
                     icon: _isGenerating
                         ? const SizedBox(
                             width: 18,

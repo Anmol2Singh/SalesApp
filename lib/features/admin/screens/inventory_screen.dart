@@ -948,10 +948,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
-                                    if (item.uom != null && item.uom!.trim().isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      _buildBadge('Unit: ${item.uom!.trim()}'),
-                                    ],
+                                    Row(
+                                      children: [
+                                        if (item.uom != null && item.uom!.trim().isNotEmpty) ...[
+                                          _buildBadge('Unit: ${item.uom!.trim()}'),
+                                          const SizedBox(width: 6),
+                                        ],
+                                        _buildBadge('GST: ${item.gstRate.truncateToDouble() == item.gstRate ? item.gstRate.toInt() : item.gstRate}%'),
+                                      ],
+                                    ),
                                   ],
                                 ),
                               ),
@@ -2317,6 +2322,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     final hsnController = TextEditingController();
     final unitController = TextEditingController(text: 'NOS');
     final priceController = TextEditingController(text: '0');
+    final gstController = TextEditingController(text: '18');
     final warrantyController = TextEditingController(text: '12');
     final allProducts = ref.read(productsProvider).valueOrNull ?? [];
     String? selectedProductName;
@@ -2359,6 +2365,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       controller: priceController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: 'Default Price (₹)', prefixIcon: Icon(Icons.currency_rupee)),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: gstController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'GST Rate (%)',
+                        prefixIcon: Icon(Icons.percent),
+                        helperText: 'Default GST rate (e.g. 5, 12, 18)',
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -2464,6 +2480,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               'hsn_sac': hsnController.text.trim(),
                               'uom': unitController.text.trim(),
                               'price': double.tryParse(priceController.text) ?? 0.0,
+                              'gst_rate': double.tryParse(gstController.text.trim()) ?? 18.0,
                               'warranty_months': int.tryParse(warrantyController.text.trim()) ?? 12,
                             });
 
@@ -2519,6 +2536,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     final hsnController = TextEditingController(text: item.hsnSac ?? '');
     final unitController = TextEditingController(text: item.uom ?? 'NOS');
     final priceController = TextEditingController(text: item.price.toString());
+    final gstController = TextEditingController(
+      text: item.gstRate.truncateToDouble() == item.gstRate ? item.gstRate.toInt().toString() : item.gstRate.toString(),
+    );
     final warrantyController = TextEditingController(text: '${item.warrantyMonths}');
     final allProducts = ref.read(productsProvider).valueOrNull ?? [];
     Product? initialProduct;
@@ -2568,6 +2588,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       controller: priceController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: 'Default Price (₹)', prefixIcon: Icon(Icons.currency_rupee)),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: gstController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'GST Rate (%)',
+                        prefixIcon: Icon(Icons.percent),
+                        helperText: 'Default GST rate (e.g. 5, 12, 18)',
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -2661,6 +2691,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               'hsn_sac': hsnController.text.trim(),
                               'uom': unitController.text.trim(),
                               'price': double.tryParse(priceController.text) ?? 0.0,
+                              'gst_rate': double.tryParse(gstController.text.trim()) ?? 18.0,
                               'warranty_months': int.tryParse(warrantyController.text.trim()) ?? 12,
                             }).eq('id', item.id);
 

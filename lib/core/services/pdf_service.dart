@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
 import '../models/quotation.dart';
+import '../models/supplementary_item.dart';
 import '../models/boq.dart';
 import '../models/factory_order.dart';
 import '../models/purchase_order.dart';
@@ -22,6 +23,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/financial_year_helper.dart';
 
+class TaxTierSummary {
+  final double rate;
+  double taxableValue;
+  double cgstAmount;
+  double sgstAmount;
+  double igstAmount;
+  double totalTax;
+
+  TaxTierSummary({
+    required this.rate,
+    this.taxableValue = 0.0,
+    this.cgstAmount = 0.0,
+    this.sgstAmount = 0.0,
+    this.igstAmount = 0.0,
+    this.totalTax = 0.0,
+  });
+
+  String get rateStr => rate.truncateToDouble() == rate
+      ? rate.toInt().toString()
+      : rate.toStringAsFixed(1);
+}
+
 class PdfService {
   static Future<Map<String, dynamic>> resolveTemplateConfig(
     Map<String, dynamic>? initialConfig, {
@@ -30,7 +53,8 @@ class PdfService {
   }) async {
     final Map<String, dynamic> resolved = {
       'company_name': 'INSIYA SOLAR INDUSTRY',
-      'company_address': 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
+      'company_address':
+          'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014',
       'company_phone': '+91 9292922992',
       'company_email': 'insiyasolarindustry@gmail.com',
       'company_gst': '27CFTPS5292A1ZY',
@@ -57,19 +81,35 @@ class PdfService {
             .maybeSingle();
         if (compRes != null) {
           hasResolvedCompany = true;
-          if (compRes['name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = compRes['name'].toString().trim();
-          if (compRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = compRes['address'].toString().trim();
-          if (compRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = compRes['phone'].toString().trim();
-          if (compRes['email']?.toString().trim().isNotEmpty == true) resolved['company_email'] = compRes['email'].toString().trim();
-          if (compRes['website']?.toString().trim().isNotEmpty == true) resolved['company_website'] = compRes['website'].toString().trim();
-          if (compRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = compRes['gstin'].toString().trim();
-          if (compRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = compRes['logo_url'].toString().trim();
-          if (compRes['stamp_url']?.toString().trim().isNotEmpty == true) resolved['stamp_url'] = compRes['stamp_url'].toString().trim();
-          if (compRes['bank_name']?.toString().trim().isNotEmpty == true) resolved['bank_name'] = compRes['bank_name'].toString().trim();
-          if (compRes['bank_account_name']?.toString().trim().isNotEmpty == true) resolved['bank_account_name'] = compRes['bank_account_name'].toString().trim();
-          if (compRes['bank_account_no']?.toString().trim().isNotEmpty == true) resolved['bank_account_no'] = compRes['bank_account_no'].toString().trim();
-          if (compRes['bank_branch']?.toString().trim().isNotEmpty == true) resolved['bank_branch'] = compRes['bank_branch'].toString().trim();
-          if (compRes['bank_ifsc']?.toString().trim().isNotEmpty == true) resolved['bank_ifsc'] = compRes['bank_ifsc'].toString().trim();
+          if (compRes['name']?.toString().trim().isNotEmpty == true)
+            resolved['company_name'] = compRes['name'].toString().trim();
+          if (compRes['address']?.toString().trim().isNotEmpty == true)
+            resolved['company_address'] = compRes['address'].toString().trim();
+          if (compRes['phone']?.toString().trim().isNotEmpty == true)
+            resolved['company_phone'] = compRes['phone'].toString().trim();
+          if (compRes['email']?.toString().trim().isNotEmpty == true)
+            resolved['company_email'] = compRes['email'].toString().trim();
+          if (compRes['website']?.toString().trim().isNotEmpty == true)
+            resolved['company_website'] = compRes['website'].toString().trim();
+          if (compRes['gstin']?.toString().trim().isNotEmpty == true)
+            resolved['company_gst'] = compRes['gstin'].toString().trim();
+          if (compRes['logo_url']?.toString().trim().isNotEmpty == true)
+            resolved['logo_url'] = compRes['logo_url'].toString().trim();
+          if (compRes['stamp_url']?.toString().trim().isNotEmpty == true)
+            resolved['stamp_url'] = compRes['stamp_url'].toString().trim();
+          if (compRes['bank_name']?.toString().trim().isNotEmpty == true)
+            resolved['bank_name'] = compRes['bank_name'].toString().trim();
+          if (compRes['bank_account_name']?.toString().trim().isNotEmpty ==
+              true)
+            resolved['bank_account_name'] =
+                compRes['bank_account_name'].toString().trim();
+          if (compRes['bank_account_no']?.toString().trim().isNotEmpty == true)
+            resolved['bank_account_no'] =
+                compRes['bank_account_no'].toString().trim();
+          if (compRes['bank_branch']?.toString().trim().isNotEmpty == true)
+            resolved['bank_branch'] = compRes['bank_branch'].toString().trim();
+          if (compRes['bank_ifsc']?.toString().trim().isNotEmpty == true)
+            resolved['bank_ifsc'] = compRes['bank_ifsc'].toString().trim();
         }
       } catch (_) {}
     } else {
@@ -83,19 +123,39 @@ class PdfService {
             .maybeSingle();
         if (defaultRes != null) {
           hasResolvedCompany = true;
-          if (defaultRes['name']?.toString().trim().isNotEmpty == true) resolved['company_name'] = defaultRes['name'].toString().trim();
-          if (defaultRes['address']?.toString().trim().isNotEmpty == true) resolved['company_address'] = defaultRes['address'].toString().trim();
-          if (defaultRes['phone']?.toString().trim().isNotEmpty == true) resolved['company_phone'] = defaultRes['phone'].toString().trim();
-          if (defaultRes['email']?.toString().trim().isNotEmpty == true) resolved['company_email'] = defaultRes['email'].toString().trim();
-          if (defaultRes['website']?.toString().trim().isNotEmpty == true) resolved['company_website'] = defaultRes['website'].toString().trim();
-          if (defaultRes['gstin']?.toString().trim().isNotEmpty == true) resolved['company_gst'] = defaultRes['gstin'].toString().trim();
-          if (defaultRes['logo_url']?.toString().trim().isNotEmpty == true) resolved['logo_url'] = defaultRes['logo_url'].toString().trim();
-          if (defaultRes['stamp_url']?.toString().trim().isNotEmpty == true) resolved['stamp_url'] = defaultRes['stamp_url'].toString().trim();
-          if (defaultRes['bank_name']?.toString().trim().isNotEmpty == true) resolved['bank_name'] = defaultRes['bank_name'].toString().trim();
-          if (defaultRes['bank_account_name']?.toString().trim().isNotEmpty == true) resolved['bank_account_name'] = defaultRes['bank_account_name'].toString().trim();
-          if (defaultRes['bank_account_no']?.toString().trim().isNotEmpty == true) resolved['bank_account_no'] = defaultRes['bank_account_no'].toString().trim();
-          if (defaultRes['bank_branch']?.toString().trim().isNotEmpty == true) resolved['bank_branch'] = defaultRes['bank_branch'].toString().trim();
-          if (defaultRes['bank_ifsc']?.toString().trim().isNotEmpty == true) resolved['bank_ifsc'] = defaultRes['bank_ifsc'].toString().trim();
+          if (defaultRes['name']?.toString().trim().isNotEmpty == true)
+            resolved['company_name'] = defaultRes['name'].toString().trim();
+          if (defaultRes['address']?.toString().trim().isNotEmpty == true)
+            resolved['company_address'] =
+                defaultRes['address'].toString().trim();
+          if (defaultRes['phone']?.toString().trim().isNotEmpty == true)
+            resolved['company_phone'] = defaultRes['phone'].toString().trim();
+          if (defaultRes['email']?.toString().trim().isNotEmpty == true)
+            resolved['company_email'] = defaultRes['email'].toString().trim();
+          if (defaultRes['website']?.toString().trim().isNotEmpty == true)
+            resolved['company_website'] =
+                defaultRes['website'].toString().trim();
+          if (defaultRes['gstin']?.toString().trim().isNotEmpty == true)
+            resolved['company_gst'] = defaultRes['gstin'].toString().trim();
+          if (defaultRes['logo_url']?.toString().trim().isNotEmpty == true)
+            resolved['logo_url'] = defaultRes['logo_url'].toString().trim();
+          if (defaultRes['stamp_url']?.toString().trim().isNotEmpty == true)
+            resolved['stamp_url'] = defaultRes['stamp_url'].toString().trim();
+          if (defaultRes['bank_name']?.toString().trim().isNotEmpty == true)
+            resolved['bank_name'] = defaultRes['bank_name'].toString().trim();
+          if (defaultRes['bank_account_name']?.toString().trim().isNotEmpty ==
+              true)
+            resolved['bank_account_name'] =
+                defaultRes['bank_account_name'].toString().trim();
+          if (defaultRes['bank_account_no']?.toString().trim().isNotEmpty ==
+              true)
+            resolved['bank_account_no'] =
+                defaultRes['bank_account_no'].toString().trim();
+          if (defaultRes['bank_branch']?.toString().trim().isNotEmpty == true)
+            resolved['bank_branch'] =
+                defaultRes['bank_branch'].toString().trim();
+          if (defaultRes['bank_ifsc']?.toString().trim().isNotEmpty == true)
+            resolved['bank_ifsc'] = defaultRes['bank_ifsc'].toString().trim();
         }
       } catch (_) {}
     }
@@ -120,12 +180,18 @@ class PdfService {
     if (!hasResolvedCompany) {
       try {
         final prefs = await SharedPreferences.getInstance();
-        if (prefs.getString('company_name')?.isNotEmpty == true) resolved['company_name'] = prefs.getString('company_name')!;
-        if (prefs.getString('company_address')?.isNotEmpty == true) resolved['company_address'] = prefs.getString('company_address')!;
-        if (prefs.getString('company_phone')?.isNotEmpty == true) resolved['company_phone'] = prefs.getString('company_phone')!;
-        if (prefs.getString('company_email')?.isNotEmpty == true) resolved['company_email'] = prefs.getString('company_email')!;
-        if (prefs.getString('company_gst')?.isNotEmpty == true) resolved['company_gst'] = prefs.getString('company_gst')!;
-        if (prefs.getString('company_logo_url')?.isNotEmpty == true) resolved['logo_url'] = prefs.getString('company_logo_url')!;
+        if (prefs.getString('company_name')?.isNotEmpty == true)
+          resolved['company_name'] = prefs.getString('company_name')!;
+        if (prefs.getString('company_address')?.isNotEmpty == true)
+          resolved['company_address'] = prefs.getString('company_address')!;
+        if (prefs.getString('company_phone')?.isNotEmpty == true)
+          resolved['company_phone'] = prefs.getString('company_phone')!;
+        if (prefs.getString('company_email')?.isNotEmpty == true)
+          resolved['company_email'] = prefs.getString('company_email')!;
+        if (prefs.getString('company_gst')?.isNotEmpty == true)
+          resolved['company_gst'] = prefs.getString('company_gst')!;
+        if (prefs.getString('company_logo_url')?.isNotEmpty == true)
+          resolved['logo_url'] = prefs.getString('company_logo_url')!;
       } catch (_) {}
     }
 
@@ -137,12 +203,24 @@ class PdfService {
           .limit(1)
           .maybeSingle();
       if (cRes != null) {
-        if (cRes['company_name']?.toString().trim().isNotEmpty == true && resolved['company_name'] == null) resolved['company_name'] = cRes['company_name'].toString().trim();
-        if (cRes['address']?.toString().trim().isNotEmpty == true && resolved['company_address'] == null) resolved['company_address'] = cRes['address'].toString().trim();
-        if (cRes['phone']?.toString().trim().isNotEmpty == true && resolved['company_phone'] == null) resolved['company_phone'] = cRes['phone'].toString().trim();
-        if (cRes['email']?.toString().trim().isNotEmpty == true && resolved['company_email'] == null) resolved['company_email'] = cRes['email'].toString().trim();
-        if (cRes['gstin']?.toString().trim().isNotEmpty == true && resolved['company_gst'] == null) resolved['company_gst'] = cRes['gstin'].toString().trim();
-        if (cRes['logo_url']?.toString().trim().isNotEmpty == true && resolved['logo_url'] == null) resolved['logo_url'] = cRes['logo_url'].toString().trim();
+        if (cRes['company_name']?.toString().trim().isNotEmpty == true &&
+            resolved['company_name'] == null)
+          resolved['company_name'] = cRes['company_name'].toString().trim();
+        if (cRes['address']?.toString().trim().isNotEmpty == true &&
+            resolved['company_address'] == null)
+          resolved['company_address'] = cRes['address'].toString().trim();
+        if (cRes['phone']?.toString().trim().isNotEmpty == true &&
+            resolved['company_phone'] == null)
+          resolved['company_phone'] = cRes['phone'].toString().trim();
+        if (cRes['email']?.toString().trim().isNotEmpty == true &&
+            resolved['company_email'] == null)
+          resolved['company_email'] = cRes['email'].toString().trim();
+        if (cRes['gstin']?.toString().trim().isNotEmpty == true &&
+            resolved['company_gst'] == null)
+          resolved['company_gst'] = cRes['gstin'].toString().trim();
+        if (cRes['logo_url']?.toString().trim().isNotEmpty == true &&
+            resolved['logo_url'] == null)
+          resolved['logo_url'] = cRes['logo_url'].toString().trim();
       }
     } catch (_) {}
 
@@ -217,7 +295,8 @@ class PdfService {
 
         final metaName = currentUser.userMetadata?['full_name'] as String? ??
             currentUser.userMetadata?['name'] as String?;
-        if (metaName != null && metaName.trim().isNotEmpty) return metaName.trim();
+        if (metaName != null && metaName.trim().isNotEmpty)
+          return metaName.trim();
 
         try {
           final res = await supabase
@@ -238,9 +317,65 @@ class PdfService {
       }
 
       final custName = prefs.getString('customer_session_name');
-      if (custName != null && custName.trim().isNotEmpty) return custName.trim();
+      if (custName != null && custName.trim().isNotEmpty)
+        return custName.trim();
     } catch (_) {}
     return 'Staff';
+  }
+
+  static List<TaxTierSummary> _calculateTaxTiers({
+    required List<dynamic> lineItems,
+    List<SupplementaryItem>? supplementaryItems,
+    required bool isInterstate,
+    double defaultRate = 18.0,
+  }) {
+    final Map<double, TaxTierSummary> tierMap = {};
+
+    for (final item in lineItems) {
+      double rate = defaultRate;
+      double taxable = 0.0;
+      if (item is LineItem) {
+        rate = item.gstPercent;
+        taxable = (item.qty * item.unitPrice) * (1 - item.discPercent / 100);
+      } else if (item is SalesOrderLineItem) {
+        rate = item.gstPercent;
+        taxable = (item.qty * item.rate) * (1 - item.discPercent / 100);
+      }
+      final tier = tierMap.putIfAbsent(rate, () => TaxTierSummary(rate: rate));
+      tier.taxableValue += taxable;
+    }
+
+    if (supplementaryItems != null) {
+      for (final item in supplementaryItems) {
+        if (item.type.toLowerCase() == 'included') continue;
+        final rate = item.gstPercent;
+        final suppTaxable = item.qty * item.rate;
+        final tier =
+            tierMap.putIfAbsent(rate, () => TaxTierSummary(rate: rate));
+        tier.taxableValue += suppTaxable;
+      }
+    }
+
+    if (tierMap.isEmpty) {
+      tierMap[defaultRate] = TaxTierSummary(rate: defaultRate);
+    }
+
+    final sortedTiers = tierMap.values.toList()
+      ..sort((a, b) => a.rate.compareTo(b.rate));
+    for (final tier in sortedTiers) {
+      if (!isInterstate) {
+        tier.cgstAmount = tier.taxableValue * (tier.rate / 2) / 100;
+        tier.sgstAmount = tier.taxableValue * (tier.rate / 2) / 100;
+        tier.igstAmount = 0.0;
+      } else {
+        tier.cgstAmount = 0.0;
+        tier.sgstAmount = 0.0;
+        tier.igstAmount = tier.taxableValue * tier.rate / 100;
+      }
+      tier.totalTax = tier.cgstAmount + tier.sgstAmount + tier.igstAmount;
+    }
+
+    return sortedTiers;
   }
 
   // ─── QUOTATION PDF ───────────────────────────────────────────────────────────
@@ -253,24 +388,32 @@ class PdfService {
     String copyType = 'Original For Recipient',
     String docTitle = 'QUOTATION',
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    final resolvedConfig =
+        await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
-    final createdByName = (quotation.salesman != null && quotation.salesman!.trim().isNotEmpty)
-        ? quotation.salesman!.trim()
-        : null;
+    final createdByName =
+        (quotation.salesman != null && quotation.salesman!.trim().isNotEmpty)
+            ? quotation.salesman!.trim()
+            : null;
 
     final pdf = pw.Document();
 
-    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
-    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
-    final companyGst = resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
+        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone =
+        resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ??
+        'insiyasolarindustry@gmail.com';
+    final companyGst =
+        resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
     final companyStateCode = 27; // Maharashtra
 
-    final bool isInterstate = quotation.stateCode != null && quotation.stateCode != companyStateCode;
+    final bool isInterstate =
+        quotation.stateCode != null && quotation.stateCode != companyStateCode;
     final bool isInvoice = docTitle.toUpperCase().contains('INVOICE');
 
     final pw.ThemeData theme = pw.ThemeData.withFont(
@@ -290,28 +433,46 @@ class PdfService {
           companyEmail: companyEmail,
           companyGst: companyGst,
           docTitle: docTitle,
-          docNumber: isInvoice ? quotation.quotationNumber.replaceAll('QT', 'INV') : quotation.quotationNumber,
+          docNumber: isInvoice
+              ? quotation.quotationNumber.replaceAll('QT', 'INV')
+              : quotation.quotationNumber,
           docDate: quotation.orderDate ?? quotation.createdAt,
           status: quotation.status.displayName,
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+          resolvedConfig['footer_text'] as String? ??
+              'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
           generatedBy: generatedByName,
           createdBy: createdByName,
         ),
         build: (context) {
-          final totalQty = quotation.lineItems.fold<double>(0, (sum, item) => sum + item.qty);
-          final totalAmount = quotation.lineItems.fold<double>(0, (sum, item) => sum + item.total);
+          final totalQty = quotation.lineItems
+              .fold<double>(0, (sum, item) => sum + item.qty);
+          final totalAmount = quotation.lineItems
+              .fold<double>(0, (sum, item) => sum + item.total);
 
-          final taxRate = (quotation.cgstRate + quotation.sgstRate);
-          final taxableValue = quotation.subtotal + quotation.supplementarySubtotal;
-          
-          final cgstAmt = isInterstate ? 0.0 : quotation.cgstAmount;
-          final sgstAmt = isInterstate ? 0.0 : quotation.sgstAmount;
-          final igstAmt = isInterstate ? quotation.igstAmount : 0.0;
+          final taxTiers = _calculateTaxTiers(
+            lineItems: quotation.lineItems,
+            supplementaryItems: quotation.supplementaryTerms,
+            isInterstate: isInterstate,
+            defaultRate: quotation.cgstRate + quotation.sgstRate,
+          );
+
+          final taxableValue =
+              quotation.subtotal + quotation.supplementarySubtotal;
+
+          final cgstAmt = isInterstate
+              ? 0.0
+              : taxTiers.fold<double>(0, (s, t) => s + t.cgstAmount);
+          final sgstAmt = isInterstate
+              ? 0.0
+              : taxTiers.fold<double>(0, (s, t) => s + t.sgstAmount);
+          final igstAmt = isInterstate
+              ? taxTiers.fold<double>(0, (s, t) => s + t.igstAmount)
+              : 0.0;
           final totalTax = cgstAmt + sgstAmt + igstAmt;
 
           final unroundedTotal = taxableValue + totalTax;
@@ -333,10 +494,16 @@ class PdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _metaItem(isInvoice ? 'Invoice No.' : 'Quotation No.', isInvoice ? quotation.quotationNumber.replaceAll('QT', 'INV') : quotation.quotationNumber),
+                        _metaItem(
+                            isInvoice ? 'Invoice No.' : 'Quotation No.',
+                            isInvoice
+                                ? quotation.quotationNumber
+                                    .replaceAll('QT', 'INV')
+                                : quotation.quotationNumber),
                         _metaItem('Eway Bill No & Date', ''),
                         _metaItem('Bill Type', quotation.billType ?? 'Credit'),
-                        _metaItem('Place of Supply', quotation.placeOfSupply ?? 'Maharashtra'),
+                        _metaItem('Place of Supply',
+                            quotation.placeOfSupply ?? 'Maharashtra'),
                         _metaItem('Payment Term', 'Credit'),
                       ],
                     ),
@@ -346,13 +513,34 @@ class PdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _metaItem(isInvoice ? 'Invoice Date' : 'Quotation Date', quotation.orderDate != null ? DateFormat('dd/MM/yyyy').format(quotation.orderDate!) : DateFormat('dd/MM/yyyy').format(quotation.createdAt)),
+                        _metaItem(
+                            isInvoice ? 'Invoice Date' : 'Quotation Date',
+                            quotation.orderDate != null
+                                ? DateFormat('dd/MM/yyyy')
+                                    .format(quotation.orderDate!)
+                                : DateFormat('dd/MM/yyyy')
+                                    .format(quotation.createdAt)),
                         if (!isInvoice) ...[
-                          _metaItem('Approval Date', quotation.isApproved && quotation.approvedAt != null ? DateFormat('dd/MM/yyyy').format(quotation.approvedAt!) : 'Pending'),
-                          _metaItem('Approved By', quotation.isApproved ? (quotation.approverName ?? 'Admin / Sales Head') : '—'),
+                          _metaItem(
+                              'Approval Date',
+                              quotation.isApproved &&
+                                      quotation.approvedAt != null
+                                  ? DateFormat('dd/MM/yyyy')
+                                      .format(quotation.approvedAt!)
+                                  : 'Pending'),
+                          _metaItem(
+                              'Approved By',
+                              quotation.isApproved
+                                  ? (quotation.approverName ??
+                                      'Admin / Sales Head')
+                                  : '—'),
                         ],
                         _metaItem('Vehicle No', ''),
-                        _metaItem('Distance', quotation.distance != null ? '${quotation.distance!.toStringAsFixed(0)} KM' : null),
+                        _metaItem(
+                            'Distance',
+                            quotation.distance != null
+                                ? '${quotation.distance!.toStringAsFixed(0)} KM'
+                                : null),
                         _metaItem('GR/LR No.', quotation.grLrNo),
                         _metaItem('Destination', quotation.destination),
                       ],
@@ -372,11 +560,19 @@ class PdfService {
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(5),
-                      child: pw.Text('Customer Name & Billing Address', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF1E3A5F))),
+                      child: pw.Text('Customer Name & Billing Address',
+                          style: pw.TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: pw.FontWeight.bold,
+                              color: const PdfColor.fromInt(0xFF1E3A5F))),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(5),
-                      child: pw.Text('Shipping Address', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF1E3A5F))),
+                      child: pw.Text('Shipping Address',
+                          style: pw.TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: pw.FontWeight.bold,
+                              color: const PdfColor.fromInt(0xFF1E3A5F))),
                     ),
                   ],
                 ),
@@ -387,14 +583,30 @@ class PdfService {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text(quotation.customerName ?? customer.companyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                          pw.Text(quotation.billingAddress ?? customer.address ?? '', style: const pw.TextStyle(fontSize: 8)),
+                          pw.Text(
+                              quotation.customerName ?? customer.companyName,
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              quotation.billingAddress ??
+                                  customer.address ??
+                                  '',
+                              style: const pw.TextStyle(fontSize: 8)),
                           pw.SizedBox(height: 3),
-                          pw.Text('Phone : ${quotation.customerPhone ?? customer.phone ?? "-"}', style: const pw.TextStyle(fontSize: 8)),
-                          if (customer.gstNumber != null && customer.gstNumber!.isNotEmpty)
-                            pw.Text('GSTIN : ${customer.gstNumber}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                          if (quotation.partyContactPerson != null && quotation.partyContactPerson!.isNotEmpty)
-                            pw.Text('Party Contact Person : ${quotation.partyContactPerson}', style: const pw.TextStyle(fontSize: 8)),
+                          pw.Text(
+                              'Phone : ${quotation.customerPhone ?? customer.phone ?? "-"}',
+                              style: const pw.TextStyle(fontSize: 8)),
+                          if (customer.gstNumber != null &&
+                              customer.gstNumber!.isNotEmpty)
+                            pw.Text('GSTIN : ${customer.gstNumber}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold)),
+                          if (quotation.partyContactPerson != null &&
+                              quotation.partyContactPerson!.isNotEmpty)
+                            pw.Text(
+                                'Party Contact Person : ${quotation.partyContactPerson}',
+                                style: const pw.TextStyle(fontSize: 8)),
                         ],
                       ),
                     ),
@@ -403,12 +615,23 @@ class PdfService {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text(quotation.shippingName ?? customer.companyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                          pw.Text(quotation.shippingAddress ?? customer.address ?? '', style: const pw.TextStyle(fontSize: 8)),
+                          pw.Text(
+                              quotation.shippingName ?? customer.companyName,
+                              style: pw.TextStyle(
+                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              quotation.shippingAddress ??
+                                  customer.address ??
+                                  '',
+                              style: const pw.TextStyle(fontSize: 8)),
                           pw.SizedBox(height: 3),
-                          pw.Text('State Code : ${quotation.stateCode ?? 27}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                          if (quotation.salesman != null && quotation.salesman!.isNotEmpty)
-                            pw.Text('Salesman : ${quotation.salesman}', style: const pw.TextStyle(fontSize: 8)),
+                          pw.Text('State Code : ${quotation.stateCode ?? 27}',
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                          if (quotation.salesman != null &&
+                              quotation.salesman!.isNotEmpty)
+                            pw.Text('Salesman : ${quotation.salesman}',
+                                style: const pw.TextStyle(fontSize: 8)),
                         ],
                       ),
                     ),
@@ -423,322 +646,749 @@ class PdfService {
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
               columnWidths: {
                 0: const pw.FixedColumnWidth(25), // S No
-                1: const pw.FlexColumnWidth(3),   // Description
-                2: const pw.FixedColumnWidth(55),  // HSN/SAC
-                3: const pw.FixedColumnWidth(35),  // Qty
-                4: const pw.FixedColumnWidth(40),  // GST %
-                5: const pw.FixedColumnWidth(35),  // UOM
-                6: const pw.FixedColumnWidth(55),  // Item Rate
-                7: const pw.FixedColumnWidth(35),  // Disc %
-                8: const pw.FixedColumnWidth(65),  // Amount
+                1: const pw.FlexColumnWidth(3), // Description
+                2: const pw.FixedColumnWidth(55), // HSN/SAC
+                3: const pw.FixedColumnWidth(35), // Qty
+                4: const pw.FixedColumnWidth(35), // UOM
+                5: const pw.FixedColumnWidth(55), // Item Rate
+                6: const pw.FixedColumnWidth(35), // Disc %
+                7: const pw.FixedColumnWidth(40), // GST %
+                8: const pw.FixedColumnWidth(65), // Amount
               },
               children: [
                 // Header Row with dark blue background #1E3A5F and white text
                 pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E3A5F)),
+                  decoration: const pw.BoxDecoration(
+                      color: PdfColor.fromInt(0xFF1E3A5F)),
                   children: [
-                    'S\nNo', 'Description', 'HSN / SAC', 'Qty', 'GST\n%', 'UOM', 'Item Rate', 'Disc %', 'Amount\n(INR)'
-                  ].map((h) => pw.Padding(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                    child: pw.Text(h, style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: h == 'Description' ? pw.TextAlign.left : pw.TextAlign.center),
-                  )).toList(),
+                    'S\nNo',
+                    'Description',
+                    'HSN / SAC',
+                    'Qty',
+                    'UOM',
+                    'Item Rate',
+                    'Disc %',
+                    'GST\n%',
+                    'Amount\n(INR)'
+                  ]
+                      .map((h) => pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 2, vertical: 4),
+                            child: pw.Text(h,
+                                style: pw.TextStyle(
+                                    fontSize: 7.5,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.white),
+                                textAlign: h == 'Description'
+                                    ? pw.TextAlign.left
+                                    : pw.TextAlign.center),
+                          ))
+                      .toList(),
                 ),
                 // Line Items Rows
                 ...quotation.lineItems.asMap().entries.map((entry) {
                   final idx = entry.key;
                   final item = entry.value;
                   return pw.TableRow(
-                          children: [
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${idx + 1}', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.description, style: const pw.TextStyle(fontSize: 7.5))),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.hsnSac ?? '', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.qty.toInt().toString(), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${item.gstPercent.toStringAsFixed(0)}%', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.uom, style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.center)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.unitPrice), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('${item.discPercent.toStringAsFixed(2)}%', style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
-                            pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.total), style: const pw.TextStyle(fontSize: 7.5), textAlign: pw.TextAlign.right)),
-                          ],
-                        );
-                      }),
-                      // Totals Row
-                      pw.TableRow(
-                        decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                        children: [
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Total', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(totalQty.toInt().toString(), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(totalAmount), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  pw.Divider(color: PdfColors.black, height: 1, thickness: 0.8),
-
-                  // Bottom Grid: Tax Summary vs Order Summary
-                  pw.Table(
-                    border: const pw.TableBorder(
-                      verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.8),
-                    ),
-                    columnWidths: {
-                      0: const pw.FlexColumnWidth(3),
-                      1: const pw.FlexColumnWidth(2),
-                    },
                     children: [
-                      pw.TableRow(
-                        children: [
-                          // Left Box: Tax summary table & amount in words
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(4),
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                // Tax summary table
-                                pw.Table(
-                                  border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
-                                  children: [
-                                    pw.TableRow(
-                                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                                      children: [
-                                        'Tax Rate', 'Taxable Value', 'CGST Amount', 'SGST Amount', 'IGST Amount', 'Total Tax'
-                                      ].map((h) => pw.Padding(
-                                        padding: const pw.EdgeInsets.all(3),
-                                        child: pw.Text(h, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
-                                      )).toList(),
-                                    ),
-                                    pw.TableRow(
-                                      children: [
-                                        pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('TAX @ ${taxRate.toStringAsFixed(0)}%', style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.center)),
-                                        pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(taxableValue), style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.right)),
-                                        pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(cgstAmt), style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.right)),
-                                        pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(sgstAmt), style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.right)),
-                                        pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(igstAmt), style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.right)),
-                                        pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(totalTax), style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.right)),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                pw.SizedBox(height: 8),
-                                // Tax and Bill amount in words
-                                pw.Text('Tax Amount : ${numberToIndianWords(totalTax)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                                pw.Text('Bill Amount : ${numberToIndianWords(finalRoundedTotal)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                                pw.SizedBox(height: 6),
-                                pw.Text('Remark : ${quotation.remarks ?? "Being Quotation Generated"}', style: const pw.TextStyle(fontSize: 7.5)),
-                              ],
-                            ),
-                          ),
-                          // Right Box: Order Summary Box
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                _totalSummaryRow('Sub Total', quotation.subtotal),
-                                if (quotation.supplementarySubtotal > 0)
-                                  _totalSummaryRow('Supplementary Terms', quotation.supplementarySubtotal),
-                                _totalSummaryRow('Taxable Amount', quotation.subtotal + quotation.supplementarySubtotal),
-                                if (!isInterstate) ...[
-                                  _totalSummaryRow('CGST', cgstAmt),
-                                  _totalSummaryRow('SGST/UTGST', sgstAmt),
-                                ] else ...[
-                                  _totalSummaryRow('IGST', igstAmt),
-                                ],
-                                if (roundOff.abs() >= 0.005)
-                                  _totalSummaryRow(
-                                    'Round Off',
-                                    roundOff,
-                                    customValue:
-                                        'Rs. ${roundOff > 0 ? '+' : ''}${roundOff.toStringAsFixed(2)}',
-                                  ),
-                                pw.Divider(color: PdfColors.black, thickness: 0.5),
-                                _totalSummaryRow('Quotation Total', finalRoundedTotal, bold: true),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text('${idx + 1}',
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.center)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(item.description,
+                              style: const pw.TextStyle(fontSize: 7.5))),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(item.hsnSac ?? '',
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.center)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(item.qty.toInt().toString(),
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(item.uom,
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.center)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(_currencyFormat.format(item.unitPrice),
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(
+                              '${item.discPercent.toStringAsFixed(2)}%',
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(
+                              '${item.gstPercent.toStringAsFixed(0)}%',
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(_currencyFormat.format(item.total),
+                              style: const pw.TextStyle(fontSize: 7.5),
+                              textAlign: pw.TextAlign.right)),
                     ],
-                  ),
-                  pw.Divider(color: PdfColors.black, height: 1, thickness: 0.8),
-
-                  // Declaration & terms and conditions
-                  pw.Table(
-                    border: const pw.TableBorder(
-                      verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.8),
-                    ),
-                    columnWidths: {
-                      0: const pw.FlexColumnWidth(3),
-                      1: const pw.FlexColumnWidth(2),
-                    },
-                    children: [
-                      pw.TableRow(
-                        children: [
-                          // Declaration & Terms (Left)
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                pw.Text('Declaration:', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                                pw.Text(
-                                  'We declare that this invoice shows the actual price of the goods/services described and that all particulars are true and correct.',
-                                  style: const pw.TextStyle(fontSize: 7),
-                                ),
-                                if (quotation.paymentTerms != null && quotation.paymentTerms!.isNotEmpty) ...[
-                                  pw.SizedBox(height: 6),
-                                  pw.Text('Payment Terms:', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                                  pw.SizedBox(height: 3),
-                                  pw.Table(
-                                    border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-                                    children: [
-                                      pw.TableRow(
-                                        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                                        children: [
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Term / Stage', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold))),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Percentage', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Amount (Rs.)', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                                        ],
-                                      ),
-                                      ...quotation.paymentTerms!.map((term) {
-                                        final name = term['term']?.toString() ?? '';
-                                        final pct = term['percent']?.toString() ?? '0';
-                                        final pctNum = double.tryParse(pct) ??
-                                            ((term['percent'] as num?)?.toDouble() ?? 0.0);
-                                        // Calculate payment term amount on round-off value only
-                                        final amt = (finalRoundedTotal * (pctNum / 100.0)).roundToDouble();
-                                        return pw.TableRow(
-                                          children: [
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(name, style: const pw.TextStyle(fontSize: 6.5))),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('$pct%', style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.center)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(amt), style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.right)),
-                                          ],
-                                        );
-                                      }),
-                                    ],
-                                  ),
-                                ],
-                                if (quotation.supplementaryTerms != null && quotation.supplementaryTerms!.isNotEmpty) ...[
-                                  pw.SizedBox(height: 6),
-                                  pw.Text('Supplementary Terms / Additional Scope:', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                                  pw.SizedBox(height: 3),
-                                  pw.Table(
-                                    border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-                                    columnWidths: {
-                                      0: const pw.FlexColumnWidth(3),   // Item / Term
-                                      1: const pw.FixedColumnWidth(48), // Type
-                                      2: const pw.FixedColumnWidth(28), // Qty
-                                      3: const pw.FixedColumnWidth(45), // Rate
-                                      4: const pw.FixedColumnWidth(32), // GST %
-                                      5: const pw.FixedColumnWidth(55), // Total
-                                    },
-                                    children: [
-                                      pw.TableRow(
-                                        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                                        children: [
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Item / Term', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold))),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Type', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Qty', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Rate (Rs.)', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('GST %', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
-                                          pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Total (Rs.)', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                                        ],
-                                      ),
-                                      ...quotation.supplementaryTerms!.map((item) {
-                                        final isIncluded = item.type.toLowerCase() == 'included';
-                                        return pw.TableRow(
-                                          children: [
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(item.name, style: const pw.TextStyle(fontSize: 6.5))),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(item.type, style: pw.TextStyle(fontSize: 6.5, fontWeight: isIncluded ? pw.FontWeight.bold : pw.FontWeight.normal, color: isIncluded ? const PdfColor.fromInt(0xFF047857) : PdfColors.black), textAlign: pw.TextAlign.center)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? '-' : '${item.qty.toInt()}', style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.center)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? '-' : _currencyFormat.format(item.rate), style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.right)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? '-' : '${item.gstPercent.toStringAsFixed(0)}%', style: const pw.TextStyle(fontSize: 6.5), textAlign: pw.TextAlign.center)),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(isIncluded ? 'Included' : _currencyFormat.format(item.amount), style: pw.TextStyle(fontSize: 6.5, fontWeight: isIncluded ? pw.FontWeight.bold : pw.FontWeight.normal, color: isIncluded ? const PdfColor.fromInt(0xFF047857) : PdfColors.black), textAlign: pw.TextAlign.right)),
-                                          ],
-                                        );
-                                      }),
-                                      // Total Row for Supplementary Table
-                                      () {
-                                        final totalSupplementaryAmount = quotation.supplementaryTerms!.fold<double>(0, (sum, it) => sum + (it.type.toLowerCase() == 'included' ? 0.0 : it.amount));
-                                        return pw.TableRow(
-                                          decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                                          children: [
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('Total Supplementary', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold))),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text('')),
-                                            pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(_currencyFormat.format(totalSupplementaryAmount), style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                                          ],
-                                        );
-                                      }(),
-                                    ],
-                                  ),
-                                ],
-                                if (quotation.termsText != null && quotation.termsText!.isNotEmpty) ...[
-                                  pw.SizedBox(height: 6),
-                                  pw.Text('Terms and Conditions:', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                                  pw.Text(quotation.termsText!, style: const pw.TextStyle(fontSize: 7)),
-                                ],
-                              ],
-                            ),
-                          ),
-                          // Signatures (Right)
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                pw.Align(
-                                  alignment: pw.Alignment.topRight,
-                                  child: pw.Text('For ${companyName.toUpperCase()}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                                ),
-                                pw.SizedBox(height: 25),
-                                pw.Row(
-                                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    pw.Column(
-                                      children: [
-                                        pw.Container(width: 80, height: 0.5, color: PdfColors.black),
-                                        pw.SizedBox(height: 2),
-                                        pw.Text("Receiver's Signature", style: const pw.TextStyle(fontSize: 7.5)),
-                                      ],
-                                    ),
-                                    pw.Column(
-                                      children: [
-                                        pw.Container(width: 80, height: 0.5, color: PdfColors.black),
-                                        pw.SizedBox(height: 2),
-                                        pw.Text('Authorised Signatory', style: const pw.TextStyle(fontSize: 7.5)),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ];
-              },
+                  );
+                }),
+                // Totals Row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                  children: [
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('',
+                            style: pw.TextStyle(
+                                fontSize: 8, fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('Total',
+                            style: pw.TextStyle(
+                                fontSize: 8, fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('')),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(totalQty.toInt().toString(),
+                            style: pw.TextStyle(
+                                fontSize: 8, fontWeight: pw.FontWeight.bold),
+                            textAlign: pw.TextAlign.right)),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('')),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('')),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('')),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text('')),
+                    pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: pw.Text(_currencyFormat.format(totalAmount),
+                            style: pw.TextStyle(
+                                fontSize: 8, fontWeight: pw.FontWeight.bold),
+                            textAlign: pw.TextAlign.right)),
+                  ],
+                ),
+              ],
             ),
-          );
+            pw.Divider(color: PdfColors.black, height: 1, thickness: 0.8),
 
-          return pdf.save();
-        }
+            // Bottom Grid: Tax Summary vs Order Summary
+            pw.Table(
+              border: const pw.TableBorder(
+                verticalInside:
+                    pw.BorderSide(color: PdfColors.black, width: 0.8),
+              ),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(3),
+                1: const pw.FlexColumnWidth(2),
+              },
+              children: [
+                pw.TableRow(
+                  children: [
+                    // Left Box: Tax summary table & amount in words
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          // Tax summary table
+                          pw.Table(
+                            border: pw.TableBorder.all(
+                                color: PdfColors.black, width: 0.5),
+                            children: [
+                              pw.TableRow(
+                                decoration: const pw.BoxDecoration(
+                                    color: PdfColors.grey200),
+                                children: [
+                                  'Tax Rate',
+                                  'Taxable Value',
+                                  'CGST Amount',
+                                  'SGST Amount',
+                                  'IGST Amount',
+                                  'Total Tax'
+                                ]
+                                    .map((h) => pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(h,
+                                              style: pw.TextStyle(
+                                                  fontSize: 7,
+                                                  fontWeight:
+                                                      pw.FontWeight.bold),
+                                              textAlign: pw.TextAlign.center),
+                                        ))
+                                    .toList(),
+                              ),
+                              ...taxTiers.map((tier) => pw.TableRow(
+                                    children: [
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              'TAX @ ${tier.rateStr}%',
+                                              style: const pw.TextStyle(
+                                                  fontSize: 7),
+                                              textAlign: pw.TextAlign.center)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat
+                                                  .format(tier.taxableValue),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 7),
+                                              textAlign: pw.TextAlign.right)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat
+                                                  .format(tier.cgstAmount),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 7),
+                                              textAlign: pw.TextAlign.right)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat
+                                                  .format(tier.sgstAmount),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 7),
+                                              textAlign: pw.TextAlign.right)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat
+                                                  .format(tier.igstAmount),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 7),
+                                              textAlign: pw.TextAlign.right)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat
+                                                  .format(tier.totalTax),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 7),
+                                              textAlign: pw.TextAlign.right)),
+                                    ],
+                                  )),
+                              if (taxTiers.length > 1)
+                                pw.TableRow(
+                                  decoration: const pw.BoxDecoration(
+                                      color: PdfColors.grey100),
+                                  children: [
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Total',
+                                            style: pw.TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.center)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text(
+                                            _currencyFormat.format(
+                                                taxTiers.fold<double>(
+                                                    0,
+                                                    (s, t) =>
+                                                        s + t.taxableValue)),
+                                            style: pw.TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text(
+                                            _currencyFormat.format(
+                                                taxTiers.fold<double>(
+                                                    0,
+                                                    (s, t) =>
+                                                        s + t.cgstAmount)),
+                                            style: pw.TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text(
+                                            _currencyFormat.format(
+                                                taxTiers.fold<double>(
+                                                    0,
+                                                    (s, t) =>
+                                                        s + t.sgstAmount)),
+                                            style: pw.TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text(
+                                            _currencyFormat.format(
+                                                taxTiers.fold<double>(
+                                                    0,
+                                                    (s, t) =>
+                                                        s + t.igstAmount)),
+                                            style: pw.TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text(
+                                            _currencyFormat.format(
+                                                taxTiers.fold<double>(0,
+                                                    (s, t) => s + t.totalTax)),
+                                            style: pw.TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                  ],
+                                ),
+                            ],
+                          ),
+                          pw.SizedBox(height: 8),
+                          // Tax and Bill amount in words
+                          pw.Text(
+                              'Tax Amount : ${numberToIndianWords(totalTax)}',
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              'Bill Amount : ${numberToIndianWords(finalRoundedTotal)}',
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                          pw.SizedBox(height: 6),
+                          pw.Text(
+                              'Remark : ${quotation.remarks ?? "Being Quotation Generated"}',
+                              style: const pw.TextStyle(fontSize: 7.5)),
+                        ],
+                      ),
+                    ),
+                    // Right Box: Order Summary Box
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _totalSummaryRow('Sub Total', quotation.subtotal),
+                          if (quotation.supplementarySubtotal > 0)
+                            _totalSummaryRow('Supplementary Terms',
+                                quotation.supplementarySubtotal),
+                          _totalSummaryRow(
+                              'Taxable Amount',
+                              quotation.subtotal +
+                                  quotation.supplementarySubtotal),
+                          if (!isInterstate) ...[
+                            _totalSummaryRow('CGST', cgstAmt),
+                            _totalSummaryRow('SGST/UTGST', sgstAmt),
+                          ] else ...[
+                            _totalSummaryRow('IGST', igstAmt),
+                          ],
+                          if (roundOff.abs() >= 0.005)
+                            _totalSummaryRow(
+                              'Round Off',
+                              roundOff,
+                              customValue:
+                                  'Rs. ${roundOff > 0 ? '+' : ''}${roundOff.toStringAsFixed(2)}',
+                            ),
+                          pw.Divider(color: PdfColors.black, thickness: 0.5),
+                          _totalSummaryRow('Quotation Total', finalRoundedTotal,
+                              bold: true),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.Divider(color: PdfColors.black, height: 1, thickness: 0.8),
+
+            // Declaration & terms and conditions
+            pw.Table(
+              border: const pw.TableBorder(
+                verticalInside:
+                    pw.BorderSide(color: PdfColors.black, width: 0.8),
+              ),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(3),
+                1: const pw.FlexColumnWidth(2),
+              },
+              children: [
+                pw.TableRow(
+                  children: [
+                    // Declaration & Terms (Left)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text('Declaration:',
+                              style: pw.TextStyle(
+                                  fontSize: 7.5,
+                                  fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                            'We declare that this invoice shows the actual price of the goods/services described and that all particulars are true and correct.',
+                            style: const pw.TextStyle(fontSize: 7),
+                          ),
+                          if (quotation.paymentTerms != null &&
+                              quotation.paymentTerms!.isNotEmpty) ...[
+                            pw.SizedBox(height: 6),
+                            pw.Text('Payment Terms:',
+                                style: pw.TextStyle(
+                                    fontSize: 7.5,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.SizedBox(height: 3),
+                            pw.Table(
+                              border: pw.TableBorder.all(
+                                  color: PdfColors.grey400, width: 0.5),
+                              children: [
+                                pw.TableRow(
+                                  decoration: const pw.BoxDecoration(
+                                      color: PdfColors.grey200),
+                                  children: [
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Term / Stage',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight:
+                                                    pw.FontWeight.bold))),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Percentage',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.center)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Amount (Rs.)',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                  ],
+                                ),
+                                ...quotation.paymentTerms!.map((term) {
+                                  final name = term['term']?.toString() ?? '';
+                                  final pct =
+                                      term['percent']?.toString() ?? '0';
+                                  final pctNum = double.tryParse(pct) ??
+                                      ((term['percent'] as num?)?.toDouble() ??
+                                          0.0);
+                                  // Calculate payment term amount on round-off value only
+                                  final amt =
+                                      (finalRoundedTotal * (pctNum / 100.0))
+                                          .roundToDouble();
+                                  return pw.TableRow(
+                                    children: [
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(name,
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5))),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text('$pct%',
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5),
+                                              textAlign: pw.TextAlign.center)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat.format(amt),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5),
+                                              textAlign: pw.TextAlign.right)),
+                                    ],
+                                  );
+                                }),
+                              ],
+                            ),
+                          ],
+                          if (quotation.supplementaryTerms != null &&
+                              quotation.supplementaryTerms!.isNotEmpty) ...[
+                            pw.SizedBox(height: 6),
+                            pw.Text('Supplementary Terms / Additional Scope:',
+                                style: pw.TextStyle(
+                                    fontSize: 7.5,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.SizedBox(height: 3),
+                            pw.Table(
+                              border: pw.TableBorder.all(
+                                  color: PdfColors.grey400, width: 0.5),
+                              columnWidths: {
+                                0: const pw.FlexColumnWidth(3), // Item / Term
+                                1: const pw.FixedColumnWidth(48), // Type
+                                2: const pw.FixedColumnWidth(28), // Qty
+                                3: const pw.FixedColumnWidth(45), // Rate
+                                4: const pw.FixedColumnWidth(32), // GST %
+                                5: const pw.FixedColumnWidth(55), // Total
+                              },
+                              children: [
+                                pw.TableRow(
+                                  decoration: const pw.BoxDecoration(
+                                      color: PdfColors.grey200),
+                                  children: [
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Item / Term',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight:
+                                                    pw.FontWeight.bold))),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Type',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.center)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Qty',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.center)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Rate (Rs.)',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('GST %',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.center)),
+                                    pw.Padding(
+                                        padding: const pw.EdgeInsets.all(3),
+                                        child: pw.Text('Total (Rs.)',
+                                            style: pw.TextStyle(
+                                                fontSize: 6.5,
+                                                fontWeight: pw.FontWeight.bold),
+                                            textAlign: pw.TextAlign.right)),
+                                  ],
+                                ),
+                                ...quotation.supplementaryTerms!.map((item) {
+                                  final isIncluded =
+                                      item.type.toLowerCase() == 'included';
+                                  return pw.TableRow(
+                                    children: [
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(item.name,
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5))),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(item.type,
+                                              style: pw.TextStyle(
+                                                  fontSize: 6.5,
+                                                  fontWeight: isIncluded
+                                                      ? pw.FontWeight.bold
+                                                      : pw.FontWeight.normal,
+                                                  color: isIncluded
+                                                      ? const PdfColor.fromInt(
+                                                          0xFF047857)
+                                                      : PdfColors.black),
+                                              textAlign: pw.TextAlign.center)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              isIncluded
+                                                  ? '-'
+                                                  : '${item.qty.toInt()}',
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5),
+                                              textAlign: pw.TextAlign.center)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              isIncluded
+                                                  ? '-'
+                                                  : _currencyFormat
+                                                      .format(item.rate),
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5),
+                                              textAlign: pw.TextAlign.right)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              isIncluded
+                                                  ? '-'
+                                                  : '${item.gstPercent.toStringAsFixed(0)}%',
+                                              style: const pw.TextStyle(
+                                                  fontSize: 6.5),
+                                              textAlign: pw.TextAlign.center)),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              isIncluded
+                                                  ? 'Included'
+                                                  : _currencyFormat
+                                                      .format(item.amount),
+                                              style: pw.TextStyle(
+                                                  fontSize: 6.5,
+                                                  fontWeight: isIncluded
+                                                      ? pw.FontWeight.bold
+                                                      : pw.FontWeight.normal,
+                                                  color: isIncluded
+                                                      ? const PdfColor.fromInt(
+                                                          0xFF047857)
+                                                      : PdfColors.black),
+                                              textAlign: pw.TextAlign.right)),
+                                    ],
+                                  );
+                                }),
+                                // Total Row for Supplementary Table
+                                () {
+                                  final totalSupplementaryAmount = quotation
+                                      .supplementaryTerms!
+                                      .fold<double>(
+                                          0,
+                                          (sum, it) =>
+                                              sum +
+                                              (it.type.toLowerCase() ==
+                                                      'included'
+                                                  ? 0.0
+                                                  : it.amount));
+                                  return pw.TableRow(
+                                    decoration: const pw.BoxDecoration(
+                                        color: PdfColors.grey100),
+                                    children: [
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text('Total Supplementary',
+                                              style: pw.TextStyle(
+                                                  fontSize: 6.5,
+                                                  fontWeight:
+                                                      pw.FontWeight.bold))),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text('')),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text('')),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text('')),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text('')),
+                                      pw.Padding(
+                                          padding: const pw.EdgeInsets.all(3),
+                                          child: pw.Text(
+                                              _currencyFormat.format(
+                                                  totalSupplementaryAmount),
+                                              style: pw.TextStyle(
+                                                  fontSize: 6.5,
+                                                  fontWeight:
+                                                      pw.FontWeight.bold),
+                                              textAlign: pw.TextAlign.right)),
+                                    ],
+                                  );
+                                }(),
+                              ],
+                            ),
+                          ],
+                          if (quotation.termsText != null &&
+                              quotation.termsText!.isNotEmpty) ...[
+                            pw.SizedBox(height: 6),
+                            pw.Text('Terms and Conditions:',
+                                style: pw.TextStyle(
+                                    fontSize: 7.5,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.Text(quotation.termsText!,
+                                style: const pw.TextStyle(fontSize: 7)),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Signatures (Right)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Align(
+                            alignment: pw.Alignment.topRight,
+                            child: pw.Text('For ${companyName.toUpperCase()}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.SizedBox(height: 25),
+                          pw.Row(
+                            mainAxisAlignment:
+                                pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Column(
+                                children: [
+                                  pw.Container(
+                                      width: 80,
+                                      height: 0.5,
+                                      color: PdfColors.black),
+                                  pw.SizedBox(height: 2),
+                                  pw.Text("Receiver's Signature",
+                                      style: const pw.TextStyle(fontSize: 7.5)),
+                                ],
+                              ),
+                              pw.Column(
+                                children: [
+                                  pw.Container(
+                                      width: 80,
+                                      height: 0.5,
+                                      color: PdfColors.black),
+                                  pw.SizedBox(height: 2),
+                                  pw.Text('Authorised Signatory',
+                                      style: const pw.TextStyle(fontSize: 7.5)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
 
   static pw.Widget _buildTankSpecPdfTable(Map<String, dynamic> tankSpec) {
     final mat = tankSpec['material']?.toString().toUpperCase() ?? 'GI';
     final cap = (tankSpec['capacity'] as num?)?.toInt() ?? 500;
     final shell = tankSpec['shell_thickness']?.toString() ?? '3mm';
     final dish = tankSpec['dish_thickness']?.toString() ?? '3mm';
-    final ins = (tankSpec['insulation']?.toString().toLowerCase().contains('puff') == true ||
-            tankSpec['insulation']?.toString().toLowerCase().contains('puf') == true)
+    final ins = (tankSpec['insulation']
+                    ?.toString()
+                    .toLowerCase()
+                    .contains('puff') ==
+                true ||
+            tankSpec['insulation']?.toString().toLowerCase().contains('puf') ==
+                true)
         ? 'PUF'
         : (tankSpec['insulation']?.toString() ?? 'PUF');
     final isPress = tankSpec['is_pressurized'] as bool? ?? true;
@@ -763,7 +1413,10 @@ class PdfService {
         pw.SizedBox(height: 14),
         pw.Text(
           'TECHNICAL SPECIFICATION FOR : $mat HOT WATER STORAGE TANK.',
-          style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+          style: pw.TextStyle(
+              fontSize: 8.5,
+              fontWeight: pw.FontWeight.bold,
+              decoration: pw.TextDecoration.underline),
         ),
         pw.SizedBox(height: 6),
         pw.Table(
@@ -780,19 +1433,28 @@ class PdfService {
               children: [
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3.5),
-                  child: pw.Text('SL\nNO', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                  child: pw.Text('SL\nNO',
+                      style: pw.TextStyle(
+                          fontSize: 7, fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center),
                 ),
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3.5),
-                  child: pw.Text('', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                  child: pw.Text('',
+                      style: pw.TextStyle(
+                          fontSize: 7, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3.5),
-                  child: pw.Text('DESCRIPTION', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                  child: pw.Text('DESCRIPTION',
+                      style: pw.TextStyle(
+                          fontSize: 7, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3.5),
-                  child: pw.Text('SPECIFICATION', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                  child: pw.Text('SPECIFICATION',
+                      style: pw.TextStyle(
+                          fontSize: 7, fontWeight: pw.FontWeight.bold)),
                 ),
               ],
             ),
@@ -803,14 +1465,17 @@ class PdfService {
                 children: [
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(3.5),
-                    child: pw.Text(r.$1, style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.center),
+                    child: pw.Text(r.$1,
+                        style: const pw.TextStyle(fontSize: 7),
+                        textAlign: pw.TextAlign.center),
                   ),
                   if (idx == 0)
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(3.5),
                       child: pw.Text(
                         '$cap Ltr\nHOT WATER\nSTORAGE $mat\n$pressStr\nTANK',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                        style: pw.TextStyle(
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                         textAlign: pw.TextAlign.center,
                       ),
                     )
@@ -818,11 +1483,13 @@ class PdfService {
                     pw.Container(),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(3.5),
-                    child: pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7)),
+                    child:
+                        pw.Text(r.$2, style: const pw.TextStyle(fontSize: 7)),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(3.5),
-                    child: pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7)),
+                    child:
+                        pw.Text(r.$3, style: const pw.TextStyle(fontSize: 7)),
                   ),
                 ],
               );
@@ -838,22 +1505,34 @@ class PdfService {
       padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
       child: pw.Row(
         children: [
-          pw.SizedBox(width: 100, child: pw.Text(label, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-          pw.Text(' : ', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-          pw.Expanded(child: pw.Text(value ?? '', style: const pw.TextStyle(fontSize: 8))),
+          pw.SizedBox(
+              width: 100,
+              child: pw.Text(label,
+                  style: pw.TextStyle(
+                      fontSize: 8, fontWeight: pw.FontWeight.bold))),
+          pw.Text(' : ',
+              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+          pw.Expanded(
+              child:
+                  pw.Text(value ?? '', style: const pw.TextStyle(fontSize: 8))),
         ],
       ),
     );
   }
 
-  static pw.Widget _totalSummaryRow(String label, double amount, {bool bold = false, String? customValue}) {
+  static pw.Widget _totalSummaryRow(String label, double amount,
+      {bool bold = false, String? customValue}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(label, style: pw.TextStyle(fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null)),
-          pw.Text(customValue ?? '$_rupee${_currencyFormat.format(amount)}', style: pw.TextStyle(fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null)),
+          pw.Text(label,
+              style: pw.TextStyle(
+                  fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null)),
+          pw.Text(customValue ?? '$_rupee${_currencyFormat.format(amount)}',
+              style: pw.TextStyle(
+                  fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null)),
         ],
       ),
     );
@@ -869,13 +1548,15 @@ class PdfService {
     required Map<String, dynamic> templateConfig,
     String scopeFilter = 'all', // 'all', 'company', 'customer'
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    final resolvedConfig =
+        await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
-    final createdByName = (quotation.salesman != null && quotation.salesman!.trim().isNotEmpty)
-        ? quotation.salesman!.trim()
-        : null;
+    final createdByName =
+        (quotation.salesman != null && quotation.salesman!.trim().isNotEmpty)
+            ? quotation.salesman!.trim()
+            : null;
 
     final pdf = pw.Document();
 
@@ -887,14 +1568,16 @@ class PdfService {
     }
 
     final companyItems = boq.items.where((i) => i.scope == 'company').toList();
-    final customerItems = boq.items.where((i) => i.scope == 'customer').toList();
+    final customerItems =
+        boq.items.where((i) => i.scope == 'customer').toList();
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         header: (context) => _buildHeader(
-          companyName: resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY',
+          companyName: resolvedConfig['company_name'] as String? ??
+              'INSIYA SOLAR INDUSTRY',
           companyAddress: resolvedConfig['company_address'] as String? ?? '',
           companyPhone: resolvedConfig['company_phone'] as String? ?? '',
           companyEmail: resolvedConfig['company_email'] as String? ?? '',
@@ -906,15 +1589,20 @@ class PdfService {
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+          resolvedConfig['footer_text'] as String? ??
+              'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
           generatedBy: generatedByName,
           createdBy: createdByName,
         ),
         build: (context) {
-          final quotationItemNames = quotation.lineItems.map((li) => li.description).where((d) => d.isNotEmpty).join(', ');
-          final displayProductName = quotationItemNames.isNotEmpty ? quotationItemNames : product.name;
+          final quotationItemNames = quotation.lineItems
+              .map((li) => li.description)
+              .where((d) => d.isNotEmpty)
+              .join(', ');
+          final displayProductName =
+              quotationItemNames.isNotEmpty ? quotationItemNames : product.name;
 
           return [
             _buildBillTo(customer),
@@ -922,7 +1610,8 @@ class PdfService {
             // Product Title Banner
             pw.Container(
               width: double.infinity,
-              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: const pw.BoxDecoration(
                 color: PdfColor.fromInt(0xFF1E3A5F),
                 borderRadius: pw.BorderRadius.all(pw.Radius.circular(4)),
@@ -971,7 +1660,8 @@ class PdfService {
                 padding: const pw.EdgeInsets.all(8),
                 decoration: pw.BoxDecoration(
                   color: PdfColors.grey100,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(4)),
                   border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
                 ),
                 child: pw.Text(
@@ -996,7 +1686,8 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    final resolvedConfig =
+        await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
@@ -1011,8 +1702,8 @@ class PdfService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             _buildHeader(
-              companyName:
-                  resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY',
+              companyName: resolvedConfig['company_name'] as String? ??
+                  'INSIYA SOLAR INDUSTRY',
               companyAddress:
                   resolvedConfig['company_address'] as String? ?? '',
               companyPhone: resolvedConfig['company_phone'] as String? ?? '',
@@ -1022,7 +1713,7 @@ class PdfService {
               docNumber: factoryOrder.orderNumber,
               docDate: factoryOrder.createdAt,
               status: factoryOrder.status.displayName,
-          logoImage: logoImage,
+              logoImage: logoImage,
             ),
             pw.SizedBox(height: 20),
             // Customer & product info
@@ -1046,21 +1737,27 @@ class PdfService {
             ],
             // Custom Fields / Additional Details
             () {
-              final customTitle = (factoryOrder.productionSpecs['custom_fields_title'] as String?)?.trim();
-              final sectionTitle = (customTitle != null && customTitle.isNotEmpty)
-                  ? customTitle
-                  : 'Additional Details';
+              final customTitle = (factoryOrder
+                      .productionSpecs['custom_fields_title'] as String?)
+                  ?.trim();
+              final sectionTitle =
+                  (customTitle != null && customTitle.isNotEmpty)
+                      ? customTitle
+                      : 'Additional Details';
               Map<String, dynamic> customFields = {};
               if (factoryOrder.productionSpecs['custom_fields'] is Map) {
-                customFields = Map<String, dynamic>.from(factoryOrder.productionSpecs['custom_fields'] as Map);
+                customFields = Map<String, dynamic>.from(
+                    factoryOrder.productionSpecs['custom_fields'] as Map);
               } else if (factoryOrder.productionSpecs.isNotEmpty) {
-                customFields = Map<String, dynamic>.from(factoryOrder.productionSpecs)
-                  ..remove('custom_fields_title')
-                  ..remove('custom_fields_defs');
+                customFields =
+                    Map<String, dynamic>.from(factoryOrder.productionSpecs)
+                      ..remove('custom_fields_title')
+                      ..remove('custom_fields_defs');
               }
 
               final validCustomFields = customFields.entries
-                  .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
+                  .where((e) =>
+                      e.value != null && e.value.toString().trim().isNotEmpty)
                   .toList();
 
               if (validCustomFields.isNotEmpty) {
@@ -1094,7 +1791,8 @@ class PdfService {
             ],
             pw.Spacer(),
             _buildFooter(
-              resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+              resolvedConfig['footer_text'] as String? ??
+                  'Thank you for your business.',
               1,
               1,
               generatedBy: generatedByName,
@@ -1115,7 +1813,8 @@ class PdfService {
     required Product product,
     required Map<String, dynamic> templateConfig,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    final resolvedConfig =
+        await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
@@ -1127,7 +1826,8 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         header: (context) => _buildHeader(
-          companyName: resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY',
+          companyName: resolvedConfig['company_name'] as String? ??
+              'INSIYA SOLAR INDUSTRY',
           companyAddress: resolvedConfig['company_address'] as String? ?? '',
           companyPhone: resolvedConfig['company_phone'] as String? ?? '',
           companyEmail: resolvedConfig['company_email'] as String? ?? '',
@@ -1139,7 +1839,8 @@ class PdfService {
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+          resolvedConfig['footer_text'] as String? ??
+              'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
           generatedBy: generatedByName,
@@ -1159,7 +1860,8 @@ class PdfService {
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: const pw.BoxDecoration(
                   color: PdfColors.grey100,
                   borderRadius: pw.BorderRadius.all(pw.Radius.circular(4)),
@@ -1226,7 +1928,8 @@ class PdfService {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   if (logoImage != null) ...[
-                    pw.Image(logoImage, width: 60, height: 60, fit: pw.BoxFit.contain),
+                    pw.Image(logoImage,
+                        width: 60, height: 60, fit: pw.BoxFit.contain),
                     pw.SizedBox(width: 12),
                   ],
                   pw.Expanded(
@@ -1235,28 +1938,28 @@ class PdfService {
                       children: [
                         pw.Text(
                           cleanCompanyName,
-                    style: pw.TextStyle(
-                      fontSize: 22,
-                      fontWeight: pw.FontWeight.bold,
-                      color: const PdfColor.fromInt(0xFF1E3A5F),
-                    ),
-                  ),
-                  if (cleanCompanyAddress.isNotEmpty)
-                    pw.Text(cleanCompanyAddress,
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700)),
-                  if (cleanCompanyPhone.isNotEmpty)
-                    pw.Text(cleanCompanyPhone,
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700)),
-                  if (cleanCompanyEmail.isNotEmpty)
-                    pw.Text(cleanCompanyEmail,
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700)),
-                  if (cleanCompanyGst.isNotEmpty)
-                    pw.Text(cleanCompanyGst,
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700)),
+                          style: pw.TextStyle(
+                            fontSize: 22,
+                            fontWeight: pw.FontWeight.bold,
+                            color: const PdfColor.fromInt(0xFF1E3A5F),
+                          ),
+                        ),
+                        if (cleanCompanyAddress.isNotEmpty)
+                          pw.Text(cleanCompanyAddress,
+                              style: const pw.TextStyle(
+                                  fontSize: 9, color: PdfColors.grey700)),
+                        if (cleanCompanyPhone.isNotEmpty)
+                          pw.Text(cleanCompanyPhone,
+                              style: const pw.TextStyle(
+                                  fontSize: 9, color: PdfColors.grey700)),
+                        if (cleanCompanyEmail.isNotEmpty)
+                          pw.Text(cleanCompanyEmail,
+                              style: const pw.TextStyle(
+                                  fontSize: 9, color: PdfColors.grey700)),
+                        if (cleanCompanyGst.isNotEmpty)
+                          pw.Text(cleanCompanyGst,
+                              style: const pw.TextStyle(
+                                  fontSize: 9, color: PdfColors.grey700)),
                       ],
                     ),
                   ),
@@ -1296,17 +1999,23 @@ class PdfService {
                   padding:
                       const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: pw.BoxDecoration(
-                    color: cleanStatus.toLowerCase() == 'confirmed' || cleanStatus.toLowerCase() == 'approved' || cleanStatus == 'Submitted'
-                            ? PdfColors.green100
-                            : PdfColors.orange100,
+                    color: cleanStatus.toLowerCase() == 'confirmed' ||
+                            cleanStatus.toLowerCase() == 'approved' ||
+                            cleanStatus == 'Submitted'
+                        ? PdfColors.green100
+                        : PdfColors.orange100,
                     borderRadius:
                         const pw.BorderRadius.all(pw.Radius.circular(3)),
                   ),
                   child: pw.Text(
-                    cleanStatus.toLowerCase() == 'confirmed' ? 'Approved' : cleanStatus,
+                    cleanStatus.toLowerCase() == 'confirmed'
+                        ? 'Approved'
+                        : cleanStatus,
                     style: pw.TextStyle(
                       fontSize: 9,
-                      color: cleanStatus.toLowerCase() == 'confirmed' || cleanStatus.toLowerCase() == 'approved' || cleanStatus == 'Submitted'
+                      color: cleanStatus.toLowerCase() == 'confirmed' ||
+                              cleanStatus.toLowerCase() == 'approved' ||
+                              cleanStatus == 'Submitted'
                           ? PdfColors.green800
                           : PdfColors.orange800,
                     ),
@@ -1376,7 +2085,11 @@ class PdfService {
     if (items.isEmpty) {
       return pw.Padding(
         padding: const pw.EdgeInsets.symmetric(vertical: 4),
-        child: pw.Text('No items in this scope.', style: pw.TextStyle(fontStyle: pw.FontStyle.italic, fontSize: 9, color: PdfColors.grey600)),
+        child: pw.Text('No items in this scope.',
+            style: pw.TextStyle(
+                fontStyle: pw.FontStyle.italic,
+                fontSize: 9,
+                color: PdfColors.grey600)),
       );
     }
     return pw.Table(
@@ -1586,7 +2299,9 @@ class PdfService {
   }
 
   static pw.Widget _buildFooter(
-      String footerText, int pageNumber, int totalPages, {
+    String footerText,
+    int pageNumber,
+    int totalPages, {
     String? generatedBy,
     String? createdBy,
     String? updatedBy,
@@ -1613,7 +2328,8 @@ class PdfService {
             pw.Expanded(
               child: pw.Text(
                 _cleanText(footerText),
-                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
               ),
             ),
             if (attributions.isNotEmpty)
@@ -1666,13 +2382,17 @@ class PdfService {
       final subParts = sub.split('/');
       if (subParts.length == 2) {
         // Check if inverted: e.g. '00027/26-27'
-        if (RegExp(r'^\d+$').hasMatch(subParts[0]) && !RegExp(r'^\d+$').hasMatch(subParts[1])) {
+        if (RegExp(r'^\d+$').hasMatch(subParts[0]) &&
+            !RegExp(r'^\d+$').hasMatch(subParts[1])) {
           final seq = subParts[0].padLeft(5, '0');
-          final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[1]) ? subParts[1] : fy;
+          final targetFy =
+              RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[1]) ? subParts[1] : fy;
           return 'IZY/SO/$targetFy/$seq';
-        } else if (!RegExp(r'^\d+$').hasMatch(subParts[0]) && RegExp(r'^\d+$').hasMatch(subParts[1])) {
+        } else if (!RegExp(r'^\d+$').hasMatch(subParts[0]) &&
+            RegExp(r'^\d+$').hasMatch(subParts[1])) {
           final seq = subParts[1].padLeft(5, '0');
-          final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[0]) ? subParts[0] : fy;
+          final targetFy =
+              RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[0]) ? subParts[0] : fy;
           return 'IZY/SO/$targetFy/$seq';
         }
       }
@@ -1684,11 +2404,15 @@ class PdfService {
       final parts = clean.split('/');
       if (RegExp(r'^\d+$').hasMatch(parts[0])) {
         final seq = parts[0].padLeft(5, '0');
-        final targetFy = parts.length > 1 && RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[1]) ? parts[1] : fy;
+        final targetFy =
+            parts.length > 1 && RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[1])
+                ? parts[1]
+                : fy;
         return 'IZY/SO/$targetFy/$seq';
       } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
         final seq = parts[1].padLeft(5, '0');
-        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[0]) ? parts[0] : fy;
+        final targetFy =
+            RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[0]) ? parts[0] : fy;
         return 'IZY/SO/$targetFy/$seq';
       }
     }
@@ -1707,19 +2431,37 @@ class PdfService {
     required Product product,
     required String variant,
     required Map<String, dynamic> templateConfig,
+    Quotation? quotation,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    Quotation? resolvedQuotation = quotation;
+    if (resolvedQuotation == null && salesOrder.pipelineId.isNotEmpty) {
+      try {
+        final supabase = Supabase.instance.client;
+        final qRes = await supabase
+            .from('quotations')
+            .select()
+            .eq('pipeline_id', salesOrder.pipelineId)
+            .maybeSingle();
+        if (qRes != null) {
+          resolvedQuotation = Quotation.fromJson(qRes);
+        }
+      } catch (_) {}
+    }
+
+    final resolvedConfig =
+        await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
-    final createdByName = (salesOrder.salesman != null && salesOrder.salesman!.trim().isNotEmpty)
-        ? salesOrder.salesman!.trim()
-        : null;
+    final createdByName =
+        (salesOrder.salesman != null && salesOrder.salesman!.trim().isNotEmpty)
+            ? salesOrder.salesman!.trim()
+            : null;
 
     final pdf = pw.Document();
 
-    final companyName = resolvedConfig['company_name'] as String? ??
-        'INSIYA SOLAR INDUSTRY';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
     final companyAddress = resolvedConfig['company_address'] as String? ??
         'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra 411014';
     final companyPhone =
@@ -1730,7 +2472,8 @@ class PdfService {
         resolvedConfig['company_gst'] as String? ?? '27CFTPS5292A1ZY';
 
     final cleanCompanyName = _cleanText(companyName);
-    final formattedSoNum = formatSalesOrderNumber(salesOrder.salesOrderNumber, salesOrder.orderDate);
+    final formattedSoNum = formatSalesOrderNumber(
+        salesOrder.salesOrderNumber, salesOrder.orderDate);
 
     final String salesOrderDocTitle;
     if (variant == 'technical') {
@@ -1741,10 +2484,32 @@ class PdfService {
       salesOrderDocTitle = 'SALES ORDER';
     }
 
+    final isInterstate =
+        !(salesOrder.placeOfSupply?.trim().toLowerCase() == 'maharashtra' ||
+            salesOrder.placeOfSupply?.trim().toLowerCase() == '27' ||
+            salesOrder.placeOfSupply?.trim().toLowerCase() == 'mh' ||
+            salesOrder.cgstAmount > 0);
+
+    final taxTiers = _calculateTaxTiers(
+      lineItems: salesOrder.lineItems,
+      supplementaryItems: resolvedQuotation?.supplementaryTerms,
+      isInterstate: isInterstate,
+      defaultRate: salesOrder.cgstRate + salesOrder.sgstRate,
+    );
+    final soTaxableValue =
+        taxTiers.fold<double>(0, (s, t) => s + t.taxableValue);
+    final soCgstAmt = taxTiers.fold<double>(0, (s, t) => s + t.cgstAmount);
+    final soSgstAmt = taxTiers.fold<double>(0, (s, t) => s + t.sgstAmount);
+    final soIgstAmt = taxTiers.fold<double>(0, (s, t) => s + t.igstAmount);
+    final soTotalTax = taxTiers.fold<double>(0, (s, t) => s + t.totalTax);
+    final soUnroundedTotal = soTaxableValue + soTotalTax;
+    final soFinalTotal = soUnroundedTotal.roundToDouble();
+    final soRoundOff = soFinalTotal - soUnroundedTotal;
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(30),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 26, vertical: 20),
         header: (context) => _buildHeader(
           companyName: companyName,
           companyAddress: companyAddress,
@@ -1760,7 +2525,8 @@ class PdfService {
         footer: (context) => _buildFooter(
           variant == 'production'
               ? ''
-              : (resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.'),
+              : (resolvedConfig['footer_text'] as String? ??
+                  'Thank you for your business.'),
           context.pageNumber,
           context.pagesCount,
           generatedBy: generatedByName,
@@ -1780,8 +2546,7 @@ class PdfService {
               children: [
                 pw.TableRow(
                   children: [
-                    _metaCellRow(
-                        'Sales Order No.', formattedSoNum),
+                    _metaCellRow('Sales Order No.', formattedSoNum),
                     _metaCellRow('Order Date',
                         DateFormat('dd/MM/yyyy').format(salesOrder.orderDate)),
                   ],
@@ -1818,7 +2583,8 @@ class PdfService {
                     _metaCellRow(
                       'Expected Dispatch',
                       salesOrder.expectedDispatchDate != null
-                          ? DateFormat('dd/MM/yyyy').format(salesOrder.expectedDispatchDate!)
+                          ? DateFormat('dd/MM/yyyy')
+                              .format(salesOrder.expectedDispatchDate!)
                           : '',
                     ),
                   ],
@@ -2028,19 +2794,24 @@ class PdfService {
                     _metaCellRow(
                       'Expected Dispatch',
                       salesOrder.expectedDispatchDate != null
-                          ? DateFormat('dd/MM/yyyy').format(salesOrder.expectedDispatchDate!)
+                          ? DateFormat('dd/MM/yyyy')
+                              .format(salesOrder.expectedDispatchDate!)
                           : '',
                     ),
                   ],
                 ),
               ],
             ),
-            pw.SizedBox(height: 12),
+            pw.SizedBox(height: 8),
           ],
 
-          // Line items table
-          _buildSalesOrderItemsTable(salesOrder, variant),
-          pw.SizedBox(height: 12),
+          // Line items table with supplementary items appended beneath
+          _buildSalesOrderItemsTable(
+            salesOrder,
+            variant,
+            supplementaryItems: resolvedQuotation?.supplementaryTerms,
+          ),
+          pw.SizedBox(height: 8),
 
           if (variant == 'commercial') ...[
             // Totals block & Taxes
@@ -2054,26 +2825,30 @@ class PdfService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       // Tax Matrix table
-                      _buildTaxMatrixTable(salesOrder),
-                      pw.SizedBox(height: 10),
+                      _buildTaxMatrixTable(
+                        salesOrder,
+                        quotation: resolvedQuotation,
+                        precalculatedTiers: taxTiers,
+                      ),
+                      pw.SizedBox(height: 4),
                       pw.Text(
-                        'Tax Amount : ${numberToIndianWords(salesOrder.cgstAmount + salesOrder.sgstAmount + salesOrder.igstAmount)}',
+                        'Tax Amount : ${numberToIndianWords(soTotalTax)}',
                         style: pw.TextStyle(
-                            fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                       ),
                       pw.Text(
-                        'Bill Amount : ${numberToIndianWords(salesOrder.grandTotal)}',
+                        'Bill Amount : ${numberToIndianWords(soFinalTotal)}',
                         style: pw.TextStyle(
-                            fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                            fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                       ),
-                      pw.SizedBox(height: 10),
                       if (salesOrder.remarks != null &&
                           salesOrder.remarks!.isNotEmpty) ...[
+                        pw.SizedBox(height: 4),
                         pw.Text('Remark : ',
                             style: pw.TextStyle(
-                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                                fontSize: 8, fontWeight: pw.FontWeight.bold)),
                         pw.Text(_cleanText(salesOrder.remarks),
-                            style: const pw.TextStyle(fontSize: 9)),
+                            style: const pw.TextStyle(fontSize: 7.5)),
                       ],
                     ],
                   ),
@@ -2081,50 +2856,126 @@ class PdfService {
                 pw.SizedBox(width: 15),
                 pw.Expanded(
                   flex: 2,
-                  child: () {
-                    final double soTaxTotal = salesOrder.cgstAmount > 0
-                        ? (salesOrder.cgstAmount + salesOrder.sgstAmount)
-                        : salesOrder.igstAmount;
-                    final double soUnroundedTotal = salesOrder.subtotal + soTaxTotal;
-                    final double soFinalTotal = soUnroundedTotal.roundToDouble();
-                    final double soRoundOff = soFinalTotal - soUnroundedTotal;
-
-                    return pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        _soTotalRow('Sub Total', salesOrder.subtotal),
-                        _soTotalRow('Taxable Amount', salesOrder.subtotal),
-                        if (salesOrder.cgstAmount > 0) ...[
-                          _soTotalRow('CGST @9.0%', salesOrder.cgstAmount),
-                          _soTotalRow('SGST @9.0%', salesOrder.sgstAmount),
-                        ] else ...[
-                          _soTotalRow('IGST @18.0%', salesOrder.igstAmount),
-                        ],
-                        if (soRoundOff.abs() >= 0.005)
-                          _soTotalRow(
-                            'Round Off',
-                            soRoundOff,
-                            customValue:
-                                'Rs. ${soRoundOff > 0 ? '+' : ''}${soRoundOff.toStringAsFixed(2)}',
-                          ),
-                        pw.Divider(thickness: 1),
-                        _soTotalRow('Order Total', soFinalTotal, bold: true),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      _soTotalRow('Sub Total', soTaxableValue),
+                      _soTotalRow('Taxable Amount', soTaxableValue),
+                      if (soCgstAmt > 0) ...[
+                        _soTotalRow('CGST Amount', soCgstAmt),
+                        _soTotalRow('SGST Amount', soSgstAmt),
+                      ] else ...[
+                        _soTotalRow('IGST Amount', soIgstAmt),
                       ],
-                    );
-                  }(),
+                      if (soRoundOff.abs() >= 0.005)
+                        _soTotalRow(
+                          'Round Off',
+                          soRoundOff,
+                          customValue:
+                              'Rs. ${soRoundOff > 0 ? '+' : ''}${soRoundOff.toStringAsFixed(2)}',
+                        ),
+                      pw.Divider(thickness: 0.5),
+                      _soTotalRow('Order Total', soFinalTotal, bold: true),
+                    ],
+                  ),
                 ),
               ],
             ),
           ],
 
+          // Payment Terms: Commercial variant ONLY!
+          () {
+            final payTerms = resolvedQuotation?.paymentTerms;
+            if (variant != 'commercial' ||
+                payTerms == null ||
+                payTerms.isEmpty) {
+              return pw.SizedBox();
+            }
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.SizedBox(height: 6),
+                pw.Text('Payment Terms:',
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 2),
+                pw.Table(
+                  border:
+                      pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+                  children: [
+                    pw.TableRow(
+                      decoration:
+                          const pw.BoxDecoration(color: PdfColors.grey200),
+                      children: [
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 3, vertical: 2),
+                            child: pw.Text('Term / Stage',
+                                style: pw.TextStyle(
+                                    fontSize: 6.5,
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 3, vertical: 2),
+                            child: pw.Text('Percentage',
+                                style: pw.TextStyle(
+                                    fontSize: 6.5,
+                                    fontWeight: pw.FontWeight.bold),
+                                textAlign: pw.TextAlign.center)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 3, vertical: 2),
+                            child: pw.Text('Amount (Rs.)',
+                                style: pw.TextStyle(
+                                    fontSize: 6.5,
+                                    fontWeight: pw.FontWeight.bold),
+                                textAlign: pw.TextAlign.right)),
+                      ],
+                    ),
+                    ...payTerms.map((term) {
+                      final name = term['term']?.toString() ?? '';
+                      final pct = term['percent']?.toString() ?? '0';
+                      final pctNum = double.tryParse(pct) ??
+                          ((term['percent'] as num?)?.toDouble() ?? 0.0);
+                      final amt =
+                          (soFinalTotal * (pctNum / 100.0)).roundToDouble();
+                      return pw.TableRow(
+                        children: [
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(
+                                  horizontal: 3, vertical: 2),
+                              child: pw.Text(name,
+                                  style: const pw.TextStyle(fontSize: 6.5))),
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(
+                                  horizontal: 3, vertical: 2),
+                              child: pw.Text('$pct%',
+                                  style: const pw.TextStyle(fontSize: 6.5),
+                                  textAlign: pw.TextAlign.center)),
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(
+                                  horizontal: 3, vertical: 2),
+                              child: pw.Text(_currencyFormat.format(amt),
+                                  style: const pw.TextStyle(fontSize: 6.5),
+                                  textAlign: pw.TextAlign.right)),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+              ],
+            );
+          }(),
+
           if (variant != 'production') ...[
-            pw.SizedBox(height: 25),
+            pw.SizedBox(height: 8),
             // Declaration
             pw.Text(
               'Declaration:\nWe declare that this invoice shows the actual price of the goods / services described and that all particulars are true and correct.',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+              style:
+                  const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
             ),
-            pw.SizedBox(height: 30),
+            pw.SizedBox(height: 10),
             // Sign-off
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -2134,9 +2985,9 @@ class PdfService {
                   children: [
                     pw.Container(
                         width: 100, height: 1, color: PdfColors.grey500),
-                    pw.SizedBox(height: 4),
+                    pw.SizedBox(height: 3),
                     pw.Text("Receiver's Signature",
-                        style: const pw.TextStyle(fontSize: 9)),
+                        style: const pw.TextStyle(fontSize: 8)),
                   ],
                 ),
                 pw.Column(
@@ -2144,13 +2995,13 @@ class PdfService {
                   children: [
                     pw.Text('For ${cleanCompanyName.toUpperCase()}',
                         style: pw.TextStyle(
-                            fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 25),
+                            fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 18),
                     pw.Container(
                         width: 120, height: 1, color: PdfColors.grey500),
-                    pw.SizedBox(height: 4),
+                    pw.SizedBox(height: 3),
                     pw.Text('Authorised Signatory',
-                        style: const pw.TextStyle(fontSize: 9)),
+                        style: const pw.TextStyle(fontSize: 8)),
                   ],
                 ),
               ],
@@ -2179,15 +3030,19 @@ class PdfService {
 
     final subParts = base.split('/');
     if (subParts.length == 2) {
-      if (RegExp(r'^\d+$').hasMatch(subParts[0]) && !RegExp(r'^\d+$').hasMatch(subParts[1])) {
+      if (RegExp(r'^\d+$').hasMatch(subParts[0]) &&
+          !RegExp(r'^\d+$').hasMatch(subParts[1])) {
         // Inverted: "00027/26-27"
         final seq = subParts[0].padLeft(5, '0');
-        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[1]) ? subParts[1] : fy;
+        final targetFy =
+            RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[1]) ? subParts[1] : fy;
         return 'IZY/DC/$targetFy/$seq';
-      } else if (!RegExp(r'^\d+$').hasMatch(subParts[0]) && RegExp(r'^\d+$').hasMatch(subParts[1])) {
+      } else if (!RegExp(r'^\d+$').hasMatch(subParts[0]) &&
+          RegExp(r'^\d+$').hasMatch(subParts[1])) {
         // Standard: "26-27/00027"
         final seq = subParts[1].padLeft(5, '0');
-        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[0]) ? subParts[0] : fy;
+        final targetFy =
+            RegExp(r'^\d{2}-\d{2}$').hasMatch(subParts[0]) ? subParts[0] : fy;
         return 'IZY/DC/$targetFy/$seq';
       }
     }
@@ -2196,11 +3051,15 @@ class PdfService {
       final parts = clean.split('/');
       if (RegExp(r'^\d+$').hasMatch(parts[0])) {
         final seq = parts[0].padLeft(5, '0');
-        final targetFy = parts.length > 1 && RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[1]) ? parts[1] : fy;
+        final targetFy =
+            parts.length > 1 && RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[1])
+                ? parts[1]
+                : fy;
         return 'IZY/DC/$targetFy/$seq';
       } else if (parts.length > 1 && RegExp(r'^\d+$').hasMatch(parts[1])) {
         final seq = parts[1].padLeft(5, '0');
-        final targetFy = RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[0]) ? parts[0] : fy;
+        final targetFy =
+            RegExp(r'^\d{2}-\d{2}$').hasMatch(parts[0]) ? parts[0] : fy;
         return 'IZY/DC/$targetFy/$seq';
       }
     }
@@ -2224,18 +3083,20 @@ class PdfService {
     String? customChallanNumber,
     String? deliveryTakenBy,
   }) async {
-    final resolvedConfig = await resolveTemplateConfig(templateConfig, product: product);
+    final resolvedConfig =
+        await resolveTemplateConfig(templateConfig, product: product);
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
     final generatedByName = await resolveCurrentUserName();
-    final createdByName = (salesOrder.salesman != null && salesOrder.salesman!.trim().isNotEmpty)
-        ? salesOrder.salesman!.trim()
-        : null;
+    final createdByName =
+        (salesOrder.salesman != null && salesOrder.salesman!.trim().isNotEmpty)
+            ? salesOrder.salesman!.trim()
+            : null;
 
     final pdf = pw.Document();
 
-    final companyName = resolvedConfig['company_name'] as String? ??
-        'INSIYA SOLAR INDUSTRY';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
     final companyAddress = resolvedConfig['company_address'] as String? ??
         'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra 411014';
     final companyPhone =
@@ -2248,48 +3109,50 @@ class PdfService {
     final cleanCompanyName = _cleanText(companyName);
     final effectiveChallanDate = challanDate ?? salesOrder.orderDate;
     final formattedDcNum = customChallanNumber ??
-        formatDeliveryChallanNumber(salesOrder.salesOrderNumber, effectiveChallanDate);
+        formatDeliveryChallanNumber(
+            salesOrder.salesOrderNumber, effectiveChallanDate);
 
-    final effectiveSalesOrder = customLineItems != null && customLineItems.isNotEmpty
-        ? SalesOrder(
-            id: salesOrder.id,
-            pipelineId: salesOrder.pipelineId,
-            salesOrderNumber: salesOrder.salesOrderNumber,
-            orderDate: salesOrder.orderDate,
-            shippingCompany: salesOrder.shippingCompany,
-            vehicleNumber: salesOrder.vehicleNumber,
-            distance: salesOrder.distance,
-            grLrNo: salesOrder.grLrNo,
-            destination: salesOrder.destination,
-            placeOfSupply: salesOrder.placeOfSupply,
-            paymentTerms: salesOrder.paymentTerms,
-            billingAddress: salesOrder.billingAddress,
-            shippingAddress: salesOrder.shippingAddress,
-            expectedDispatchDate: salesOrder.expectedDispatchDate,
-            ewayBillNo: salesOrder.ewayBillNo,
-            ewayBillDate: salesOrder.ewayBillDate,
-            billType: salesOrder.billType,
-            salesman: salesOrder.salesman,
-            partyContactPerson: salesOrder.partyContactPerson,
-            lineItems: customLineItems,
-            subtotal: salesOrder.subtotal,
-            cgstRate: salesOrder.cgstRate,
-            sgstRate: salesOrder.sgstRate,
-            cgstAmount: salesOrder.cgstAmount,
-            sgstAmount: salesOrder.sgstAmount,
-            igstAmount: salesOrder.igstAmount,
-            grandTotal: salesOrder.grandTotal,
-            remarks: salesOrder.remarks,
-            status: salesOrder.status,
-            createdAt: salesOrder.createdAt,
-            updatedAt: salesOrder.updatedAt,
-          )
-        : salesOrder;
+    final effectiveSalesOrder =
+        customLineItems != null && customLineItems.isNotEmpty
+            ? SalesOrder(
+                id: salesOrder.id,
+                pipelineId: salesOrder.pipelineId,
+                salesOrderNumber: salesOrder.salesOrderNumber,
+                orderDate: salesOrder.orderDate,
+                shippingCompany: salesOrder.shippingCompany,
+                vehicleNumber: salesOrder.vehicleNumber,
+                distance: salesOrder.distance,
+                grLrNo: salesOrder.grLrNo,
+                destination: salesOrder.destination,
+                placeOfSupply: salesOrder.placeOfSupply,
+                paymentTerms: salesOrder.paymentTerms,
+                billingAddress: salesOrder.billingAddress,
+                shippingAddress: salesOrder.shippingAddress,
+                expectedDispatchDate: salesOrder.expectedDispatchDate,
+                ewayBillNo: salesOrder.ewayBillNo,
+                ewayBillDate: salesOrder.ewayBillDate,
+                billType: salesOrder.billType,
+                salesman: salesOrder.salesman,
+                partyContactPerson: salesOrder.partyContactPerson,
+                lineItems: customLineItems,
+                subtotal: salesOrder.subtotal,
+                cgstRate: salesOrder.cgstRate,
+                sgstRate: salesOrder.sgstRate,
+                cgstAmount: salesOrder.cgstAmount,
+                sgstAmount: salesOrder.sgstAmount,
+                igstAmount: salesOrder.igstAmount,
+                grandTotal: salesOrder.grandTotal,
+                remarks: salesOrder.remarks,
+                status: salesOrder.status,
+                createdAt: salesOrder.createdAt,
+                updatedAt: salesOrder.updatedAt,
+              )
+            : salesOrder;
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(30),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 26, vertical: 20),
         header: (context) => _buildHeader(
           companyName: companyName,
           companyAddress: companyAddress,
@@ -2303,7 +3166,8 @@ class PdfService {
           logoImage: logoImage,
         ),
         footer: (context) => _buildFooter(
-          resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.',
+          resolvedConfig['footer_text'] as String? ??
+              'Thank you for your business.',
           context.pageNumber,
           context.pagesCount,
           generatedBy: generatedByName,
@@ -2334,7 +3198,8 @@ class PdfService {
               ),
               pw.TableRow(
                 children: [
-                  _metaCellRow('Shipping Company', effectiveSalesOrder.shippingCompany),
+                  _metaCellRow(
+                      'Shipping Company', effectiveSalesOrder.shippingCompany),
                   _metaCellRow('Distance', effectiveSalesOrder.distance),
                 ],
               ),
@@ -2347,14 +3212,20 @@ class PdfService {
               ),
               pw.TableRow(
                 children: [
-                  _metaCellRow('Bill Type', effectiveSalesOrder.billType ?? 'Credit'),
+                  _metaCellRow(
+                      'Bill Type', effectiveSalesOrder.billType ?? 'Credit'),
                   _metaCellRow('Destination', effectiveSalesOrder.destination),
                 ],
               ),
               pw.TableRow(
                 children: [
-                  _metaCellRow('Place of Supply', effectiveSalesOrder.placeOfSupply),
-                  _metaCellRow('Delivery Taken By', deliveryTakenBy ?? effectiveSalesOrder.partyContactPerson ?? '-'),
+                  _metaCellRow(
+                      'Place of Supply', effectiveSalesOrder.placeOfSupply),
+                  _metaCellRow(
+                      'Delivery Taken By',
+                      deliveryTakenBy ??
+                          effectiveSalesOrder.partyContactPerson ??
+                          '-'),
                 ],
               ),
             ],
@@ -2406,8 +3277,7 @@ class PdfService {
                           pw.Text(
                               'GSTIN : ${_cleanText(customer.gstNumber)}  State Code : ${customer.gstNumber!.length >= 2 ? customer.gstNumber!.substring(0, 2) : "27"}',
                               style: pw.TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: pw.FontWeight.bold)),
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold)),
                         if (customer.phone != null &&
                             customer.phone!.isNotEmpty)
                           pw.Text('Phone : ${_cleanText(customer.phone)}',
@@ -2467,8 +3337,7 @@ class PdfService {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Container(
-                      width: 100, height: 1, color: PdfColors.grey500),
+                  pw.Container(width: 100, height: 1, color: PdfColors.grey500),
                   pw.SizedBox(height: 4),
                   pw.Text("Receiver's Signature",
                       style: const pw.TextStyle(fontSize: 9)),
@@ -2481,8 +3350,7 @@ class PdfService {
                       style: pw.TextStyle(
                           fontSize: 9, fontWeight: pw.FontWeight.bold)),
                   pw.SizedBox(height: 25),
-                  pw.Container(
-                      width: 120, height: 1, color: PdfColors.grey500),
+                  pw.Container(width: 120, height: 1, color: PdfColors.grey500),
                   pw.SizedBox(height: 4),
                   pw.Text('Authorised Signatory',
                       style: const pw.TextStyle(fontSize: 9)),
@@ -2500,21 +3368,20 @@ class PdfService {
   static pw.Widget _metaCellRow(String label, String? value) {
     if (label.isEmpty) return pw.Container();
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: pw.Row(
         children: [
           pw.SizedBox(
-            width: 110,
+            width: 105,
             child: pw.Text(_cleanText(label),
-                style: pw.TextStyle(
-                    fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+                style:
+                    pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
           ),
           pw.Text(' : ',
-              style:
-                  pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
           pw.Expanded(
             child: pw.Text(_cleanText(value ?? ''),
-                style: const pw.TextStyle(fontSize: 8.5)),
+                style: const pw.TextStyle(fontSize: 8)),
           ),
         ],
       ),
@@ -2528,18 +3395,19 @@ class PdfService {
       children: [
         pw.Text(_cleanText(label),
             style: pw.TextStyle(
-                fontSize: 9, fontWeight: bold ? pw.FontWeight.bold : null)),
+                fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null)),
         pw.Text(
           customValue ?? '$_rupee${_currencyFormat.format(amount)}',
           style: pw.TextStyle(
-              fontSize: 9, fontWeight: bold ? pw.FontWeight.bold : null),
+              fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null),
         ),
       ],
     );
   }
 
   static pw.Widget _buildSalesOrderItemsTable(
-      SalesOrder salesOrder, String variant) {
+      SalesOrder salesOrder, String variant,
+      {List<SupplementaryItem>? supplementaryItems}) {
     final items = salesOrder.lineItems;
     final headers = variant == 'commercial'
         ? [
@@ -2547,10 +3415,10 @@ class PdfService {
             'Description',
             'HSN / SAC',
             'Qty',
-            'GST %',
             'UOM',
             'Item Rate',
             'Disc %',
+            'GST %',
             'Amount (INR)'
           ]
         : (variant == 'technical' || variant == 'challan')
@@ -2563,10 +3431,10 @@ class PdfService {
             1: const pw.FlexColumnWidth(3),
             2: const pw.FixedColumnWidth(55),
             3: const pw.FixedColumnWidth(35),
-            4: const pw.FixedColumnWidth(40),
-            5: const pw.FixedColumnWidth(35),
-            6: const pw.FixedColumnWidth(50),
-            7: const pw.FixedColumnWidth(35),
+            4: const pw.FixedColumnWidth(35),
+            5: const pw.FixedColumnWidth(50),
+            6: const pw.FixedColumnWidth(35),
+            7: const pw.FixedColumnWidth(40),
             8: const pw.FixedColumnWidth(60),
           }
         : (variant == 'technical' || variant == 'challan')
@@ -2583,20 +3451,32 @@ class PdfService {
                 3: const pw.FixedColumnWidth(60),
               };
 
-    final gstFraction = salesOrder.subtotal > 0
-        ? (salesOrder.cgstAmount +
-                salesOrder.sgstAmount +
-                salesOrder.igstAmount) /
-            salesOrder.subtotal
-        : 0.18;
-
     double totalQty = 0;
     double totalAmount = 0;
     for (final item in items) {
       totalQty += item.qty;
       final lineTaxable = (item.qty * item.rate) * (1 - item.discPercent / 100);
-      final lineAmountIncludingTax = lineTaxable * (1 + gstFraction);
+      final lineAmountIncludingTax = lineTaxable * (1 + item.gstPercent / 100);
       totalAmount += lineAmountIncludingTax;
+    }
+
+    if (supplementaryItems != null) {
+      for (final supp in supplementaryItems) {
+        final isIncluded = supp.type.toLowerCase() == 'included';
+        if (!isIncluded) {
+          totalQty += supp.qty;
+          final suppTaxable = supp.qty * supp.rate;
+          final suppAmountIncludingTax =
+              suppTaxable * (1 + supp.gstPercent / 100);
+          totalAmount += suppAmountIncludingTax;
+        } else {
+          if (variant == 'technical' ||
+              variant == 'challan' ||
+              variant == 'production') {
+            totalQty += supp.qty;
+          }
+        }
+      }
     }
 
     return pw.Table(
@@ -2609,13 +3489,17 @@ class PdfService {
               const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E3A5F)),
           children: headers.map((h) {
             return pw.Padding(
-              padding: const pw.EdgeInsets.all(5),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
               child: pw.Text(
                 _cleanText(h),
                 style: pw.TextStyle(
                     color: PdfColors.white,
-                    fontSize: 8.5,
+                    fontSize: 8,
                     fontWeight: pw.FontWeight.bold),
+                textAlign: h == 'Description'
+                    ? pw.TextAlign.left
+                    : pw.TextAlign.center,
               ),
             );
           }).toList(),
@@ -2627,7 +3511,8 @@ class PdfService {
 
           final lineTaxable =
               (item.qty * item.rate) * (1 - item.discPercent / 100);
-          final lineAmountIncludingTax = lineTaxable * (1 + gstFraction);
+          final lineAmountIncludingTax =
+              lineTaxable * (1 + item.gstPercent / 100);
 
           final cells = variant == 'commercial'
               ? [
@@ -2635,10 +3520,10 @@ class PdfService {
                   item.description,
                   item.hsnSac ?? '',
                   item.qty.toInt().toString(),
-                  '${item.gstPercent.toStringAsFixed(0)}%',
                   item.uom,
                   _currencyFormat.format(item.rate),
                   '${item.discPercent.toStringAsFixed(2)}%',
+                  '${item.gstPercent.toStringAsFixed(0)}%',
                   _currencyFormat.format(lineAmountIncludingTax),
                 ]
               : (variant == 'technical' || variant == 'challan')
@@ -2666,31 +3551,34 @@ class PdfService {
 
               final alignRight = variant == 'commercial'
                   ? (colIdx == 3 ||
-                      colIdx == 4 ||
+                      colIdx == 5 ||
                       colIdx == 6 ||
                       colIdx == 7 ||
                       colIdx == 8)
                   : (colIdx == 2);
 
-              if ((variant == 'technical' || variant == 'challan') && colIdx == 1) {
+              if ((variant == 'technical' || variant == 'challan') &&
+                  colIdx == 1) {
                 return pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+                  padding:
+                      const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
                         _cleanText(val),
                         style: pw.TextStyle(
-                          fontSize: 8.5,
+                          fontSize: 8,
                           fontWeight: pw.FontWeight.bold,
                         ),
                       ),
-                      if (item.remark != null && item.remark!.trim().isNotEmpty) ...[
-                        pw.SizedBox(height: 2),
+                      if (item.remark != null &&
+                          item.remark!.trim().isNotEmpty) ...[
+                        pw.SizedBox(height: 1),
                         pw.Text(
                           _cleanText(item.remark!),
                           style: pw.TextStyle(
-                            fontSize: 7.5,
+                            fontSize: 7,
                             fontStyle: pw.FontStyle.italic,
                             color: PdfColors.grey700,
                           ),
@@ -2702,49 +3590,227 @@ class PdfService {
               }
 
               return pw.Padding(
-                padding: const pw.EdgeInsets.all(4),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
                 child: pw.Text(
                   _cleanText(val),
-                  style: const pw.TextStyle(fontSize: 8),
-                  textAlign:
-                      alignRight ? pw.TextAlign.right : pw.TextAlign.left,
+                  style: const pw.TextStyle(fontSize: 7.5),
+                  textAlign: alignRight
+                      ? pw.TextAlign.right
+                      : ((colIdx == 0 || colIdx == 2 || colIdx == 4)
+                          ? pw.TextAlign.center
+                          : pw.TextAlign.left),
                 ),
               );
             }).toList(),
           );
         }),
+        // Appended Supplementary items rows beneath line items
+        if (supplementaryItems != null && supplementaryItems.isNotEmpty)
+          ...supplementaryItems.asMap().entries.map((suppEntry) {
+            final suppIdx = suppEntry.key;
+            final supp = suppEntry.value;
+            final isIncluded = supp.type.toLowerCase() == 'included';
+            final rowNumber = (items.length + suppIdx + 1).toString();
+            final suppTaxable = supp.qty * supp.rate;
+            final suppAmountIncludingTax =
+                suppTaxable * (1 + supp.gstPercent / 100);
+
+            if (variant == 'commercial') {
+              return pw.TableRow(
+                decoration: pw.BoxDecoration(
+                  color: (items.length + suppIdx).isEven
+                      ? PdfColors.grey50
+                      : PdfColors.white,
+                ),
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(rowNumber,
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.center),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      _cleanText(supp.type.trim().isEmpty
+                          ? supp.name
+                          : '${supp.name} - ${supp.type}'),
+                      style: const pw.TextStyle(fontSize: 7.5),
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text('-',
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.center),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      isIncluded ? '-' : '${supp.qty.toInt()}',
+                      style: const pw.TextStyle(fontSize: 7.5),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      isIncluded ? '-' : 'NOS',
+                      style: const pw.TextStyle(fontSize: 7.5),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      isIncluded ? '-' : _currencyFormat.format(supp.rate),
+                      style: const pw.TextStyle(fontSize: 7.5),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text('-',
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.right),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      isIncluded
+                          ? '-'
+                          : '${supp.gstPercent.toStringAsFixed(0)}%',
+                      style: const pw.TextStyle(fontSize: 7.5),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      isIncluded
+                          ? 'Included'
+                          : _currencyFormat.format(suppAmountIncludingTax),
+                      style: pw.TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: isIncluded
+                            ? pw.FontWeight.bold
+                            : pw.FontWeight.normal,
+                        color: isIncluded
+                            ? const PdfColor.fromInt(0xFF047857)
+                            : PdfColors.black,
+                      ),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                ],
+              );
+            } else {
+              return pw.TableRow(
+                decoration: pw.BoxDecoration(
+                  color: (items.length + suppIdx).isEven
+                      ? PdfColors.grey50
+                      : PdfColors.white,
+                ),
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(rowNumber,
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.center),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      _cleanText(supp.type.trim().isEmpty
+                          ? supp.name
+                          : '${supp.name} - ${supp.type}'),
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text(
+                      supp.qty == supp.qty.roundToDouble()
+                          ? '${supp.qty.toInt()}.00'
+                          : supp.qty.toStringAsFixed(2),
+                      style: const pw.TextStyle(fontSize: 7.5),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 3),
+                    child: pw.Text('NOS',
+                        style: const pw.TextStyle(fontSize: 7.5),
+                        textAlign: pw.TextAlign.center),
+                  ),
+                ],
+              );
+            }
+          }),
         // Total row at bottom
         if (variant == 'commercial')
           pw.TableRow(
             decoration: const pw.BoxDecoration(color: PdfColors.white),
             children: [
               pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
+              pw.Padding(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text('Total',
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold)),
               ),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text(_currencyFormat.format(totalQty),
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.right),
               ),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
               pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text(_currencyFormat.format(totalAmount),
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold),
@@ -2757,15 +3823,19 @@ class PdfService {
             decoration: const pw.BoxDecoration(color: PdfColors.white),
             children: [
               pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
+              pw.Padding(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text('Total',
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold)),
               ),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text(
                     totalQty == totalQty.roundToDouble()
                         ? '${totalQty.toInt()}.00'
@@ -2775,7 +3845,9 @@ class PdfService {
                     textAlign: pw.TextAlign.right),
               ),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
             ],
           )
         else
@@ -2783,35 +3855,58 @@ class PdfService {
             decoration: const pw.BoxDecoration(color: PdfColors.white),
             children: [
               pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
+              pw.Padding(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text('Total',
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold)),
               ),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(5),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
                 child: pw.Text(_currencyFormat.format(totalQty),
                     style: pw.TextStyle(
                         fontSize: 8, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.right),
               ),
               pw.Padding(
-                  padding: const pw.EdgeInsets.all(5), child: pw.Text('')),
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 3.5),
+                  child: pw.Text('')),
             ],
           )
       ],
     );
   }
 
-  static pw.Widget _buildTaxMatrixTable(SalesOrder so) {
-    final taxRate = so.cgstRate + so.sgstRate;
-    final taxableValue = so.subtotal;
-    final cgst = so.cgstAmount;
-    final sgst = so.sgstAmount;
-    final igst = so.igstAmount;
-    final totalTax = cgst + sgst + igst;
+  static pw.Widget _buildTaxMatrixTable(
+    SalesOrder so, {
+    Quotation? quotation,
+    List<TaxTierSummary>? precalculatedTiers,
+  }) {
+    final taxTiers = precalculatedTiers ??
+        () {
+          final isInterstate =
+              !(so.placeOfSupply?.trim().toLowerCase() == 'maharashtra' ||
+                  so.placeOfSupply?.trim().toLowerCase() == '27' ||
+                  so.placeOfSupply?.trim().toLowerCase() == 'mh' ||
+                  so.cgstAmount > 0);
+          return _calculateTaxTiers(
+            lineItems: so.lineItems,
+            supplementaryItems: quotation?.supplementaryTerms,
+            isInterstate: isInterstate,
+            defaultRate: so.cgstRate + so.sgstRate,
+          );
+        }();
+    final totalTaxable = taxTiers.fold<double>(0, (s, t) => s + t.taxableValue);
+    final totalCgst = taxTiers.fold<double>(0, (s, t) => s + t.cgstAmount);
+    final totalSgst = taxTiers.fold<double>(0, (s, t) => s + t.sgstAmount);
+    final totalIgst = taxTiers.fold<double>(0, (s, t) => s + t.igstAmount);
+    final totalTax = taxTiers.fold<double>(0, (s, t) => s + t.totalTax);
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
@@ -2839,28 +3934,80 @@ class PdfService {
               padding: const pw.EdgeInsets.all(4),
               child: pw.Text(h,
                   style: pw.TextStyle(
-                      fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                      fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                  textAlign: pw.TextAlign.center),
             );
           }).toList(),
         ),
-        // Row
-        pw.TableRow(
-          children: [
-            'TAX @ ${taxRate.toStringAsFixed(0)}%',
-            _currencyFormat.format(taxableValue),
-            _currencyFormat.format(cgst),
-            _currencyFormat.format(sgst),
-            _currencyFormat.format(igst),
-            _currencyFormat.format(totalTax),
-          ].map((v) {
-            return pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
-              child: pw.Text(v,
-                  style: const pw.TextStyle(fontSize: 7.5),
-                  textAlign: pw.TextAlign.right),
-            );
-          }).toList(),
-        ),
+        // Rows
+        ...taxTiers.map((tier) {
+          return pw.TableRow(
+            children: [
+              'TAX @ ${tier.rateStr}%',
+              _currencyFormat.format(tier.taxableValue),
+              _currencyFormat.format(tier.cgstAmount),
+              _currencyFormat.format(tier.sgstAmount),
+              _currencyFormat.format(tier.igstAmount),
+              _currencyFormat.format(tier.totalTax),
+            ].asMap().entries.map((e) {
+              return pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(e.value,
+                    style: const pw.TextStyle(fontSize: 7.5),
+                    textAlign:
+                        e.key == 0 ? pw.TextAlign.center : pw.TextAlign.right),
+              );
+            }).toList(),
+          );
+        }),
+        if (taxTiers.length > 1)
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text('Total',
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(_currencyFormat.format(totalTaxable),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.right),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(_currencyFormat.format(totalCgst),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.right),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(_currencyFormat.format(totalSgst),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.right),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(_currencyFormat.format(totalIgst),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.right),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: pw.Text(_currencyFormat.format(totalTax),
+                    style: pw.TextStyle(
+                        fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.right),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -2955,12 +4102,14 @@ class PdfService {
 
     final pdf = pw.Document();
 
-    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
     final companyAddress = resolvedConfig['company_address'] as String? ?? '';
     final companyPhone = resolvedConfig['company_phone'] as String? ?? '';
     final companyEmail = resolvedConfig['company_email'] as String? ?? '';
     final companyGst = resolvedConfig['company_gst'] as String? ?? '';
-    final footerText = resolvedConfig['footer_text'] as String? ?? 'Thank you for your business.';
+    final footerText = resolvedConfig['footer_text'] as String? ??
+        'Thank you for your business.';
     final termsDefault = resolvedConfig['terms_default'] as String? ?? '';
 
     final customer = contract.customer;
@@ -2988,8 +4137,9 @@ class PdfService {
           status: contract.status.displayName,
           logoImage: logoImage,
         ),
-        footer: (context) =>
-            _buildFooter(footerText, context.pageNumber, context.pagesCount, generatedBy: generatedByName),
+        footer: (context) => _buildFooter(
+            footerText, context.pageNumber, context.pagesCount,
+            generatedBy: generatedByName),
         build: (context) => [
           _buildBillTo(customer),
           pw.SizedBox(height: 20),
@@ -3125,9 +4275,12 @@ class PdfService {
     final resolvedConfig = await resolveTemplateConfig(templateConfig);
     final generatedByName = await resolveCurrentUserName();
     final pdf = pw.Document();
-    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
+        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone =
+        resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
 
     pdf.addPage(
       pw.Page(
@@ -3148,15 +4301,23 @@ class PdfService {
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text(companyName.toUpperCase(), style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                      pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Phone: $companyPhone', style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text(companyName.toUpperCase(),
+                          style: pw.TextStyle(
+                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                      pw.Text(companyAddress,
+                          style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Phone: $companyPhone',
+                          style: const pw.TextStyle(fontSize: 8)),
                     ],
                   ),
                   pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.black)),
-                    child: pw.Text('SERVICE VISIT RECEIPT', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.black)),
+                    child: pw.Text('SERVICE VISIT RECEIPT',
+                        style: pw.TextStyle(
+                            fontSize: 10, fontWeight: pw.FontWeight.bold)),
                   ),
                 ],
               ),
@@ -3171,16 +4332,26 @@ class PdfService {
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Customer: ${customer.companyName}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      if (customer.contactPerson != null) pw.Text('Contact: ${customer.contactPerson}', style: const pw.TextStyle(fontSize: 8)),
-                      if (customer.phone != null) pw.Text('Phone: ${customer.phone}', style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Customer: ${customer.companyName}',
+                          style: pw.TextStyle(
+                              fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      if (customer.contactPerson != null)
+                        pw.Text('Contact: ${customer.contactPerson}',
+                            style: const pw.TextStyle(fontSize: 8)),
+                      if (customer.phone != null)
+                        pw.Text('Phone: ${customer.phone}',
+                            style: const pw.TextStyle(fontSize: 8)),
                     ],
                   ),
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text('Visit Date: ${DateFormat('dd/MM/yyyy').format(visit.visitDate)}', style: const pw.TextStyle(fontSize: 9)),
-                      if (visit.technicianName != null) pw.Text('Technician: ${visit.technicianName}', style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text(
+                          'Visit Date: ${DateFormat('dd/MM/yyyy').format(visit.visitDate)}',
+                          style: const pw.TextStyle(fontSize: 9)),
+                      if (visit.technicianName != null)
+                        pw.Text('Technician: ${visit.technicianName}',
+                            style: const pw.TextStyle(fontSize: 8)),
                     ],
                   ),
                 ],
@@ -3188,35 +4359,93 @@ class PdfService {
               pw.SizedBox(height: 16),
 
               // Spare Parts Table
-              pw.Text('Spare Parts & Charges', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Spare Parts & Charges',
+                  style: pw.TextStyle(
+                      fontSize: 10, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 6),
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
                 children: [
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                    decoration:
+                        const pw.BoxDecoration(color: PdfColors.grey200),
                     children: [
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Part / Service Description', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Qty', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Unit Rate (INR)', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Total (INR)', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text('Part / Service Description',
+                              style: pw.TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text('Qty',
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold),
+                              textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text('Unit Rate (INR)',
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold),
+                              textAlign: pw.TextAlign.right)),
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text('Total (INR)',
+                              style: pw.TextStyle(
+                                  fontSize: 8, fontWeight: pw.FontWeight.bold),
+                              textAlign: pw.TextAlign.right)),
                     ],
                   ),
                   ...visit.items.map((item) => pw.TableRow(
-                    children: [
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.partName, style: const pw.TextStyle(fontSize: 8))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(item.qty.toInt().toString(), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.unitPrice), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(item.total), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
-                    ],
-                  )),
+                        children: [
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.all(4),
+                              child: pw.Text(item.partName,
+                                  style: const pw.TextStyle(fontSize: 8))),
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.all(4),
+                              child: pw.Text(item.qty.toInt().toString(),
+                                  style: const pw.TextStyle(fontSize: 8),
+                                  textAlign: pw.TextAlign.right)),
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.all(4),
+                              child: pw.Text(
+                                  _currencyFormat.format(item.unitPrice),
+                                  style: const pw.TextStyle(fontSize: 8),
+                                  textAlign: pw.TextAlign.right)),
+                          pw.Padding(
+                              padding: const pw.EdgeInsets.all(4),
+                              child: pw.Text(_currencyFormat.format(item.total),
+                                  style: const pw.TextStyle(fontSize: 8),
+                                  textAlign: pw.TextAlign.right)),
+                        ],
+                      )),
                   if (visit.laborCharge > 0)
                     pw.TableRow(
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Labor & Service Charges', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('1', style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(visit.laborCharge), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(_currencyFormat.format(visit.laborCharge), style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text('Labor & Service Charges',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text('1',
+                                style: const pw.TextStyle(fontSize: 8),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                                _currencyFormat.format(visit.laborCharge),
+                                style: const pw.TextStyle(fontSize: 8),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                                _currencyFormat.format(visit.laborCharge),
+                                style: const pw.TextStyle(fontSize: 8),
+                                textAlign: pw.TextAlign.right)),
                       ],
                     ),
                 ],
@@ -3225,14 +4454,24 @@ class PdfService {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.end,
                 children: [
-                  pw.Text('Grand Total: ', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Rs. ${_currencyFormat.format(visit.totalCost)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                  pw.Text('Grand Total: ',
+                      style: pw.TextStyle(
+                          fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Rs. ${_currencyFormat.format(visit.totalCost)}',
+                      style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue900)),
                 ],
               ),
               pw.SizedBox(height: 16),
-              if (visit.serviceNotes != null && visit.serviceNotes!.isNotEmpty) ...[
-                pw.Text('Service Visit Remarks:', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                pw.Text(visit.serviceNotes!, style: const pw.TextStyle(fontSize: 8)),
+              if (visit.serviceNotes != null &&
+                  visit.serviceNotes!.isNotEmpty) ...[
+                pw.Text('Service Visit Remarks:',
+                    style: pw.TextStyle(
+                        fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                pw.Text(visit.serviceNotes!,
+                    style: const pw.TextStyle(fontSize: 8)),
                 pw.SizedBox(height: 20),
               ],
               pw.Spacer(),
@@ -3241,16 +4480,20 @@ class PdfService {
                 children: [
                   pw.Column(
                     children: [
-                      pw.Container(width: 100, height: 0.5, color: PdfColors.black),
+                      pw.Container(
+                          width: 100, height: 0.5, color: PdfColors.black),
                       pw.SizedBox(height: 2),
-                      pw.Text("Customer Signature", style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text("Customer Signature",
+                          style: const pw.TextStyle(fontSize: 8)),
                     ],
                   ),
                   pw.Column(
                     children: [
-                      pw.Container(width: 100, height: 0.5, color: PdfColors.black),
+                      pw.Container(
+                          width: 100, height: 0.5, color: PdfColors.black),
                       pw.SizedBox(height: 2),
-                      pw.Text('Technician Signature', style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Technician Signature',
+                          style: const pw.TextStyle(fontSize: 8)),
                     ],
                   ),
                 ],
@@ -3258,7 +4501,9 @@ class PdfService {
               pw.SizedBox(height: 6),
               pw.Align(
                 alignment: pw.Alignment.centerRight,
-                child: pw.Text('Generated by: ${_cleanText(generatedByName)}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                child: pw.Text('Generated by: ${_cleanText(generatedByName)}',
+                    style: const pw.TextStyle(
+                        fontSize: 7.5, color: PdfColors.grey700)),
               ),
             ],
           ),
@@ -3279,8 +4524,10 @@ class PdfService {
     final generatedByName = await resolveCurrentUserName();
 
     final pdf = pw.Document();
-    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
+        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
 
     final wNum = card.warrantyNumber ?? card.invoiceNumber ?? '#WRN/26-27/0001';
 
@@ -3297,26 +4544,46 @@ class PdfService {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Text(companyName.toUpperCase(), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+              pw.Text(companyName.toUpperCase(),
+                  style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue900)),
               pw.SizedBox(height: 4),
-              pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center),
+              pw.Text(companyAddress,
+                  style: const pw.TextStyle(fontSize: 9),
+                  textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 12),
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: pw.BoxDecoration(color: PdfColors.amber100, borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4))),
-                child: pw.Text('OFFICIAL WARRANTY CERTIFICATE', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.amber900)),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: pw.BoxDecoration(
+                    color: PdfColors.amber100,
+                    borderRadius:
+                        const pw.BorderRadius.all(pw.Radius.circular(4))),
+                child: pw.Text('OFFICIAL WARRANTY CERTIFICATE',
+                    style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.amber900)),
               ),
               pw.SizedBox(height: 24),
 
               // Info Table
               pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
+                border:
+                    pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
                 children: [
                   _buildTableRow('Warranty Number', wNum),
-                  _buildTableRow('Customer Name', card.customerName ?? 'Valued Customer'),
+                  _buildTableRow(
+                      'Customer Name', card.customerName ?? 'Valued Customer'),
                   _buildTableRow('Contact Number', card.customerPhone ?? 'N/A'),
                   _buildTableRow('Email Address', card.customerEmail ?? 'N/A'),
-                  _buildTableRow('Activation Status', card.isActivated ? 'ACTIVATED & VERIFIED' : 'PENDING ACTIVATION'),
+                  _buildTableRow(
+                      'Activation Status',
+                      card.isActivated
+                          ? 'ACTIVATED & VERIFIED'
+                          : 'PENDING ACTIVATION'),
                 ],
               ),
               pw.SizedBox(height: 14),
@@ -3326,41 +4593,58 @@ class PdfService {
                 alignment: pw.Alignment.centerLeft,
                 child: pw.Text(
                   'COVERED PRODUCTS & EQUIPMENT WARRANTIES',
-                  style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                  style: pw.TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue900),
                 ),
               ),
               pw.SizedBox(height: 6),
               pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
+                border:
+                    pw.TableBorder.all(color: PdfColors.grey400, width: 0.8),
                 children: [
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                    decoration:
+                        const pw.BoxDecoration(color: PdfColors.grey200),
                     children: [
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text('Product / Equipment Name', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                        child: pw.Text('Product / Equipment Name',
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text('Warranty Period', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                        child: pw.Text('Warranty Period',
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text('Start Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                        child: pw.Text('Start Date',
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text('Expiry Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                        child: pw.Text('Expiry Date',
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                       ),
                     ],
                   ),
                   ...card.productWarranties.map((p) {
                     final startStr = p.startDate != null
                         ? DateFormat('dd MMM yyyy').format(p.startDate!)
-                        : (card.startDate != null ? DateFormat('dd MMM yyyy').format(card.startDate!) : 'N/A');
+                        : (card.startDate != null
+                            ? DateFormat('dd MMM yyyy').format(card.startDate!)
+                            : 'N/A');
                     final endStr = p.endDate != null
                         ? DateFormat('dd MMM yyyy').format(p.endDate!)
-                        : (card.endDate != null ? DateFormat('dd MMM yyyy').format(card.endDate!) : 'N/A');
+                        : (card.endDate != null
+                            ? DateFormat('dd MMM yyyy').format(card.endDate!)
+                            : 'N/A');
                     final periodStr = p.warrantyYears > 0
                         ? '${p.warrantyYears} Year(s) (${p.warrantyMonths} Mos)'
                         : '${p.warrantyMonths} Month(s)';
@@ -3369,19 +4653,27 @@ class PdfService {
                       children: [
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(p.productName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          child: pw.Text(p.productName,
+                              style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold, fontSize: 8)),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(periodStr, style: const pw.TextStyle(fontSize: 8)),
+                          child: pw.Text(periodStr,
+                              style: const pw.TextStyle(fontSize: 8)),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(startStr, style: const pw.TextStyle(fontSize: 8)),
+                          child: pw.Text(startStr,
+                              style: const pw.TextStyle(fontSize: 8)),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(endStr, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.blue800)),
+                          child: pw.Text(endStr,
+                              style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  fontSize: 8,
+                                  color: PdfColors.blue800)),
                         ),
                       ],
                     );
@@ -3405,7 +4697,9 @@ class PdfService {
                         height: 70,
                       ),
                       pw.SizedBox(height: 4),
-                      pw.Text('Scan to Verify Warranty', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                      pw.Text('Scan to Verify Warranty',
+                          style: const pw.TextStyle(
+                              fontSize: 8, color: PdfColors.grey700)),
                     ],
                   ),
                   pw.Expanded(
@@ -3413,7 +4707,8 @@ class PdfService {
                       padding: const pw.EdgeInsets.only(left: 20),
                       child: pw.Text(
                         'Terms: This warranty certificate guarantees product coverage according to standard terms. Please present this certificate with QR code for official service requests.',
-                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                        style: const pw.TextStyle(
+                            fontSize: 8, color: PdfColors.grey700),
                         textAlign: pw.TextAlign.left,
                       ),
                     ),
@@ -3428,16 +4723,23 @@ class PdfService {
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Ref: $wNum', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Ref: $wNum',
+                          style: pw.TextStyle(
+                              fontSize: 9, fontWeight: pw.FontWeight.bold)),
                       pw.SizedBox(height: 2),
-                      pw.Text('Generated by: ${_cleanText(generatedByName)}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                      pw.Text('Generated by: ${_cleanText(generatedByName)}',
+                          style: const pw.TextStyle(
+                              fontSize: 7.5, color: PdfColors.grey700)),
                     ],
                   ),
                   pw.Column(
                     children: [
-                      pw.Container(width: 120, height: 0.5, color: PdfColors.black),
+                      pw.Container(
+                          width: 120, height: 0.5, color: PdfColors.black),
                       pw.SizedBox(height: 2),
-                      pw.Text('Authorized Signature', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Authorized Signature',
+                          style: pw.TextStyle(
+                              fontSize: 8, fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                 ],
@@ -3464,25 +4766,42 @@ class PdfService {
     final generatedByName = await resolveCurrentUserName();
 
     final resolvedConfig = await resolveTemplateConfig(null);
-    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
-    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
+        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone =
+        resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ??
+        'insiyasolarindustry@gmail.com';
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
-    final incProspects = selectedSections == null || selectedSections.contains('prospects');
-    final incLeads = selectedSections == null || selectedSections.contains('leads');
-    final incComms = selectedSections == null || selectedSections.contains('comms');
-    final incDeals = selectedSections == null || selectedSections.contains('deals');
-    final incCustomers = selectedSections == null || selectedSections.contains('customers');
-    final incComplaints = selectedSections == null || selectedSections.contains('complaints');
-    final incSteps = selectedSections == null || selectedSections.contains('steps');
-    final incConversions = selectedSections == null || selectedSections.contains('conversions');
+    final incDailyTasks =
+        selectedSections == null || selectedSections.contains('daily_tasks');
+    final incProspects =
+        selectedSections == null || selectedSections.contains('prospects');
+    final incLeads =
+        selectedSections == null || selectedSections.contains('leads');
+    final incComms =
+        selectedSections == null || selectedSections.contains('comms');
+    final incDeals =
+        selectedSections == null || selectedSections.contains('deals');
+    final incCustomers =
+        selectedSections == null || selectedSections.contains('customers');
+    final incComplaints =
+        selectedSections == null || selectedSections.contains('complaints');
+    final incSteps =
+        selectedSections == null || selectedSections.contains('steps');
+    final incConversions =
+        selectedSections == null || selectedSections.contains('conversions');
 
     String dateStr = dateRangeType.toUpperCase();
-    if (dateRangeType == 'custom' && customStartDate != null && customEndDate != null) {
-      dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
+    if (dateRangeType == 'custom' &&
+        customStartDate != null &&
+        customEndDate != null) {
+      dateStr =
+          '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
     }
 
     final pw.ThemeData pdfTheme = pw.ThemeData.withFont(
@@ -3499,11 +4818,20 @@ class PdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                pw.Text(_cleanText(companyName),
+                    style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900)),
                 pw.SizedBox(height: 3),
-                pw.Text(_cleanText(companyAddress), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Text(_cleanText(companyAddress),
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey700)),
                 pw.SizedBox(height: 2),
-                pw.Text('Phone: ${_cleanText(companyPhone)} | Email: ${_cleanText(companyEmail)}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Text(
+                    'Phone: ${_cleanText(companyPhone)} | Email: ${_cleanText(companyEmail)}',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey700)),
               ],
             ),
           ),
@@ -3518,7 +4846,8 @@ class PdfService {
       );
     }
 
-    pw.Widget buildSectionHeader(String title, [PdfColor headerColor = PdfColors.blue900]) {
+    pw.Widget buildSectionHeader(String title,
+        [PdfColor headerColor = PdfColors.blue900]) {
       return pw.Container(
         margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
         padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -3526,16 +4855,23 @@ class PdfService {
           color: PdfColors.blue50,
           border: pw.Border(left: pw.BorderSide(color: headerColor, width: 4)),
         ),
-        child: pw.Text(title, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: headerColor)),
+        child: pw.Text(title,
+            style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: headerColor)),
       );
     }
 
     pw.Widget buildStatBox(String label, String value, PdfColor color) {
       return pw.Column(
         children: [
-          pw.Text(value, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: color)),
+          pw.Text(value,
+              style: pw.TextStyle(
+                  fontSize: 14, fontWeight: pw.FontWeight.bold, color: color)),
           pw.SizedBox(height: 2),
-          pw.Text(label, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+          pw.Text(label,
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
         ],
       );
     }
@@ -3551,13 +4887,20 @@ class PdfService {
             margin: const pw.EdgeInsets.only(bottom: 12),
             padding: const pw.EdgeInsets.only(bottom: 4),
             decoration: const pw.BoxDecoration(
-              border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
+              border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
             ),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                pw.Text('USER ACTIVITY REPORT | ${_cleanText(userName)}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                pw.Text(_cleanText(companyName),
+                    style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900)),
+                pw.Text('USER ACTIVITY REPORT | ${_cleanText(userName)}',
+                    style: const pw.TextStyle(
+                        fontSize: 8, color: PdfColors.grey700)),
               ],
             ),
           );
@@ -3569,31 +4912,57 @@ class PdfService {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
-                pw.Text('Generated by: ${_cleanText(generatedByName)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
-                pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                pw.Text(
+                    'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+                    style: const pw.TextStyle(
+                        fontSize: 8, color: PdfColors.grey600)),
+                pw.Text('Generated by: ${_cleanText(generatedByName)}',
+                    style: pw.TextStyle(
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700)),
+                pw.Text('Page ${context.pageNumber} of ${context.pagesCount}',
+                    style: const pw.TextStyle(
+                        fontSize: 8, color: PdfColors.grey600)),
               ],
             ),
           ],
         ),
         build: (context) {
           final summaryStats = <pw.Widget>[
-            if (incProspects) buildStatBox('Prospects', data.prospects.length.toString(), PdfColors.indigo800),
-            if (incLeads) buildStatBox('Leads', data.leads.length.toString(), PdfColors.cyan900),
-            if (incComms) buildStatBox('Comms', data.communications.length.toString(), PdfColors.purple900),
-            if (incDeals) buildStatBox('Deals', data.pipelines.length.toString(), PdfColors.teal900),
-            if (incCustomers) buildStatBox('Customers', data.customers.length.toString(), PdfColors.blue900),
-            if (incComplaints) buildStatBox('Complaints', data.complaints.length.toString(), PdfColors.orange900),
+            if (incDailyTasks)
+              buildStatBox('Tasks', data.dailyTasks.length.toString(),
+                  PdfColors.indigo900),
+            if (incProspects)
+              buildStatBox('Prospects', data.prospects.length.toString(),
+                  PdfColors.indigo800),
+            if (incLeads)
+              buildStatBox(
+                  'Leads', data.leads.length.toString(), PdfColors.cyan900),
+            if (incComms)
+              buildStatBox('Comms', data.communications.length.toString(),
+                  PdfColors.purple900),
+            if (incDeals)
+              buildStatBox(
+                  'Deals', data.pipelines.length.toString(), PdfColors.teal900),
+            if (incCustomers)
+              buildStatBox('Customers', data.customers.length.toString(),
+                  PdfColors.blue900),
+            if (incComplaints)
+              buildStatBox('Complaints', data.complaints.length.toString(),
+                  PdfColors.orange900),
           ];
 
-          final hasAnyVisibleActivity = (incCustomers && data.customers.isNotEmpty) ||
-              (incDeals && data.pipelines.isNotEmpty) ||
-              (incSteps && data.stepAuditLogs.isNotEmpty) ||
-              (incComms && data.communications.isNotEmpty) ||
-              (incLeads && data.leads.isNotEmpty) ||
-              (incProspects && data.prospects.isNotEmpty) ||
-              (incConversions && data.conversions.isNotEmpty) ||
-              (incComplaints && data.complaints.isNotEmpty);
+          final hasAnyVisibleActivity =
+              (incDailyTasks && data.dailyTasks.isNotEmpty) ||
+                  (incCustomers && data.customers.isNotEmpty) ||
+                  (incDeals && data.pipelines.isNotEmpty) ||
+                  (incSteps && data.stepAuditLogs.isNotEmpty) ||
+                  (incComms && data.communications.isNotEmpty) ||
+                  (incLeads && data.leads.isNotEmpty) ||
+                  (incProspects && data.prospects.isNotEmpty) ||
+                  (incConversions && data.conversions.isNotEmpty) ||
+                  (incComplaints && data.complaints.isNotEmpty);
 
           return [
             // Company Header & Report Title directly in body flow (not clipped at top margin)
@@ -3604,10 +4973,19 @@ class PdfService {
             pw.Center(
               child: pw.Column(
                 children: [
-                  pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.2)),
+                  pw.Text('USER ACTIVITY REPORT',
+                      style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.black,
+                          letterSpacing: 1.2)),
                   pw.SizedBox(height: 3),
-                  pw.Text('Generated for: ${_cleanText(userName)}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                  pw.Text('Generated for: ${_cleanText(userName)}',
+                      style: pw.TextStyle(
+                          fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Period: $dateStr',
+                      style: const pw.TextStyle(
+                          fontSize: 9, color: PdfColors.grey700)),
                 ],
               ),
             ),
@@ -3616,10 +4994,12 @@ class PdfService {
             // Activity Overview Summary Box
             if (summaryStats.isNotEmpty)
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                padding:
+                    const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                 decoration: pw.BoxDecoration(
                   color: PdfColors.grey50,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(6)),
                   border: pw.Border.all(color: PdfColors.grey300),
                 ),
                 child: pw.Row(
@@ -3628,69 +5008,174 @@ class PdfService {
                 ),
               ),
             pw.SizedBox(height: 6),
-            if (incCustomers && data.customers.isNotEmpty) ...[
-              buildSectionHeader('CUSTOMERS ADDED (${data.customers.length})', PdfColors.blue900),
+            if (incDailyTasks && data.dailyTasks.isNotEmpty) ...[
+              buildSectionHeader(
+                  'DAILY TASKS COMPLETED (${data.dailyTasks.length})',
+                  PdfColors.indigo900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 9.5),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.indigo900),
+                cellStyle: const pw.TextStyle(fontSize: 9),
+                cellPadding: const pw.EdgeInsets.all(5),
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                columnWidths: {
+                  0: const pw.FixedColumnWidth(26),
+                  1: const pw.FlexColumnWidth(2),
+                  2: const pw.FlexColumnWidth(3.5),
+                  3: const pw.FixedColumnWidth(65),
+                },
+                headers: [
+                  'Sr. No.',
+                  'Customer / Prospect',
+                  'Task Description',
+                  'Time'
+                ],
+                data: data.dailyTasks.asMap().entries.map((entry) {
+                  final t = entry.value;
+                  final completedAt = t['completed_at'] != null
+                      ? (DateTime.tryParse(t['completed_at'].toString())
+                          ?.toLocal())
+                      : null;
+                  final timeStr = completedAt != null
+                      ? DateFormat('hh:mm a').format(completedAt)
+                      : '-';
+                  return [
+                    (entry.key + 1).toString(),
+                    _cleanText(t['customer_name']?.toString() ?? '-'),
+                    _cleanText(t['task_description']?.toString() ?? '-'),
+                    timeStr,
+                  ];
+                }).toList(),
+              ),
+              pw.SizedBox(height: 10),
+            ],
+            if (incCustomers && data.customers.isNotEmpty) ...[
+              buildSectionHeader('CUSTOMERS ADDED (${data.customers.length})',
+                  PdfColors.blue900),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.blue900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 headers: ['Sr. No.', 'ID', 'Name', 'Phone', 'Created At'],
-                data: data.customers.asMap().entries.map((entry) => [
-                  (entry.key + 1).toString(),
-                  (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
-                  _cleanText(entry.value['customer_name']?.toString() ?? '-'),
-                  _cleanText(entry.value['phone']?.toString() ?? '-'),
-                  entry.value['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(entry.value['created_at']) ?? DateTime.now()) : '-',
-                ]).toList(),
+                data: data.customers
+                    .asMap()
+                    .entries
+                    .map((entry) => [
+                          (entry.key + 1).toString(),
+                          (entry.value['id']?.toString() ?? '').length > 8
+                              ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...'
+                              : (entry.value['id']?.toString() ?? ''),
+                          _cleanText(
+                              entry.value['customer_name']?.toString() ?? '-'),
+                          _cleanText(entry.value['phone']?.toString() ?? '-'),
+                          entry.value['created_at'] != null
+                              ? DateFormat('dd MMM yyyy, HH:mm').format(
+                                  DateTime.tryParse(
+                                          entry.value['created_at']) ??
+                                      DateTime.now())
+                              : '-',
+                        ])
+                    .toList(),
               ),
             ],
 
             pw.SizedBox(height: 10),
             if (incDeals && data.pipelines.isNotEmpty) ...[
-              buildSectionHeader('DEALS CREATED (${data.pipelines.length})', PdfColors.teal900),
+              buildSectionHeader('DEALS CREATED (${data.pipelines.length})',
+                  PdfColors.teal900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.teal900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.teal900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Sr. No.', 'Deal ID', 'Customer', 'Product', 'Status'],
-                data: data.pipelines.asMap().entries.map((entry) => [
-                  (entry.key + 1).toString(),
-                  (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
-                  _cleanText(entry.value['customers'] != null ? entry.value['customers']['customer_name'] : '-'),
-                  _cleanText(entry.value['products'] != null ? entry.value['products']['name'] : '-'),
-                  entry.value['status']?.toString().toUpperCase() ?? '-',
-                ]).toList(),
+                headers: [
+                  'Sr. No.',
+                  'Deal ID',
+                  'Customer',
+                  'Product',
+                  'Status'
+                ],
+                data: data.pipelines
+                    .asMap()
+                    .entries
+                    .map((entry) => [
+                          (entry.key + 1).toString(),
+                          (entry.value['id']?.toString() ?? '').length > 8
+                              ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...'
+                              : (entry.value['id']?.toString() ?? ''),
+                          _cleanText(entry.value['customers'] != null
+                              ? entry.value['customers']['customer_name']
+                              : '-'),
+                          _cleanText(entry.value['products'] != null
+                              ? entry.value['products']['name']
+                              : '-'),
+                          entry.value['status']?.toString().toUpperCase() ??
+                              '-',
+                        ])
+                    .toList(),
               ),
             ],
 
             pw.SizedBox(height: 10),
             if (incSteps && data.stepAuditLogs.isNotEmpty) ...[
-              buildSectionHeader('DEAL STEPS FINISHED (${data.stepAuditLogs.length})', PdfColors.indigo900),
+              buildSectionHeader(
+                  'DEAL STEPS FINISHED (${data.stepAuditLogs.length})',
+                  PdfColors.indigo900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.indigo900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Sr. No.', 'Deal / Customer', 'Step', 'Action', 'Time'],
+                headers: [
+                  'Sr. No.',
+                  'Deal / Customer',
+                  'Step',
+                  'Action',
+                  'Time'
+                ],
                 data: data.stepAuditLogs.asMap().entries.map((entry) {
                   final s = entry.value;
-                  final pipeline = s['sales_pipelines'] as Map<String, dynamic>?;
+                  final pipeline =
+                      s['sales_pipelines'] as Map<String, dynamic>?;
                   final cust = pipeline?['customers'] as Map<String, dynamic>?;
                   final prod = pipeline?['products'] as Map<String, dynamic>?;
                   final cName = cust?['customer_name'] ?? '';
                   final pName = prod?['name'] ?? '';
-                  final dealStr = [cName, pName].where((e) => e.isNotEmpty).join(' - ');
+                  final dealStr =
+                      [cName, pName].where((e) => e.isNotEmpty).join(' - ');
                   return [
                     (entry.key + 1).toString(),
-                    _cleanText(dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-')),
+                    _cleanText(dealStr.isNotEmpty
+                        ? dealStr
+                        : (s['pipeline_id']?.toString().substring(0, 8) ??
+                            '-')),
                     s['step_name']?.toString().toUpperCase() ?? '-',
                     s['action']?.toString() ?? '-',
-                    s['performed_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(s['performed_at']) ?? DateTime.now()) : '-',
+                    s['performed_at'] != null
+                        ? DateFormat('dd MMM, HH:mm').format(
+                            DateTime.tryParse(s['performed_at']) ??
+                                DateTime.now())
+                        : '-',
                   ];
                 }).toList(),
               ),
@@ -3698,14 +5183,26 @@ class PdfService {
 
             pw.SizedBox(height: 10),
             if (incComms && data.communications.isNotEmpty) ...[
-              buildSectionHeader('LEAD COMMUNICATIONS (${data.communications.length})', PdfColors.purple900),
+              buildSectionHeader(
+                  'LEAD COMMUNICATIONS (${data.communications.length})',
+                  PdfColors.purple900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.purple900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.purple900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Sr. No.', 'Lead / Prospect', 'Type', 'Summary', 'Time'],
+                headers: [
+                  'Sr. No.',
+                  'Lead / Prospect',
+                  'Type',
+                  'Summary',
+                  'Time'
+                ],
                 data: data.communications.asMap().entries.map((entry) {
                   final comm = entry.value;
                   final lead = comm['crm_leads'] as Map<String, dynamic>?;
@@ -3715,7 +5212,11 @@ class PdfService {
                     _cleanText(leadName),
                     comm['type']?.toString() ?? '-',
                     _cleanText(comm['summary']?.toString() ?? '-'),
-                    comm['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(comm['created_at']) ?? DateTime.now()) : '-',
+                    comm['created_at'] != null
+                        ? DateFormat('dd MMM, HH:mm').format(
+                            DateTime.tryParse(comm['created_at']) ??
+                                DateTime.now())
+                        : '-',
                   ];
                 }).toList(),
               ),
@@ -3723,14 +5224,25 @@ class PdfService {
 
             pw.SizedBox(height: 10),
             if (incLeads && data.leads.isNotEmpty) ...[
-              buildSectionHeader('LEADS ADDED (${data.leads.length})', PdfColors.cyan900),
+              buildSectionHeader(
+                  'LEADS ADDED (${data.leads.length})', PdfColors.cyan900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.cyan900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.cyan900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Sr. No.', 'Prospect', 'Product', 'Est. Value', 'Status'],
+                headers: [
+                  'Sr. No.',
+                  'Prospect',
+                  'Product',
+                  'Est. Value',
+                  'Status'
+                ],
                 data: data.leads.asMap().entries.map((entry) {
                   final l = entry.value;
                   return [
@@ -3746,14 +5258,27 @@ class PdfService {
 
             pw.SizedBox(height: 10),
             if (incProspects && data.prospects.isNotEmpty) ...[
-              buildSectionHeader('PROSPECTS ADDED (${data.prospects.length})', PdfColors.indigo800),
+              buildSectionHeader('PROSPECTS ADDED (${data.prospects.length})',
+                  PdfColors.indigo800),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo800),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.indigo800),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Sr. No.', 'Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
+                headers: [
+                  'Sr. No.',
+                  'Prospect Name',
+                  'Phone',
+                  'Company',
+                  'Source',
+                  'Converted',
+                  'Date'
+                ],
                 data: data.prospects.asMap().entries.map((entry) {
                   final pr = entry.value;
                   return [
@@ -3763,7 +5288,11 @@ class PdfService {
                     _cleanText(pr['company']?.toString() ?? '-'),
                     pr['source']?.toString() ?? 'Manual',
                     pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
-                    pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+                    pr['created_at'] != null
+                        ? DateFormat('dd MMM, HH:mm').format(
+                            DateTime.tryParse(pr['created_at']) ??
+                                DateTime.now())
+                        : '-',
                   ];
                 }).toList(),
               ),
@@ -3771,10 +5300,15 @@ class PdfService {
 
             pw.SizedBox(height: 10),
             if (incConversions && data.conversions.isNotEmpty) ...[
-              buildSectionHeader('CONVERSIONS (${data.conversions.length})', PdfColors.green900),
+              buildSectionHeader('CONVERSIONS (${data.conversions.length})',
+                  PdfColors.green900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.green900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.green900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
@@ -3793,7 +5327,10 @@ class PdfService {
                     _cleanText(conv['type']?.toString() ?? '-'),
                     _cleanText(conv['name']?.toString() ?? '-'),
                     _cleanText(conv['details']?.toString() ?? '-'),
-                    conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
+                    conv['time'] != null
+                        ? DateFormat('dd MMM, HH:mm').format(
+                            DateTime.tryParse(conv['time']) ?? DateTime.now())
+                        : '-',
                   ];
                 }).toList(),
               ),
@@ -3801,19 +5338,34 @@ class PdfService {
 
             pw.SizedBox(height: 10),
             if (incComplaints && data.complaints.isNotEmpty) ...[
-              buildSectionHeader('COMPLAINTS LOGGED/HANDLED (${data.complaints.length})', PdfColors.orange900),
+              buildSectionHeader(
+                  'COMPLAINTS LOGGED/HANDLED (${data.complaints.length})',
+                  PdfColors.orange900),
               pw.TableHelper.fromTextArray(
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.orange900),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                    fontSize: 10),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.orange900),
                 cellStyle: const pw.TextStyle(fontSize: 10),
                 cellPadding: const pw.EdgeInsets.all(6),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
-                headers: ['Sr. No.', 'Ticket ID', 'Title', 'Customer', 'Status'],
+                headers: [
+                  'Sr. No.',
+                  'Ticket ID',
+                  'Title',
+                  'Customer',
+                  'Status'
+                ],
                 data: data.complaints.asMap().entries.map((entry) {
                   final c = entry.value;
                   return [
                     (entry.key + 1).toString(),
-                    c['ticket_number'] ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
+                    c['ticket_number'] ??
+                        (c['id'] != null && c['id'].toString().length > 8
+                            ? '${c['id'].toString().substring(0, 8)}...'
+                            : '-'),
                     c['title']?.toString() ?? '-',
                     c['customer_name']?.toString() ?? '-',
                     c['status']?.toString().toUpperCase() ?? '-',
@@ -3823,7 +5375,12 @@ class PdfService {
             ],
 
             if (!hasAnyVisibleActivity)
-              pw.Text('No activities recorded for the selected sections during this period.', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
+              pw.Text(
+                  'No activities recorded for the selected sections during this period.',
+                  style: pw.TextStyle(
+                      fontSize: 10,
+                      color: PdfColors.grey600,
+                      fontStyle: pw.FontStyle.italic)),
           ];
         },
       ),
@@ -3844,25 +5401,42 @@ class PdfService {
     final generatedByName = await resolveCurrentUserName();
 
     final resolvedConfig = await resolveTemplateConfig(null);
-    final companyName = resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
-    final companyAddress = resolvedConfig['company_address'] as String? ?? 'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
-    final companyPhone = resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
-    final companyEmail = resolvedConfig['company_email'] as String? ?? 'insiyasolarindustry@gmail.com';
+    final companyName =
+        resolvedConfig['company_name'] as String? ?? 'INSIYA SOLAR INDUSTRY';
+    final companyAddress = resolvedConfig['company_address'] as String? ??
+        'Office No 807, 8th Floor, Finswell Building, Behind Hyatt Hotel, Viman Nagar, Pune, Maharashtra - 411014';
+    final companyPhone =
+        resolvedConfig['company_phone'] as String? ?? '+91 9292922992';
+    final companyEmail = resolvedConfig['company_email'] as String? ??
+        'insiyasolarindustry@gmail.com';
     final logoUrl = resolvedConfig['logo_url'] as String?;
     final logoImage = await _fetchLogo(logoUrl);
 
-    final incProspects = selectedSections == null || selectedSections.contains('prospects');
-    final incLeads = selectedSections == null || selectedSections.contains('leads');
-    final incComms = selectedSections == null || selectedSections.contains('comms');
-    final incDeals = selectedSections == null || selectedSections.contains('deals');
-    final incCustomers = selectedSections == null || selectedSections.contains('customers');
-    final incComplaints = selectedSections == null || selectedSections.contains('complaints');
-    final incSteps = selectedSections == null || selectedSections.contains('steps');
-    final incConversions = selectedSections == null || selectedSections.contains('conversions');
+    final incDailyTasks =
+        selectedSections == null || selectedSections.contains('daily_tasks');
+    final incProspects =
+        selectedSections == null || selectedSections.contains('prospects');
+    final incLeads =
+        selectedSections == null || selectedSections.contains('leads');
+    final incComms =
+        selectedSections == null || selectedSections.contains('comms');
+    final incDeals =
+        selectedSections == null || selectedSections.contains('deals');
+    final incCustomers =
+        selectedSections == null || selectedSections.contains('customers');
+    final incComplaints =
+        selectedSections == null || selectedSections.contains('complaints');
+    final incSteps =
+        selectedSections == null || selectedSections.contains('steps');
+    final incConversions =
+        selectedSections == null || selectedSections.contains('conversions');
 
     String dateStr = dateRangeType.toUpperCase();
-    if (dateRangeType == 'custom' && customStartDate != null && customEndDate != null) {
-      dateStr = '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
+    if (dateRangeType == 'custom' &&
+        customStartDate != null &&
+        customEndDate != null) {
+      dateStr =
+          '${DateFormat('dd MMM yyyy').format(customStartDate)} to ${DateFormat('dd MMM yyyy').format(customEndDate)}';
     }
 
     final pw.ThemeData pdfTheme = pw.ThemeData.withFont(
@@ -3879,11 +5453,20 @@ class PdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                pw.Text(_cleanText(companyName),
+                    style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900)),
                 pw.SizedBox(height: 3),
-                pw.Text(_cleanText(companyAddress), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Text(_cleanText(companyAddress),
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey700)),
                 pw.SizedBox(height: 2),
-                pw.Text('Phone: ${_cleanText(companyPhone)} | Email: ${_cleanText(companyEmail)}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Text(
+                    'Phone: ${_cleanText(companyPhone)} | Email: ${_cleanText(companyEmail)}',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey700)),
               ],
             ),
           ),
@@ -3904,16 +5487,23 @@ class PdfService {
           color: PdfColors.grey100,
           border: pw.Border(left: pw.BorderSide(color: headerColor, width: 4)),
         ),
-        child: pw.Text(title, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: headerColor)),
+        child: pw.Text(title,
+            style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: headerColor)),
       );
     }
 
     pw.Widget buildStatBox(String label, String value, PdfColor color) {
       return pw.Column(
         children: [
-          pw.Text(value, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: color)),
+          pw.Text(value,
+              style: pw.TextStyle(
+                  fontSize: 12, fontWeight: pw.FontWeight.bold, color: color)),
           pw.SizedBox(height: 2),
-          pw.Text(label, style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+          pw.Text(label,
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
         ],
       );
     }
@@ -3934,13 +5524,21 @@ class PdfService {
               margin: const pw.EdgeInsets.only(bottom: 12),
               padding: const pw.EdgeInsets.only(bottom: 4),
               decoration: const pw.BoxDecoration(
-                border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
+                border: pw.Border(
+                    bottom:
+                        pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
               ),
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(_cleanText(companyName), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                  pw.Text('USER ACTIVITY REPORT | ${_cleanText(uName)}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                  pw.Text(_cleanText(companyName),
+                      style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue900)),
+                  pw.Text('USER ACTIVITY REPORT | ${_cleanText(uName)}',
+                      style: const pw.TextStyle(
+                          fontSize: 8, color: PdfColors.grey700)),
                 ],
               ),
             );
@@ -3952,31 +5550,57 @@ class PdfService {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
-                  pw.Text('Generated by: ${_cleanText(generatedByName)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
-                  pw.Text('Page ${pageCtx.pageNumber} of ${pageCtx.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                  pw.Text(
+                      'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+                      style: const pw.TextStyle(
+                          fontSize: 8, color: PdfColors.grey600)),
+                  pw.Text('Generated by: ${_cleanText(generatedByName)}',
+                      style: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey700)),
+                  pw.Text('Page ${pageCtx.pageNumber} of ${pageCtx.pagesCount}',
+                      style: const pw.TextStyle(
+                          fontSize: 8, color: PdfColors.grey600)),
                 ],
               ),
             ],
           ),
           build: (pageCtx) {
             final summaryStats = <pw.Widget>[
-              if (incProspects) buildStatBox('Prospects', uData.prospects.length.toString(), PdfColors.indigo800),
-              if (incLeads) buildStatBox('Leads', uData.leads.length.toString(), PdfColors.cyan900),
-              if (incComms) buildStatBox('Comms', uData.communications.length.toString(), PdfColors.purple900),
-              if (incDeals) buildStatBox('Deals', uData.pipelines.length.toString(), PdfColors.teal900),
-              if (incCustomers) buildStatBox('Customers', uData.customers.length.toString(), PdfColors.blue900),
-              if (incComplaints) buildStatBox('Complaints', uData.complaints.length.toString(), PdfColors.orange900),
+              if (incDailyTasks)
+                buildStatBox('Tasks', uData.dailyTasks.length.toString(),
+                    PdfColors.indigo900),
+              if (incProspects)
+                buildStatBox('Prospects', uData.prospects.length.toString(),
+                    PdfColors.indigo800),
+              if (incLeads)
+                buildStatBox(
+                    'Leads', uData.leads.length.toString(), PdfColors.cyan900),
+              if (incComms)
+                buildStatBox('Comms', uData.communications.length.toString(),
+                    PdfColors.purple900),
+              if (incDeals)
+                buildStatBox('Deals', uData.pipelines.length.toString(),
+                    PdfColors.teal900),
+              if (incCustomers)
+                buildStatBox('Customers', uData.customers.length.toString(),
+                    PdfColors.blue900),
+              if (incComplaints)
+                buildStatBox('Complaints', uData.complaints.length.toString(),
+                    PdfColors.orange900),
             ];
 
-            final hasAnyVisibleActivity = (incCustomers && uData.customers.isNotEmpty) ||
-                (incDeals && uData.pipelines.isNotEmpty) ||
-                (incSteps && uData.stepAuditLogs.isNotEmpty) ||
-                (incComms && uData.communications.isNotEmpty) ||
-                (incLeads && uData.leads.isNotEmpty) ||
-                (incProspects && uData.prospects.isNotEmpty) ||
-                (incConversions && uData.conversions.isNotEmpty) ||
-                (incComplaints && uData.complaints.isNotEmpty);
+            final hasAnyVisibleActivity =
+                (incDailyTasks && uData.dailyTasks.isNotEmpty) ||
+                    (incCustomers && uData.customers.isNotEmpty) ||
+                    (incDeals && uData.pipelines.isNotEmpty) ||
+                    (incSteps && uData.stepAuditLogs.isNotEmpty) ||
+                    (incComms && uData.communications.isNotEmpty) ||
+                    (incLeads && uData.leads.isNotEmpty) ||
+                    (incProspects && uData.prospects.isNotEmpty) ||
+                    (incConversions && uData.conversions.isNotEmpty) ||
+                    (incComplaints && uData.complaints.isNotEmpty);
 
             return [
               // Company Header & Title on first page flow
@@ -3987,10 +5611,22 @@ class PdfService {
               pw.Center(
                 child: pw.Column(
                   children: [
-                    pw.Text('USER ACTIVITY REPORT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black, letterSpacing: 1.2)),
+                    pw.Text('USER ACTIVITY REPORT',
+                        style: pw.TextStyle(
+                            fontSize: 16,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.black,
+                            letterSpacing: 1.2)),
                     pw.SizedBox(height: 3),
-                    pw.Text('Staff Member: ${_cleanText(uName)} ${uRole.isNotEmpty ? "($_cleanText(uRole))" : ""}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                    pw.Text('Period: $dateStr', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    pw.Text(
+                        'Staff Member: ${_cleanText(uName)} ${uRole.isNotEmpty ? "($_cleanText(uRole))" : ""}',
+                        style: pw.TextStyle(
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.blue900)),
+                    pw.Text('Period: $dateStr',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.grey700)),
                   ],
                 ),
               ),
@@ -3999,10 +5635,12 @@ class PdfService {
               // Activity Overview Summary Box for this user
               if (summaryStats.isNotEmpty)
                 pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  padding:
+                      const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                   decoration: pw.BoxDecoration(
                     color: PdfColors.grey50,
-                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                    borderRadius:
+                        const pw.BorderRadius.all(pw.Radius.circular(6)),
                     border: pw.Border.all(color: PdfColors.grey300),
                   ),
                   child: pw.Row(
@@ -4011,69 +5649,178 @@ class PdfService {
                   ),
                 ),
               pw.SizedBox(height: 6),
-              if (incCustomers && uData.customers.isNotEmpty) ...[
-                buildSectionHeader('CUSTOMERS ADDED (${uData.customers.length})', PdfColors.blue900),
+              if (incDailyTasks && uData.dailyTasks.isNotEmpty) ...[
+                buildSectionHeader(
+                    'DAILY TASKS COMPLETED (${uData.dailyTasks.length})',
+                    PdfColors.indigo900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.indigo900),
+                  cellStyle: const pw.TextStyle(fontSize: 8.5),
+                  cellPadding: const pw.EdgeInsets.all(5),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  columnWidths: {
+                    0: const pw.FixedColumnWidth(26),
+                    1: const pw.FlexColumnWidth(2),
+                    2: const pw.FlexColumnWidth(3.5),
+                    3: const pw.FixedColumnWidth(65),
+                  },
+                  headers: [
+                    'Sr. No.',
+                    'Customer / Prospect',
+                    'Task Description',
+                    'Time'
+                  ],
+                  data: uData.dailyTasks.asMap().entries.map((entry) {
+                    final t = entry.value;
+                    final completedAt = t['completed_at'] != null
+                        ? (DateTime.tryParse(t['completed_at'].toString())
+                            ?.toLocal())
+                        : null;
+                    final timeStr = completedAt != null
+                        ? DateFormat('hh:mm a').format(completedAt)
+                        : '-';
+                    return [
+                      (entry.key + 1).toString(),
+                      _cleanText(t['customer_name']?.toString() ?? '-'),
+                      _cleanText(t['task_description']?.toString() ?? '-'),
+                      timeStr,
+                    ];
+                  }).toList(),
+                ),
+                pw.SizedBox(height: 8),
+              ],
+              if (incCustomers && uData.customers.isNotEmpty) ...[
+                buildSectionHeader(
+                    'CUSTOMERS ADDED (${uData.customers.length})',
+                    PdfColors.blue900),
+                pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.blue900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   headers: ['Sr. No.', 'ID', 'Name', 'Phone', 'Created At'],
-                  data: uData.customers.asMap().entries.map((entry) => [
-                    (entry.key + 1).toString(),
-                    (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
-                    entry.value['customer_name']?.toString() ?? '-',
-                    entry.value['phone']?.toString() ?? '-',
-                    entry.value['created_at'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.tryParse(entry.value['created_at']) ?? DateTime.now()) : '-',
-                  ]).toList(),
+                  data: uData.customers
+                      .asMap()
+                      .entries
+                      .map((entry) => [
+                            (entry.key + 1).toString(),
+                            (entry.value['id']?.toString() ?? '').length > 8
+                                ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...'
+                                : (entry.value['id']?.toString() ?? ''),
+                            entry.value['customer_name']?.toString() ?? '-',
+                            entry.value['phone']?.toString() ?? '-',
+                            entry.value['created_at'] != null
+                                ? DateFormat('dd MMM yyyy, HH:mm').format(
+                                    DateTime.tryParse(
+                                            entry.value['created_at']) ??
+                                        DateTime.now())
+                                : '-',
+                          ])
+                      .toList(),
                 ),
               ],
-              
+
               pw.SizedBox(height: 10),
               if (incDeals && uData.pipelines.isNotEmpty) ...[
-                buildSectionHeader('DEALS CREATED (${uData.pipelines.length})', PdfColors.teal900),
+                buildSectionHeader('DEALS CREATED (${uData.pipelines.length})',
+                    PdfColors.teal900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.teal900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.teal900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Sr. No.', 'Deal ID', 'Customer', 'Product', 'Status'],
-                  data: uData.pipelines.asMap().entries.map((entry) => [
-                    (entry.key + 1).toString(),
-                    (entry.value['id']?.toString() ?? '').length > 8 ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...' : (entry.value['id']?.toString() ?? ''),
-                    entry.value['customers'] != null ? entry.value['customers']['customer_name']?.toString() ?? '-' : '-',
-                    entry.value['products'] != null ? entry.value['products']['name']?.toString() ?? '-' : '-',
-                    entry.value['status']?.toString().toUpperCase() ?? '-',
-                  ]).toList(),
+                  headers: [
+                    'Sr. No.',
+                    'Deal ID',
+                    'Customer',
+                    'Product',
+                    'Status'
+                  ],
+                  data: uData.pipelines
+                      .asMap()
+                      .entries
+                      .map((entry) => [
+                            (entry.key + 1).toString(),
+                            (entry.value['id']?.toString() ?? '').length > 8
+                                ? '${(entry.value['id']?.toString() ?? '').substring(0, 8)}...'
+                                : (entry.value['id']?.toString() ?? ''),
+                            entry.value['customers'] != null
+                                ? entry.value['customers']['customer_name']
+                                        ?.toString() ??
+                                    '-'
+                                : '-',
+                            entry.value['products'] != null
+                                ? entry.value['products']['name']?.toString() ??
+                                    '-'
+                                : '-',
+                            entry.value['status']?.toString().toUpperCase() ??
+                                '-',
+                          ])
+                      .toList(),
                 ),
               ],
 
               pw.SizedBox(height: 10),
               if (incSteps && uData.stepAuditLogs.isNotEmpty) ...[
-                buildSectionHeader('DEAL STEPS FINISHED (${uData.stepAuditLogs.length})', PdfColors.indigo900),
+                buildSectionHeader(
+                    'DEAL STEPS FINISHED (${uData.stepAuditLogs.length})',
+                    PdfColors.indigo900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.indigo900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Sr. No.', 'Deal / Customer', 'Step', 'Action', 'Time'],
+                  headers: [
+                    'Sr. No.',
+                    'Deal / Customer',
+                    'Step',
+                    'Action',
+                    'Time'
+                  ],
                   data: uData.stepAuditLogs.asMap().entries.map((entry) {
                     final s = entry.value;
-                    final pipeline = s['sales_pipelines'] as Map<String, dynamic>?;
-                    final cust = pipeline?['customers'] as Map<String, dynamic>?;
+                    final pipeline =
+                        s['sales_pipelines'] as Map<String, dynamic>?;
+                    final cust =
+                        pipeline?['customers'] as Map<String, dynamic>?;
                     final prod = pipeline?['products'] as Map<String, dynamic>?;
                     final cName = cust?['customer_name'] ?? '';
                     final pName = prod?['name'] ?? '';
-                    final dealStr = [cName, pName].where((e) => e.isNotEmpty).join(' - ');
+                    final dealStr =
+                        [cName, pName].where((e) => e.isNotEmpty).join(' - ');
                     return [
                       (entry.key + 1).toString(),
-                      dealStr.isNotEmpty ? dealStr : (s['pipeline_id']?.toString().substring(0, 8) ?? '-'),
+                      dealStr.isNotEmpty
+                          ? dealStr
+                          : (s['pipeline_id']?.toString().substring(0, 8) ??
+                              '-'),
                       s['step_name']?.toString().toUpperCase() ?? '-',
                       s['action']?.toString() ?? '-',
-                      s['performed_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(s['performed_at']) ?? DateTime.now()) : '-',
+                      s['performed_at'] != null
+                          ? DateFormat('dd MMM, HH:mm').format(
+                              DateTime.tryParse(s['performed_at']) ??
+                                  DateTime.now())
+                          : '-',
                     ];
                   }).toList(),
                 ),
@@ -4081,14 +5828,26 @@ class PdfService {
 
               pw.SizedBox(height: 10),
               if (incComms && uData.communications.isNotEmpty) ...[
-                buildSectionHeader('LEAD COMMUNICATIONS (${uData.communications.length})', PdfColors.purple900),
+                buildSectionHeader(
+                    'LEAD COMMUNICATIONS (${uData.communications.length})',
+                    PdfColors.purple900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.purple900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.purple900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Sr. No.', 'Lead / Prospect', 'Type', 'Summary', 'Time'],
+                  headers: [
+                    'Sr. No.',
+                    'Lead / Prospect',
+                    'Type',
+                    'Summary',
+                    'Time'
+                  ],
                   data: uData.communications.asMap().entries.map((entry) {
                     final comm = entry.value;
                     final lead = comm['crm_leads'] as Map<String, dynamic>?;
@@ -4098,7 +5857,11 @@ class PdfService {
                       leadName,
                       comm['type']?.toString() ?? '-',
                       comm['summary']?.toString() ?? '-',
-                      comm['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(comm['created_at']) ?? DateTime.now()) : '-',
+                      comm['created_at'] != null
+                          ? DateFormat('dd MMM, HH:mm').format(
+                              DateTime.tryParse(comm['created_at']) ??
+                                  DateTime.now())
+                          : '-',
                     ];
                   }).toList(),
                 ),
@@ -4106,14 +5869,25 @@ class PdfService {
 
               pw.SizedBox(height: 10),
               if (incLeads && uData.leads.isNotEmpty) ...[
-                buildSectionHeader('LEADS ADDED (${uData.leads.length})', PdfColors.cyan900),
+                buildSectionHeader(
+                    'LEADS ADDED (${uData.leads.length})', PdfColors.cyan900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.cyan900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.cyan900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Sr. No.', 'Prospect', 'Product', 'Est. Value', 'Status'],
+                  headers: [
+                    'Sr. No.',
+                    'Prospect',
+                    'Product',
+                    'Est. Value',
+                    'Status'
+                  ],
                   data: uData.leads.asMap().entries.map((entry) {
                     final l = entry.value;
                     return [
@@ -4129,14 +5903,28 @@ class PdfService {
 
               pw.SizedBox(height: 10),
               if (incProspects && uData.prospects.isNotEmpty) ...[
-                buildSectionHeader('PROSPECTS ADDED (${uData.prospects.length})', PdfColors.indigo800),
+                buildSectionHeader(
+                    'PROSPECTS ADDED (${uData.prospects.length})',
+                    PdfColors.indigo800),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo800),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.indigo800),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Sr. No.', 'Prospect Name', 'Phone', 'Company', 'Source', 'Converted', 'Date'],
+                  headers: [
+                    'Sr. No.',
+                    'Prospect Name',
+                    'Phone',
+                    'Company',
+                    'Source',
+                    'Converted',
+                    'Date'
+                  ],
                   data: uData.prospects.asMap().entries.map((entry) {
                     final pr = entry.value;
                     return [
@@ -4146,7 +5934,11 @@ class PdfService {
                       _cleanText(pr['company']?.toString() ?? '-'),
                       pr['source']?.toString() ?? 'Manual',
                       pr['converted_to_lead_id'] != null ? 'Yes (Lead)' : 'No',
-                      pr['created_at'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(pr['created_at']) ?? DateTime.now()) : '-',
+                      pr['created_at'] != null
+                          ? DateFormat('dd MMM, HH:mm').format(
+                              DateTime.tryParse(pr['created_at']) ??
+                                  DateTime.now())
+                          : '-',
                     ];
                   }).toList(),
                 ),
@@ -4154,10 +5946,15 @@ class PdfService {
 
               pw.SizedBox(height: 10),
               if (incConversions && uData.conversions.isNotEmpty) ...[
-                buildSectionHeader('CONVERSIONS (${uData.conversions.length})', PdfColors.green900),
+                buildSectionHeader('CONVERSIONS (${uData.conversions.length})',
+                    PdfColors.green900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.green900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.green900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
@@ -4176,7 +5973,10 @@ class PdfService {
                       _cleanText(conv['type']?.toString() ?? '-'),
                       _cleanText(conv['name']?.toString() ?? '-'),
                       _cleanText(conv['details']?.toString() ?? '-'),
-                      conv['time'] != null ? DateFormat('dd MMM, HH:mm').format(DateTime.tryParse(conv['time']) ?? DateTime.now()) : '-',
+                      conv['time'] != null
+                          ? DateFormat('dd MMM, HH:mm').format(
+                              DateTime.tryParse(conv['time']) ?? DateTime.now())
+                          : '-',
                     ];
                   }).toList(),
                 ),
@@ -4184,19 +5984,34 @@ class PdfService {
 
               pw.SizedBox(height: 10),
               if (incComplaints && uData.complaints.isNotEmpty) ...[
-                buildSectionHeader('COMPLAINTS LOGGED / HANDLED (${uData.complaints.length})', PdfColors.orange900),
+                buildSectionHeader(
+                    'COMPLAINTS LOGGED / HANDLED (${uData.complaints.length})',
+                    PdfColors.orange900),
                 pw.TableHelper.fromTextArray(
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.orange900),
+                  headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                      fontSize: 9),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.orange900),
                   cellStyle: const pw.TextStyle(fontSize: 9),
                   cellPadding: const pw.EdgeInsets.all(5),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
-                  headers: ['Sr. No.', 'Ticket ID', 'Title', 'Customer', 'Status'],
+                  headers: [
+                    'Sr. No.',
+                    'Ticket ID',
+                    'Title',
+                    'Customer',
+                    'Status'
+                  ],
                   data: uData.complaints.asMap().entries.map((entry) {
                     final c = entry.value;
                     return [
                       (entry.key + 1).toString(),
-                      c['ticket_number']?.toString() ?? (c['id'] != null && c['id'].toString().length > 8 ? '${c['id'].toString().substring(0, 8)}...' : '-'),
+                      c['ticket_number']?.toString() ??
+                          (c['id'] != null && c['id'].toString().length > 8
+                              ? '${c['id'].toString().substring(0, 8)}...'
+                              : '-'),
                       c['title']?.toString() ?? '-',
                       c['customer_name']?.toString() ?? '-',
                       c['status']?.toString().toUpperCase() ?? '-',
@@ -4206,7 +6021,12 @@ class PdfService {
               ],
 
               if (!hasAnyVisibleActivity)
-                pw.Text('No activities recorded for the selected sections during this period.', style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
+                pw.Text(
+                    'No activities recorded for the selected sections during this period.',
+                    style: pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey600,
+                        fontStyle: pw.FontStyle.italic)),
             ];
           },
         ),

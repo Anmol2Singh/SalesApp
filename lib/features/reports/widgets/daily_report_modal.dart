@@ -56,6 +56,12 @@ class _DailyReportSheetState extends ConsumerState<_DailyReportSheet> {
 
   static const List<Map<String, dynamic>> availableSections = [
     {
+      'key': 'daily_tasks',
+      'title': 'Daily Tasks Completed',
+      'icon': Icons.task_alt_outlined,
+      'desc': 'Daily tasks and customer activities completed today',
+    },
+    {
       'key': 'prospects',
       'title': 'Prospects',
       'icon': Icons.person_search_outlined,
