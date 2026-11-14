@@ -20,8 +20,6 @@ import '../widgets/searchable_tank_dropdown.dart';
 import '../../services/price_calculator.dart';
 import '../../services/tank_spec_options_service.dart';
 import '../../services/tank_item_parser.dart';
-import '../../../../core/models/user_role.dart';
-import '../../../auth/providers/auth_provider.dart';
 import '../../models/generator_company_settings.dart';
 import '../../providers/quotation_generator_providers.dart';
 import '../../../../core/providers/company_provider.dart';
@@ -38,13 +36,15 @@ class HeatPumpProposalBuilderScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<HeatPumpProposalBuilderScreen> createState() => _HeatPumpProposalBuilderScreenState();
+  ConsumerState<HeatPumpProposalBuilderScreen> createState() =>
+      _HeatPumpProposalBuilderScreenState();
 }
 
-class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposalBuilderScreen> {
+class _HeatPumpProposalBuilderScreenState
+    extends ConsumerState<HeatPumpProposalBuilderScreen> {
   bool _isLoading = true;
   String? _errorMessage;
-  
+
   DealQuotationItem? _dealQuotation;
   QgProposalDraft? _draft;
   bool _isSaving = false;
@@ -67,10 +67,14 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
 
   Future<void> _loadTankDropdownOptions() async {
     try {
-      final mats = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryMaterial);
-      final ins = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryInsulation);
-      final shell = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryShellThickness);
-      final dish = await TankSpecOptionsService.getOptions(TankSpecOptionsService.categoryDishThickness);
+      final mats = await TankSpecOptionsService.getOptions(
+          TankSpecOptionsService.categoryMaterial);
+      final ins = await TankSpecOptionsService.getOptions(
+          TankSpecOptionsService.categoryInsulation);
+      final shell = await TankSpecOptionsService.getOptions(
+          TankSpecOptionsService.categoryShellThickness);
+      final dish = await TankSpecOptionsService.getOptions(
+          TankSpecOptionsService.categoryDishThickness);
       if (mounted) {
         setState(() {
           _materialOptions = mats;
@@ -107,7 +111,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       if (dealItem == null) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Quotation with ID "${widget.quotationId}" could not be found.';
+          _errorMessage =
+              'Quotation with ID "${widget.quotationId}" could not be found.';
         });
         return;
       }
@@ -136,8 +141,10 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       final savedDraft = await QgDraftsService.loadDraft(widget.quotationId);
 
       if (savedDraft != null) {
-        final settings = ref.read(quotationSettingsProvider).valueOrNull ?? await ref.read(quotationRepositoryProvider).getSettings();
-        final freshDraft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
+        final settings = ref.read(quotationSettingsProvider).valueOrNull ??
+            await ref.read(quotationRepositoryProvider).getSettings();
+        final freshDraft =
+            QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
         if (savedDraft.hpModel != freshDraft.hpModel ||
             savedDraft.hpKw != freshDraft.hpKw ||
             savedDraft.hpSpecs['Heat Pump Model'] != freshDraft.hpModel ||
@@ -172,14 +179,18 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         }
       } else {
         // Initial draft from source deal quotation
-        final settings = ref.read(quotationSettingsProvider).valueOrNull ?? await ref.read(quotationRepositoryProvider).getSettings();
-        _draft = QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
+        final settings = ref.read(quotationSettingsProvider).valueOrNull ??
+            await ref.read(quotationRepositoryProvider).getSettings();
+        _draft =
+            QgProposalDraft.fromDealQuotation(dealItem, settings: settings);
         _isRestoredFromDraft = false;
 
         // If Module Settings didn't have specs for this model, attempt catalog match
-        if (_draft!.specsCopiedFrom == null || !_draft!.specsCopiedFrom!.startsWith('Module Settings')) {
+        if (_draft!.specsCopiedFrom == null ||
+            !_draft!.specsCopiedFrom!.startsWith('Module Settings')) {
           final catalogService = QgCatalogService(supabase);
-          final specMatch = await catalogService.matchSpecifications(_draft!.hpKw);
+          final specMatch =
+              await catalogService.matchSpecifications(_draft!.hpKw);
           _draft!.hpSpecs = specMatch.specs;
           _draft!.specsCopiedFrom = specMatch.specsCopiedFrom;
         }
@@ -271,7 +282,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => Navigator.pop(ctx, 'save'),
-            child: const Text('Save & Exit', style: TextStyle(color: Colors.white)),
+            child: const Text('Save & Exit',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -313,10 +325,14 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       final supabase = ref.read(supabaseClientProvider);
       final catalogService = QgCatalogService(supabase);
 
-      final settings = ref.read(quotationSettingsProvider).valueOrNull ?? await ref.read(quotationRepositoryProvider).getSettings();
-      final freshDraft = QgProposalDraft.fromDealQuotation(_dealQuotation!, settings: settings);
-      if (freshDraft.specsCopiedFrom == null || !freshDraft.specsCopiedFrom!.startsWith('Module Settings')) {
-        final specMatch = await catalogService.matchSpecifications(freshDraft.hpKw);
+      final settings = ref.read(quotationSettingsProvider).valueOrNull ??
+          await ref.read(quotationRepositoryProvider).getSettings();
+      final freshDraft = QgProposalDraft.fromDealQuotation(_dealQuotation!,
+          settings: settings);
+      if (freshDraft.specsCopiedFrom == null ||
+          !freshDraft.specsCopiedFrom!.startsWith('Module Settings')) {
+        final specMatch =
+            await catalogService.matchSpecifications(freshDraft.hpKw);
         freshDraft.hpSpecs = specMatch.specs;
         freshDraft.specsCopiedFrom = specMatch.specsCopiedFrom;
       }
@@ -331,7 +347,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Proposal reset to CRM deal quotation values.')),
+          const SnackBar(
+              content: Text('Proposal reset to CRM deal quotation values.')),
         );
       }
     }
@@ -364,9 +381,11 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                const Icon(Icons.error_outline,
+                    size: 48, color: AppColors.error),
                 const SizedBox(height: 16),
-                Text(_errorMessage ?? 'Proposal not available', textAlign: TextAlign.center),
+                Text(_errorMessage ?? 'Proposal not available',
+                    textAlign: TextAlign.center),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _loadQuotationAndDraft,
@@ -398,12 +417,14 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             children: [
               Text(
                 'Proposal Builder • ${draft.quotationNumber}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
               ),
               Text(
                 draft.customerName,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.normal),
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -416,14 +437,18 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                   child: SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   ),
                 ),
               )
             else if (_hasUnsavedChanges)
               TextButton.icon(
-                icon: const Icon(Icons.save_outlined, size: 16, color: Colors.white),
-                label: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.save_outlined,
+                    size: 16, color: Colors.white),
+                label: const Text('Save',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
                 onPressed: () => _saveDraft(showSnackbar: true),
               )
             else
@@ -432,11 +457,13 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                 child: Center(
                   child: Row(
                     children: [
-                      const Icon(Icons.cloud_done_outlined, size: 14, color: Colors.white70),
+                      const Icon(Icons.cloud_done_outlined,
+                          size: 14, color: Colors.white70),
                       const SizedBox(width: 4),
                       Text(
                         _isRestoredFromDraft ? 'Draft Restored' : 'Saved',
-                        style: const TextStyle(fontSize: 11, color: Colors.white70),
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.white70),
                       ),
                     ],
                   ),
@@ -500,7 +527,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             ),
             child: Row(
               children: [
-                const Icon(Icons.lock_clock, color: AppColors.warning, size: 24),
+                const Icon(Icons.lock_clock,
+                    color: AppColors.warning, size: 24),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -508,12 +536,15 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                     children: [
                       const Text(
                         'Pending Approval: Changes stay on this device',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.warning),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.warning),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Quotation status is "${draft.status.toUpperCase()}". PDF previews carry a "DRAFT - NOT APPROVED" watermark. Finalize will be enabled once confirmed by Admin/Sales Head.',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -532,7 +563,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             ),
             child: const Row(
               children: [
-                Icon(Icons.verified_outlined, color: AppColors.success, size: 24),
+                Icon(Icons.verified_outlined,
+                    color: AppColors.success, size: 24),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -540,12 +572,15 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                     children: [
                       Text(
                         'Quotation Approved & Confirmed',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.success),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Ready to generate final proposal PDF and publish to quotation repository.',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -553,7 +588,6 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
               ],
             ),
           ),
-
         if (_sourceQuotationChanged)
           Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -565,17 +599,23 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             ),
             child: Row(
               children: [
-                const Icon(Icons.sync_problem, color: AppColors.error, size: 24),
+                const Icon(Icons.sync_problem,
+                    color: AppColors.error, size: 24),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
                     'Source quotation was updated in CRM. Tap "Reset to Deal Quotation" if you wish to synchronize new changes.',
-                    style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
                 TextButton(
                   onPressed: _resetToDealQuotation,
-                  child: const Text('Reset', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+                  child: const Text('Reset',
+                      style: TextStyle(
+                          color: AppColors.error, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -589,7 +629,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
   Widget _buildCustomerSalesSection(QgProposalDraft draft) {
     return _CollapsibleCard(
       title: 'Customer & Sales Details',
-      subtitle: '${draft.customerSalutation} ${draft.customerName} • Sales: ${draft.salesmanName}',
+      subtitle:
+          '${draft.customerSalutation} ${draft.customerName} • Sales: ${draft.salesmanName}',
       icon: Icons.person_outline,
       initiallyExpanded: true,
       children: [
@@ -599,7 +640,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
               width: 100,
               child: DropdownButtonFormField<String>(
                 value: draft.customerSalutation,
-                decoration: const InputDecoration(labelText: 'Salutation', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Salutation', border: OutlineInputBorder()),
                 items: ['M/s.', 'Mr.', 'Ms.', 'Mrs.'].map((s) {
                   return DropdownMenuItem(value: s, child: Text(s));
                 }).toList(),
@@ -615,7 +657,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Expanded(
               child: TextFormField(
                 initialValue: draft.customerName,
-                decoration: const InputDecoration(labelText: 'Customer Name', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Customer Name', border: OutlineInputBorder()),
                 onChanged: (val) {
                   draft.customerName = val;
                   _triggerAutoSave();
@@ -628,7 +671,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         TextFormField(
           initialValue: draft.customerAddress,
           maxLines: 2,
-          decoration: const InputDecoration(labelText: 'Billing Address', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+              labelText: 'Billing Address', border: OutlineInputBorder()),
           onChanged: (val) {
             draft.customerAddress = val;
             _triggerAutoSave();
@@ -640,7 +684,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Expanded(
               child: TextFormField(
                 initialValue: draft.customerPhone,
-                decoration: const InputDecoration(labelText: 'Customer Mobile', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Customer Mobile', border: OutlineInputBorder()),
                 onChanged: (val) {
                   draft.customerPhone = val;
                   _triggerAutoSave();
@@ -651,7 +696,9 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Expanded(
               child: TextFormField(
                 initialValue: draft.customerGst ?? '',
-                decoration: const InputDecoration(labelText: 'GST Number (Optional)', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'GST Number (Optional)',
+                    border: OutlineInputBorder()),
                 onChanged: (val) {
                   draft.customerGst = val.trim().isEmpty ? null : val.trim();
                   _triggerAutoSave();
@@ -667,7 +714,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
               width: 100,
               child: DropdownButtonFormField<String>(
                 value: draft.salesmanSalutation,
-                decoration: const InputDecoration(labelText: 'Salutation', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Salutation', border: OutlineInputBorder()),
                 items: ['Mr.', 'Ms.', 'Mrs.'].map((s) {
                   return DropdownMenuItem(value: s, child: Text(s));
                 }).toList(),
@@ -683,7 +731,9 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Expanded(
               child: TextFormField(
                 initialValue: draft.salesmanName,
-                decoration: const InputDecoration(labelText: 'Salesperson Name', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Salesperson Name',
+                    border: OutlineInputBorder()),
                 onChanged: (val) {
                   draft.salesmanName = val;
                   _triggerAutoSave();
@@ -694,7 +744,9 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Expanded(
               child: TextFormField(
                 initialValue: draft.salesmanPhone,
-                decoration: const InputDecoration(labelText: 'Salesperson Mobile', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Salesperson Mobile',
+                    border: OutlineInputBorder()),
                 onChanged: (val) {
                   draft.salesmanPhone = val;
                   _triggerAutoSave();
@@ -768,7 +820,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         color: isResolved ? Colors.white : AppColors.warning.withAlpha(15),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isResolved ? AppColors.border : AppColors.warning.withAlpha(120),
+          color:
+              isResolved ? AppColors.border : AppColors.warning.withAlpha(120),
         ),
       ),
       child: Column(
@@ -779,13 +832,16 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
               Expanded(
                 child: Text(
                   item.rawDescription,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isResolved ? AppColors.success.withAlpha(20) : AppColors.warning.withAlpha(20),
+                  color: isResolved
+                      ? AppColors.success.withAlpha(20)
+                      : AppColors.warning.withAlpha(20),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -806,18 +862,23 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             spacing: 8,
             runSpacing: 4,
             children: [
-              Text('Qty: ${item.qty}  •  Rate: ₹${item.rate.toStringAsFixed(2)}  •  Amount: ₹${item.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              Text(
+                  'Qty: ${item.qty}  •  Rate: ₹${item.rate.toStringAsFixed(2)}  •  Amount: ₹${item.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
               TextButton.icon(
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 icon: const Icon(Icons.tune, size: 14),
-                label: const Text('Resolve / Edit', style: TextStyle(fontSize: 12)),
+                label: const Text('Resolve / Edit',
+                    style: TextStyle(fontSize: 12)),
                 onPressed: () async {
-                  final updated = await ItemResolveDialog.show(context, item: item);
+                  final updated =
+                      await ItemResolveDialog.show(context, item: item);
                   if (updated != null) {
                     setState(() {
                       draft.items[index] = updated;
@@ -832,7 +893,10 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           if (item.hpModel != null)
             Text(
               'Model: ${item.hpModel} (${item.hpKw} kW)',
-              style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold),
             ),
           if (item.unmappedReason != null && !isResolved)
             Text(
@@ -889,13 +953,15 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
   Widget _buildSupplementarySection(QgProposalDraft draft) {
     return _CollapsibleCard(
       title: 'Supplementary Terms & Charges',
-      subtitle: '${draft.supplementaryItems.length} items • Subtotal: ${PriceCalculator.formatIndianCurrency(draft.supplementarySubtotal.round())}',
+      subtitle:
+          '${draft.supplementaryItems.length} items • Subtotal: ${PriceCalculator.formatIndianCurrency(draft.supplementarySubtotal.round())}',
       icon: Icons.add_shopping_cart,
       children: [
         if (draft.supplementaryItems.isEmpty)
           const Padding(
             padding: EdgeInsets.all(8.0),
-            child: Text('No supplementary charges attached to this deal quotation.'),
+            child: Text(
+                'No supplementary charges attached to this deal quotation.'),
           )
         else
           for (int i = 0; i < draft.supplementaryItems.length; i++) ...[
@@ -908,7 +974,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
 
   Widget _buildSupplementaryRow(QgProposalDraft draft, int index) {
     final item = draft.supplementaryItems[index];
-    final isIncluded = (item['type']?.toString().toLowerCase() ?? 'included') == 'included';
+    final isIncluded =
+        (item['type']?.toString().toLowerCase() ?? 'included') == 'included';
     final name = item['name']?.toString() ?? 'Item';
     final rate = (item['rate'] as num?)?.toDouble() ?? 0.0;
     final qty = (item['qty'] as num?)?.toInt() ?? (isIncluded ? 0 : 1);
@@ -943,8 +1010,13 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   segments: const [
-                    ButtonSegment(value: 'Included', label: Text('Included', style: TextStyle(fontSize: 11))),
-                    ButtonSegment(value: 'Extra', label: Text('Extra', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(
+                        value: 'Included',
+                        label:
+                            Text('Included', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(
+                        value: 'Extra',
+                        label: Text('Extra', style: TextStyle(fontSize: 11))),
                   ],
                   selected: {isIncluded ? 'Included' : 'Extra'},
                   onSelectionChanged: (set) {
@@ -953,11 +1025,17 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                       draft.supplementaryItems[index]['type'] = chosen;
                       if (chosen == 'Included') {
                         draft.supplementaryItems[index]['rate'] = 0.0;
-                        if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
+                        if (((draft.supplementaryItems[index]['qty'] as num?)
+                                    ?.toInt() ??
+                                0) <=
+                            0) {
                           draft.supplementaryItems[index]['qty'] = 1;
                         }
                       } else {
-                        if (((draft.supplementaryItems[index]['qty'] as num?)?.toInt() ?? 0) <= 0) {
+                        if (((draft.supplementaryItems[index]['qty'] as num?)
+                                    ?.toInt() ??
+                                0) <=
+                            0) {
                           draft.supplementaryItems[index]['qty'] = 1;
                         }
                       }
@@ -980,7 +1058,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                     labelText: 'Qty',
                     border: OutlineInputBorder(),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (val) {
@@ -998,13 +1077,16 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                   height: 38,
                   child: TextFormField(
                     key: ValueKey('supp_rate_${index}_$isIncluded'),
-                    initialValue: isIncluded ? '' : (rate > 0 ? rate.toStringAsFixed(0) : ''),
+                    initialValue: isIncluded
+                        ? ''
+                        : (rate > 0 ? rate.toStringAsFixed(0) : ''),
                     enabled: !isIncluded,
                     decoration: InputDecoration(
                       labelText: isIncluded ? 'Rate (Incl.)' : 'Rate (₹)',
                       border: const OutlineInputBorder(),
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
                     ),
                     keyboardType: TextInputType.number,
                     onChanged: (val) {
@@ -1039,14 +1121,16 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
   // ─── SECTION 4: PAYMENT TERMS & TOTALS ───────────────────────────────────
 
   Widget _buildPaymentAndTotalsSection(QgProposalDraft draft) {
-    final grandTotalFormatted = PriceCalculator.formatIndianCurrency(draft.grandTotal.round());
+    final grandTotalFormatted =
+        PriceCalculator.formatIndianCurrency(draft.grandTotal.round());
     return _CollapsibleCard(
       title: 'Payment Terms & Totals Reconciliation',
       subtitle: 'Grand Total: $grandTotalFormatted',
       icon: Icons.receipt_long,
       children: [
         TextFormField(
-          initialValue: draft.paymentTermsText.replaceAllMapped(RegExp(r'(\d+)\.\d+%'), (m) => '${m[1]}%'),
+          initialValue: draft.paymentTermsText
+              .replaceAllMapped(RegExp(r'(\d+)\.\d+%'), (m) => '${m[1]}%'),
           maxLines: 2,
           decoration: const InputDecoration(
             labelText: 'Payment Terms Sentence (Annexure III)',
@@ -1067,17 +1151,40 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           ),
           child: Column(
             children: [
-              _buildTotalRow('Base Line Items Subtotal', PriceCalculator.formatIndianCurrency(draft.subtotal.round())),
-              _buildTotalRow('Supplementary Charges (Extra)', PriceCalculator.formatIndianCurrency(draft.supplementarySubtotal.round())),
+              _buildTotalRow('Base Line Items Subtotal',
+                  PriceCalculator.formatIndianCurrency(draft.subtotal.round())),
+              _buildTotalRow(
+                  'Supplementary Charges (Extra)',
+                  PriceCalculator.formatIndianCurrency(
+                      draft.supplementarySubtotal.round())),
               const Divider(),
-              _buildTotalRow('Calculated Printed Subtotal', PriceCalculator.formatIndianCurrency(draft.calculatedSubTotal.round()), isBold: true),
-              _buildTotalRow('CGST (${draft.cgstRate.round()}%)', PriceCalculator.formatIndianCurrency(draft.cgstAmount.round())),
-              _buildTotalRow('SGST (${draft.sgstRate.round()}%)', PriceCalculator.formatIndianCurrency(draft.sgstAmount.round())),
+              _buildTotalRow(
+                  'Calculated Printed Subtotal',
+                  PriceCalculator.formatIndianCurrency(
+                      draft.calculatedSubTotal.round()),
+                  isBold: true),
+              _buildTotalRow(
+                  'CGST (${draft.cgstRate.round()}%)',
+                  PriceCalculator.formatIndianCurrency(
+                      draft.cgstAmount.round())),
+              _buildTotalRow(
+                  'SGST (${draft.sgstRate.round()}%)',
+                  PriceCalculator.formatIndianCurrency(
+                      draft.sgstAmount.round())),
               if (draft.igstAmount > 0)
-                _buildTotalRow('IGST (${draft.igstRate.round()}%)', PriceCalculator.formatIndianCurrency(draft.igstAmount.round())),
+                _buildTotalRow(
+                    'IGST (${draft.igstRate.round()}%)',
+                    PriceCalculator.formatIndianCurrency(
+                        draft.igstAmount.round())),
               const Divider(),
-              _buildTotalRow('Calculated Grand Total', PriceCalculator.formatIndianCurrency(draft.calculatedGrandTotal.round()), isBold: true, color: AppColors.primary),
-              _buildTotalRow('CRM Deal Grand Total', grandTotalFormatted, isBold: true),
+              _buildTotalRow(
+                  'Calculated Grand Total',
+                  PriceCalculator.formatIndianCurrency(
+                      draft.calculatedGrandTotal.round()),
+                  isBold: true,
+                  color: AppColors.primary),
+              _buildTotalRow('CRM Deal Grand Total', grandTotalFormatted,
+                  isBold: true),
             ],
           ),
         ),
@@ -1092,12 +1199,16 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, size: 16, color: AppColors.warning),
+                const Icon(Icons.info_outline,
+                    size: 16, color: AppColors.warning),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Reconciliation notice: Printed sum differs by ${PriceCalculator.formatIndianCurrency((draft.calculatedGrandTotal - draft.grandTotal).abs().round())} from CRM deal quotation.',
-                    style: const TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1108,14 +1219,22 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
     );
   }
 
-  Widget _buildTotalRow(String label, String value, {bool isBold = false, Color? color}) {
+  Widget _buildTotalRow(String label, String value,
+      {bool isBold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-          Text(value, style: TextStyle(fontSize: 12, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  color: color)),
         ],
       ),
     );
@@ -1126,7 +1245,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
   Widget _buildSpecificationsSection(QgProposalDraft draft) {
     return _CollapsibleCard(
       title: 'Technical Specifications',
-      subtitle: '${draft.hpModel} (${draft.hpKw} kW) • Category: ${draft.specCategoryId}',
+      subtitle:
+          '${draft.hpModel} (${draft.hpKw} kW) • Category: ${draft.specCategoryId}',
       icon: Icons.precision_manufacturing,
       children: [
         Row(
@@ -1148,7 +1268,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                     draft.hpModel = 'IZ-${newKw}C';
                     final supabase = ref.read(supabaseClientProvider);
                     final catalogService = QgCatalogService(supabase);
-                    final specMatch = await catalogService.matchSpecifications(newKw);
+                    final specMatch =
+                        await catalogService.matchSpecifications(newKw);
                     setState(() {
                       draft.hpSpecs = specMatch.specs;
                       draft.specsCopiedFrom = specMatch.specsCopiedFrom;
@@ -1185,12 +1306,16 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             ),
             child: Row(
               children: [
-                const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
+                const Icon(Icons.warning_amber_rounded,
+                    size: 16, color: AppColors.warning),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Specs copied from catalog fallback: ${draft.specsCopiedFrom}. All row values are editable below.',
-                    style: const TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1210,7 +1335,9 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
               children: [
                 Expanded(
                   flex: 2,
-                  child: Text(entry.key, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                  child: Text(entry.key,
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w500)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1218,7 +1345,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                   child: TextFormField(
                     initialValue: entry.value,
                     style: const TextStyle(fontSize: 12),
-                    decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                        isDense: true, border: OutlineInputBorder()),
                     onChanged: (newVal) {
                       draft.hpSpecs[entry.key] = newVal;
                       _triggerAutoSave();
@@ -1234,7 +1362,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         // Tank Specifications (if applicable)
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Include Hot Water Storage Tank Specification', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          title: const Text('Include Hot Water Storage Tank Specification',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           value: draft.hasTank,
           onChanged: (val) {
             setState(() {
@@ -1314,15 +1443,18 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
   }
 
   void _syncDraftTankSpecs(QgProposalDraft draft) {
-    final insText = (draft.tankInsulation.toLowerCase().contains('puff') || draft.tankInsulation.toLowerCase().contains('puf'))
+    final insText = (draft.tankInsulation.toLowerCase().contains('puff') ||
+            draft.tankInsulation.toLowerCase().contains('puf'))
         ? 'PUF'
         : draft.tankInsulation;
     draft.tankSpecs['Capacity and Thickness'] =
         '${draft.tankCapacityLitres} ltr, ${draft.tankShellThickness} Shell, ${draft.tankDishThickness} Dish.';
     draft.tankSpecs['Inner and outer Tank'] = draft.tankMaterial;
     draft.tankSpecs['Outer Tank Insulation'] = insText;
-    draft.tankSpecs['Operating pressure'] = draft.isTankPressurized ? 'Up to 5 Bar' : 'Atmospheric';
-    draft.tankSpecs['Testing Pressure'] = draft.isTankPressurized ? '7 bar pressure' : 'Atmospheric';
+    draft.tankSpecs['Operating pressure'] =
+        draft.isTankPressurized ? 'Up to 5 Bar' : 'Atmospheric';
+    draft.tankSpecs['Testing Pressure'] =
+        draft.isTankPressurized ? '7 bar pressure' : 'Atmospheric';
   }
 
   Future<void> _openManageTankOptions({
@@ -1376,9 +1508,11 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
               _materialOptions = updated;
             } else if (category == TankSpecOptionsService.categoryInsulation) {
               _insulationOptions = updated;
-            } else if (category == TankSpecOptionsService.categoryShellThickness) {
+            } else if (category ==
+                TankSpecOptionsService.categoryShellThickness) {
               _shellThicknessOptions = updated;
-            } else if (category == TankSpecOptionsService.categoryDishThickness) {
+            } else if (category ==
+                TankSpecOptionsService.categoryDishThickness) {
               _dishThicknessOptions = updated;
             }
           });
@@ -1415,7 +1549,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         const Divider(),
         _buildImageOverrideRow(
           label: 'Product Showcase Banner',
-          currentPath: draft.bannerImagePath ?? 'assets/images/insiya_banner.png',
+          currentPath:
+              draft.bannerImagePath ?? 'assets/images/insiya_banner.png',
           onReset: () {
             setState(() => draft.bannerImagePath = null);
             _triggerAutoSave();
@@ -1438,14 +1573,19 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(currentPath, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text(label,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(currentPath,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary)),
               ],
             ),
           ),
           TextButton(
             onPressed: onReset,
-            child: const Text('Reset to Default', style: TextStyle(fontSize: 11)),
+            child:
+                const Text('Reset to Default', style: TextStyle(fontSize: 11)),
           ),
         ],
       ),
@@ -1459,7 +1599,9 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))
+        ],
       ),
       child: SafeArea(
         child: Row(
@@ -1469,28 +1611,42 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
                 icon: const Icon(Icons.picture_as_pdf),
                 label: Text(isConfirmed ? 'Preview PDF' : 'Preview (Draft)'),
                 onPressed: () {
-                  final company = ref.read(companyForProductProvider('heat_pump'));
-                  final moduleSettings = ref.read(quotationSettingsProvider).valueOrNull;
-                  var companySettings = GeneratorCompanySettings.fromAppCompany(company);
+                  final company =
+                      ref.read(companyForProductProvider('heat_pump'));
+                  final moduleSettings =
+                      ref.read(quotationSettingsProvider).valueOrNull;
+                  var companySettings =
+                      GeneratorCompanySettings.fromAppCompany(company);
                   if (moduleSettings != null) {
                     companySettings = companySettings.copyWith(
-                      models: moduleSettings.models.isNotEmpty ? moduleSettings.models : null,
-                      allInOneModels: moduleSettings.allInOneModels.isNotEmpty ? moduleSettings.allInOneModels : null,
-                      poolModels: moduleSettings.poolModels.isNotEmpty ? moduleSettings.poolModels : null,
-                      defaultCoverImagePath: moduleSettings.defaultCoverImagePath,
-                      defaultBannerImagePath: moduleSettings.defaultBannerImagePath,
+                      models: moduleSettings.models.isNotEmpty
+                          ? moduleSettings.models
+                          : null,
+                      allInOneModels: moduleSettings.allInOneModels.isNotEmpty
+                          ? moduleSettings.allInOneModels
+                          : null,
+                      poolModels: moduleSettings.poolModels.isNotEmpty
+                          ? moduleSettings.poolModels
+                          : null,
+                      defaultCoverImagePath:
+                          moduleSettings.defaultCoverImagePath,
+                      defaultBannerImagePath:
+                          moduleSettings.defaultBannerImagePath,
                       stampImagePath: moduleSettings.stampImagePath,
                       domesticHpImagePath: moduleSettings.domesticHpImagePath,
                       allInOneImagePath: moduleSettings.allInOneImagePath,
-                      allInOneWallImagePath: moduleSettings.allInOneWallImagePath,
-                      swimmingPoolImagePath: moduleSettings.swimmingPoolImagePath,
+                      allInOneWallImagePath:
+                          moduleSettings.allInOneWallImagePath,
+                      swimmingPoolImagePath:
+                          moduleSettings.swimmingPoolImagePath,
                     );
                   }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (ctx) => QuotationPreviewScreen(
-                        quotation: draft.toGeneratorQuotation(settings: companySettings),
+                        quotation: draft.toGeneratorQuotation(
+                            settings: companySettings),
                         settings: companySettings,
                       ),
                     ),
@@ -1502,7 +1658,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
             Expanded(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isConfirmed ? AppColors.primary : Colors.grey,
+                  backgroundColor:
+                      isConfirmed ? AppColors.primary : Colors.grey,
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.check_circle_outline),
@@ -1556,7 +1713,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
         await repo.finalizeProposal(
           quotationId: draft.quotationId,
           payload: draft.toJson(),
-          pdfPath: 'proposals/${draft.quotationId}/${draft.quotationNumber.replaceAll('/', '_')}.pdf',
+          pdfPath:
+              'proposals/${draft.quotationId}/${draft.quotationNumber.replaceAll('/', '_')}.pdf',
           refNo: draft.refNumber,
         );
 
@@ -1564,7 +1722,8 @@ class _HeatPumpProposalBuilderScreenState extends ConsumerState<HeatPumpProposal
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: AppColors.success,
-              content: Text('✓ Proposal finalized and snapshot stored successfully!'),
+              content: Text(
+                  '✓ Proposal finalized and snapshot stored successfully!'),
             ),
           );
           Navigator.pop(context, true);
@@ -1614,8 +1773,14 @@ class _CollapsibleCard extends StatelessWidget {
             backgroundColor: AppColors.primary.withAlpha(20),
             child: Icon(icon, color: AppColors.primary, size: 20),
           ),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(title,
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          subtitle: Text(subtitle,
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
           childrenPadding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
           children: children,
         ),

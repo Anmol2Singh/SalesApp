@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/models/user_role.dart';
-import '../../../core/models/pipeline.dart';
 import '../../../core/auth/role_access.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
@@ -35,8 +34,11 @@ class SalesDashboardScreen extends ConsumerWidget {
         0;
 
     final rawName = profile?.fullName.trim() ?? '';
-    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Sales Executive');
-    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+    final displayName = rawName.isNotEmpty
+        ? rawName
+        : (profile?.primaryRole.displayName ?? 'Sales Executive');
+    final avatarInitial =
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -230,8 +232,10 @@ class SalesDashboardScreen extends ConsumerWidget {
 
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        final crossAxisCount = constraints.maxWidth >= 800 ? 4 : 2;
-                        final childAspectRatio = constraints.maxWidth >= 800 ? 1.6 : 1.34;
+                        final crossAxisCount =
+                            constraints.maxWidth >= 800 ? 4 : 2;
+                        final childAspectRatio =
+                            constraints.maxWidth >= 800 ? 1.6 : 1.34;
 
                         return GridView.count(
                           crossAxisCount: crossAxisCount,
@@ -292,20 +296,24 @@ class SalesDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Builder(
                   builder: (context) {
-                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                    final isDark =
+                        Theme.of(context).brightness == Brightness.dark;
                     final roles = profile?.roles ?? [];
-                    final isHeadOrAdmin = profile?.primaryRole == UserRole.admin ||
-                        profile?.primaryRole == UserRole.manager ||
-                        profile?.primaryRole == UserRole.salesHead ||
-                        roles.contains(UserRole.admin) ||
-                        roles.contains(UserRole.salesHead);
+                    final isHeadOrAdmin =
+                        profile?.primaryRole == UserRole.admin ||
+                            profile?.primaryRole == UserRole.manager ||
+                            profile?.primaryRole == UserRole.salesHead ||
+                            roles.contains(UserRole.admin) ||
+                            roles.contains(UserRole.salesHead);
 
-                    final isSalesRole = profile?.primaryRole == UserRole.sales ||
-                        profile?.primaryRole == UserRole.salesHead ||
-                        roles.contains(UserRole.sales) ||
-                        roles.contains(UserRole.salesHead);
+                    final isSalesRole =
+                        profile?.primaryRole == UserRole.sales ||
+                            profile?.primaryRole == UserRole.salesHead ||
+                            roles.contains(UserRole.sales) ||
+                            roles.contains(UserRole.salesHead);
 
-                    final canAccessQuotation = roles.any((r) => r.canCreateQuotation) ||
+                    final canAccessQuotation = roles
+                            .any((r) => r.canCreateQuotation) ||
                         (profile?.primaryRole.canCreateQuotation ?? false) ||
                         isHeadOrAdmin;
 
@@ -319,7 +327,8 @@ class SalesDashboardScreen extends ConsumerWidget {
                         color: const Color(0xFF3B82F6),
                         onTap: () => context.push('/crm/dashboard'),
                       ),
-                      if (!isSalesRole && (profile?.primaryRole.canCreateCustomers ?? false))
+                      if (!isSalesRole &&
+                          (profile?.primaryRole.canCreateCustomers ?? false))
                         _QuickActionBtn(
                           icon: Icons.business_outlined,
                           label: 'New Customer',
@@ -338,7 +347,8 @@ class SalesDashboardScreen extends ConsumerWidget {
                           icon: Icons.request_quote_outlined,
                           label: 'Quotation Generator',
                           color: const Color(0xFF0284C7),
-                          onTap: () => context.push(AppRoutes.heatPumpQuotationHub),
+                          onTap: () =>
+                              context.push(AppRoutes.heatPumpQuotationHub),
                         ),
                     ];
                     if (salesActions.isNotEmpty) {
@@ -385,7 +395,9 @@ class SalesDashboardScreen extends ConsumerWidget {
                           color: const Color(0xFF8B5CF6),
                           onTap: () => context.push('/complaints/dashboard'),
                         ),
-                      if (roles.contains(UserRole.installation) || roles.contains(UserRole.serviceHead) || isHeadOrAdmin)
+                      if (roles.contains(UserRole.installation) ||
+                          roles.contains(UserRole.serviceHead) ||
+                          isHeadOrAdmin)
                         _QuickActionBtn(
                           icon: Icons.build_circle_outlined,
                           label: 'Installations',
@@ -480,16 +492,20 @@ class SalesDashboardScreen extends ConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Padding(
-                                    padding: const EdgeInsets.only(bottom: 8, left: 2),
+                                    padding: const EdgeInsets.only(
+                                        bottom: 8, left: 2),
                                     child: Row(
                                       children: [
                                         Container(
                                           padding: const EdgeInsets.all(4),
                                           decoration: BoxDecoration(
-                                            color: cat.color.withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(6),
+                                            color: cat.color
+                                                .withValues(alpha: 0.12),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
                                           ),
-                                          child: Icon(cat.icon, size: 13, color: cat.color),
+                                          child: Icon(cat.icon,
+                                              size: 13, color: cat.color),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -507,7 +523,8 @@ class SalesDashboardScreen extends ConsumerWidget {
                                       ],
                                     ),
                                   ),
-                                  _buildSalesActionGrid(cat.actions, constraints, isDark),
+                                  _buildSalesActionGrid(
+                                      cat.actions, constraints, isDark),
                                 ],
                               ),
                             );
@@ -541,12 +558,15 @@ class SalesDashboardScreen extends ConsumerWidget {
                 pipelinesAsync.when(
                   data: (pipelines) {
                     final visiblePipelines = pipelines
-                        .where((p) => RoleAccess.isDealVisibleForUser(p, profile))
+                        .where(
+                            (p) => RoleAccess.isDealVisibleForUser(p, profile))
                         .toList();
-                    final activeDeals = visiblePipelines.where((p) =>
-                        p.status != PipelineStatus.completed &&
-                        p.currentStep != PipelineStep.completed &&
-                        p.status != PipelineStatus.cancelled).toList();
+                    final activeDeals = visiblePipelines
+                        .where((p) =>
+                            p.status != PipelineStatus.completed &&
+                            p.currentStep != PipelineStep.completed &&
+                            p.status != PipelineStatus.cancelled)
+                        .toList();
                     final recent = (activeDeals
                           ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
                         .take(5)
@@ -610,17 +630,21 @@ class SalesDashboardScreen extends ConsumerWidget {
                                 ),
                                 Builder(
                                   builder: (context) {
-                                    final badgeColor = _getDealBadgeColor(p.currentStep, p.status);
+                                    final badgeColor = _getDealBadgeColor(
+                                        p.currentStep, p.status);
                                     return Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: badgeColor.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: badgeColor.withOpacity(0.3)),
+                                        border: Border.all(
+                                            color: badgeColor.withOpacity(0.3)),
                                       ),
                                       child: Text(
-                                        p.status == PipelineStatus.completed ? 'Completed' : p.currentStep.displayName,
+                                        p.status == PipelineStatus.completed
+                                            ? 'Completed'
+                                            : p.currentStep.displayName,
                                         style: TextStyle(
                                           fontFamily: 'Inter',
                                           fontSize: 10,
@@ -662,8 +686,9 @@ class SalesDashboardScreen extends ConsumerWidget {
 
 Color _getDealBadgeColor(PipelineStep step, PipelineStatus status) {
   if (status == PipelineStatus.completed) return const Color(0xFF10B981);
-  if (status == PipelineStatus.suspended || status == PipelineStatus.cancelled) return Colors.red;
-  
+  if (status == PipelineStatus.suspended || status == PipelineStatus.cancelled)
+    return Colors.red;
+
   switch (step) {
     case PipelineStep.quotation:
       return Colors.amber.shade700;
@@ -726,17 +751,21 @@ Widget _buildSalesActionGrid(
                 onTap: a.onTap,
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF1E293B) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : Colors.grey.shade200,
                       width: 1.2,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
+                        color:
+                            Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -760,7 +789,8 @@ Widget _buildSalesActionGrid(
                             fontFamily: 'Inter',
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            color:
+                                isDark ? Colors.white : const Color(0xFF0F172A),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

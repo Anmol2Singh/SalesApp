@@ -6,7 +6,6 @@ import '../../../../core/models/customer.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../customers/providers/customers_provider.dart';
 import '../../providers/pm_providers.dart';
-import '../../providers/pm_company_provider.dart';
 import '../theme/pm_tokens.dart';
 import 'pm_button.dart';
 
@@ -21,7 +20,8 @@ class CustomerSearchPicker extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<CustomerSearchPicker> createState() => _CustomerSearchPickerState();
+  ConsumerState<CustomerSearchPicker> createState() =>
+      _CustomerSearchPickerState();
 }
 
 class _CustomerSearchPickerState extends ConsumerState<CustomerSearchPicker> {
@@ -62,7 +62,8 @@ class _CustomerSearchPickerState extends ConsumerState<CustomerSearchPicker> {
             TextButton.icon(
               onPressed: () async {
                 // Deep link to existing create customer flow
-                final created = await context.push<Customer>(AppRoutes.createCustomer);
+                final created =
+                    await context.push<Customer>(AppRoutes.createCustomer);
                 if (created != null) {
                   widget.onCustomerSelected(created);
                 } else {
@@ -88,7 +89,8 @@ class _CustomerSearchPickerState extends ConsumerState<CustomerSearchPicker> {
               color: pm.card,
               borderRadius: BorderRadius.circular(pm.radiusMd),
               border: Border.all(
-                color: customer == null ? pm.border : pm.primary.withOpacity(0.4),
+                color:
+                    customer == null ? pm.border : pm.primary.withOpacity(0.4),
                 width: customer == null ? 1 : 1.5,
               ),
             ),
@@ -131,7 +133,8 @@ class _CustomerSearchPickerState extends ConsumerState<CustomerSearchPicker> {
                           ],
                         ),
                 ),
-                Icon(LucideIcons.chevronDown, size: 16, color: pm.mutedForeground),
+                Icon(LucideIcons.chevronDown,
+                    size: 16, color: pm.mutedForeground),
               ],
             ),
           ),
@@ -147,7 +150,8 @@ class _CustomerSearchModal extends ConsumerStatefulWidget {
   const _CustomerSearchModal({required this.onSelected});
 
   @override
-  ConsumerState<_CustomerSearchModal> createState() => _CustomerSearchModalState();
+  ConsumerState<_CustomerSearchModal> createState() =>
+      _CustomerSearchModalState();
 }
 
 class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
@@ -167,7 +171,8 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
 
     return Dialog(
       backgroundColor: pm.card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(pm.radiusLg)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(pm.radiusLg)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 550, maxHeight: 600),
@@ -212,7 +217,9 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');
-                            ref.read(customersNotifierProvider.notifier).search('');
+                            ref
+                                .read(customersNotifierProvider.notifier)
+                                .search('');
                           },
                         )
                       : null,
@@ -231,13 +238,17 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
               // Results list
               Expanded(
                 child: customersState.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (err, _) => Center(
-                    child: Text('Error loading customers: $err', style: TextStyle(color: pm.destructive)),
+                    child: Text('Error loading customers: $err',
+                        style: TextStyle(color: pm.destructive)),
                   ),
                   data: (customers) {
-                    final existingProjectsAsync = ref.watch(pmProjectsListProvider);
-                    final existingCustomerIds = existingProjectsAsync.valueOrNull
+                    final existingProjectsAsync =
+                        ref.watch(pmProjectsListProvider);
+                    final existingCustomerIds = existingProjectsAsync
+                            .valueOrNull
                             ?.map((p) => p.customerId)
                             .toSet() ??
                         {};
@@ -251,7 +262,8 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
                       if (_query.isNotEmpty) {
                         final q = _query.toLowerCase();
                         return c.companyName.toLowerCase().contains(q) ||
-                            (c.contactPerson?.toLowerCase().contains(q) ?? false) ||
+                            (c.contactPerson?.toLowerCase().contains(q) ??
+                                false) ||
                             (c.phone?.toLowerCase().contains(q) ?? false) ||
                             (c.address?.toLowerCase().contains(q) ?? false);
                       }
@@ -263,23 +275,28 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(LucideIcons.users, size: 36, color: pm.mutedForeground.withOpacity(0.5)),
+                            Icon(LucideIcons.users,
+                                size: 36,
+                                color: pm.mutedForeground.withOpacity(0.5)),
                             const SizedBox(height: 10),
                             Text(
                               'No customers found matching "$_query"',
-                              style: TextStyle(color: pm.mutedForeground, fontSize: 13),
+                              style: TextStyle(
+                                  color: pm.mutedForeground, fontSize: 13),
                             ),
                             const SizedBox(height: 12),
                             PmButton(
                               size: PmButtonSize.sm,
                               onPressed: () async {
                                 Navigator.of(context).pop();
-                                final created = await context.push<Customer>(AppRoutes.createCustomer);
+                                final created = await context
+                                    .push<Customer>(AppRoutes.createCustomer);
                                 if (created != null) {
                                   widget.onSelected(created);
                                 }
                               },
-                              child: const Text('+ Create Customer in SalesApp'),
+                              child:
+                                  const Text('+ Create Customer in SalesApp'),
                             ),
                           ],
                         ),
@@ -288,11 +305,13 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
 
                     return ListView.separated(
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Divider(color: pm.border.withOpacity(0.5), height: 1),
+                      separatorBuilder: (_, __) =>
+                          Divider(color: pm.border.withOpacity(0.5), height: 1),
                       itemBuilder: (ctx, i) {
                         final c = filtered[i];
                         return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           title: Text(
                             c.companyName,
                             style: TextStyle(
@@ -310,7 +329,8 @@ class _CustomerSearchModalState extends ConsumerState<_CustomerSearchModal> {
                               color: pm.mutedForeground,
                             ),
                           ),
-                          trailing: const Icon(LucideIcons.arrowRight, size: 16),
+                          trailing:
+                              const Icon(LucideIcons.arrowRight, size: 16),
                           onTap: () => widget.onSelected(c),
                         );
                       },

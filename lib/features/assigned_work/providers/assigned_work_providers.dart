@@ -5,6 +5,8 @@ import '../../../core/models/profile.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../crm/data/models/prospect_model.dart';
+import '../../crm/data/models/lead_model.dart';
 import '../data/assigned_work_repository.dart';
 import '../models/assigned_work_item.dart';
 
@@ -55,7 +57,10 @@ final assignedWorkMonthItemsProvider = FutureProvider<List<AssignedWorkItem>>((r
   if (currentProfile == null) return [];
 
   final roles = currentProfile.roles;
-  final canSeeAll = roles.contains(UserRole.admin) || roles.contains(UserRole.salesHead);
+  final canSeeAll = roles.contains(UserRole.admin) ||
+      roles.contains(UserRole.manager) ||
+      roles.contains(UserRole.salesHead) ||
+      roles.contains(UserRole.serviceHead);
 
   if (canSeeAll) {
     return items;
@@ -233,6 +238,7 @@ final todayTasksForCurrentUserProvider = FutureProvider<List<AssignedWorkItem>>(
 /// Returns list of profiles that the current user is authorized to assign tasks to:
 /// - Admin & Manager: Can assign to ANY staff member.
 /// - Sales Head: Can assign ONLY to Sales Persons.
+/// - Service Head: Can assign ONLY to Technicians.
 /// - Others: Can only assign to themselves.
 final assignableUsersProvider = FutureProvider<List<Profile>>((ref) async {
   final currentProfile = ref.watch(currentProfileProvider);
@@ -242,8 +248,9 @@ final assignableUsersProvider = FutureProvider<List<Profile>>((ref) async {
   final roles = currentProfile.roles;
   final isAdminOrManager = roles.contains(UserRole.admin) || roles.contains(UserRole.manager);
   final isSalesHead = roles.contains(UserRole.salesHead);
+  final isServiceHead = roles.contains(UserRole.serviceHead);
 
-  if (!isAdminOrManager && !isSalesHead) {
+  if (!isAdminOrManager && !isSalesHead && !isServiceHead) {
     // Regular users can only assign to themselves
     return [currentProfile];
   }
@@ -263,10 +270,26 @@ final assignableUsersProvider = FutureProvider<List<Profile>>((ref) async {
       return allProfiles;
     }
 
-    if (isSalesHead) {
+    if (isServiceHead && !isSalesHead) {
+      // Service Head can assign ONLY to Technicians
+      return allProfiles.where((p) {
+        return p.roles.contains(UserRole.technician);
+      }).toList();
+    }
+
+    if (isSalesHead && !isServiceHead) {
       // Sales Head can assign ONLY to Sales Person (and Sales Head)
       return allProfiles.where((p) {
         return p.roles.contains(UserRole.sales) || p.roles.contains(UserRole.salesHead);
+      }).toList();
+    }
+
+    if (isSalesHead && isServiceHead) {
+      // If user holds both roles, allow both Sales and Technicians
+      return allProfiles.where((p) {
+        return p.roles.contains(UserRole.sales) ||
+            p.roles.contains(UserRole.salesHead) ||
+            p.roles.contains(UserRole.technician);
       }).toList();
     }
 
@@ -279,7 +302,7 @@ final assignableUsersProvider = FutureProvider<List<Profile>>((ref) async {
 // ─── OPTIONAL CUSTOMER SEARCH PROVIDERS ──────────────────────────────────────
 
 /// Fetches full list of customers according to role permissions:
-/// - Admin & Sales Head: see ALL customers
+/// - Admin, Manager, Sales Head, Service Head: see ALL customers
 /// - Other roles: see customers created by or assigned to them
 final assignableCustomersProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
@@ -287,7 +310,10 @@ final assignableCustomersProvider = FutureProvider<List<Map<String, dynamic>>>((
   if (currentProfile == null) return [];
 
   final roles = currentProfile.roles;
-  final canSeeAll = roles.contains(UserRole.admin) || roles.contains(UserRole.salesHead);
+  final canSeeAll = roles.contains(UserRole.admin) ||
+      roles.contains(UserRole.manager) ||
+      roles.contains(UserRole.salesHead) ||
+      roles.contains(UserRole.serviceHead);
 
   try {
     var req = supabase.from('customers').select('id, customer_name, phone, address, company_name');
@@ -310,7 +336,10 @@ final customerSearchFamilyProvider = FutureProvider.family<List<Map<String, dyna
   final clean = query.trim();
 
   final roles = currentProfile?.roles ?? [];
-  final canSeeAll = roles.contains(UserRole.admin) || roles.contains(UserRole.salesHead);
+  final canSeeAll = roles.contains(UserRole.admin) ||
+      roles.contains(UserRole.manager) ||
+      roles.contains(UserRole.salesHead) ||
+      roles.contains(UserRole.serviceHead);
 
   try {
     var req = supabase.from('customers').select('id, customer_name, phone, address, company_name');
@@ -326,6 +355,134 @@ final customerSearchFamilyProvider = FutureProvider.family<List<Map<String, dyna
     final res = await req.order('customer_name').limit(50);
     return List<Map<String, dynamic>>.from(res as List);
   } catch (_) {
+    return [];
+  }
+});
+
+// ─── ASSIGNABLE PROSPECTS & LEADS PROVIDERS ─────────────────────────────────
+
+/// Fetches prospects for Assigned Work:
+/// - Admin, Manager, Sales Head, Service Head: see ALL prospects (enables Service Head to see all in Assigned Work only)
+/// - Other roles: see prospects created by or assigned to them
+final assignableProspectsProvider = FutureProvider<List<Prospect>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final currentProfile = ref.watch(currentProfileProvider);
+  if (currentProfile == null) return [];
+
+  final roles = currentProfile.roles;
+  final canSeeAll = roles.contains(UserRole.admin) ||
+      roles.contains(UserRole.manager) ||
+      roles.contains(UserRole.salesHead) ||
+      roles.contains(UserRole.serviceHead) ||
+      currentProfile.primaryRole == UserRole.admin ||
+      currentProfile.primaryRole == UserRole.manager ||
+      currentProfile.primaryRole == UserRole.salesHead ||
+      currentProfile.primaryRole == UserRole.serviceHead;
+
+  try {
+    dynamic query = supabase.from('crm_prospects').select();
+    if (!canSeeAll) {
+      final isSalesStaff = roles.contains(UserRole.sales) ||
+          roles.contains(UserRole.crmStaff) ||
+          currentProfile.primaryRole == UserRole.sales ||
+          currentProfile.primaryRole == UserRole.crmStaff;
+      if (isSalesStaff) {
+        query = query.or('created_by.eq.${currentProfile.id},assigned_to.eq.${currentProfile.id}');
+      } else {
+        query = query.eq('created_by', currentProfile.id);
+      }
+    }
+    query = query.order('created_at', ascending: false);
+    final List<dynamic> response = await query;
+    final rawList = List<Map<String, dynamic>>.from(response);
+
+    final userIds = <String>{};
+    for (final r in rawList) {
+      if (r['created_by'] != null) userIds.add(r['created_by'] as String);
+      if (r['assigned_to'] != null) userIds.add(r['assigned_to'] as String);
+    }
+
+    final profileMap = <String, Map<String, dynamic>>{};
+    if (userIds.isNotEmpty) {
+      try {
+        final profiles = await supabase
+            .from('profiles')
+            .select('id, full_name, role, roles')
+            .inFilter('id', userIds.toList());
+        for (final p in (profiles as List)) {
+          profileMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
+        }
+      } catch (_) {}
+    }
+
+    return rawList.map((r) {
+      final creator = profileMap[r['created_by']];
+      final assignee = profileMap[r['assigned_to']];
+      final copy = Map<String, dynamic>.from(r);
+      copy['creator'] = creator;
+      copy['assignee'] = assignee;
+      return Prospect.fromJson(copy);
+    }).toList();
+  } catch (e) {
+    return [];
+  }
+});
+
+/// Fetches leads for Assigned Work:
+/// - Admin, Manager, Sales Head, Service Head: see ALL leads
+/// - Other roles: see leads created by or assigned to them
+final assignableLeadsProvider = FutureProvider<List<Lead>>((ref) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final currentProfile = ref.watch(currentProfileProvider);
+  if (currentProfile == null) return [];
+
+  final roles = currentProfile.roles;
+  final canSeeAll = roles.contains(UserRole.admin) ||
+      roles.contains(UserRole.manager) ||
+      roles.contains(UserRole.salesHead) ||
+      roles.contains(UserRole.serviceHead) ||
+      currentProfile.primaryRole == UserRole.admin ||
+      currentProfile.primaryRole == UserRole.manager ||
+      currentProfile.primaryRole == UserRole.salesHead ||
+      currentProfile.primaryRole == UserRole.serviceHead;
+
+  try {
+    dynamic query = supabase.from('crm_leads').select();
+    if (!canSeeAll) {
+      query = query.or('created_by.eq.${currentProfile.id},assigned_to.eq.${currentProfile.id}');
+    }
+    query = query.order('created_at', ascending: false);
+    final List<dynamic> response = await query;
+    final rawList = List<Map<String, dynamic>>.from(response);
+
+    final userIds = <String>{};
+    for (final r in rawList) {
+      if (r['created_by'] != null) userIds.add(r['created_by'] as String);
+      if (r['assigned_to'] != null) userIds.add(r['assigned_to'] as String);
+    }
+
+    Map<String, Map<String, dynamic>> profilesMap = {};
+    if (userIds.isNotEmpty) {
+      try {
+        final profs = await supabase
+            .from('profiles')
+            .select('id, full_name, role, roles')
+            .inFilter('id', userIds.toList());
+        for (final p in (profs as List? ?? [])) {
+          profilesMap[p['id'] as String] = Map<String, dynamic>.from(p as Map);
+        }
+      } catch (_) {}
+    }
+
+    return rawList.map((r) {
+      final creator = profilesMap[r['created_by']];
+      final assignee = profilesMap[r['assigned_to']];
+      final copy = Map<String, dynamic>.from(r);
+      copy['creator_name'] = creator?['full_name'];
+      copy['assigned_name'] = assignee?['full_name'];
+      return Lead.fromJson(copy);
+    }).toList();
+  } catch (e) {
     return [];
   }
 });

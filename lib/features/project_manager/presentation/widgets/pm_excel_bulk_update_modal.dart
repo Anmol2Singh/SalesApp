@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' hide Border, BorderStyle;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -16,17 +14,21 @@ class PmExcelBulkUpdateModal extends ConsumerStatefulWidget {
   const PmExcelBulkUpdateModal({super.key, this.isPurchase = false});
 
   @override
-  ConsumerState<PmExcelBulkUpdateModal> createState() => _PmExcelBulkUpdateModalState();
+  ConsumerState<PmExcelBulkUpdateModal> createState() =>
+      _PmExcelBulkUpdateModalState();
 }
 
-class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal> {
+class _PmExcelBulkUpdateModalState
+    extends ConsumerState<PmExcelBulkUpdateModal> {
   String? _selectedFileName;
   List<Map<String, dynamic>> _parsedRecords = [];
   bool _isLoading = false;
 
   void _downloadTemplate() {
     final excel = Excel.createExcel();
-    final sheetName = widget.isPurchase ? 'Vendor_Update_Template' : 'Customer_Update_Template';
+    final sheetName = widget.isPurchase
+        ? 'Vendor_Update_Template'
+        : 'Customer_Update_Template';
     final defaultSheet = excel.getDefaultSheet();
     final sheet = excel[sheetName];
     if (defaultSheet != null && defaultSheet != sheetName) {
@@ -44,7 +46,8 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
     ];
 
     for (int i = 0; i < headers.length; i++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      final cell =
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
       cell.value = TextCellValue(headers[i]);
       cell.cellStyle = CellStyle(
         bold: true,
@@ -64,7 +67,9 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
     ];
 
     for (int c = 0; c < sample.length; c++) {
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 1)).value = TextCellValue(sample[c]);
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 1))
+          .value = TextCellValue(sample[c]);
     }
 
     final bytes = excel.save();
@@ -97,7 +102,9 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
           final row = rows[r];
           if (row.isEmpty) continue;
 
-          String val(int idx) => idx < row.length && row[idx] != null ? row[idx]!.value.toString().trim() : '';
+          String val(int idx) => idx < row.length && row[idx] != null
+              ? row[idx]!.value.toString().trim()
+              : '';
 
           final idNoStr = val(0);
           final siteName = val(1);
@@ -131,8 +138,12 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
       int updatedCount = 0;
       final activeCompany = ref.read(pmActiveCompanyProvider);
       final List<dynamic> existing = widget.isPurchase
-          ? await ref.read(pmPurchasesRepositoryProvider).getPurchases(companyId: activeCompany.id)
-          : await ref.read(pmProjectsRepositoryProvider).getProjects(companyId: activeCompany.id);
+          ? await ref
+              .read(pmPurchasesRepositoryProvider)
+              .getPurchases(companyId: activeCompany.id)
+          : await ref
+              .read(pmProjectsRepositoryProvider)
+              .getProjects(companyId: activeCompany.id);
 
       for (final rec in _parsedRecords) {
         final idNo = rec['id_no'] as int?;
@@ -158,7 +169,8 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
 
         if (match != null) {
           final updateData = <String, dynamic>{};
-          if (rec['mobile_number'] != null && (rec['mobile_number'] as String).isNotEmpty) {
+          if (rec['mobile_number'] != null &&
+              (rec['mobile_number'] as String).isNotEmpty) {
             updateData['mobile_number'] = rec['mobile_number'];
           }
           if (rec['address'] != null && (rec['address'] as String).isNotEmpty) {
@@ -174,15 +186,20 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
           if (rec['extra_work_value'] != null && !widget.isPurchase) {
             updateData['extra_work_value'] = rec['extra_work_value'];
           }
-          if (rec['party_print_name'] != null && (rec['party_print_name'] as String).isNotEmpty) {
+          if (rec['party_print_name'] != null &&
+              (rec['party_print_name'] as String).isNotEmpty) {
             updateData['party_print_name'] = rec['party_print_name'];
           }
 
           if (updateData.isNotEmpty) {
             if (widget.isPurchase) {
-              await ref.read(pmPurchasesRepositoryProvider).updatePurchase(match.id, updateData);
+              await ref
+                  .read(pmPurchasesRepositoryProvider)
+                  .updatePurchase(match.id, updateData);
             } else {
-              await ref.read(pmProjectsRepositoryProvider).updateProject(match.id, updateData);
+              await ref
+                  .read(pmProjectsRepositoryProvider)
+                  .updateProject(match.id, updateData);
             }
             updatedCount++;
           }
@@ -198,7 +215,9 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Successfully updated $updatedCount records via Excel!')),
+          SnackBar(
+              content: Text(
+                  'Successfully updated $updatedCount records via Excel!')),
         );
       }
     } catch (e) {
@@ -231,7 +250,8 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                 children: [
                   const Row(
                     children: [
-                      Icon(LucideIcons.fileUp, size: 20, color: Color(0xFF005CE6)),
+                      Icon(LucideIcons.fileUp,
+                          size: 20, color: Color(0xFF005CE6)),
                       SizedBox(width: 8),
                       Text(
                         'Bulk Update via Excel',
@@ -245,7 +265,8 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(LucideIcons.x, size: 18, color: Color(0xFF64748B)),
+                    icon: const Icon(LucideIcons.x,
+                        size: 18, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.of(context).pop(),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -270,18 +291,26 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('How it works:', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                    const Text('How it works:',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A))),
                     const SizedBox(height: 8),
                     const Text(
                       '1. Download the template or use your exported Excel file.\n2. Ensure the match key (ID or Customer Name) is present and correct.\n3. Upload the file, then select which columns you want to overwrite.',
-                      style: TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.4),
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF334155),
+                          height: 1.4),
                     ),
                     const SizedBox(height: 12),
                     InkWell(
                       onTap: _downloadTemplate,
                       borderRadius: BorderRadius.circular(9999),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(9999),
@@ -290,9 +319,14 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.download, size: 13, color: Color(0xFF005CE6)),
+                            Icon(LucideIcons.download,
+                                size: 13, color: Color(0xFF005CE6)),
                             SizedBox(width: 6),
-                            Text('Download Template', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                            Text('Download Template',
+                                style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A))),
                           ],
                         ),
                       ),
@@ -303,7 +337,11 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
               const SizedBox(height: 16),
 
               // Upload Excel/CSV File label & dashed box (Screenshot 4)
-              const Text('Upload Excel/CSV File', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+              const Text('Upload Excel/CSV File',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A))),
               const SizedBox(height: 8),
               InkWell(
                 onTap: _pickExcelFile,
@@ -323,7 +361,8 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.cloudUpload, size: 36, color: Color(0xFF0284C7)),
+                        const Icon(LucideIcons.cloudUpload,
+                            size: 36, color: Color(0xFF0284C7)),
                         const SizedBox(height: 10),
                         Text(
                           _selectedFileName ?? 'Click to select file',
@@ -336,13 +375,17 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                         const SizedBox(height: 4),
                         const Text(
                           '.xlsx, .xls, or .csv',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          style:
+                              TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                         ),
                         if (_parsedRecords.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
                             '${_parsedRecords.length} records ready to update',
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF16A34A)),
+                            style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF16A34A)),
                           ),
                         ],
                       ],
@@ -360,30 +403,47 @@ class _PmExcelBulkUpdateModalState extends ConsumerState<PmExcelBulkUpdateModal>
                     onTap: () => Navigator.of(context).pop(),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 9),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFCBD5E1)),
                       ),
-                      child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                      child: const Text('Cancel',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A))),
                     ),
                   ),
                   const SizedBox(width: 12),
                   InkWell(
-                    onTap: _parsedRecords.isNotEmpty && !_isLoading ? _updateRecords : null,
+                    onTap: _parsedRecords.isNotEmpty && !_isLoading
+                        ? _updateRecords
+                        : null,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 22, vertical: 9),
                       decoration: BoxDecoration(
-                        color: _parsedRecords.isNotEmpty ? const Color(0xFF005CE6) : const Color(0xFF93C5FD),
+                        color: _parsedRecords.isNotEmpty
+                            ? const Color(0xFF005CE6)
+                            : const Color(0xFF93C5FD),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: _isLoading
-                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
                           : Text(
                               'Update ${_parsedRecords.length} Customers',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white),
                             ),
                     ),
                   ),

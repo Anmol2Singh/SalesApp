@@ -1,7 +1,4 @@
 import '../providers/app_config_provider.dart';
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 
@@ -30,7 +27,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _itemSearchController = TextEditingController();
-  final TextEditingController _productSearchController = TextEditingController();
+  final TextEditingController _productSearchController =
+      TextEditingController();
   final TextEditingController _suppSearchController = TextEditingController();
 
   String _itemSearchQuery = '';
@@ -79,13 +77,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           AnimatedBuilder(
             animation: _tabController.animation ?? _tabController,
             builder: (context, _) {
-              final animVal = _tabController.animation?.value ?? _tabController.index.toDouble();
+              final animVal = _tabController.animation?.value ??
+                  _tabController.index.toDouble();
               final isProducts = animVal.round() == 2;
               return AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+                layoutBuilder:
+                    (Widget? currentChild, List<Widget> previousChildren) {
                   return Stack(
                     alignment: Alignment.centerRight,
                     children: <Widget>[
@@ -112,15 +112,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.download, color: Colors.white),
+                            icon:
+                                const Icon(Icons.download, color: Colors.white),
                             tooltip: 'Export Products',
                             onPressed: () {
-                              final products = ref.read(productsProvider).valueOrNull ?? [];
+                              final products =
+                                  ref.read(productsProvider).valueOrNull ?? [];
                               if (products.isNotEmpty) {
                                 ExcelService.exportProducts(context, products);
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('No products to export.')),
+                                  const SnackBar(
+                                      content: Text('No products to export.')),
                                 );
                               }
                             },
@@ -132,29 +135,39 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.file_download_outlined, color: Colors.white),
+                            icon: const Icon(Icons.file_download_outlined,
+                                color: Colors.white),
                             tooltip: 'Download Template',
                             onPressed: () {
-                              final products = ref.read(productsProvider).valueOrNull ?? [];
-                              ExcelService.downloadInventoryTemplate(context, products: products);
+                              final products =
+                                  ref.read(productsProvider).valueOrNull ?? [];
+                              ExcelService.downloadInventoryTemplate(context,
+                                  products: products);
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.upload_file, color: Colors.white),
+                            icon: const Icon(Icons.upload_file,
+                                color: Colors.white),
                             tooltip: 'Import Excel',
                             onPressed: () => _importExcel(context, ref),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.download, color: Colors.white),
+                            icon:
+                                const Icon(Icons.download, color: Colors.white),
                             tooltip: 'Export Excel',
                             onPressed: () {
                               final items = inventoryAsync.valueOrNull ?? [];
                               if (items.isNotEmpty) {
-                                final products = ref.read(productsProvider).valueOrNull ?? [];
-                                ExcelService.exportInventoryItems(context, items, products: products);
+                                final products =
+                                    ref.read(productsProvider).valueOrNull ??
+                                        [];
+                                ExcelService.exportInventoryItems(
+                                    context, items,
+                                    products: products);
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('No items to export.')),
+                                  const SnackBar(
+                                      content: Text('No items to export.')),
                                 );
                               }
                             },
@@ -171,7 +184,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 14),
+          labelStyle: const TextStyle(
+              fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 14),
           tabs: const [
             Tab(
               icon: Icon(Icons.inventory_2_outlined, size: 20),
@@ -199,14 +213,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       floatingActionButton: AnimatedBuilder(
         animation: _tabController.animation ?? _tabController,
         builder: (context, _) {
-          final animVal = _tabController.animation?.value ?? _tabController.index.toDouble();
+          final animVal = _tabController.animation?.value ??
+              _tabController.index.toDouble();
           final activeTab = animVal.round().clamp(0, 2);
 
           return AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+            layoutBuilder:
+                (Widget? currentChild, List<Widget> previousChildren) {
               return Stack(
                 alignment: Alignment.bottomRight,
                 clipBehavior: Clip.none,
@@ -220,7 +236,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               return FadeTransition(
                 opacity: animation,
                 child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+                  scale:
+                      Tween<double>(begin: 0.85, end: 1.0).animate(animation),
                   child: child,
                 ),
               );
@@ -234,19 +251,26 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     icon: const Icon(Icons.add, color: Colors.white),
                     label: const Text(
                       'Add Item',
-                      style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.bold),
                     ),
                   )
                 : (activeTab == 1
                     ? FloatingActionButton.extended(
                         key: const ValueKey('fab_supp'),
                         heroTag: null,
-                        onPressed: () => _showAddSupplementaryDialog(context, ref),
+                        onPressed: () =>
+                            _showAddSupplementaryDialog(context, ref),
                         backgroundColor: AppColors.primary,
                         icon: const Icon(Icons.add, color: Colors.white),
                         label: const Text(
                           'Add Supplementary',
-                          style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold),
                         ),
                       )
                     : FloatingActionButton.extended(
@@ -255,7 +279,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         tooltip: isProductAddUnlocked
                             ? 'Add Product'
                             : 'Product creation is locked. Enable in Admin > Configuration to add products.',
-                        backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+                        backgroundColor: isProductAddUnlocked
+                            ? AppColors.primary
+                            : Colors.blueGrey.shade600,
                         onPressed: () {
                           if (!isProductAddUnlocked) {
                             _showProductAddLockedDialog(context);
@@ -263,10 +289,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             _showAddProductDialog(context);
                           }
                         },
-                        icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+                        icon: Icon(
+                            isProductAddUnlocked
+                                ? Icons.add
+                                : Icons.lock_outline,
+                            color: Colors.white),
                         label: Text(
-                          isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
-                          style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                          isProductAddUnlocked
+                              ? 'Add Product'
+                              : 'Add Product (Locked)',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.bold),
                         ),
                       )),
           );
@@ -301,7 +336,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 controller: _productSearchController,
                 decoration: InputDecoration(
                   hintText: 'Search products by name or category...',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                  prefixIcon:
+                      const Icon(Icons.search, color: AppColors.primary),
                   suffixIcon: _productSearchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear),
@@ -313,7 +349,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       : null,
                   filled: true,
                   fillColor: AppColors.background,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: Colors.grey.shade300),
@@ -323,7 +360,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
-                onChanged: (val) => setState(() => _productSearchQuery = val.trim()),
+                onChanged: (val) =>
+                    setState(() => _productSearchQuery = val.trim()),
               ),
             ),
             Expanded(
@@ -332,7 +370,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.inventory_outlined, size: 54, color: Colors.grey.shade400),
+                          Icon(Icons.inventory_outlined,
+                              size: 54, color: Colors.grey.shade400),
                           const SizedBox(height: 12),
                           Text(
                             _productSearchQuery.isEmpty
@@ -347,7 +386,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+                              backgroundColor: isProductAddUnlocked
+                                  ? AppColors.primary
+                                  : Colors.blueGrey.shade600,
                             ),
                             onPressed: () {
                               if (!isProductAddUnlocked) {
@@ -356,9 +397,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 _showAddProductDialog(context);
                               }
                             },
-                            icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+                            icon: Icon(
+                                isProductAddUnlocked
+                                    ? Icons.add
+                                    : Icons.lock_outline,
+                                color: Colors.white),
                             label: Text(
-                              isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
+                              isProductAddUnlocked
+                                  ? 'Add Product'
+                                  : 'Add Product (Locked)',
                               style: const TextStyle(color: Colors.white),
                             ),
                           ),
@@ -378,7 +425,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary)),
       error: (e, _) => Center(child: Text('Error loading products: $e')),
     );
   }
@@ -414,7 +462,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.solar_power, color: AppColors.primary, size: 24),
+                  child: const Icon(Icons.solar_power,
+                      color: AppColors.primary, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -436,9 +485,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (product.category != null && product.category!.isNotEmpty)
+                          if (product.category != null &&
+                              product.category!.isNotEmpty)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: AppColors.primarySurface,
                                 borderRadius: BorderRadius.circular(4),
@@ -454,9 +505,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               ),
                             ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: product.isActive ? Colors.green.shade50 : Colors.red.shade50,
+                              color: product.isActive
+                                  ? Colors.green.shade50
+                                  : Colors.red.shade50,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -465,14 +519,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 fontFamily: 'Inter',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: product.isActive ? Colors.green.shade700 : Colors.red.shade700,
+                                color: product.isActive
+                                    ? Colors.green.shade700
+                                    : Colors.red.shade700,
                               ),
                             ),
                           ),
                           Builder(builder: (context) {
-                            final assignedCompany = ref.watch(companyForProductProvider(product.id));
+                            final assignedCompany = ref
+                                .watch(companyForProductProvider(product.id));
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.indigo.shade50,
                                 borderRadius: BorderRadius.circular(4),
@@ -480,7 +538,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.apartment, size: 12, color: Colors.indigo.shade700),
+                                  Icon(Icons.apartment,
+                                      size: 12, color: Colors.indigo.shade700),
                                   const SizedBox(width: 4),
                                   Text(
                                     assignedCompany.name,
@@ -516,7 +575,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                          Icon(Icons.edit_outlined,
+                              size: 18, color: AppColors.primary),
                           SizedBox(width: 8),
                           Text('Edit Name / Category'),
                         ],
@@ -526,7 +586,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       value: 'subsystems',
                       child: Row(
                         children: [
-                          Icon(Icons.account_tree_outlined, size: 18, color: AppColors.primary),
+                          Icon(Icons.account_tree_outlined,
+                              size: 18, color: AppColors.primary),
                           SizedBox(width: 8),
                           Text('Manage Sub-Systems'),
                         ],
@@ -536,9 +597,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                          Icon(Icons.delete_outline,
+                              size: 18, color: AppColors.error),
                           SizedBox(width: 8),
-                          Text('Delete Product', style: TextStyle(color: AppColors.error)),
+                          Text('Delete Product',
+                              style: TextStyle(color: AppColors.error)),
                         ],
                       ),
                     ),
@@ -560,7 +623,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.straighten, size: 16, color: AppColors.textSecondary),
+                        const Icon(Icons.straighten,
+                            size: 16, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
                         Text(
                           'Capacities & Sizes (${capacities.length})',
@@ -577,10 +641,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       onTap: () => _showManageCapacityDialog(context, product),
                       borderRadius: BorderRadius.circular(6),
                       child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         child: Row(
                           children: [
-                            Icon(Icons.tune, size: 14, color: AppColors.primary),
+                            Icon(Icons.tune,
+                                size: 14, color: AppColors.primary),
                             SizedBox(width: 4),
                             Text(
                               'Manage Capacity',
@@ -601,7 +667,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 if (capacities.isEmpty)
                   Text(
                     'No capacities configured yet. Tap "Manage Capacity" to add size/capacity options.',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey.shade500),
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: Colors.grey.shade500),
                   )
                 else
                   Wrap(
@@ -609,7 +678,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     runSpacing: 6,
                     children: capacities.map((cap) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
@@ -641,7 +711,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 Expanded(
                   child: Row(
                     children: [
-                      const Icon(Icons.link, size: 16, color: AppColors.textSecondary),
+                      const Icon(Icons.link,
+                          size: 16, color: AppColors.textSecondary),
                       const SizedBox(width: 6),
                       const Flexible(
                         child: Text(
@@ -657,7 +728,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       ),
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2.5),
                         decoration: BoxDecoration(
                           color: product.baseSpecs.linkedItems.isNotEmpty
                               ? const Color(0xFFEFF6FF)
@@ -747,7 +819,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       controller: _itemSearchController,
                       decoration: InputDecoration(
                         hintText: 'Search items by name or HSN code...',
-                        prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                        prefixIcon:
+                            const Icon(Icons.search, color: AppColors.primary),
                         suffixIcon: _itemSearchQuery.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear),
@@ -759,7 +832,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             : null,
                         filled: true,
                         fillColor: AppColors.background,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 0, horizontal: 16),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -769,7 +843,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                       ),
-                      onChanged: (val) => setState(() => _itemSearchQuery = val.trim()),
+                      onChanged: (val) =>
+                          setState(() => _itemSearchQuery = val.trim()),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -780,17 +855,23 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       border: Border.all(color: Colors.grey.shade300),
                     ),
                     child: Tooltip(
-                      message: _itemsSortAscending ? 'Sort: A-Z (Click for Z-A)' : 'Sort: Z-A (Click for A-Z)',
+                      message: _itemsSortAscending
+                          ? 'Sort: A-Z (Click for Z-A)'
+                          : 'Sort: Z-A (Click for A-Z)',
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        onTap: () => setState(() => _itemsSortAscending = !_itemsSortAscending),
+                        onTap: () => setState(
+                            () => _itemsSortAscending = !_itemsSortAscending),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 10),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                _itemsSortAscending ? Icons.arrow_downward : Icons.arrow_upward,
+                                _itemsSortAscending
+                                    ? Icons.arrow_downward
+                                    : Icons.arrow_upward,
                                 size: 14,
                                 color: AppColors.primary,
                               ),
@@ -815,7 +896,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             ),
             if (_selectedItemIds.isNotEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 color: const Color(0xFFEFF6FF),
                 child: Row(
                   children: [
@@ -830,18 +912,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     ),
                     const Spacer(),
                     TextButton(
-                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact),
                       onPressed: () {
                         setState(() {
                           if (_selectedItemIds.length == filteredItems.length) {
                             _selectedItemIds.clear();
                           } else {
-                            _selectedItemIds.addAll(filteredItems.map((e) => e.id));
+                            _selectedItemIds
+                                .addAll(filteredItems.map((e) => e.id));
                           }
                         });
                       },
                       child: Text(
-                        _selectedItemIds.length == filteredItems.length ? 'Deselect All' : 'Select All',
+                        _selectedItemIds.length == filteredItems.length
+                            ? 'Deselect All'
+                            : 'Select All',
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),
@@ -850,13 +936,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.error,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6)),
                         visualDensity: VisualDensity.compact,
                       ),
-                      icon: const Icon(Icons.delete, size: 14, color: Colors.white),
-                      label: Text('Delete (${_selectedItemIds.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      onPressed: () => _confirmBulkDelete(context, ref, typedItems),
+                      icon: const Icon(Icons.delete,
+                          size: 14, color: Colors.white),
+                      label: Text('Delete (${_selectedItemIds.length})',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () =>
+                          _confirmBulkDelete(context, ref, typedItems),
                     ),
                   ],
                 ),
@@ -867,7 +959,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.inventory_2_outlined, size: 54, color: Colors.grey.shade400),
+                          Icon(Icons.inventory_2_outlined,
+                              size: 54, color: Colors.grey.shade400),
                           const SizedBox(height: 12),
                           Text(
                             _itemSearchQuery.isEmpty
@@ -881,10 +974,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary),
                             onPressed: () => _showAddItemDialog(context, ref),
                             icon: const Icon(Icons.add, color: Colors.white),
-                            label: const Text('Add Item', style: TextStyle(color: Colors.white)),
+                            label: const Text('Add Item',
+                                style: TextStyle(color: Colors.white)),
                           ),
                         ],
                       ),
@@ -901,10 +996,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFF1F5F9) : Colors.white,
+                            color: isSelected
+                                ? const Color(0xFFF1F5F9)
+                                : Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isSelected ? const Color(0xFF0F172A) : Colors.grey.shade200,
+                              color: isSelected
+                                  ? const Color(0xFF0F172A)
+                                  : Colors.grey.shade200,
                               width: isSelected ? 1.5 : 1.0,
                             ),
                           ),
@@ -918,10 +1017,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 side: BorderSide(
                                   color: isSelected
                                       ? const Color(0xFF0F172A)
-                                      : (hasAnySelection ? const Color(0xFF475569) : const Color(0xFFCBD5E1)),
+                                      : (hasAnySelection
+                                          ? const Color(0xFF475569)
+                                          : const Color(0xFFCBD5E1)),
                                   width: 1.5,
                                 ),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4)),
                                 visualDensity: VisualDensity.compact,
                                 onChanged: (val) {
                                   setState(() {
@@ -950,11 +1052,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                     ),
                                     Row(
                                       children: [
-                                        if (item.uom != null && item.uom!.trim().isNotEmpty) ...[
-                                          _buildBadge('Unit: ${item.uom!.trim()}'),
+                                        if (item.uom != null &&
+                                            item.uom!.trim().isNotEmpty) ...[
+                                          _buildBadge(
+                                              'Unit: ${item.uom!.trim()}'),
                                           const SizedBox(width: 6),
                                         ],
-                                        _buildBadge('GST: ${item.gstRate.truncateToDouble() == item.gstRate ? item.gstRate.toInt() : item.gstRate}%'),
+                                        _buildBadge(
+                                            'GST: ${item.gstRate.truncateToDouble() == item.gstRate ? item.gstRate.toInt() : item.gstRate}%'),
                                       ],
                                     ),
                                   ],
@@ -980,16 +1085,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blueGrey),
-                                        onPressed: () => _showEditItemDialog(context, ref, item),
+                                        icon: const Icon(Icons.edit_outlined,
+                                            size: 18, color: Colors.blueGrey),
+                                        onPressed: () => _showEditItemDialog(
+                                            context, ref, item),
                                         constraints: const BoxConstraints(),
-                                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                                        onPressed: () => _confirmDelete(context, ref, item),
+                                        icon: const Icon(Icons.delete_outline,
+                                            size: 18, color: Colors.redAccent),
+                                        onPressed: () =>
+                                            _confirmDelete(context, ref, item),
                                         constraints: const BoxConstraints(),
-                                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4),
                                       ),
                                     ],
                                   ),
@@ -1004,12 +1115,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary)),
       error: (err, _) => Center(child: Text('Error: $err')),
     );
   }
 
-  void _confirmBulkDelete(BuildContext context, WidgetRef ref, List<InventoryItem> allItems) {
+  void _confirmBulkDelete(
+      BuildContext context, WidgetRef ref, List<InventoryItem> allItems) {
     if (_selectedItemIds.isEmpty) return;
 
     showDialog(
@@ -1017,9 +1130,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Delete ${_selectedItemIds.length} Items'),
-        content: Text('Are you sure you want to delete ${_selectedItemIds.length} selected items? This cannot be undone.'),
+        content: Text(
+            'Are you sure you want to delete ${_selectedItemIds.length} selected items? This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () async {
@@ -1033,13 +1148,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     .toSet();
 
                 // 1. Delete from inventory_items
-                await supabase.from('inventory_items').delete().inFilter('id', idsToDelete);
+                await supabase
+                    .from('inventory_items')
+                    .delete()
+                    .inFilter('id', idsToDelete);
 
                 // 2. Clean up from linked_items in products
-                final allProducts = ref.read(productsProvider).valueOrNull ?? [];
+                final allProducts =
+                    ref.read(productsProvider).valueOrNull ?? [];
                 for (final p in allProducts) {
                   final updated = List<String>.from(p.baseSpecs.linkedItems)
-                    ..removeWhere((name) => deletedNames.contains(name.toLowerCase()));
+                    ..removeWhere(
+                        (name) => deletedNames.contains(name.toLowerCase()));
                   if (updated.length != p.baseSpecs.linkedItems.length) {
                     final rawSpecs = Map<String, dynamic>.from(p.baseSpecs.raw);
                     rawSpecs['linked_items'] = updated;
@@ -1060,7 +1180,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Deleted ${idsToDelete.length} items successfully.'),
+                      content: Text(
+                          'Deleted ${idsToDelete.length} items successfully.'),
                       backgroundColor: AppColors.success,
                     ),
                   );
@@ -1068,7 +1189,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting items: $e'), backgroundColor: AppColors.error),
+                    SnackBar(
+                        content: Text('Error deleting items: $e'),
+                        backgroundColor: AppColors.error),
                   );
                 }
               }
@@ -1111,7 +1234,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           children: const [
             Icon(Icons.lock, color: AppColors.error),
             SizedBox(width: 8),
-            Text('Product Creation Locked', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('Product Creation Locked',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: const Text(
@@ -1121,13 +1245,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Close',
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -1143,7 +1269,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   void _showAddProductDialog(BuildContext context) {
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
-    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final companies = ref.read(appCompaniesProvider).valueOrNull ??
+        AppCompany.defaultCompanies;
     final defaultCompany = ref.read(defaultCompanyProvider);
     String selectedCompanyId = defaultCompany.id;
     final formKey = GlobalKey<FormState>();
@@ -1153,12 +1280,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
               Icon(Icons.add_shopping_cart, color: AppColors.primary),
               SizedBox(width: 8),
-              Text('Add New Product', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 18)),
+              Text('Add New Product',
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18)),
             ],
           ),
           content: Form(
@@ -1174,7 +1306,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       hintText: 'e.g. Commercial Heat Pump',
                       prefixIcon: Icon(Icons.label_outline),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -1184,7 +1317,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       hintText: 'e.g. HVAC, Access Control, SWH',
                       prefixIcon: Icon(Icons.category_outlined),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -1218,7 +1352,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: isSaving
                   ? null
                   : () async {
@@ -1242,16 +1377,21 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Product added successfully!'), backgroundColor: AppColors.success),
+                            const SnackBar(
+                                content: Text('Product added successfully!'),
+                                backgroundColor: AppColors.success),
                           );
                         }
                       } catch (e) {
                         if (e.toString().contains('PRODUCT_ADD_LOCKED')) {
-                          if (ctx.mounted && Navigator.canPop(ctx)) Navigator.pop(ctx);
+                          if (ctx.mounted && Navigator.canPop(ctx))
+                            Navigator.pop(ctx);
                           _showProductAddLockedDialog(context);
                         } else if (ctx.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error adding product: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                                content: Text('Error adding product: $e'),
+                                backgroundColor: AppColors.error),
                           );
                         }
                       } finally {
@@ -1259,8 +1399,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       }
                     },
               child: isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Add Product', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Text('Add Product',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1270,8 +1416,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
 
   void _showEditProductDialog(BuildContext context, Product product) {
     final nameController = TextEditingController(text: product.name);
-    final categoryController = TextEditingController(text: product.category ?? '');
-    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final categoryController =
+        TextEditingController(text: product.category ?? '');
+    final companies = ref.read(appCompaniesProvider).valueOrNull ??
+        AppCompany.defaultCompanies;
     final defaultCompany = ref.read(defaultCompanyProvider);
     String selectedCompanyId = product.companyId ?? defaultCompany.id;
     if (!companies.any((c) => c.id == selectedCompanyId)) {
@@ -1285,8 +1433,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Edit Product', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Edit Product',
+              style:
+                  TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
           content: Form(
             key: formKey,
             child: SingleChildScrollView(
@@ -1295,14 +1446,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 children: [
                   TextFormField(
                     controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Product Name *', prefixIcon: Icon(Icons.label_outline)),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    decoration: const InputDecoration(
+                        labelText: 'Product Name *',
+                        prefixIcon: Icon(Icons.label_outline)),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: categoryController,
-                    decoration: const InputDecoration(labelText: 'Category *', prefixIcon: Icon(Icons.category_outlined)),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    decoration: const InputDecoration(
+                        labelText: 'Category *',
+                        prefixIcon: Icon(Icons.category_outlined)),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -1329,7 +1486,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   const SizedBox(height: 12),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Product is Active', style: TextStyle(fontFamily: 'Inter', fontSize: 14)),
+                    title: const Text('Product is Active',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: 14)),
                     value: isActive,
                     onChanged: (val) => setModalState(() => isActive = val),
                   ),
@@ -1338,9 +1496,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: isSaving
                   ? null
                   : () async {
@@ -1348,7 +1509,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       setModalState(() => isSaving = true);
                       try {
                         final supabase = ref.read(supabaseClientProvider);
-                        final updatedSpecs = Map<String, dynamic>.from(product.baseSpecs.toJson());
+                        final updatedSpecs = Map<String, dynamic>.from(
+                            product.baseSpecs.toJson());
                         updatedSpecs['company_id'] = selectedCompanyId;
 
                         await supabase.from('products').update({
@@ -1364,13 +1526,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Product updated successfully'), backgroundColor: AppColors.success),
+                            const SnackBar(
+                                content: Text('Product updated successfully'),
+                                backgroundColor: AppColors.success),
                           );
                         }
                       } catch (e) {
                         if (ctx.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: AppColors.error),
                           );
                         }
                       } finally {
@@ -1378,8 +1544,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       }
                     },
               child: isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Text('Save Changes',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1394,7 +1566,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         title: const Text('Delete Product'),
         content: Text('Are you sure you want to delete "${product.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () async {
@@ -1407,13 +1580,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 ref.invalidate(productsProvider);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Product removed successfully'), backgroundColor: AppColors.success),
+                    const SnackBar(
+                        content: Text('Product removed successfully'),
+                        backgroundColor: AppColors.success),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting product: $e'), backgroundColor: AppColors.error),
+                    SnackBar(
+                        content: Text('Error deleting product: $e'),
+                        backgroundColor: AppColors.error),
                   );
                 }
               }
@@ -1440,7 +1617,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               const Icon(Icons.tune, color: AppColors.primary),
@@ -1448,7 +1626,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               Expanded(
                 child: Text(
                   'Capacities for ${product.name}',
-                  style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                  style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -1463,7 +1644,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 children: [
                   const Text(
                     'Define capacities or ratings (e.g. 500 LPD, 1000 LPD, 5 kW, 10 kW).\nEach capacity is automatically linked as an item in the Items tab for price management.',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -1475,15 +1659,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             hintText: 'e.g. 500 LPD or 10 kW',
                             filled: true,
                             fillColor: AppColors.background,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
                             ),
                           ),
                           onSubmitted: (val) {
                             final trimmed = val.trim();
-                            if (trimmed.isNotEmpty && !currentCapacities.contains(trimmed)) {
+                            if (trimmed.isNotEmpty &&
+                                !currentCapacities.contains(trimmed)) {
                               setModalState(() {
                                 currentCapacities.add(trimmed);
                                 capacityInputController.clear();
@@ -1496,26 +1683,35 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
                         onPressed: () {
                           final trimmed = capacityInputController.text.trim();
-                          if (trimmed.isNotEmpty && !currentCapacities.contains(trimmed)) {
+                          if (trimmed.isNotEmpty &&
+                              !currentCapacities.contains(trimmed)) {
                             setModalState(() {
                               currentCapacities.add(trimmed);
                               capacityInputController.clear();
                             });
                           }
                         },
-                        child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: const Text('Add',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     'Active Capacities:',
-                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13),
                   ),
                   const SizedBox(height: 8),
                   if (currentCapacities.isEmpty)
@@ -1530,7 +1726,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       child: const Center(
                         child: Text(
                           'No capacities added yet.',
-                          style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary, fontSize: 13),
+                          style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: AppColors.textSecondary,
+                              fontSize: 13),
                         ),
                       ),
                     )
@@ -1549,19 +1748,27 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           final cap = currentCapacities[idx];
                           return ListTile(
                             dense: true,
-                            title: Text(cap, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
+                            title: Text(cap,
+                                style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.w600)),
                             subtitle: Text(
                               'Item Name: ${product.name} - $cap',
-                              style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+                              style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                  icon: const Icon(Icons.edit_outlined,
+                                      size: 18, color: AppColors.primary),
                                   tooltip: 'Edit Capacity',
                                   onPressed: () async {
-                                    final editController = TextEditingController(text: cap);
+                                    final editController =
+                                        TextEditingController(text: cap);
                                     final updated = await showDialog<String>(
                                       context: ctx,
                                       builder: (editCtx) => AlertDialog(
@@ -1576,20 +1783,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                         ),
                                         actions: [
                                           TextButton(
-                                            onPressed: () => Navigator.pop(editCtx),
+                                            onPressed: () =>
+                                                Navigator.pop(editCtx),
                                             child: const Text('Cancel'),
                                           ),
                                           ElevatedButton(
                                             onPressed: () {
-                                              final text = editController.text.trim();
-                                              if (text.isNotEmpty) Navigator.pop(editCtx, text);
+                                              final text =
+                                                  editController.text.trim();
+                                              if (text.isNotEmpty)
+                                                Navigator.pop(editCtx, text);
                                             },
                                             child: const Text('Update'),
                                           ),
                                         ],
                                       ),
                                     );
-                                    if (updated != null && updated.isNotEmpty && updated != cap) {
+                                    if (updated != null &&
+                                        updated.isNotEmpty &&
+                                        updated != cap) {
                                       setModalState(() {
                                         if (initialCapacities.contains(cap)) {
                                           renamedCapacities[cap] = updated;
@@ -1600,11 +1812,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                   },
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                                  tooltip: 'Delete Capacity & remove from Items',
+                                  icon: const Icon(Icons.delete_outline,
+                                      size: 18, color: AppColors.error),
+                                  tooltip:
+                                      'Delete Capacity & remove from Items',
                                   onPressed: () {
                                     setModalState(() {
-                                      final removed = currentCapacities.removeAt(idx);
+                                      final removed =
+                                          currentCapacities.removeAt(idx);
                                       if (initialCapacities.contains(removed)) {
                                         deletedCapacities.add(removed);
                                       }
@@ -1627,7 +1842,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: isSaving
                   ? null
                   : () async {
@@ -1638,20 +1854,28 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         // 1. Process deletions in inventory_items
                         for (final delCap in deletedCapacities) {
                           final itemName = '${product.name} - $delCap';
-                          await supabase.from('inventory_items').delete().eq('item_name', itemName);
+                          await supabase
+                              .from('inventory_items')
+                              .delete()
+                              .eq('item_name', itemName);
                         }
 
                         // 2. Process renames in inventory_items
                         for (final entry in renamedCapacities.entries) {
                           final oldName = '${product.name} - ${entry.key}';
                           final newName = '${product.name} - ${entry.value}';
-                          await supabase.from('inventory_items').update({'item_name': newName}).eq('item_name', oldName);
+                          await supabase.from('inventory_items').update(
+                              {'item_name': newName}).eq('item_name', oldName);
                         }
 
                         // 3. Process new additions / ensures in inventory_items
                         for (final cap in currentCapacities) {
                           final itemName = '${product.name} - $cap';
-                          final existing = await supabase.from('inventory_items').select('id').eq('item_name', itemName).maybeSingle();
+                          final existing = await supabase
+                              .from('inventory_items')
+                              .select('id')
+                              .eq('item_name', itemName)
+                              .maybeSingle();
                           if (existing == null) {
                             await supabase.from('inventory_items').insert({
                               'item_name': itemName,
@@ -1663,7 +1887,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         }
 
                         // 4. Update product base_specs
-                        final rawSpecs = Map<String, dynamic>.from(product.baseSpecs.raw);
+                        final rawSpecs =
+                            Map<String, dynamic>.from(product.baseSpecs.raw);
                         rawSpecs['capacities'] = currentCapacities;
 
                         await supabase.from('products').update({
@@ -1678,7 +1903,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Capacities & matching Items synchronized successfully!'),
+                              content: Text(
+                                  'Capacities & matching Items synchronized successfully!'),
                               backgroundColor: AppColors.success,
                             ),
                           );
@@ -1686,7 +1912,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       } catch (e) {
                         if (ctx.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error updating capacities: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                                content: Text('Error updating capacities: $e'),
+                                backgroundColor: AppColors.error),
                           );
                         }
                       } finally {
@@ -1694,8 +1922,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       }
                     },
               child: isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Save Capacities', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Text('Save Capacities',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1743,7 +1977,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         final prefix = '${p.name.trim().toLowerCase()} - ';
         if (nameLower.startsWith(prefix)) {
           final remainder = nameLower.substring(prefix.length).trim();
-          if (p.baseSpecs.capacities.any((c) => c.trim().toLowerCase() == remainder)) {
+          if (p.baseSpecs.capacities
+              .any((c) => c.trim().toLowerCase() == remainder)) {
             return false;
           }
         }
@@ -1751,7 +1986,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       return true;
     }).toList();
 
-    availableItems.sort((a, b) => a.itemName.toLowerCase().compareTo(b.itemName.toLowerCase()));
+    availableItems.sort(
+        (a, b) => a.itemName.toLowerCase().compareTo(b.itemName.toLowerCase()));
 
     // 4. Current selected items
     final selectedItems = Set<String>.from(product.baseSpecs.linkedItems);
@@ -1766,11 +2002,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         builder: (ctx, setModalState) {
           final filtered = availableItems.where((item) {
             if (searchQuery.isEmpty) return true;
-            return item.itemName.toLowerCase().contains(searchQuery.toLowerCase());
+            return item.itemName
+                .toLowerCase()
+                .contains(searchQuery.toLowerCase());
           }).toList();
 
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
                 const Icon(Icons.link, color: AppColors.primary),
@@ -1781,13 +2020,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     children: [
                       Text(
                         'Link Items to ${product.name}',
-                        style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                        style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17),
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Select items treated as this product (${selectedItems.length} selected)',
-                        style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                        style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -1805,13 +2050,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       prefixIcon: const Icon(Icons.search, size: 20),
                       filled: true,
                       fillColor: AppColors.background,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
                     ),
-                    onChanged: (val) => setModalState(() => searchQuery = val.trim()),
+                    onChanged: (val) =>
+                        setModalState(() => searchQuery = val.trim()),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -1819,13 +2066,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     children: [
                       Text(
                         'Available Items (${filtered.length})',
-                        style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textSecondary),
+                        style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: AppColors.textSecondary),
                       ),
                       if (filtered.isNotEmpty)
                         Row(
                           children: [
                             TextButton(
-                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                              style: TextButton.styleFrom(
+                                  visualDensity: VisualDensity.compact),
                               onPressed: () {
                                 setModalState(() {
                                   for (final it in filtered) {
@@ -1833,10 +2085,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                   }
                                 });
                               },
-                              child: const Text('Select All', style: TextStyle(fontSize: 12)),
+                              child: const Text('Select All',
+                                  style: TextStyle(fontSize: 12)),
                             ),
                             TextButton(
-                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                              style: TextButton.styleFrom(
+                                  visualDensity: VisualDensity.compact),
                               onPressed: () {
                                 setModalState(() {
                                   for (final it in filtered) {
@@ -1844,7 +2098,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                   }
                                 });
                               },
-                              child: const Text('Clear', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              child: const Text('Clear',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey)),
                             ),
                           ],
                         ),
@@ -1856,15 +2112,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         ? const Center(
                             child: Text(
                               'No matching items found.',
-                              style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary, fontSize: 13),
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13),
                             ),
                           )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, idx) {
                               final item = filtered[idx];
-                              final isSelected = selectedItems.contains(item.itemName);
+                              final isSelected =
+                                  selectedItems.contains(item.itemName);
                               return CheckboxListTile(
                                 dense: true,
                                 value: isSelected,
@@ -1872,17 +2133,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                   item.itemName,
                                   style: TextStyle(
                                     fontFamily: 'Inter',
-                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                                     fontSize: 13,
                                   ),
                                 ),
                                 subtitle: item.price > 0
                                     ? Text(
                                         '₹${item.price.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textSecondary),
                                       )
                                     : null,
-                                controlAffinity: ListTileControlAffinity.leading,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
                                 contentPadding: EdgeInsets.zero,
                                 onChanged: (val) {
                                   setModalState(() {
@@ -1906,14 +2172,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary),
                 onPressed: isSaving
                     ? null
                     : () async {
                         setModalState(() => isSaving = true);
                         try {
                           final supabase = ref.read(supabaseClientProvider);
-                          final rawSpecs = Map<String, dynamic>.from(product.baseSpecs.raw);
+                          final rawSpecs =
+                              Map<String, dynamic>.from(product.baseSpecs.raw);
                           rawSpecs['linked_items'] = selectedItems.toList();
 
                           await supabase.from('products').update({
@@ -1927,7 +2195,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             Navigator.pop(ctx);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Linked items updated successfully!'),
+                                content:
+                                    Text('Linked items updated successfully!'),
                                 backgroundColor: AppColors.success,
                               ),
                             );
@@ -1935,16 +2204,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         } catch (e) {
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error linking items: $e'), backgroundColor: AppColors.error),
+                              SnackBar(
+                                  content: Text('Error linking items: $e'),
+                                  backgroundColor: AppColors.error),
                             );
                           }
                         } finally {
-                          if (ctx.mounted) setModalState(() => isSaving = false);
+                          if (ctx.mounted)
+                            setModalState(() => isSaving = false);
                         }
                       },
                 child: isSaving
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Save Items', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('Save Items',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -1972,9 +2250,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             children: [
               // Modal Header
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                  border:
+                      Border(bottom: BorderSide(color: Colors.grey.shade200)),
                 ),
                 child: Row(
                   children: [
@@ -1984,7 +2264,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.account_tree_outlined, color: AppColors.primary, size: 22),
+                      child: const Icon(Icons.account_tree_outlined,
+                          color: AppColors.primary, size: 22),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -2002,7 +2283,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           ),
                           const Text(
                             'Accessories & items customer purchases with this product',
-                            style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                            style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -2019,7 +2303,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               Expanded(
                 child: Consumer(
                   builder: (context, ref, _) {
-                    final boqItemsAsync = ref.watch(productBoqItemsProvider(product.id));
+                    final boqItemsAsync =
+                        ref.watch(productBoqItemsProvider(product.id));
 
                     return boqItemsAsync.when(
                       data: (items) {
@@ -2028,16 +2313,22 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.format_list_bulleted, size: 48, color: Colors.grey.shade400),
+                                Icon(Icons.format_list_bulleted,
+                                    size: 48, color: Colors.grey.shade400),
                                 const SizedBox(height: 12),
                                 Text(
                                   'No sub-systems configured for ${product.name}.',
-                                  style: const TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: AppColors.textSecondary),
                                 ),
                                 const SizedBox(height: 6),
                                 const Text(
                                   'Tap "+ Add Sub-System" below to add from inventory.',
-                                  style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
@@ -2047,11 +2338,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         return ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
                           itemBuilder: (context, idx) {
                             final item = items[idx];
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
@@ -2061,7 +2354,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 children: [
                                   CircleAvatar(
                                     radius: 14,
-                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                    backgroundColor: AppColors.primary
+                                        .withValues(alpha: 0.1),
                                     child: Text(
                                       '${idx + 1}',
                                       style: const TextStyle(
@@ -2075,7 +2369,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           item.itemName,
@@ -2088,24 +2383,35 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
-                                            _buildBadge('Unit: ${item.defaultUnit}'),
+                                            _buildBadge(
+                                                'Unit: ${item.defaultUnit}'),
                                           ],
                                         ),
                                       ],
                                     ),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 20, color: AppColors.error),
                                     tooltip: 'Remove Sub-System',
                                     onPressed: () async {
                                       try {
-                                        final supabase = ref.read(supabaseClientProvider);
-                                        await supabase.from('product_boq_items').delete().eq('id', item.id);
-                                        ref.invalidate(productBoqItemsProvider(product.id));
+                                        final supabase =
+                                            ref.read(supabaseClientProvider);
+                                        await supabase
+                                            .from('product_boq_items')
+                                            .delete()
+                                            .eq('id', item.id);
+                                        ref.invalidate(productBoqItemsProvider(
+                                            product.id));
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                                content: Text('Error: $e'),
+                                                backgroundColor:
+                                                    AppColors.error),
                                           );
                                         }
                                       }
@@ -2117,8 +2423,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           },
                         );
                       },
-                      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                      error: (e, _) => Center(child: Text('Error loading sub-systems: $e')),
+                      loading: () => const Center(
+                          child: CircularProgressIndicator(
+                              color: AppColors.primary)),
+                      error: (e, _) =>
+                          Center(child: Text('Error loading sub-systems: $e')),
                     );
                   },
                 ),
@@ -2137,14 +2446,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.add, color: Colors.white),
                     label: const Text(
                       'Add Sub-System from Inventory',
-                      style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
                     ),
-                    onPressed: () => _showInventorySearchPicker(context, product.id),
+                    onPressed: () =>
+                        _showInventorySearchPicker(context, product.id),
                   ),
                 ),
               ),
@@ -2170,7 +2484,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         return StatefulBuilder(
           builder: (context, setPickerState) {
             final filtered = allItems.where((item) {
-              return item.itemName.toLowerCase().contains(searchQuery.toLowerCase());
+              return item.itemName
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase());
             }).toList();
 
             return Container(
@@ -2184,7 +2500,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     children: [
                       const Text(
                         'Select Item from Inventory',
-                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 17),
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -2212,22 +2531,30 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     child: filtered.isEmpty
                         ? Center(
                             child: Text(
-                              searchQuery.isEmpty ? 'No inventory items available.' : 'No items match "$searchQuery"',
-                              style: const TextStyle(color: AppColors.textSecondary),
+                              searchQuery.isEmpty
+                                  ? 'No inventory items available.'
+                                  : 'No items match "$searchQuery"',
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary),
                             ),
                           )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, idx) {
                               final invItem = filtered[idx];
                               return ListTile(
-                                title: Text(invItem.itemName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                subtitle: Text('Unit: ${invItem.uom ?? "NOS"} | Price: ₹${invItem.price}'),
+                                title: Text(invItem.itemName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600)),
+                                subtitle: Text(
+                                    'Unit: ${invItem.uom ?? "NOS"} | Price: ₹${invItem.price}'),
                                 trailing: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8)),
                                   ),
                                   onPressed: () {
                                     Navigator.pop(pickerCtx);
@@ -2239,7 +2566,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                       invItem.uom ?? 'NOS',
                                     );
                                   },
-                                  child: const Text('Add', style: TextStyle(color: Colors.white)),
+                                  child: const Text('Add',
+                                      style: TextStyle(color: Colors.white)),
                                 ),
                               );
                             },
@@ -2266,13 +2594,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        title: Text('Configure "$itemName"', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        title: Text('Configure "$itemName"',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: unitController,
-              decoration: const InputDecoration(labelText: 'Default Unit (e.g. NOS, MTR, SET)'),
+              decoration: const InputDecoration(
+                  labelText: 'Default Unit (e.g. NOS, MTR, SET)'),
             ),
           ],
         ),
@@ -2291,23 +2621,30 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   'product_id': productId,
                   'item_name': itemName,
                   'inventory_item_id': inventoryItemId,
-                  'default_unit': unitController.text.trim().isEmpty ? 'NOS' : unitController.text.trim(),
+                  'default_unit': unitController.text.trim().isEmpty
+                      ? 'NOS'
+                      : unitController.text.trim(),
                 });
                 ref.invalidate(productBoqItemsProvider(productId));
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Item added to product!'), backgroundColor: AppColors.success),
+                    const SnackBar(
+                        content: Text('Item added to product!'),
+                        backgroundColor: AppColors.success),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error adding item: $e'), backgroundColor: AppColors.error),
+                    SnackBar(
+                        content: Text('Error adding item: $e'),
+                        backgroundColor: AppColors.error),
                   );
                 }
               }
             },
-            child: const Text('Add to Product', style: TextStyle(color: Colors.white)),
+            child: const Text('Add to Product',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -2334,12 +2671,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               title: const Row(
                 children: [
                   Icon(Icons.inventory_2, color: AppColors.primary),
                   SizedBox(width: 8),
-                  Text('New Inventory Item', style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('New Inventory Item',
+                      style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
               content: SingleChildScrollView(
@@ -2348,28 +2690,38 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   children: [
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Item Name *', prefixIcon: Icon(Icons.label_outline)),
+                      decoration: const InputDecoration(
+                          labelText: 'Item Name *',
+                          prefixIcon: Icon(Icons.label_outline)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: hsnController,
-                      decoration: const InputDecoration(labelText: 'HSN / SAC Code', prefixIcon: Icon(Icons.numbers)),
+                      decoration: const InputDecoration(
+                          labelText: 'HSN / SAC Code',
+                          prefixIcon: Icon(Icons.numbers)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: unitController,
-                      decoration: const InputDecoration(labelText: 'Unit (UOM) *', prefixIcon: Icon(Icons.scale)),
+                      decoration: const InputDecoration(
+                          labelText: 'Unit (UOM) *',
+                          prefixIcon: Icon(Icons.scale)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: priceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Default Price (₹)', prefixIcon: Icon(Icons.currency_rupee)),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'Default Price (₹)',
+                          prefixIcon: Icon(Icons.currency_rupee)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: gstController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'GST Rate (%)',
                         prefixIcon: Icon(Icons.percent),
@@ -2383,7 +2735,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       decoration: const InputDecoration(
                         labelText: 'Warranty Period (Months)',
                         prefixIcon: Icon(Icons.verified_user_outlined),
-                        helperText: 'e.g. 12 or 24 months from customer purchase date',
+                        helperText:
+                            'e.g. 12 or 24 months from customer purchase date',
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -2392,44 +2745,53 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       decoration: const InputDecoration(
                         labelText: 'Under Product (Optional)',
                         prefixIcon: Icon(Icons.sell_outlined),
-                        helperText: 'Select sell product if treated as product name',
+                        helperText:
+                            'Select sell product if treated as product name',
                       ),
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
-                          child: Text('None (Standard Item)', style: TextStyle(color: Colors.grey)),
+                          child: Text('None (Standard Item)',
+                              style: TextStyle(color: Colors.grey)),
                         ),
                         ...allProducts.map((p) => DropdownMenuItem<String?>(
-                          value: p.name,
-                          child: Text(p.name),
-                        )),
+                              value: p.name,
+                              child: Text(p.name),
+                            )),
                       ],
                       onChanged: (newVal) async {
                         if (newVal != null && newVal != selectedProductName) {
                           final confirmed = await showDialog<bool>(
                             context: ctx,
                             builder: (alertCtx) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
                               title: const Row(
                                 children: [
-                                  Icon(Icons.info_outline, color: AppColors.primary),
+                                  Icon(Icons.info_outline,
+                                      color: AppColors.primary),
                                   SizedBox(width: 8),
                                   Text('Treat as Product?'),
                                 ],
                               ),
                               content: const Text(
                                 "it will be treated as product name, if it's just a side/extra item don't select this",
-                                style: TextStyle(fontFamily: 'Inter', fontSize: 14),
+                                style: TextStyle(
+                                    fontFamily: 'Inter', fontSize: 14),
                               ),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(alertCtx, false),
+                                  onPressed: () =>
+                                      Navigator.pop(alertCtx, false),
                                   child: const Text('Cancel'),
                                 ),
                                 ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                                  onPressed: () => Navigator.pop(alertCtx, true),
-                                  child: const Text('OK', style: TextStyle(color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary),
+                                  onPressed: () =>
+                                      Navigator.pop(alertCtx, true),
+                                  child: const Text('OK',
+                                      style: TextStyle(color: Colors.white)),
                                 ),
                               ],
                             ),
@@ -2448,26 +2810,36 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel')),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary),
                   onPressed: isSaving
                       ? null
                       : () async {
                           final name = nameController.text.trim();
                           if (name.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item name is required.')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Item name is required.')));
                             return;
                           }
 
                           setModalState(() => isSaving = true);
                           try {
-                            final items = ref.read(inventoryProvider).valueOrNull ?? [];
-                            final exists = items.any((i) => i.itemName.toLowerCase() == name.toLowerCase());
+                            final items =
+                                ref.read(inventoryProvider).valueOrNull ?? [];
+                            final exists = items.any((i) =>
+                                i.itemName.toLowerCase() == name.toLowerCase());
                             if (exists) {
                               if (ctx.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('An item with this name already exists.'), backgroundColor: AppColors.error),
+                                  const SnackBar(
+                                      content: Text(
+                                          'An item with this name already exists.'),
+                                      backgroundColor: AppColors.error),
                                 );
                                 setModalState(() => isSaving = false);
                               }
@@ -2479,23 +2851,32 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               'item_name': name,
                               'hsn_sac': hsnController.text.trim(),
                               'uom': unitController.text.trim(),
-                              'price': double.tryParse(priceController.text) ?? 0.0,
-                              'gst_rate': double.tryParse(gstController.text.trim()) ?? 18.0,
-                              'warranty_months': int.tryParse(warrantyController.text.trim()) ?? 12,
+                              'price':
+                                  double.tryParse(priceController.text) ?? 0.0,
+                              'gst_rate':
+                                  double.tryParse(gstController.text.trim()) ??
+                                      18.0,
+                              'warranty_months': int.tryParse(
+                                      warrantyController.text.trim()) ??
+                                  12,
                             });
 
                             // If Under Product is selected, link item to that product
                             if (selectedProductName != null) {
-                              final matchedProd = allProducts.firstWhereOrNull((p) => p.name == selectedProductName);
+                              final matchedProd = allProducts.firstWhereOrNull(
+                                  (p) => p.name == selectedProductName);
                               if (matchedProd != null) {
-                                final updatedLinked = List<String>.from(matchedProd.baseSpecs.linkedItems);
+                                final updatedLinked = List<String>.from(
+                                    matchedProd.baseSpecs.linkedItems);
                                 if (!updatedLinked.contains(name)) {
                                   updatedLinked.add(name);
-                                  final rawSpecs = Map<String, dynamic>.from(matchedProd.baseSpecs.raw);
+                                  final rawSpecs = Map<String, dynamic>.from(
+                                      matchedProd.baseSpecs.raw);
                                   rawSpecs['linked_items'] = updatedLinked;
                                   await supabase.from('products').update({
                                     'base_specs': rawSpecs,
-                                    'updated_at': DateTime.now().toIso8601String(),
+                                    'updated_at':
+                                        DateTime.now().toIso8601String(),
                                   }).eq('id', matchedProd.id);
                                   ref.invalidate(productsProvider);
                                 }
@@ -2506,22 +2887,34 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Item added successfully!'), backgroundColor: AppColors.success),
+                                const SnackBar(
+                                    content: Text('Item added successfully!'),
+                                    backgroundColor: AppColors.success),
                               );
                             }
                           } catch (e) {
                             if (ctx.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                                SnackBar(
+                                    content: Text('Error: $e'),
+                                    backgroundColor: AppColors.error),
                               );
                             }
                           } finally {
-                            if (ctx.mounted) setModalState(() => isSaving = false);
+                            if (ctx.mounted)
+                              setModalState(() => isSaving = false);
                           }
                         },
                   child: isSaving
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save Item', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Text('Save Item',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -2537,9 +2930,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     final unitController = TextEditingController(text: item.uom ?? 'NOS');
     final priceController = TextEditingController(text: item.price.toString());
     final gstController = TextEditingController(
-      text: item.gstRate.truncateToDouble() == item.gstRate ? item.gstRate.toInt().toString() : item.gstRate.toString(),
+      text: item.gstRate.truncateToDouble() == item.gstRate
+          ? item.gstRate.toInt().toString()
+          : item.gstRate.toString(),
     );
-    final warrantyController = TextEditingController(text: '${item.warrantyMonths}');
+    final warrantyController =
+        TextEditingController(text: '${item.warrantyMonths}');
     final allProducts = ref.read(productsProvider).valueOrNull ?? [];
     Product? initialProduct;
     for (final p in allProducts) {
@@ -2557,12 +2953,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               title: const Row(
                 children: [
                   Icon(Icons.edit, color: AppColors.primary),
                   SizedBox(width: 8),
-                  Text('Edit Inventory Item', style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Edit Inventory Item',
+                      style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
               content: SingleChildScrollView(
@@ -2571,28 +2972,38 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   children: [
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Item Name *', prefixIcon: Icon(Icons.label_outline)),
+                      decoration: const InputDecoration(
+                          labelText: 'Item Name *',
+                          prefixIcon: Icon(Icons.label_outline)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: hsnController,
-                      decoration: const InputDecoration(labelText: 'HSN / SAC Code', prefixIcon: Icon(Icons.numbers)),
+                      decoration: const InputDecoration(
+                          labelText: 'HSN / SAC Code',
+                          prefixIcon: Icon(Icons.numbers)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: unitController,
-                      decoration: const InputDecoration(labelText: 'Unit (UOM) *', prefixIcon: Icon(Icons.scale)),
+                      decoration: const InputDecoration(
+                          labelText: 'Unit (UOM) *',
+                          prefixIcon: Icon(Icons.scale)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: priceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Default Price (₹)', prefixIcon: Icon(Icons.currency_rupee)),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'Default Price (₹)',
+                          prefixIcon: Icon(Icons.currency_rupee)),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: gstController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'GST Rate (%)',
                         prefixIcon: Icon(Icons.percent),
@@ -2606,7 +3017,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       decoration: const InputDecoration(
                         labelText: 'Warranty Period (Months)',
                         prefixIcon: Icon(Icons.verified_user_outlined),
-                        helperText: 'e.g. 12 or 24 months from customer purchase date',
+                        helperText:
+                            'e.g. 12 or 24 months from customer purchase date',
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -2615,44 +3027,53 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       decoration: const InputDecoration(
                         labelText: 'Under Product (Optional)',
                         prefixIcon: Icon(Icons.sell_outlined),
-                        helperText: 'Select sell product if treated as product name',
+                        helperText:
+                            'Select sell product if treated as product name',
                       ),
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
-                          child: Text('None (Standard Item)', style: TextStyle(color: Colors.grey)),
+                          child: Text('None (Standard Item)',
+                              style: TextStyle(color: Colors.grey)),
                         ),
                         ...allProducts.map((p) => DropdownMenuItem<String?>(
-                          value: p.name,
-                          child: Text(p.name),
-                        )),
+                              value: p.name,
+                              child: Text(p.name),
+                            )),
                       ],
                       onChanged: (newVal) async {
                         if (newVal != null && newVal != selectedProductName) {
                           final confirmed = await showDialog<bool>(
                             context: ctx,
                             builder: (alertCtx) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
                               title: const Row(
                                 children: [
-                                  Icon(Icons.info_outline, color: AppColors.primary),
+                                  Icon(Icons.info_outline,
+                                      color: AppColors.primary),
                                   SizedBox(width: 8),
                                   Text('Treat as Product?'),
                                 ],
                               ),
                               content: const Text(
                                 "it will be treated as product name, if it's just a side/extra item don't select this",
-                                style: TextStyle(fontFamily: 'Inter', fontSize: 14),
+                                style: TextStyle(
+                                    fontFamily: 'Inter', fontSize: 14),
                               ),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(alertCtx, false),
+                                  onPressed: () =>
+                                      Navigator.pop(alertCtx, false),
                                   child: const Text('Cancel'),
                                 ),
                                 ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                                  onPressed: () => Navigator.pop(alertCtx, true),
-                                  child: const Text('OK', style: TextStyle(color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary),
+                                  onPressed: () =>
+                                      Navigator.pop(alertCtx, true),
+                                  child: const Text('OK',
+                                      style: TextStyle(color: Colors.white)),
                                 ),
                               ],
                             ),
@@ -2671,15 +3092,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel')),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary),
                   onPressed: isSaving
                       ? null
                       : () async {
                           final name = nameController.text.trim();
                           if (name.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item name is required.')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Item name is required.')));
                             return;
                           }
 
@@ -2690,38 +3116,52 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               'item_name': name,
                               'hsn_sac': hsnController.text.trim(),
                               'uom': unitController.text.trim(),
-                              'price': double.tryParse(priceController.text) ?? 0.0,
-                              'gst_rate': double.tryParse(gstController.text.trim()) ?? 18.0,
-                              'warranty_months': int.tryParse(warrantyController.text.trim()) ?? 12,
+                              'price':
+                                  double.tryParse(priceController.text) ?? 0.0,
+                              'gst_rate':
+                                  double.tryParse(gstController.text.trim()) ??
+                                      18.0,
+                              'warranty_months': int.tryParse(
+                                      warrantyController.text.trim()) ??
+                                  12,
                             }).eq('id', item.id);
 
                             // Update linked_items in products if changed or renamed
                             final oldName = item.itemName as String;
-                            if (selectedProductName != initialProduct?.name || name != oldName) {
+                            if (selectedProductName != initialProduct?.name ||
+                                name != oldName) {
                               // 1. If old product existed, remove old name
                               if (initialProduct != null) {
-                                final updatedOld = List<String>.from(initialProduct.baseSpecs.linkedItems)
+                                final updatedOld = List<String>.from(
+                                    initialProduct.baseSpecs.linkedItems)
                                   ..remove(oldName)
                                   ..remove(name);
-                                final rawOld = Map<String, dynamic>.from(initialProduct.baseSpecs.raw);
+                                final rawOld = Map<String, dynamic>.from(
+                                    initialProduct.baseSpecs.raw);
                                 rawOld['linked_items'] = updatedOld;
                                 await supabase.from('products').update({
                                   'base_specs': rawOld,
-                                  'updated_at': DateTime.now().toIso8601String(),
+                                  'updated_at':
+                                      DateTime.now().toIso8601String(),
                                 }).eq('id', initialProduct.id);
                               }
                               // 2. If new product selected, add name
                               if (selectedProductName != null) {
-                                final newProd = allProducts.firstWhereOrNull((p) => p.name == selectedProductName);
+                                final newProd = allProducts.firstWhereOrNull(
+                                    (p) => p.name == selectedProductName);
                                 if (newProd != null) {
-                                  final updatedNew = List<String>.from(newProd.baseSpecs.linkedItems)
+                                  final updatedNew = List<String>.from(
+                                      newProd.baseSpecs.linkedItems)
                                     ..remove(oldName);
-                                  if (!updatedNew.contains(name)) updatedNew.add(name);
-                                  final rawNew = Map<String, dynamic>.from(newProd.baseSpecs.raw);
+                                  if (!updatedNew.contains(name))
+                                    updatedNew.add(name);
+                                  final rawNew = Map<String, dynamic>.from(
+                                      newProd.baseSpecs.raw);
                                   rawNew['linked_items'] = updatedNew;
                                   await supabase.from('products').update({
                                     'base_specs': rawNew,
-                                    'updated_at': DateTime.now().toIso8601String(),
+                                    'updated_at':
+                                        DateTime.now().toIso8601String(),
                                   }).eq('id', newProd.id);
                                 }
                               }
@@ -2732,22 +3172,34 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Item updated successfully!'), backgroundColor: AppColors.success),
+                                const SnackBar(
+                                    content: Text('Item updated successfully!'),
+                                    backgroundColor: AppColors.success),
                               );
                             }
                           } catch (e) {
                             if (ctx.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                                SnackBar(
+                                    content: Text('Error: $e'),
+                                    backgroundColor: AppColors.error),
                               );
                             }
                           } finally {
-                            if (ctx.mounted) setModalState(() => isSaving = false);
+                            if (ctx.mounted)
+                              setModalState(() => isSaving = false);
                           }
                         },
                   child: isSaving
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Text('Save Changes',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -2764,24 +3216,32 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         title: const Text('Delete Item'),
         content: Text('Are you sure you want to delete "${item.itemName}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               Navigator.pop(ctx);
               try {
                 final supabase = ref.read(supabaseClientProvider);
-                await supabase.from('inventory_items').delete().eq('id', item.id);
+                await supabase
+                    .from('inventory_items')
+                    .delete()
+                    .eq('id', item.id);
                 ref.invalidate(inventoryProvider);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Item deleted successfully'), backgroundColor: AppColors.success),
+                    const SnackBar(
+                        content: Text('Item deleted successfully'),
+                        backgroundColor: AppColors.success),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                    SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: AppColors.error),
                   );
                 }
               }
@@ -2811,7 +3271,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       if (bytes.isEmpty) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not read the selected Excel file.'), backgroundColor: AppColors.error),
+            const SnackBar(
+                content: Text('Could not read the selected Excel file.'),
+                backgroundColor: AppColors.error),
           );
         }
         return;
@@ -2828,7 +3290,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             child: Center(
               child: Card(
                 elevation: 8,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
                   child: Column(
@@ -2838,7 +3301,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       SizedBox(height: 20),
                       Text(
                         'Importing Inventory Items...',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16),
                       ),
                       SizedBox(height: 6),
                       Text(
@@ -2858,7 +3322,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
 
       final supabase = ref.read(supabaseClientProvider);
       final existingItems = ref.read(inventoryProvider).valueOrNull ?? [];
-      final existingNames = existingItems.map((e) => e.itemName.toLowerCase()).toSet();
+      final existingNames =
+          existingItems.map((e) => e.itemName.toLowerCase()).toSet();
 
       final existingProducts = ref.read(productsProvider).valueOrNull ?? [];
       final Map<String, Product> productByName = {};
@@ -2892,7 +3357,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             isFirstRow = false;
             // Parse headers to locate columns dynamically if headers exist
             for (int i = 0; i < row.length; i++) {
-              final header = row[i]?.value?.toString().toLowerCase().trim() ?? '';
+              final header =
+                  row[i]?.value?.toString().toLowerCase().trim() ?? '';
               if (header.isEmpty) continue;
 
               final isIdOrCode = header == 'id' ||
@@ -2902,9 +3368,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   header.contains('sr.') ||
                   header == '#';
 
-              if (header.contains('under product') || header.contains('product category') || header.contains('category')) {
+              if (header.contains('under product') ||
+                  header.contains('product category') ||
+                  header.contains('category')) {
                 underProductCol = i;
-              } else if (!isIdOrCode && (header.contains('item name') || header.contains('product name') || header.contains('material') || header == 'item' || header == 'name' || header.contains('description'))) {
+              } else if (!isIdOrCode &&
+                  (header.contains('item name') ||
+                      header.contains('product name') ||
+                      header.contains('material') ||
+                      header == 'item' ||
+                      header == 'name' ||
+                      header.contains('description'))) {
                 // If nameCol not yet identified, or if this header explicitly contains 'name'
                 if (nameCol == -1 || header.contains('name')) {
                   nameCol = i;
@@ -2913,7 +3387,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 hsnCol = i;
               } else if (header.contains('unit') || header.contains('uom')) {
                 unitCol = i;
-              } else if (header.contains('price') || header.contains('cost') || header.contains('rate') || header.contains('amount') || header.contains('₹')) {
+              } else if (header.contains('price') ||
+                  header.contains('cost') ||
+                  header.contains('rate') ||
+                  header.contains('amount') ||
+                  header.contains('₹')) {
                 priceCol = i;
               } else if (header.contains('warranty')) {
                 warrantyCol = i;
@@ -2922,35 +3400,59 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
 
             // Fallback column positions if headers weren't found
             if (nameCol == -1) {
-              final firstHeader = row.isNotEmpty ? row[0]?.value?.toString().toLowerCase().trim() ?? '' : '';
-              if (row.length > 1 && (firstHeader == '#' || firstHeader.contains('id') || firstHeader.contains('sr'))) {
+              final firstHeader = row.isNotEmpty
+                  ? row[0]?.value?.toString().toLowerCase().trim() ?? ''
+                  : '';
+              if (row.length > 1 &&
+                  (firstHeader == '#' ||
+                      firstHeader.contains('id') ||
+                      firstHeader.contains('sr'))) {
                 nameCol = 1;
               } else {
                 nameCol = 0;
               }
             }
-            if (underProductCol == -1 && row.length > (nameCol == 0 ? 1 : 2)) underProductCol = (nameCol == 0) ? 1 : 2;
-            if (hsnCol == -1 && row.length > (nameCol == 0 ? 2 : 3)) hsnCol = (nameCol == 0) ? 2 : 3;
-            if (unitCol == -1 && row.length > (nameCol == 0 ? 3 : 4)) unitCol = (nameCol == 0) ? 3 : 4;
-            if (priceCol == -1 && row.length > (nameCol == 0 ? 4 : 5)) priceCol = (nameCol == 0) ? 4 : 5;
-            if (warrantyCol == -1 && row.length > (nameCol == 0 ? 5 : 6)) warrantyCol = (nameCol == 0) ? 5 : 6;
+            if (underProductCol == -1 && row.length > (nameCol == 0 ? 1 : 2))
+              underProductCol = (nameCol == 0) ? 1 : 2;
+            if (hsnCol == -1 && row.length > (nameCol == 0 ? 2 : 3))
+              hsnCol = (nameCol == 0) ? 2 : 3;
+            if (unitCol == -1 && row.length > (nameCol == 0 ? 3 : 4))
+              unitCol = (nameCol == 0) ? 3 : 4;
+            if (priceCol == -1 && row.length > (nameCol == 0 ? 4 : 5))
+              priceCol = (nameCol == 0) ? 4 : 5;
+            if (warrantyCol == -1 && row.length > (nameCol == 0 ? 5 : 6))
+              warrantyCol = (nameCol == 0) ? 5 : 6;
             continue;
           }
 
           if (row.isEmpty) continue;
 
-          final itemNameCell = (nameCol >= 0 && row.length > nameCol) ? row[nameCol]?.value : null;
-          final underProductCell = underProductCol >= 0 && row.length > underProductCol ? row[underProductCol]?.value : null;
-          final hsnCell = (hsnCol >= 0 && row.length > hsnCol) ? row[hsnCol]?.value : null;
-          final unitCell = (unitCol >= 0 && row.length > unitCol) ? row[unitCol]?.value : null;
-          final priceCell = (priceCol >= 0 && row.length > priceCol) ? row[priceCol]?.value : null;
-          final warrantyCell = (warrantyCol >= 0 && row.length > warrantyCol) ? row[warrantyCol]?.value : null;
+          final itemNameCell = (nameCol >= 0 && row.length > nameCol)
+              ? row[nameCol]?.value
+              : null;
+          final underProductCell =
+              underProductCol >= 0 && row.length > underProductCol
+                  ? row[underProductCol]?.value
+                  : null;
+          final hsnCell =
+              (hsnCol >= 0 && row.length > hsnCol) ? row[hsnCol]?.value : null;
+          final unitCell = (unitCol >= 0 && row.length > unitCol)
+              ? row[unitCol]?.value
+              : null;
+          final priceCell = (priceCol >= 0 && row.length > priceCol)
+              ? row[priceCol]?.value
+              : null;
+          final warrantyCell = (warrantyCol >= 0 && row.length > warrantyCol)
+              ? row[warrantyCol]?.value
+              : null;
 
           final itemName = itemNameCell?.toString().trim();
           if (itemName == null || itemName.isEmpty) continue;
 
           final underProductName = underProductCell?.toString().trim();
-          final hasUnderProduct = underProductName != null && underProductName.isNotEmpty && underProductName != '-';
+          final hasUnderProduct = underProductName != null &&
+              underProductName.isNotEmpty &&
+              underProductName != '-';
 
           // If under product category is specified, check if it matches a sell product
           if (hasUnderProduct) {
@@ -2979,7 +3481,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             } else if (priceCell is IntCellValue) {
               price = priceCell.value.toDouble();
             } else {
-              price = double.tryParse(priceCell.toString().replaceAll('₹', '').replaceAll(',', '').trim()) ?? 0.0;
+              price = double.tryParse(priceCell
+                      .toString()
+                      .replaceAll('₹', '')
+                      .replaceAll(',', '')
+                      .trim()) ??
+                  0.0;
             }
           }
 
@@ -2990,7 +3497,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             } else if (warrantyCell is DoubleCellValue) {
               warranty = warrantyCell.value.toInt();
             } else {
-              warranty = int.tryParse(warrantyCell.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 12;
+              warranty = int.tryParse(warrantyCell
+                      .toString()
+                      .replaceAll(RegExp(r'[^0-9]'), '')) ??
+                  12;
             }
           }
 
@@ -3032,11 +3542,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       }
 
       if (context.mounted) {
-        final linkedMsg = modifiedProductIds.isNotEmpty ? ' Linked to ${modifiedProductIds.length} products.' : '';
+        final linkedMsg = modifiedProductIds.isNotEmpty
+            ? ' Linked to ${modifiedProductIds.length} products.'
+            : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Imported $importedCount items. Skipped $skippedCount duplicates.$linkedMsg'),
-            backgroundColor: (importedCount > 0 || modifiedProductIds.isNotEmpty) ? AppColors.success : Colors.orange,
+            content: Text(
+                'Imported $importedCount items. Skipped $skippedCount duplicates.$linkedMsg'),
+            backgroundColor:
+                (importedCount > 0 || modifiedProductIds.isNotEmpty)
+                    ? AppColors.success
+                    : Colors.orange,
           ),
         );
       }
@@ -3047,7 +3563,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Import Error: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
@@ -3063,7 +3581,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       data: (items) {
         final filteredItems = items.where((item) {
           if (_suppSearchQuery.isEmpty) return true;
-          return item.name.toLowerCase().contains(_suppSearchQuery.toLowerCase());
+          return item.name
+              .toLowerCase()
+              .contains(_suppSearchQuery.toLowerCase());
         }).toList();
 
         return Column(
@@ -3075,7 +3595,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 controller: _suppSearchController,
                 decoration: InputDecoration(
                   hintText: 'Search supplementary terms...',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                  prefixIcon:
+                      const Icon(Icons.search, color: AppColors.primary),
                   suffixIcon: _suppSearchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear),
@@ -3087,7 +3608,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       : null,
                   filled: true,
                   fillColor: AppColors.background,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: Colors.grey.shade300),
@@ -3097,7 +3619,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
-                onChanged: (val) => setState(() => _suppSearchQuery = val.trim()),
+                onChanged: (val) =>
+                    setState(() => _suppSearchQuery = val.trim()),
               ),
             ),
             Expanded(
@@ -3106,7 +3629,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.list_alt_outlined, size: 54, color: Colors.grey.shade400),
+                          Icon(Icons.list_alt_outlined,
+                              size: 54, color: Colors.grey.shade400),
                           const SizedBox(height: 12),
                           Text(
                             _suppSearchQuery.isEmpty
@@ -3120,10 +3644,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                            onPressed: () => _showAddSupplementaryDialog(context, ref),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary),
+                            onPressed: () =>
+                                _showAddSupplementaryDialog(context, ref),
                             icon: const Icon(Icons.add, color: Colors.white),
-                            label: const Text('Add Item', style: TextStyle(color: Colors.white)),
+                            label: const Text('Add Item',
+                                style: TextStyle(color: Colors.white)),
                           ),
                         ],
                       ),
@@ -3147,10 +3674,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.08),
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(Icons.add_task, color: AppColors.primary, size: 20),
+                                child: const Icon(Icons.add_task,
+                                    color: AppColors.primary, size: 20),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -3179,25 +3708,36 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.blueGrey, size: 20),
-                                onPressed: () => _showEditSupplementaryDialog(context, ref, item),
+                                icon: const Icon(Icons.edit,
+                                    color: Colors.blueGrey, size: 20),
+                                onPressed: () => _showEditSupplementaryDialog(
+                                    context, ref, item),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete, color: AppColors.error, size: 20),
+                                icon: const Icon(Icons.delete,
+                                    color: AppColors.error, size: 20),
                                 onPressed: () {
                                   showDialog(
                                     context: context,
                                     builder: (ctx) => AlertDialog(
                                       title: const Text('Delete Item'),
-                                      content: Text('Are you sure you want to delete "${item.name}"?'),
+                                      content: Text(
+                                          'Are you sure you want to delete "${item.name}"?'),
                                       actions: [
-                                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                        TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('Cancel')),
                                         TextButton(
                                           onPressed: () {
                                             Navigator.pop(ctx);
-                                            ref.read(supplementaryItemsServiceProvider).deleteItem(item.id!);
+                                            ref
+                                                .read(
+                                                    supplementaryItemsServiceProvider)
+                                                .deleteItem(item.id!);
                                           },
-                                          child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+                                          child: const Text('Delete',
+                                              style: TextStyle(
+                                                  color: AppColors.error)),
                                         ),
                                       ],
                                     ),
@@ -3213,7 +3753,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary)),
       error: (e, _) => Center(child: Text('Error: $e')),
     );
   }
@@ -3251,7 +3792,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -3265,13 +3807,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   if (context.mounted) {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Item added successfully'), backgroundColor: AppColors.success),
+                      const SnackBar(
+                          content: Text('Item added successfully'),
+                          backgroundColor: AppColors.success),
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                      SnackBar(
+                          content: Text('Error: $e'),
+                          backgroundColor: AppColors.error),
                     );
                   }
                 }
@@ -3284,7 +3830,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     );
   }
 
-  void _showEditSupplementaryDialog(BuildContext context, WidgetRef ref, dynamic item) {
+  void _showEditSupplementaryDialog(
+      BuildContext context, WidgetRef ref, dynamic item) {
     final nameCtrl = TextEditingController(text: item.name);
     final rateCtrl = TextEditingController(text: item.rate.toString());
     final gstCtrl = TextEditingController(text: item.gstPercent.toString());
@@ -3317,7 +3864,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -3332,13 +3880,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   if (context.mounted) {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Item updated successfully'), backgroundColor: AppColors.success),
+                      const SnackBar(
+                          content: Text('Item updated successfully'),
+                          backgroundColor: AppColors.success),
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                      SnackBar(
+                          content: Text('Error: $e'),
+                          backgroundColor: AppColors.error),
                     );
                   }
                 }

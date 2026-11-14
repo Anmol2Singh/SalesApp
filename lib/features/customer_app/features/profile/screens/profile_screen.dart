@@ -1,4 +1,3 @@
-import 'package:salesapp/features/auth/providers/auth_provider.dart' show authControllerProvider;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,25 +37,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       final supabase = ref.read(supabaseClientProvider);
       final cleanPhone = (phone ?? '').replaceAll(RegExp(r'\D'), '');
-      final last10 = cleanPhone.length >= 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
+      final last10 = cleanPhone.length >= 10
+          ? cleanPhone.substring(cleanPhone.length - 10)
+          : cleanPhone;
 
       String? custId;
       if (last10.isNotEmpty) {
-        final cRes = await supabase.from('customers').select('id, phone').limit(50);
+        final cRes =
+            await supabase.from('customers').select('id, phone').limit(50);
         for (final row in (cRes as List? ?? [])) {
-          final rp = (row['phone'] as String?)?.replaceAll(RegExp(r'\D'), '') ?? '';
-          if (rp.isNotEmpty && (rp == cleanPhone || rp.endsWith(last10) || last10.endsWith(rp))) {
+          final rp =
+              (row['phone'] as String?)?.replaceAll(RegExp(r'\D'), '') ?? '';
+          if (rp.isNotEmpty &&
+              (rp == cleanPhone ||
+                  rp.endsWith(last10) ||
+                  last10.endsWith(rp))) {
             custId = row['id'] as String;
             break;
           }
         }
       }
 
-      var query = supabase.from('amc_contracts').select('amc_number, status, end_date');
+      var query =
+          supabase.from('amc_contracts').select('amc_number, status, end_date');
       if (custId != null) {
         query = query.eq('customer_id', custId);
       }
-      final contracts = await query.order('created_at', ascending: false).limit(10);
+      final contracts =
+          await query.order('created_at', ascending: false).limit(10);
       for (final c in (contracts as List? ?? [])) {
         final status = (c['status'] as String? ?? '').toLowerCase();
         if (status == 'active' || status == 'approved') {
@@ -135,8 +143,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-
-
   void _addAddress() {
     // Show quick dialog to add address
     final controller = TextEditingController();
@@ -209,7 +215,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           final phone = profile['phone'] ?? '+91 99999 99999';
 
           if (!_hasInitializedAddresses) {
-            final saved = (profile['savedAddresses'] as List?)?.whereType<String>().toList() ?? [];
+            final saved = (profile['savedAddresses'] as List?)
+                    ?.whereType<String>()
+                    .toList() ??
+                [];
             _addresses.addAll(saved);
             _hasInitializedAddresses = true;
           }
@@ -307,7 +316,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 // Active AMC Card
                 productsAsync.when(
                   data: (products) {
-                    final amcProducts = products.where((p) => p.amcStatus == 'active').toList();
+                    final amcProducts =
+                        products.where((p) => p.amcStatus == 'active').toList();
                     final hasAmc = amcProducts.isNotEmpty || _directAmcActive;
                     return GlassCard(
                       padding: const EdgeInsets.all(18),
@@ -320,12 +330,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: (hasAmc ? const Color(0xFF10B981) : Colors.amber).withValues(alpha: 0.15),
+                                  color: (hasAmc
+                                          ? const Color(0xFF10B981)
+                                          : Colors.amber)
+                                      .withValues(alpha: 0.15),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  hasAmc ? Icons.verified_user : Icons.shield_outlined,
-                                  color: hasAmc ? const Color(0xFF10B981) : Colors.amber,
+                                  hasAmc
+                                      ? Icons.verified_user
+                                      : Icons.shield_outlined,
+                                  color: hasAmc
+                                      ? const Color(0xFF10B981)
+                                      : Colors.amber,
                                   size: 22,
                                 ),
                               ),
@@ -335,7 +352,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      hasAmc ? 'Active AMC Protection' : 'Annual Maintenance Contract',
+                                      hasAmc
+                                          ? 'Active AMC Protection'
+                                          : 'Annual Maintenance Contract',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -346,7 +365,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       hasAmc
                                           ? (amcProducts.isNotEmpty
                                               ? 'Contract ${amcProducts.first.serialNumber}'
-                                              : (_directAmcNumber != null ? 'Contract $_directAmcNumber' : 'Active Maintenance Contract'))
+                                              : (_directAmcNumber != null
+                                                  ? 'Contract $_directAmcNumber'
+                                                  : 'Active Maintenance Contract'))
                                           : 'No active maintenance contract',
                                       style: const TextStyle(
                                         fontSize: 12,
@@ -357,15 +378,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: (hasAmc ? const Color(0xFF10B981) : Colors.grey).withValues(alpha: 0.15),
+                                  color: (hasAmc
+                                          ? const Color(0xFF10B981)
+                                          : Colors.grey)
+                                      .withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   hasAmc ? 'ACTIVE' : 'NONE',
                                   style: TextStyle(
-                                    color: hasAmc ? const Color(0xFF10B981) : Colors.grey,
+                                    color: hasAmc
+                                        ? const Color(0xFF10B981)
+                                        : Colors.grey,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,
                                   ),
@@ -379,28 +406,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(height: 10),
                             if (amcProducts.isNotEmpty)
                               ...amcProducts.map((p) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(p.productName, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
-                                    Text(
-                                      p.amcExpiryDate != null ? 'Valid until ${DateFormat('dd MMM yyyy').format(p.amcExpiryDate!)}' : 'Active Contract',
-                                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(p.productName,
+                                            style: TextStyle(
+                                                color: textColor,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13)),
+                                        Text(
+                                          p.amcExpiryDate != null
+                                              ? 'Valid until ${DateFormat('dd MMM yyyy').format(p.amcExpiryDate!)}'
+                                              : 'Active Contract',
+                                          style: const TextStyle(
+                                              color: Color(0xFF10B981),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ))
+                                  ))
                             else if (_directAmcEndDate != null)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4.0),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Active Protection Plan', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+                                    Text('Active Protection Plan',
+                                        style: TextStyle(
+                                            color: textColor,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13)),
                                     Text(
                                       'Valid until ${DateFormat('dd MMM yyyy').format(_directAmcEndDate!)}',
-                                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600),
+                                      style: const TextStyle(
+                                          color: Color(0xFF10B981),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600),
                                     ),
                                   ],
                                 ),
@@ -408,16 +455,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(height: 10),
                             Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 11, horizontal: 16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                color: const Color(0xFF10B981)
+                                    .withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                                border: Border.all(
+                                    color: const Color(0xFF10B981)
+                                        .withValues(alpha: 0.3)),
                               ),
                               child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.check_circle, color: Color(0xFF10B981), size: 18),
+                                  Icon(Icons.check_circle,
+                                      color: Color(0xFF10B981), size: 18),
                                   SizedBox(width: 8),
                                   Text(
                                     'AMC Activated',
@@ -439,17 +491,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   backgroundColor: AppColors.accent,
                                   foregroundColor: Colors.white,
                                   elevation: 1,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
                                 ),
-                                icon: const Icon(Icons.shield_outlined, size: 18),
+                                icon:
+                                    const Icon(Icons.shield_outlined, size: 18),
                                 label: const Text(
                                   'Avail AMC Contract',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14),
                                 ),
                                 onPressed: () async {
                                   await Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const AmcAvailScreen()),
+                                    MaterialPageRoute(
+                                        builder: (_) => const AmcAvailScreen()),
                                   );
                                   _hasCheckedDirectAmc = false;
                                   ref.invalidate(productsProvider);
@@ -478,8 +536,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     Text(
                       'Saved Addresses',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     IconButton(
                       icon: const Icon(
@@ -524,8 +582,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ),
                             IconButton(
                               icon: Icon(
-                                _defaultAddressIndex == idx ? Icons.star : Icons.star_border,
-                                color: _defaultAddressIndex == idx ? AppColors.accent : AppColors.textSecondary,
+                                _defaultAddressIndex == idx
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                color: _defaultAddressIndex == idx
+                                    ? AppColors.accent
+                                    : AppColors.textSecondary,
                                 size: 20,
                               ),
                               onPressed: () {
@@ -565,8 +627,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(
                   'Notification Settings',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 10),
                 GlassCard(
@@ -620,8 +682,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(
                   'App Preferences',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 10),
                 GlassCard(
@@ -643,7 +705,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             final mode = ref.watch(appThemeModeProvider);
                             return DropdownButton<ThemeMode>(
                               value: mode,
-                              dropdownColor: isDark ? AppColors.bgSecondary : AppColors.bgSecondaryLight,
+                              dropdownColor: isDark
+                                  ? AppColors.bgSecondary
+                                  : AppColors.bgSecondaryLight,
                               underline: const SizedBox(),
                               style: const TextStyle(
                                 color: AppColors.accent,
@@ -667,7 +731,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ],
                               onChanged: (newMode) {
                                 if (newMode != null) {
-                                  ref.read(appThemeModeProvider.notifier).updateThemeMode(newMode);
+                                  ref
+                                      .read(appThemeModeProvider.notifier)
+                                      .updateThemeMode(newMode);
                                   ToastService.show(
                                     context,
                                     'Theme updated successfully.',
@@ -679,7 +745,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           },
                         ),
                       ),
-
                     ],
                   ),
                 ),

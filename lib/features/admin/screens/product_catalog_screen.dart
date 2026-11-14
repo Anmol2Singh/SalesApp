@@ -13,8 +13,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/app_company.dart';
@@ -28,7 +26,8 @@ import '../../auth/providers/auth_provider.dart';
 final productDealCountsProvider = FutureProvider<Map<String, int>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
   try {
-    final response = await supabase.from('sales_pipelines').select('product_id');
+    final response =
+        await supabase.from('sales_pipelines').select('product_id');
     final Map<String, int> counts = {};
     for (final row in response as List) {
       final pid = row['product_id'] as String?;
@@ -53,7 +52,8 @@ final productsProvider = FutureProvider<List<Product>>((ref) async {
         id: 'p1',
         name: 'Boom Barrier (Heavy Duty)',
         category: 'Security',
-        baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+        baseSpecs:
+            const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -62,7 +62,8 @@ final productsProvider = FutureProvider<List<Product>>((ref) async {
         id: 'p2',
         name: 'IZYHEAT Commercial Heat Pump',
         category: 'Heating',
-        baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+        baseSpecs:
+            const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -94,14 +95,17 @@ class ProductCatalogScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(productsProvider);
     final profile = ref.watch(currentProfileProvider);
-    final isAdmin = (profile?.primaryRole.canManageCatalog ?? false) && !isViewOnly;
+    final isAdmin =
+        (profile?.primaryRole.canManageCatalog ?? false) && !isViewOnly;
     final isProductAddUnlocked = ref.watch(productAddUnlockedProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: isEmbedded ? null : AppBar(
-        title: const Text('Product Catalog'),
-      ),
+      appBar: isEmbedded
+          ? null
+          : AppBar(
+              title: const Text('Product Catalog'),
+            ),
       body: productsAsync.when(
         data: (products) {
           if (products.isEmpty) {
@@ -130,7 +134,9 @@ class ProductCatalogScreen extends ConsumerWidget {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: product.isActive ? AppColors.border : AppColors.textDisabled,
+                    color: product.isActive
+                        ? AppColors.border
+                        : AppColors.textDisabled,
                   ),
                 ),
                 child: Column(
@@ -168,7 +174,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                                 runSpacing: 4,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  if (product.category != null && product.category!.isNotEmpty)
+                                  if (product.category != null &&
+                                      product.category!.isNotEmpty)
                                     Text(
                                       product.category!,
                                       style: const TextStyle(
@@ -200,7 +207,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                                     ),
                                   ),
                                   Consumer(builder: (context, ref, _) {
-                                    final company = ref.watch(companyForProductProvider(product.id));
+                                    final company = ref.watch(
+                                        companyForProductProvider(product.id));
                                     return Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 3),
@@ -212,7 +220,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(Icons.apartment,
-                                              size: 11, color: Colors.indigo.shade700),
+                                              size: 11,
+                                              color: Colors.indigo.shade700),
                                           const SizedBox(width: 4),
                                           Text(
                                             company.name,
@@ -235,7 +244,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                         if (isAdmin) ...[
                           const SizedBox(width: 4),
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                            icon: const Icon(Icons.more_vert,
+                                size: 20, color: AppColors.textSecondary),
                             onSelected: (val) {
                               if (val == 'edit') {
                                 _showEditProductDialog(context, ref, product);
@@ -258,9 +268,12 @@ class ProductCatalogScreen extends ConsumerWidget {
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                                    Icon(Icons.delete_outline,
+                                        size: 16, color: AppColors.error),
                                     SizedBox(width: 8),
-                                    Text('Delete Product', style: TextStyle(color: AppColors.error)),
+                                    Text('Delete Product',
+                                        style:
+                                            TextStyle(color: AppColors.error)),
                                   ],
                                 ),
                               ),
@@ -273,8 +286,10 @@ class ProductCatalogScreen extends ConsumerWidget {
                     const SizedBox(height: 10),
                     Consumer(
                       builder: (context, ref, _) {
-                        final dealCountsAsync = ref.watch(productDealCountsProvider);
-                        final dealCount = dealCountsAsync.value?[product.id] ?? 0;
+                        final dealCountsAsync =
+                            ref.watch(productDealCountsProvider);
+                        final dealCount =
+                            dealCountsAsync.value?[product.id] ?? 0;
                         return Text(
                           '$dealCount active deal${dealCount == 1 ? "" : "s"}',
                           style: const TextStyle(
@@ -309,9 +324,15 @@ class ProductCatalogScreen extends ConsumerWidget {
                             onTap: () => _uploadImage(context, ref, product),
                             child: const Row(
                               children: [
-                                Icon(Icons.add_a_photo_outlined, size: 16, color: AppColors.primary),
+                                Icon(Icons.add_a_photo_outlined,
+                                    size: 16, color: AppColors.primary),
                                 SizedBox(width: 4),
-                                Text('Add Photo', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                Text('Add Photo',
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
@@ -319,7 +340,11 @@ class ProductCatalogScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     if (product.imageUrls.isEmpty)
-                      const Text('No photos uploaded yet.', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary))
+                      const Text('No photos uploaded yet.',
+                          style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary))
                     else
                       SizedBox(
                         height: 70,
@@ -329,7 +354,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                           itemBuilder: (ctx, imgIdx) {
                             final url = product.imageUrls[imgIdx];
                             return GestureDetector(
-                              onTap: () => _showImagePreviewDialog(context, url, product.name),
+                              onTap: () => _showImagePreviewDialog(
+                                  context, url, product.name),
                               child: Stack(
                                 children: [
                                   Container(
@@ -338,7 +364,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                                     height: 70,
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: AppColors.border),
+                                      border:
+                                          Border.all(color: AppColors.border),
                                       image: DecorationImage(
                                         image: NetworkImage(url),
                                         fit: BoxFit.cover,
@@ -350,14 +377,16 @@ class ProductCatalogScreen extends ConsumerWidget {
                                       top: 2,
                                       right: 10,
                                       child: GestureDetector(
-                                        onTap: () => _deleteImage(context, ref, product, url),
+                                        onTap: () => _deleteImage(
+                                            context, ref, product, url),
                                         child: Container(
                                           padding: const EdgeInsets.all(2),
                                           decoration: const BoxDecoration(
                                             color: Colors.black54,
                                             shape: BoxShape.circle,
                                           ),
-                                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                          child: const Icon(Icons.close,
+                                              size: 14, color: Colors.white),
                                         ),
                                       ),
                                     ),
@@ -388,9 +417,15 @@ class ProductCatalogScreen extends ConsumerWidget {
                             onTap: () => _uploadBrochure(context, ref, product),
                             child: const Row(
                               children: [
-                                Icon(Icons.upload_file_outlined, size: 16, color: AppColors.primary),
+                                Icon(Icons.upload_file_outlined,
+                                    size: 16, color: AppColors.primary),
                                 SizedBox(width: 4),
-                                Text('Add Brochure', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                Text('Add Brochure',
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
@@ -398,49 +433,68 @@ class ProductCatalogScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     if (product.brochures.isEmpty)
-                      const Text('No brochures uploaded yet.', style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary))
+                      const Text('No brochures uploaded yet.',
+                          style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: AppColors.textSecondary))
                     else
                       Column(
                         children: product.brochures.map((brochure) {
                           return Container(
                             margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: AppColors.surfaceVariant,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.picture_as_pdf, size: 18, color: AppColors.error),
+                                const Icon(Icons.picture_as_pdf,
+                                    size: 18, color: AppColors.error),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     brochure.title,
-                                    style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
+                                  icon: const Icon(Icons.visibility_outlined,
+                                      size: 18, color: AppColors.primary),
                                   tooltip: 'View PDF (In-App)',
-                                  onPressed: () => _viewBrochureInApp(context, brochure.url, brochure.title),
+                                  onPressed: () => _viewBrochureInApp(
+                                      context, brochure.url, brochure.title),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.share_outlined, size: 18, color: AppColors.accent),
+                                  icon: const Icon(Icons.share_outlined,
+                                      size: 18, color: AppColors.accent),
                                   tooltip: 'Share PDF File',
-                                  onPressed: () => _shareBrochurePdfFile(context, brochure.url, brochure.title),
+                                  onPressed: () => _shareBrochurePdfFile(
+                                      context, brochure.url, brochure.title),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.download_outlined, size: 18, color: AppColors.success),
+                                  icon: const Icon(Icons.download_outlined,
+                                      size: 18, color: AppColors.success),
                                   tooltip: 'Download',
-                                  onPressed: () => _downloadUrlFile(context, brochure.url, '${brochure.title.replaceAll(" ", "_")}.pdf'),
+                                  onPressed: () => _downloadUrlFile(
+                                      context,
+                                      brochure.url,
+                                      '${brochure.title.replaceAll(" ", "_")}.pdf'),
                                 ),
                                 if (isAdmin)
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 18, color: AppColors.error),
                                     tooltip: 'Delete',
-                                    onPressed: () => _deleteBrochure(context, ref, product, brochure),
+                                    onPressed: () => _deleteBrochure(
+                                        context, ref, product, brochure),
                                   ),
                               ],
                             ),
@@ -463,7 +517,9 @@ class ProductCatalogScreen extends ConsumerWidget {
               tooltip: isProductAddUnlocked
                   ? 'Add New Product'
                   : 'Product creation is locked. Enable in Admin > Configuration to add products.',
-              backgroundColor: isProductAddUnlocked ? AppColors.primary : Colors.blueGrey.shade600,
+              backgroundColor: isProductAddUnlocked
+                  ? AppColors.primary
+                  : Colors.blueGrey.shade600,
               onPressed: () {
                 if (!isProductAddUnlocked) {
                   _showProductAddLockedDialog(context);
@@ -471,10 +527,14 @@ class ProductCatalogScreen extends ConsumerWidget {
                   _showAddProductDialog(context, ref);
                 }
               },
-              icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline, color: Colors.white),
+              icon: Icon(isProductAddUnlocked ? Icons.add : Icons.lock_outline,
+                  color: Colors.white),
               label: Text(
                 isProductAddUnlocked ? 'Add Product' : 'Add Product (Locked)',
-                style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, color: Colors.white),
+                style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white),
               ),
             )
           : null,
@@ -490,7 +550,8 @@ class ProductCatalogScreen extends ConsumerWidget {
           children: const [
             Icon(Icons.lock, color: AppColors.error),
             SizedBox(width: 8),
-            Text('Product Creation Locked', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('Product Creation Locked',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: const Text(
@@ -500,13 +561,15 @@ class ProductCatalogScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Close',
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -522,7 +585,8 @@ class ProductCatalogScreen extends ConsumerWidget {
   void _showAddProductDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
-    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final companies = ref.read(appCompaniesProvider).valueOrNull ??
+        AppCompany.defaultCompanies;
     final defaultCompany = ref.read(defaultCompanyProvider);
     String selectedCompanyId = defaultCompany.id;
     final formKey = GlobalKey<FormState>();
@@ -638,10 +702,13 @@ class ProductCatalogScreen extends ConsumerWidget {
       ),
     );
   }
-  void _showEditProductDialog(BuildContext context, WidgetRef ref, Product product) {
+
+  void _showEditProductDialog(
+      BuildContext context, WidgetRef ref, Product product) {
     final nameController = TextEditingController(text: product.name);
     final categoryController = TextEditingController(text: product.category);
-    final companies = ref.read(appCompaniesProvider).valueOrNull ?? AppCompany.defaultCompanies;
+    final companies = ref.read(appCompaniesProvider).valueOrNull ??
+        AppCompany.defaultCompanies;
     final defaultCompany = ref.read(defaultCompanyProvider);
     String selectedCompanyId = product.companyId ?? defaultCompany.id;
     if (!companies.any((c) => c.id == selectedCompanyId)) {
@@ -731,7 +798,8 @@ class ProductCatalogScreen extends ConsumerWidget {
 
                 try {
                   final supabase = ref.read(supabaseClientProvider);
-                  final updatedSpecs = Map<String, dynamic>.from(product.baseSpecs.toJson());
+                  final updatedSpecs =
+                      Map<String, dynamic>.from(product.baseSpecs.toJson());
                   updatedSpecs['company_id'] = selectedCompanyId;
 
                   await supabase.from('products').update({
@@ -773,7 +841,8 @@ class ProductCatalogScreen extends ConsumerWidget {
     );
   }
 
-  void _showDeleteProductDialog(BuildContext context, WidgetRef ref, Product product) {
+  void _showDeleteProductDialog(
+      BuildContext context, WidgetRef ref, Product product) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -823,53 +892,70 @@ class ProductCatalogScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _uploadImage(BuildContext context, WidgetRef ref, Product product) async {
+  Future<void> _uploadImage(
+      BuildContext context, WidgetRef ref, Product product) async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final image =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (image == null) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Uploading product photo...'), backgroundColor: AppColors.info),
+      const SnackBar(
+          content: Text('Uploading product photo...'),
+          backgroundColor: AppColors.info),
     );
 
     try {
       final bytes = await image.readAsBytes();
       final supabase = ref.read(supabaseClientProvider);
-      final filename = 'prod_${product.id}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final filename =
+          'prod_${product.id}_${DateTime.now().millisecondsSinceEpoch}.png';
 
       await supabase.storage.from('product-images').uploadBinary(
-        filename,
-        bytes,
-        fileOptions: const FileOptions(upsert: true),
-      );
-      final publicUrl = supabase.storage.from('product-images').getPublicUrl(filename);
+            filename,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final publicUrl =
+          supabase.storage.from('product-images').getPublicUrl(filename);
 
       final updatedImages = [...product.imageUrls, publicUrl];
-      await supabase.from('products').update({'image_urls': updatedImages}).eq('id', product.id);
+      await supabase
+          .from('products')
+          .update({'image_urls': updatedImages}).eq('id', product.id);
       ref.invalidate(productsProvider);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✓ Product photo uploaded!'), backgroundColor: AppColors.success),
+          const SnackBar(
+              content: Text('✓ Product photo uploaded!'),
+              backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading image: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error uploading image: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
   }
 
-  Future<void> _deleteImage(BuildContext context, WidgetRef ref, Product product, String targetUrl) async {
+  Future<void> _deleteImage(BuildContext context, WidgetRef ref,
+      Product product, String targetUrl) async {
     final supabase = ref.read(supabaseClientProvider);
-    final updatedImages = product.imageUrls.where((u) => u != targetUrl).toList();
-    await supabase.from('products').update({'image_urls': updatedImages}).eq('id', product.id);
+    final updatedImages =
+        product.imageUrls.where((u) => u != targetUrl).toList();
+    await supabase
+        .from('products')
+        .update({'image_urls': updatedImages}).eq('id', product.id);
     ref.invalidate(productsProvider);
   }
 
-  Future<void> _uploadBrochure(BuildContext context, WidgetRef ref, Product product) async {
+  Future<void> _uploadBrochure(
+      BuildContext context, WidgetRef ref, Product product) async {
     final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
@@ -880,7 +966,9 @@ class ProductCatalogScreen extends ConsumerWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploading ${file.name}...'), backgroundColor: AppColors.info),
+        SnackBar(
+            content: Text('Uploading ${file.name}...'),
+            backgroundColor: AppColors.info),
       );
     }
 
@@ -891,41 +979,57 @@ class ProductCatalogScreen extends ConsumerWidget {
       }
 
       final supabase = ref.read(supabaseClientProvider);
-      final filename = 'brochure_${product.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final filename =
+          'brochure_${product.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
       await supabase.storage.from('product-brochures').uploadBinary(
-        filename,
-        bytes,
-        fileOptions: const FileOptions(upsert: true),
-      );
-      final publicUrl = supabase.storage.from('product-brochures').getPublicUrl(filename);
+            filename,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final publicUrl =
+          supabase.storage.from('product-brochures').getPublicUrl(filename);
 
-      final newBrochure = ProductBrochure(title: file.name.replaceAll('.pdf', ''), url: publicUrl);
-      final updatedBrochures = [...product.brochures.map((b) => b.toJson()), newBrochure.toJson()];
-      await supabase.from('products').update({'brochure_urls': updatedBrochures}).eq('id', product.id);
+      final newBrochure = ProductBrochure(
+          title: file.name.replaceAll('.pdf', ''), url: publicUrl);
+      final updatedBrochures = [
+        ...product.brochures.map((b) => b.toJson()),
+        newBrochure.toJson()
+      ];
+      await supabase
+          .from('products')
+          .update({'brochure_urls': updatedBrochures}).eq('id', product.id);
       ref.invalidate(productsProvider);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✓ PDF Brochure uploaded!'), backgroundColor: AppColors.success),
+          const SnackBar(
+              content: Text('✓ PDF Brochure uploaded!'),
+              backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading brochure: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error uploading brochure: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
   }
 
-  Future<void> _deleteBrochure(BuildContext context, WidgetRef ref, Product product, ProductBrochure targetBrochure) async {
+  Future<void> _deleteBrochure(BuildContext context, WidgetRef ref,
+      Product product, ProductBrochure targetBrochure) async {
     final supabase = ref.read(supabaseClientProvider);
     final updatedBrochures = product.brochures
-        .where((b) => b.url != targetBrochure.url || b.title != targetBrochure.title)
+        .where((b) =>
+            b.url != targetBrochure.url || b.title != targetBrochure.title)
         .map((b) => b.toJson())
         .toList();
-    await supabase.from('products').update({'brochure_urls': updatedBrochures}).eq('id', product.id);
+    await supabase
+        .from('products')
+        .update({'brochure_urls': updatedBrochures}).eq('id', product.id);
     ref.invalidate(productsProvider);
   }
 
@@ -941,7 +1045,8 @@ class ProductCatalogScreen extends ConsumerWidget {
             AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
-              title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
+              title: Text(title,
+                  style: const TextStyle(color: Colors.white, fontSize: 16)),
               leading: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => Navigator.pop(ctx),
@@ -955,7 +1060,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Padding(
                     padding: EdgeInsets.all(32.0),
-                    child: Icon(Icons.broken_image, size: 64, color: Colors.white54),
+                    child: Icon(Icons.broken_image,
+                        size: 64, color: Colors.white54),
                   ),
                 ),
               ),
@@ -978,7 +1084,8 @@ class ProductCatalogScreen extends ConsumerWidget {
                   ),
                   ElevatedButton.icon(
                     onPressed: () {
-                      _downloadUrlFile(context, url, '${title.replaceAll(" ", "_")}_photo.jpg');
+                      _downloadUrlFile(context, url,
+                          '${title.replaceAll(" ", "_")}_photo.jpg');
                     },
                     icon: const Icon(Icons.download, size: 18),
                     label: const Text('Download'),
@@ -996,10 +1103,13 @@ class ProductCatalogScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _downloadUrlFile(BuildContext context, String url, String fileName) async {
+  Future<void> _downloadUrlFile(
+      BuildContext context, String url, String fileName) async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Downloading file...'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('Downloading file...'),
+            duration: Duration(seconds: 2)),
       );
 
       final response = await http.get(Uri.parse(url));
@@ -1046,10 +1156,13 @@ class ProductCatalogScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _viewBrochureInApp(BuildContext context, String url, String title) async {
+  Future<void> _viewBrochureInApp(
+      BuildContext context, String url, String title) async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Loading PDF brochure...'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('Loading PDF brochure...'),
+            duration: Duration(seconds: 2)),
       );
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200 && context.mounted) {
@@ -1068,21 +1181,27 @@ class ProductCatalogScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load PDF: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Could not load PDF: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
   }
 
-  Future<void> _shareBrochurePdfFile(BuildContext context, String url, String title) async {
+  Future<void> _shareBrochurePdfFile(
+      BuildContext context, String url, String title) async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preparing PDF file for sharing...'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('Preparing PDF file for sharing...'),
+            duration: Duration(seconds: 2)),
       );
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final tempDir = await getTemporaryDirectory();
-        final tempFile = File('${tempDir.path}/${title.replaceAll(" ", "_")}.pdf');
+        final tempFile =
+            File('${tempDir.path}/${title.replaceAll(" ", "_")}.pdf');
         await tempFile.writeAsBytes(response.bodyBytes);
 
         await Share.shareXFiles(

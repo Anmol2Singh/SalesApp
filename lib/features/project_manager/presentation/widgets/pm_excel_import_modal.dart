@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart' hide Border, BorderStyle;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +24,8 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
 
   void _downloadTemplate() {
     final excel = Excel.createExcel();
-    final sheetName = widget.isPurchase ? 'Vendors_Template' : 'Customers_Template';
+    final sheetName =
+        widget.isPurchase ? 'Vendors_Template' : 'Customers_Template';
     final defaultSheet = excel.getDefaultSheet();
     final sheet = excel[sheetName];
     if (defaultSheet != null && defaultSheet != sheetName) {
@@ -51,7 +50,8 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
     ];
 
     for (int i = 0; i < headers.length; i++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      final cell =
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
       cell.value = TextCellValue(headers[i]);
       cell.cellStyle = CellStyle(
         bold: true,
@@ -79,7 +79,9 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
     ];
 
     for (int c = 0; c < sample.length; c++) {
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 1)).value = TextCellValue(sample[c]);
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 1))
+          .value = TextCellValue(sample[c]);
     }
 
     final bytes = excel.save();
@@ -112,7 +114,9 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
           final row = rows[r];
           if (row.isEmpty) continue;
 
-          String val(int idx) => idx < row.length && row[idx] != null ? row[idx]!.value.toString().trim() : '';
+          String val(int idx) => idx < row.length && row[idx] != null
+              ? row[idx]!.value.toString().trim()
+              : '';
 
           final siteName = val(1);
           if (siteName.isEmpty) continue;
@@ -124,7 +128,9 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
             'salesman_name': val(4),
             'firm_name': val(5),
             'party_print_name': val(6),
-            'order_type': val(7).isNotEmpty ? val(7) : (widget.isPurchase ? 'Vendor Supply' : 'Solar Water Heater'),
+            'order_type': val(7).isNotEmpty
+                ? val(7)
+                : (widget.isPurchase ? 'Vendor Supply' : 'Solar Water Heater'),
             'order_value': double.tryParse(val(8)) ?? 0.0,
             'hp_type': val(9),
             'hp_qty': int.tryParse(val(10)) ?? 0,
@@ -170,7 +176,8 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Successfully imported $importedCount records!')),
+          SnackBar(
+              content: Text('Successfully imported $importedCount records!')),
         );
       }
     } catch (e) {
@@ -203,10 +210,13 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                 children: [
                   Row(
                     children: [
-                      const Icon(LucideIcons.fileSpreadsheet, size: 20, color: Color(0xFF005CE6)),
+                      const Icon(LucideIcons.fileSpreadsheet,
+                          size: 20, color: Color(0xFF005CE6)),
                       const SizedBox(width: 8),
                       Text(
-                        widget.isPurchase ? 'Import Vendors from Excel' : 'Import Customers from Excel',
+                        widget.isPurchase
+                            ? 'Import Vendors from Excel'
+                            : 'Import Customers from Excel',
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
@@ -217,7 +227,8 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(LucideIcons.x, size: 18, color: Color(0xFF64748B)),
+                    icon: const Icon(LucideIcons.x,
+                        size: 18, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.of(context).pop(),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -233,7 +244,8 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
 
               // Need a sample file? card
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
@@ -245,16 +257,23 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                     const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Need a sample file?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                        Text('Need a sample file?',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A))),
                         SizedBox(height: 2),
-                        Text('Download pre-formatted Excel template', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                        Text('Download pre-formatted Excel template',
+                            style: TextStyle(
+                                fontSize: 11, color: Color(0xFF64748B))),
                       ],
                     ),
                     InkWell(
                       onTap: _downloadTemplate,
                       borderRadius: BorderRadius.circular(9999),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(9999),
@@ -263,9 +282,14 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.download, size: 13, color: Color(0xFF005CE6)),
+                            Icon(LucideIcons.download,
+                                size: 13, color: Color(0xFF005CE6)),
                             SizedBox(width: 6),
-                            Text('Download Template', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF005CE6))),
+                            Text('Download Template',
+                                style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF005CE6))),
                           ],
                         ),
                       ),
@@ -294,10 +318,12 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.cloudUpload, size: 36, color: Color(0xFF0284C7)),
+                        const Icon(LucideIcons.cloudUpload,
+                            size: 36, color: Color(0xFF0284C7)),
                         const SizedBox(height: 10),
                         Text(
-                          _selectedFileName ?? 'Click to select Excel file (.xlsx, .csv)',
+                          _selectedFileName ??
+                              'Click to select Excel file (.xlsx, .csv)',
                           style: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
@@ -308,7 +334,8 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                         // Required format pill box
                         Container(
                           margin: const EdgeInsets.symmetric(horizontal: 24),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0FDF4),
                             borderRadius: BorderRadius.circular(8),
@@ -316,7 +343,10 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                           ),
                           child: const Text(
                             'Required format: Use the template to avoid errors.\nColumns: ID Number, Site Name, Mobile Number, Address, Sales Man Name, Firm Name, Party Print Name, Item Group, Order Value, Item Name, Item Qty, Tank Type, Tank Qty, Remark',
-                            style: TextStyle(fontSize: 10.5, color: Color(0xFF15803D), height: 1.3),
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: Color(0xFF15803D),
+                                height: 1.3),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -335,30 +365,47 @@ class _PmExcelImportModalState extends ConsumerState<PmExcelImportModal> {
                     onTap: () => Navigator.of(context).pop(),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 9),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFCBD5E1)),
                       ),
-                      child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                      child: const Text('Cancel',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A))),
                     ),
                   ),
                   const SizedBox(width: 12),
                   InkWell(
-                    onTap: _parsedRecords.isNotEmpty && !_isLoading ? _importRecords : null,
+                    onTap: _parsedRecords.isNotEmpty && !_isLoading
+                        ? _importRecords
+                        : null,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 22, vertical: 9),
                       decoration: BoxDecoration(
-                        color: _parsedRecords.isNotEmpty ? const Color(0xFF005CE6) : const Color(0xFF93C5FD),
+                        color: _parsedRecords.isNotEmpty
+                            ? const Color(0xFF005CE6)
+                            : const Color(0xFF93C5FD),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: _isLoading
-                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
                           : Text(
                               'Import ${_parsedRecords.length} Customers',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white),
                             ),
                     ),
                   ),

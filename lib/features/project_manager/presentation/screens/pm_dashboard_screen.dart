@@ -16,7 +16,6 @@ import '../widgets/pm_pdf_preview_modal.dart';
 import '../widgets/pm_excel_preview_modal.dart';
 import '../widgets/pm_excel_import_modal.dart';
 import '../widgets/pm_excel_bulk_update_modal.dart';
-import '../../../../core/router/app_router.dart';
 
 class PmDashboardScreen extends ConsumerStatefulWidget {
   const PmDashboardScreen({super.key});
@@ -51,552 +50,718 @@ class _PmDashboardScreenState extends ConsumerState<PmDashboardScreen> {
       child: Scaffold(
         backgroundColor: pm.background,
         body: SafeArea(
-        child: Column(
-          children: [
-            // Header Bar
-            PmHeaderBar(
-              searchQuery: _searchQuery,
-              onSearchChanged: (val) => setState(() => _searchQuery = val.trim()),
-              onRefresh: () {
-                if (isPurchase) {
-                  ref.invalidate(pmPurchasesListProvider);
-                } else {
-                  ref.invalidate(pmProjectsListProvider);
-                }
-              },
-            ),
-
-            // Content Body
-            Expanded(
-              child: recordsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, _) => Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.triangleAlert, size: 40, color: pm.destructive),
-                      const SizedBox(height: 12),
-                      Text('Error loading records: $err', style: TextStyle(color: pm.destructive)),
-                      const SizedBox(height: 12),
-                      PmButton(
-                        size: PmButtonSize.sm,
-                        onPressed: () {
-                          if (isPurchase) {
-                            ref.invalidate(pmPurchasesListProvider);
-                          } else {
-                            ref.invalidate(pmProjectsListProvider);
-                          }
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-                data: (records) {
-                  final filtered = _searchQuery.isEmpty
-                      ? records
-                      : records.where((dynamic r) {
-                          final q = _searchQuery.toLowerCase();
-                          final siteName = (r.siteName ?? '').toString().toLowerCase();
-                          final party = (r.partyPrintName ?? '').toString().toLowerCase();
-                          final mob = (r.mobileNumber ?? '').toString().toLowerCase();
-                          final addr = (r.address ?? '').toString().toLowerCase();
-                          final idNo = r.idNo.toString();
-                          return siteName.contains(q) ||
-                              party.contains(q) ||
-                              mob.contains(q) ||
-                              addr.contains(q) ||
-                              idNo.contains(q);
-                        }).toList();
-
-                  // Compute summary totals
-                  double totalOrder = 0;
-                  double totalPaid = 0;
-                  double totalBalance = 0;
-
-                  for (final dynamic r in records) {
-                    totalOrder += (r.orderValue as num).toDouble();
-                    totalPaid += (r.paymentReceived as num).toDouble();
-                    totalBalance += (r.balance as num).toDouble();
+          child: Column(
+            children: [
+              // Header Bar
+              PmHeaderBar(
+                searchQuery: _searchQuery,
+                onSearchChanged: (val) =>
+                    setState(() => _searchQuery = val.trim()),
+                onRefresh: () {
+                  if (isPurchase) {
+                    ref.invalidate(pmPurchasesListProvider);
+                  } else {
+                    ref.invalidate(pmProjectsListProvider);
                   }
+                },
+              ),
 
-                  return RefreshIndicator(
-                    onRefresh: () async {
-                      if (isPurchase) {
-                        ref.invalidate(pmPurchasesListProvider);
-                      } else {
-                        ref.invalidate(pmProjectsListProvider);
-                      }
-                    },
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // KPI Summary Cards
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final isWide = constraints.maxWidth > 900;
-                              final cards = [
-                                PmStatCard(
-                                  title: isPurchase ? 'Active Vendors' : 'Active Projects',
-                                  value: records.length.toString(),
-                                  description: isPurchase ? 'Total vendors managed' : 'Total projects managed',
-                                  icon: const Icon(LucideIcons.briefcase),
-                                  iconBgColor: const Color(0xFFEFF6FF),
-                                  iconColor: const Color(0xFF2563EB),
-                                ),
-                                PmStatCard(
-                                  title: isPurchase ? 'Quotation Value' : 'Total Order Value',
-                                  value: '₹${_currencyFormat.format(totalOrder)}',
-                                  description: 'Combined contract values',
-                                  icon: const Icon(LucideIcons.indianRupee),
-                                  iconBgColor: const Color(0xFFECFDF5),
-                                  iconColor: const Color(0xFF059669),
-                                ),
-                                PmStatCard(
-                                  title: isPurchase ? 'Payment Paid' : 'Payment Received',
-                                  value: '₹${_currencyFormat.format(totalPaid)}',
-                                  description: isPurchase ? 'Total payments made' : 'Total funds collected',
-                                  icon: const Icon(LucideIcons.wallet),
-                                  iconBgColor: const Color(0xFFF5F3FF),
-                                  iconColor: const Color(0xFF7C3AED),
-                                ),
-                                PmStatCard(
-                                  title: 'Outstanding Balance',
-                                  value: '₹${_currencyFormat.format(totalBalance)}',
-                                  description: isPurchase ? 'Pending payment balance' : 'Remaining to be collected',
-                                  icon: const Icon(LucideIcons.trendingDown),
-                                  iconBgColor: const Color(0xFFFFF1F2),
-                                  iconColor: const Color(0xFFE11D48),
-                                ),
-                              ];
+              // Content Body
+              Expanded(
+                child: recordsAsync.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (err, _) => Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.triangleAlert,
+                            size: 40, color: pm.destructive),
+                        const SizedBox(height: 12),
+                        Text('Error loading records: $err',
+                            style: TextStyle(color: pm.destructive)),
+                        const SizedBox(height: 12),
+                        PmButton(
+                          size: PmButtonSize.sm,
+                          onPressed: () {
+                            if (isPurchase) {
+                              ref.invalidate(pmPurchasesListProvider);
+                            } else {
+                              ref.invalidate(pmProjectsListProvider);
+                            }
+                          },
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  data: (records) {
+                    final filtered = _searchQuery.isEmpty
+                        ? records
+                        : records.where((dynamic r) {
+                            final q = _searchQuery.toLowerCase();
+                            final siteName =
+                                (r.siteName ?? '').toString().toLowerCase();
+                            final party = (r.partyPrintName ?? '')
+                                .toString()
+                                .toLowerCase();
+                            final mob =
+                                (r.mobileNumber ?? '').toString().toLowerCase();
+                            final addr =
+                                (r.address ?? '').toString().toLowerCase();
+                            final idNo = r.idNo.toString();
+                            return siteName.contains(q) ||
+                                party.contains(q) ||
+                                mob.contains(q) ||
+                                addr.contains(q) ||
+                                idNo.contains(q);
+                          }).toList();
 
-                              if (isWide) {
-                                return Row(
+                    // Compute summary totals
+                    double totalOrder = 0;
+                    double totalPaid = 0;
+                    double totalBalance = 0;
+
+                    for (final dynamic r in records) {
+                      totalOrder += (r.orderValue as num).toDouble();
+                      totalPaid += (r.paymentReceived as num).toDouble();
+                      totalBalance += (r.balance as num).toDouble();
+                    }
+
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        if (isPurchase) {
+                          ref.invalidate(pmPurchasesListProvider);
+                        } else {
+                          ref.invalidate(pmProjectsListProvider);
+                        }
+                      },
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // KPI Summary Cards
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isWide = constraints.maxWidth > 900;
+                                final cards = [
+                                  PmStatCard(
+                                    title: isPurchase
+                                        ? 'Active Vendors'
+                                        : 'Active Projects',
+                                    value: records.length.toString(),
+                                    description: isPurchase
+                                        ? 'Total vendors managed'
+                                        : 'Total projects managed',
+                                    icon: const Icon(LucideIcons.briefcase),
+                                    iconBgColor: const Color(0xFFEFF6FF),
+                                    iconColor: const Color(0xFF2563EB),
+                                  ),
+                                  PmStatCard(
+                                    title: isPurchase
+                                        ? 'Quotation Value'
+                                        : 'Total Order Value',
+                                    value:
+                                        '₹${_currencyFormat.format(totalOrder)}',
+                                    description: 'Combined contract values',
+                                    icon: const Icon(LucideIcons.indianRupee),
+                                    iconBgColor: const Color(0xFFECFDF5),
+                                    iconColor: const Color(0xFF059669),
+                                  ),
+                                  PmStatCard(
+                                    title: isPurchase
+                                        ? 'Payment Paid'
+                                        : 'Payment Received',
+                                    value:
+                                        '₹${_currencyFormat.format(totalPaid)}',
+                                    description: isPurchase
+                                        ? 'Total payments made'
+                                        : 'Total funds collected',
+                                    icon: const Icon(LucideIcons.wallet),
+                                    iconBgColor: const Color(0xFFF5F3FF),
+                                    iconColor: const Color(0xFF7C3AED),
+                                  ),
+                                  PmStatCard(
+                                    title: 'Outstanding Balance',
+                                    value:
+                                        '₹${_currencyFormat.format(totalBalance)}',
+                                    description: isPurchase
+                                        ? 'Pending payment balance'
+                                        : 'Remaining to be collected',
+                                    icon: const Icon(LucideIcons.trendingDown),
+                                    iconBgColor: const Color(0xFFFFF1F2),
+                                    iconColor: const Color(0xFFE11D48),
+                                  ),
+                                ];
+
+                                if (isWide) {
+                                  return Row(
+                                    children: cards
+                                        .map((c) => Expanded(
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6),
+                                                child: c,
+                                              ),
+                                            ))
+                                        .toList(),
+                                  );
+                                }
+
+                                // 2x2 Grid on phone or small devices (Request 4)
+                                final halfWidth =
+                                    (constraints.maxWidth - 10) / 2;
+                                return Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
                                   children: cards
-                                      .map((c) => Expanded(
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6),
-                                              child: c,
-                                            ),
+                                      .map((c) => SizedBox(
+                                            width: halfWidth,
+                                            child: c,
                                           ))
                                       .toList(),
                                 );
-                              }
+                              },
+                            ),
 
-                              // 2x2 Grid on phone or small devices (Request 4)
-                              final halfWidth = (constraints.maxWidth - 10) / 2;
-                              return Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                children: cards
-                                    .map((c) => SizedBox(
-                                          width: halfWidth,
-                                          child: c,
-                                        ))
-                                    .toList(),
-                              );
-                            },
-                          ),
+                            const SizedBox(height: 20),
 
-                          const SizedBox(height: 20),
-
-                          // Table Title & Action Bar (Matching Screenshot 1)
-                          LayoutBuilder(
-                            builder: (context, actionConstraints) {
-                              final isMobile = actionConstraints.maxWidth < 700;
-                              final titleColumn = Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    isPurchase ? 'Vendor Directory' : 'Project Directory',
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF0F172A),
-                                      letterSpacing: -0.4,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    isPurchase
-                                        ? 'Manage and track all vendor purchase accounts'
-                                        : 'Manage and track all installation sites',
-                                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                                  ),
-                                ],
-                              );
-
-                              final actionPills = Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  // Total count pill
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEFF6FF),
-                                      borderRadius: BorderRadius.circular(9999),
-                                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                                    ),
-                                    child: Text(
-                                      '${filtered.length} Total',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF005CE6),
-                                      ),
-                                    ),
-                                  ),
-                                  // Filter pill
-                                  InkWell(
-                                    onTap: () => context.push('/pm/filter'),
-                                    borderRadius: BorderRadius.circular(9999),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(LucideIcons.slidersHorizontal, size: 13, color: Color(0xFF005CE6)),
-                                          SizedBox(width: 6),
-                                          Text('Filter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  // Generate PDF pill
-                                  InkWell(
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (ctx) => PmPdfPreviewModal(
-                                          records: filtered,
-                                          companyName: activeCompany.name,
-                                          isPurchase: isPurchase,
-                                        ),
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(9999),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(LucideIcons.fileText, size: 13, color: Color(0xFFEF4444)),
-                                          SizedBox(width: 6),
-                                          Text('Generate PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  // Export to Excel pill
-                                  InkWell(
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (ctx) => PmExcelPreviewModal(
-                                          records: filtered,
-                                          companyName: activeCompany.name,
-                                          isPurchase: isPurchase,
-                                        ),
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(9999),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(LucideIcons.fileSpreadsheet, size: 13, color: Color(0xFF16A34A)),
-                                          SizedBox(width: 6),
-                                          Text('Export to Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  // Update via Excel pill
-                                  InkWell(
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (ctx) => PmExcelBulkUpdateModal(
-                                          isPurchase: isPurchase,
-                                        ),
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(9999),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(LucideIcons.refreshCw, size: 13, color: Color(0xFF8B5CF6)),
-                                          SizedBox(width: 6),
-                                          Text('Update via Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  // Import Excel pill
-                                  InkWell(
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (ctx) => PmExcelImportModal(
-                                          isPurchase: isPurchase,
-                                        ),
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(9999),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEFF6FF),
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(color: const Color(0xFFBFDBFE)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(LucideIcons.upload, size: 13, color: Color(0xFF005CE6)),
-                                          SizedBox(width: 6),
-                                          Text('Import Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF005CE6))),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-
-                              if (isMobile) {
-                                return Column(
+                            // Table Title & Action Bar (Matching Screenshot 1)
+                            LayoutBuilder(
+                              builder: (context, actionConstraints) {
+                                final isMobile =
+                                    actionConstraints.maxWidth < 700;
+                                final titleColumn = Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    titleColumn,
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        // Total count pill
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFEFF6FF),
-                                            borderRadius: BorderRadius.circular(9999),
-                                            border: Border.all(color: const Color(0xFFBFDBFE)),
-                                          ),
-                                          child: Text(
-                                            '${filtered.length} Total',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF005CE6),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        // Tools dropdown menu (Request 5)
-                                        PopupMenuButton<String>(
-                                          tooltip: 'Tools & Actions',
-                                          offset: const Offset(0, 36),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                          onSelected: (val) {
-                                            if (val == 'filter') {
-                                              context.push('/pm/filter');
-                                            } else if (val == 'pdf') {
-                                              showDialog(
-                                                context: context,
-                                                builder: (ctx) => PmPdfPreviewModal(
-                                                  records: filtered,
-                                                  companyName: activeCompany.name,
-                                                  isPurchase: isPurchase,
-                                                ),
-                                              );
-                                            } else if (val == 'export_excel') {
-                                              showDialog(
-                                                context: context,
-                                                builder: (ctx) => PmExcelPreviewModal(
-                                                  records: filtered,
-                                                  companyName: activeCompany.name,
-                                                  isPurchase: isPurchase,
-                                                ),
-                                              );
-                                            } else if (val == 'update_excel') {
-                                              showDialog(
-                                                context: context,
-                                                builder: (ctx) => PmExcelBulkUpdateModal(
-                                                  isPurchase: isPurchase,
-                                                ),
-                                              );
-                                            } else if (val == 'import_excel') {
-                                              showDialog(
-                                                context: context,
-                                                builder: (ctx) => PmExcelImportModal(
-                                                  isPurchase: isPurchase,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                          itemBuilder: (ctx) => [
-                                            const PopupMenuItem(
-                                              value: 'filter',
-                                              child: Row(
-                                                children: [
-                                                  Icon(LucideIcons.slidersHorizontal, size: 15, color: Color(0xFF005CE6)),
-                                                  SizedBox(width: 10),
-                                                  Text('Filter Records', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'pdf',
-                                              child: Row(
-                                                children: [
-                                                  Icon(LucideIcons.fileText, size: 15, color: Color(0xFFEF4444)),
-                                                  SizedBox(width: 10),
-                                                  Text('Generate PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'export_excel',
-                                              child: Row(
-                                                children: [
-                                                  Icon(LucideIcons.fileSpreadsheet, size: 15, color: Color(0xFF16A34A)),
-                                                  SizedBox(width: 10),
-                                                  Text('Export to Excel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'update_excel',
-                                              child: Row(
-                                                children: [
-                                                  Icon(LucideIcons.refreshCw, size: 15, color: Color(0xFF8B5CF6)),
-                                                  SizedBox(width: 10),
-                                                  Text('Update via Excel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                                ],
-                                              ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'import_excel',
-                                              child: Row(
-                                                children: [
-                                                  Icon(LucideIcons.upload, size: 15, color: Color(0xFF005CE6)),
-                                                  SizedBox(width: 10),
-                                                  Text('Import Excel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(9999),
-                                              border: Border.all(color: const Color(0xFFCBD5E1)),
-                                            ),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(LucideIcons.wrench, size: 13, color: Color(0xFF005CE6)),
-                                                SizedBox(width: 6),
-                                                Text(
-                                                  'Tools',
-                                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-                                                ),
-                                                SizedBox(width: 4),
-                                                Icon(LucideIcons.chevronDown, size: 13, color: Color(0xFF64748B)),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                    Text(
+                                      isPurchase
+                                          ? 'Vendor Directory'
+                                          : 'Project Directory',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                        letterSpacing: -0.4,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isPurchase
+                                          ? 'Manage and track all vendor purchase accounts'
+                                          : 'Manage and track all installation sites',
+                                      style: const TextStyle(
+                                          fontSize: 12.5,
+                                          color: Color(0xFF64748B)),
                                     ),
                                   ],
                                 );
-                              }
 
-                              return Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  titleColumn,
-                                  actionPills,
-                                ],
-                              );
-                            },
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // Directory Table Widget
-                          PmDirectoryTable(
-                            records: filtered,
-                            isPurchase: isPurchase,
-                            onBulkDelete: (ids) async {
-                              final confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Delete Selected Records?'),
-                                  content: Text('Are you sure you want to permanently delete ${ids.length} records? This cannot be undone.'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.of(ctx).pop(false),
-                                      child: const Text('Cancel'),
+                                final actionPills = Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    // Total count pill
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius:
+                                            BorderRadius.circular(9999),
+                                        border: Border.all(
+                                            color: const Color(0xFFBFDBFE)),
+                                      ),
+                                      child: Text(
+                                        '${filtered.length} Total',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF005CE6),
+                                        ),
+                                      ),
                                     ),
-                                    ElevatedButton(
-                                      onPressed: () => Navigator.of(ctx).pop(true),
-                                      style: ElevatedButton.styleFrom(backgroundColor: pm.destructive),
-                                      child: const Text('Delete'),
+                                    // Filter pill
+                                    InkWell(
+                                      onTap: () => context.push('/pm/filter'),
+                                      borderRadius: BorderRadius.circular(9999),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(9999),
+                                          border: Border.all(
+                                              color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.slidersHorizontal,
+                                                size: 13,
+                                                color: Color(0xFF005CE6)),
+                                            SizedBox(width: 6),
+                                            Text('Filter',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF0F172A))),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Generate PDF pill
+                                    InkWell(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (ctx) => PmPdfPreviewModal(
+                                            records: filtered,
+                                            companyName: activeCompany.name,
+                                            isPurchase: isPurchase,
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(9999),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(9999),
+                                          border: Border.all(
+                                              color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.fileText,
+                                                size: 13,
+                                                color: Color(0xFFEF4444)),
+                                            SizedBox(width: 6),
+                                            Text('Generate PDF',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF0F172A))),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Export to Excel pill
+                                    InkWell(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (ctx) => PmExcelPreviewModal(
+                                            records: filtered,
+                                            companyName: activeCompany.name,
+                                            isPurchase: isPurchase,
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(9999),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(9999),
+                                          border: Border.all(
+                                              color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.fileSpreadsheet,
+                                                size: 13,
+                                                color: Color(0xFF16A34A)),
+                                            SizedBox(width: 6),
+                                            Text('Export to Excel',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF0F172A))),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Update via Excel pill
+                                    InkWell(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (ctx) =>
+                                              PmExcelBulkUpdateModal(
+                                            isPurchase: isPurchase,
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(9999),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(9999),
+                                          border: Border.all(
+                                              color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.refreshCw,
+                                                size: 13,
+                                                color: Color(0xFF8B5CF6)),
+                                            SizedBox(width: 6),
+                                            Text('Update via Excel',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF0F172A))),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Import Excel pill
+                                    InkWell(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (ctx) => PmExcelImportModal(
+                                            isPurchase: isPurchase,
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(9999),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius:
+                                              BorderRadius.circular(9999),
+                                          border: Border.all(
+                                              color: const Color(0xFFBFDBFE)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.upload,
+                                                size: 13,
+                                                color: Color(0xFF005CE6)),
+                                            SizedBox(width: 6),
+                                            Text('Import Excel',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF005CE6))),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ],
-                                ),
-                              );
+                                );
 
-                              if (confirmed == true) {
-                                if (isPurchase) {
-                                  await ref.read(pmPurchasesRepositoryProvider).bulkDeletePurchases(ids);
-                                  ref.invalidate(pmPurchasesListProvider);
-                                } else {
-                                  await ref.read(pmProjectsRepositoryProvider).bulkDeleteProjects(ids);
-                                  ref.invalidate(pmProjectsListProvider);
+                                if (isMobile) {
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      titleColumn,
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          // Total count pill
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEFF6FF),
+                                              borderRadius:
+                                                  BorderRadius.circular(9999),
+                                              border: Border.all(
+                                                  color:
+                                                      const Color(0xFFBFDBFE)),
+                                            ),
+                                            child: Text(
+                                              '${filtered.length} Total',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF005CE6),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Tools dropdown menu (Request 5)
+                                          PopupMenuButton<String>(
+                                            tooltip: 'Tools & Actions',
+                                            offset: const Offset(0, 36),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12)),
+                                            onSelected: (val) {
+                                              if (val == 'filter') {
+                                                context.push('/pm/filter');
+                                              } else if (val == 'pdf') {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) =>
+                                                      PmPdfPreviewModal(
+                                                    records: filtered,
+                                                    companyName:
+                                                        activeCompany.name,
+                                                    isPurchase: isPurchase,
+                                                  ),
+                                                );
+                                              } else if (val ==
+                                                  'export_excel') {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) =>
+                                                      PmExcelPreviewModal(
+                                                    records: filtered,
+                                                    companyName:
+                                                        activeCompany.name,
+                                                    isPurchase: isPurchase,
+                                                  ),
+                                                );
+                                              } else if (val ==
+                                                  'update_excel') {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) =>
+                                                      PmExcelBulkUpdateModal(
+                                                    isPurchase: isPurchase,
+                                                  ),
+                                                );
+                                              } else if (val ==
+                                                  'import_excel') {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) =>
+                                                      PmExcelImportModal(
+                                                    isPurchase: isPurchase,
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                            itemBuilder: (ctx) => [
+                                              const PopupMenuItem(
+                                                value: 'filter',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                        LucideIcons
+                                                            .slidersHorizontal,
+                                                        size: 15,
+                                                        color:
+                                                            Color(0xFF005CE6)),
+                                                    SizedBox(width: 10),
+                                                    Text('Filter Records',
+                                                        style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600)),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'pdf',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(LucideIcons.fileText,
+                                                        size: 15,
+                                                        color:
+                                                            Color(0xFFEF4444)),
+                                                    SizedBox(width: 10),
+                                                    Text('Generate PDF',
+                                                        style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600)),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'export_excel',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                        LucideIcons
+                                                            .fileSpreadsheet,
+                                                        size: 15,
+                                                        color:
+                                                            Color(0xFF16A34A)),
+                                                    SizedBox(width: 10),
+                                                    Text('Export to Excel',
+                                                        style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600)),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'update_excel',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(LucideIcons.refreshCw,
+                                                        size: 15,
+                                                        color:
+                                                            Color(0xFF8B5CF6)),
+                                                    SizedBox(width: 10),
+                                                    Text('Update via Excel',
+                                                        style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600)),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'import_excel',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(LucideIcons.upload,
+                                                        size: 15,
+                                                        color:
+                                                            Color(0xFF005CE6)),
+                                                    SizedBox(width: 10),
+                                                    Text('Import Excel',
+                                                        style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(9999),
+                                                border: Border.all(
+                                                    color: const Color(
+                                                        0xFFCBD5E1)),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(LucideIcons.wrench,
+                                                      size: 13,
+                                                      color: Color(0xFF005CE6)),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    'Tools',
+                                                    style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            Color(0xFF0F172A)),
+                                                  ),
+                                                  SizedBox(width: 4),
+                                                  Icon(LucideIcons.chevronDown,
+                                                      size: 13,
+                                                      color: Color(0xFF64748B)),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  );
                                 }
-                              }
-                            },
-                          ),
-                        ],
+
+                                return Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    titleColumn,
+                                    actionPills,
+                                  ],
+                                );
+                              },
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Directory Table Widget
+                            PmDirectoryTable(
+                              records: filtered,
+                              isPurchase: isPurchase,
+                              onBulkDelete: (ids) async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title:
+                                        const Text('Delete Selected Records?'),
+                                    content: Text(
+                                        'Are you sure you want to permanently delete ${ids.length} records? This cannot be undone.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(ctx).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.of(ctx).pop(true),
+                                        style: ElevatedButton.styleFrom(
+                                            backgroundColor: pm.destructive),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirmed == true) {
+                                  if (isPurchase) {
+                                    await ref
+                                        .read(pmPurchasesRepositoryProvider)
+                                        .bulkDeletePurchases(ids);
+                                    ref.invalidate(pmPurchasesListProvider);
+                                  } else {
+                                    await ref
+                                        .read(pmProjectsRepositoryProvider)
+                                        .bulkDeleteProjects(ids);
+                                    ref.invalidate(pmProjectsListProvider);
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

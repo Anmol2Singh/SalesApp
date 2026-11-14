@@ -1,7 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -15,7 +12,8 @@ class PmAppSettingsDialog extends ConsumerStatefulWidget {
   const PmAppSettingsDialog({super.key});
 
   @override
-  ConsumerState<PmAppSettingsDialog> createState() => _PmAppSettingsDialogState();
+  ConsumerState<PmAppSettingsDialog> createState() =>
+      _PmAppSettingsDialogState();
 }
 
 class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
@@ -40,8 +38,12 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
     setState(() => _isBackingUp = true);
 
     try {
-      final projects = await ref.read(pmProjectsRepositoryProvider).getProjects(companyId: activeCompany.id);
-      final purchases = await ref.read(pmPurchasesRepositoryProvider).getPurchases(companyId: activeCompany.id);
+      final projects = await ref
+          .read(pmProjectsRepositoryProvider)
+          .getProjects(companyId: activeCompany.id);
+      final purchases = await ref
+          .read(pmPurchasesRepositoryProvider)
+          .getPurchases(companyId: activeCompany.id);
 
       final backupData = {
         'version': '1.0',
@@ -56,7 +58,8 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
 
       await Printing.sharePdf(
         bytes: bytes,
-        filename: '${activeCompany.name.replaceAll(' ', '_')}_backup_${DateTime.now().millisecondsSinceEpoch}.json',
+        filename:
+            '${activeCompany.name.replaceAll(' ', '_')}_backup_${DateTime.now().millisecondsSinceEpoch}.json',
       );
 
       if (mounted) {
@@ -103,7 +106,9 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Successfully restored ${projectsList.length} records!')),
+            SnackBar(
+                content: Text(
+                    'Successfully restored ${projectsList.length} records!')),
           );
         }
       } catch (e) {
@@ -141,7 +146,8 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                   const Expanded(
                     child: Row(
                       children: [
-                        Icon(LucideIcons.settings, size: 20, color: Color(0xFF005CE6)),
+                        Icon(LucideIcons.settings,
+                            size: 20, color: Color(0xFF005CE6)),
                         SizedBox(width: 8),
                         Flexible(
                           child: Text(
@@ -161,7 +167,8 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(LucideIcons.x, size: 18, color: Color(0xFF64748B)),
+                    icon: const Icon(LucideIcons.x,
+                        size: 18, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.of(context).pop(),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -188,11 +195,15 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                           children: [
                             const Row(
                               children: [
-                                Icon(LucideIcons.database, size: 16, color: Color(0xFF0284C7)),
+                                Icon(LucideIcons.database,
+                                    size: 16, color: Color(0xFF0284C7)),
                                 SizedBox(width: 8),
                                 Text(
                                   'Database Backup & Storage',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0F172A)),
                                 ),
                               ],
                             ),
@@ -204,11 +215,19 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Text('PC Save Folder Location', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                      const Text('PC Save Folder Location',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF0F172A))),
                                       const SizedBox(height: 2),
-                                      Text('Default: $_saveLocation', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                      Text('Default: $_saveLocation',
+                                          style: const TextStyle(
+                                              fontSize: 10.5,
+                                              color: Color(0xFF64748B))),
                                     ],
                                   ),
                                 ),
@@ -216,18 +235,25 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                   onTap: _handleSetLocation,
                                   borderRadius: BorderRadius.circular(9999),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(9999),
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      border: Border.all(
+                                          color: const Color(0xFFCBD5E1)),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(LucideIcons.folder, size: 13, color: Color(0xFFD97706)),
+                                        Icon(LucideIcons.folder,
+                                            size: 13, color: Color(0xFFD97706)),
                                         SizedBox(width: 6),
-                                        Text('Set Location', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                        Text('Set Location',
+                                            style: TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF0F172A))),
                                       ],
                                     ),
                                   ),
@@ -244,11 +270,20 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Text('Download Backup (.json)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                      const Text('Download Backup (.json)',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF0F172A))),
                                       const SizedBox(height: 2),
-                                      Text('Full JSON data for ${activeCompany.name}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                      Text(
+                                          'Full JSON data for ${activeCompany.name}',
+                                          style: const TextStyle(
+                                              fontSize: 10.5,
+                                              color: Color(0xFF64748B))),
                                     ],
                                   ),
                                 ),
@@ -256,7 +291,8 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                   onTap: _isBackingUp ? null : _handleBackup,
                                   borderRadius: BorderRadius.circular(9999),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF005CE6),
                                       borderRadius: BorderRadius.circular(9999),
@@ -264,9 +300,17 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(LucideIcons.download, size: 13, color: Colors.white),
+                                        const Icon(LucideIcons.download,
+                                            size: 13, color: Colors.white),
                                         const SizedBox(width: 6),
-                                        Text(_isBackingUp ? 'Exporting...' : 'Backup', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white)),
+                                        Text(
+                                            _isBackingUp
+                                                ? 'Exporting...'
+                                                : 'Backup',
+                                            style: const TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white)),
                                       ],
                                     ),
                                   ),
@@ -283,11 +327,19 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                               children: [
                                 const Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text('Restore Database (.json)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                      Text('Restore Database (.json)',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF0F172A))),
                                       SizedBox(height: 2),
-                                      Text('Upload previously exported backup', style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                      Text('Upload previously exported backup',
+                                          style: TextStyle(
+                                              fontSize: 10.5,
+                                              color: Color(0xFF64748B))),
                                     ],
                                   ),
                                 ),
@@ -295,18 +347,28 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                   onTap: _isRestoring ? null : _handleRestore,
                                   borderRadius: BorderRadius.circular(9999),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(9999),
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      border: Border.all(
+                                          color: const Color(0xFFCBD5E1)),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(LucideIcons.cloudUpload, size: 13, color: Color(0xFF005CE6)),
+                                        const Icon(LucideIcons.cloudUpload,
+                                            size: 13, color: Color(0xFF005CE6)),
                                         const SizedBox(width: 6),
-                                        Text(_isRestoring ? 'Restoring...' : 'Restore', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                        Text(
+                                            _isRestoring
+                                                ? 'Restoring...'
+                                                : 'Restore',
+                                            style: const TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF0F172A))),
                                       ],
                                     ),
                                   ),
@@ -333,11 +395,16 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('PDF Export Columns', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                  Text('PDF Export Columns',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF0F172A))),
                                   SizedBox(height: 2),
                                   Text(
                                     'Choose columns for Directory PDF',
-                                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                    style: TextStyle(
+                                        fontSize: 11, color: Color(0xFF64748B)),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -349,18 +416,25 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                               onTap: () {
                                 showDialog(
                                   context: context,
-                                  builder: (ctx) => const PmPdfColumnsConfigDialog(),
+                                  builder: (ctx) =>
+                                      const PmPdfColumnsConfigDialog(),
                                 );
                               },
                               borderRadius: BorderRadius.circular(9999),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(9999),
-                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  border: Border.all(
+                                      color: const Color(0xFFCBD5E1)),
                                 ),
-                                child: const Text('Configure', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                                child: const Text('Configure',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0F172A))),
                               ),
                             ),
                           ],
@@ -371,11 +445,16 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                       // Section 4: MANAGE CREATED COMPANIES (Screenshot 1)
                       const Row(
                         children: [
-                          Icon(LucideIcons.building2, size: 16, color: Color(0xFF005CE6)),
+                          Icon(LucideIcons.building2,
+                              size: 16, color: Color(0xFF005CE6)),
                           SizedBox(width: 8),
                           Text(
                             'MANAGE CREATED COMPANIES',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: 0.6),
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: 0.6),
                           ),
                         ],
                       ),
@@ -386,37 +465,59 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                         final isActive = c.id == activeCompany.id;
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: isActive ? const Color(0xFFEFF6FF) : Colors.white,
+                            color: isActive
+                                ? const Color(0xFFEFF6FF)
+                                : Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: isActive ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0)),
+                            border: Border.all(
+                                color: isActive
+                                    ? const Color(0xFFBFDBFE)
+                                    : const Color(0xFFE2E8F0)),
                           ),
                           child: Row(
                             children: [
                               Expanded(
                                 child: InkWell(
                                   onTap: () {
-                                    ref.read(pmActiveCompanyProvider.notifier).setCompany(c);
+                                    ref
+                                        .read(pmActiveCompanyProvider.notifier)
+                                        .setCompany(c);
                                   },
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           Text(
                                             c.name,
-                                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                            style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF0F172A)),
                                           ),
                                           if (isActive) ...[
                                             const SizedBox(width: 8),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFBFDBFE),
-                                                borderRadius: BorderRadius.circular(9999),
+                                                borderRadius:
+                                                    BorderRadius.circular(9999),
                                               ),
-                                              child: const Text('Active', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF1E40AF))),
+                                              child: const Text('Active',
+                                                  style: TextStyle(
+                                                      fontSize: 9.5,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color:
+                                                          Color(0xFF1E40AF))),
                                             ),
                                           ],
                                         ],
@@ -424,7 +525,9 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                       const SizedBox(height: 2),
                                       Text(
                                         c.tagline ?? 'Project Manager',
-                                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF64748B)),
                                       ),
                                     ],
                                   ),
@@ -434,14 +537,21 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                                 icon: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(LucideIcons.trash2, size: 14, color: Color(0xFFEF4444)),
+                                    Icon(LucideIcons.trash2,
+                                        size: 14, color: Color(0xFFEF4444)),
                                     SizedBox(width: 4),
-                                    Text('Delete', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
+                                    Text('Delete',
+                                        style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFFEF4444))),
                                   ],
                                 ),
                                 onPressed: () {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Cannot delete default system company: ${c.name}')),
+                                    SnackBar(
+                                        content: Text(
+                                            'Cannot delete default system company: ${c.name}')),
                                   );
                                 },
                               ),
@@ -462,13 +572,18 @@ class _PmAppSettingsDialogState extends ConsumerState<PmAppSettingsDialog> {
                   onTap: () => Navigator.of(context).pop(),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: const Color(0xFFCBD5E1)),
                     ),
-                    child: const Text('Close', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                    child: const Text('Close',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A))),
                   ),
                 ),
               ),

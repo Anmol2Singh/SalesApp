@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:salesapp/core/router/app_router.dart';
-import 'package:salesapp/features/auth/providers/auth_provider.dart';
 import 'package:salesapp/features/customer_app/core/theme/app_theme.dart';
 import 'package:salesapp/features/customer_app/data/models/data_models.dart';
 import 'package:salesapp/features/customer_app/data/repositories/app_repositories.dart';
@@ -117,420 +115,418 @@ class MainDashboard extends ConsumerWidget {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-              SliverAppBar(
-                expandedHeight: 180,
-                pinned: true,
-                backgroundColor: const Color(0xFF1E1B4B),
-                elevation: 0,
-                clipBehavior: Clip.antiAlias,
-                automaticallyImplyLeading: false,
-                shape: const RoundedRectangleBorder(
+          SliverAppBar(
+            expandedHeight: 180,
+            pinned: true,
+            backgroundColor: const Color(0xFF1E1B4B),
+            elevation: 0,
+            clipBehavior: Clip.antiAlias,
+            automaticallyImplyLeading: false,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(
+                bottom: Radius.circular(28),
+              ),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.none,
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0F172A),
+                      Color(0xFF2E1065),
+                      Color(0xFF6B21A8),
+                      Color(0xFF4F46E5),
+                      Color(0xFF2563EB),
+                    ],
+                  ),
                   borderRadius: BorderRadius.vertical(
                     bottom: Radius.circular(28),
                   ),
                 ),
-                flexibleSpace: FlexibleSpaceBar(
-                  collapseMode: CollapseMode.none,
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF0F172A),
-                          Color(0xFF2E1065),
-                          Color(0xFF6B21A8),
-                          Color(0xFF4F46E5),
-                          Color(0xFF2563EB),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(28),
-                      ),
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                child: SafeArea(
+                  bottom: false,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Stack(
                             children: [
-                              Stack(
-                                children: [
-                                  Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: const Color(0xFF5A6B8A),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.25),
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        avatarInitial,
-                                        style: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF5A6B8A),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.25),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    avatarInitial,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
                                     ),
                                   ),
-                                  const Positioned(bottom: 0, right: 0, child: NetworkAvatarDot(size: 13, borderColor: Color(0xFF1E1B4B)))
-                                ],
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Good ${_getGreeting()},',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 13,
-                                        color: Colors.white.withOpacity(0.8),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      displayName,
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      DateFormat("'Today 'd MMM")
-                                          .format(DateTime.now()),
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 12,
-                                        color: Colors.white.withOpacity(0.65),
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'CUSTOMER',
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white.withOpacity(0.85),
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                   const NetworkStatusChip(),
-                                ],
-                              ),
+                              const Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: NetworkAvatarDot(
+                                      size: 13, borderColor: Color(0xFF1E1B4B)))
                             ],
                           ),
-                        ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Good ${_getGreeting()},',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  displayName,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat("'Today 'd MMM")
+                                      .format(DateTime.now()),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 12,
+                                    color: Colors.white.withOpacity(0.65),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'CUSTOMER',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withOpacity(0.85),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const NetworkStatusChip(),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 14),
-                    child: IconButton(
-                      icon: ref.watch(notificationsViewedProvider)
-                          ? const Icon(Icons.notifications_outlined,
-                              color: Colors.white, size: 22)
-                          : const Badge(
-                              smallSize: 8,
-                              backgroundColor: Colors.amberAccent,
-                              child: Icon(Icons.notifications_outlined,
-                                  color: Colors.white, size: 22),
-                            ),
-                      tooltip: 'Alerts & Notifications',
-                      onPressed: () => _showNotificationsSheet(context, ref),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 14),
-                    child: IconButton(
-                      icon: const Icon(Icons.refresh,
-                          color: Colors.white, size: 22),
-                      tooltip: 'Refresh Data',
-                      onPressed: () {
-                        ref.invalidate(productsProvider);
-                        ref.invalidate(userProfileProvider);
-                        ref.invalidate(serviceRequestsProvider);
-                        ref.invalidate(invoicesProvider);
-                      },
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 14),
-                    child: IconButton(
-                      icon: const Icon(Icons.logout_rounded,
-                          color: Colors.white, size: 22),
-                      tooltip: 'Logout',
-                      onPressed: () => _showLogoutDialog(context, ref),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20.0, 18.0, 20.0, 14.0),
-                sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                  // [B] MY PURCHASED PRODUCTS
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: IconButton(
+                  icon: ref.watch(notificationsViewedProvider)
+                      ? const Icon(Icons.notifications_outlined,
+                          color: Colors.white, size: 22)
+                      : const Badge(
+                          smallSize: 8,
+                          backgroundColor: Colors.amberAccent,
+                          child: Icon(Icons.notifications_outlined,
+                              color: Colors.white, size: 22),
+                        ),
+                  tooltip: 'Alerts & Notifications',
+                  onPressed: () => _showNotificationsSheet(context, ref),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: IconButton(
+                  icon:
+                      const Icon(Icons.refresh, color: Colors.white, size: 22),
+                  tooltip: 'Refresh Data',
+                  onPressed: () {
+                    ref.invalidate(productsProvider);
+                    ref.invalidate(userProfileProvider);
+                    ref.invalidate(serviceRequestsProvider);
+                    ref.invalidate(invoicesProvider);
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: IconButton(
+                  icon: const Icon(Icons.logout_rounded,
+                      color: Colors.white, size: 22),
+                  tooltip: 'Logout',
+                  onPressed: () => _showLogoutDialog(context, ref),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20.0, 18.0, 20.0, 14.0),
+            sliver: SliverList(
+                delegate: SliverChildListDelegate([
+              // [B] MY PURCHASED PRODUCTS
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            'My Products',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          productsAsync.maybeWhen(
-                            data: (prods) => prods.isNotEmpty
-                                ? Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          AppColors.primary.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '${prods.length}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  )
-                                : const SizedBox.shrink(),
-                            orElse: () {
-                              final cached =
-                                  SupabaseCustomerRepository.cachedProducts;
-                              if (cached != null && cached.isNotEmpty) {
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${cached.length}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, size: 18),
-                        tooltip: 'Refresh products',
-                        onPressed: () => ref.refresh(productsProvider),
-                        color: subtitleColor,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  productsAsync.when(
-                    data: (products) => _buildProductsList(context, ref,
-                        products, textColor, subtitleColor, isDark),
-                    loading: () {
-                      final cached =
-                          SupabaseCustomerRepository.cachedProducts ??
-                              productsAsync.valueOrNull;
-                      if (cached != null && cached.isNotEmpty) {
-                        return _buildProductsList(context, ref, cached,
-                            textColor, subtitleColor, isDark);
-                      }
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24.0),
-                          child: CircularProgressIndicator(
-                              color: AppColors.primary),
+                      Text(
+                        'My Products',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
                         ),
-                      );
-                    },
-                    error: (e, _) {
-                      final cached = SupabaseCustomerRepository.cachedProducts;
-                      if (cached != null && cached.isNotEmpty) {
-                        return _buildProductsList(context, ref, cached,
-                            textColor, subtitleColor, isDark);
-                      }
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16.0),
-                          child: Text('Error loading products: $e',
-                              style: TextStyle(color: textColor)),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-
-                  // [D] QUICK ACTIONS
-                  if (ref.watch(amcOptEnabledProvider)) ...[
-                    _buildQuickActionCard(
-                      context,
-                      'Opt for AMC',
-                      'Secure your products with scheduled maintenance',
-                      Icons.verified_user,
-                      AppColors.accent,
-                      () => context.push('/amc_avail'),
-                    ),
-                    const SizedBox(height: 28),
-                  ],
-
-                  // [C2] ALSO AVAILABLE (ADVERTISEMENT)
-                  Text(
-                    'Also Available',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Explore other high-performance heating solutions from our catalog',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: subtitleColor,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  advProductsAsync.when(
-                    data: (advProducts) {
-                      if (advProducts.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return SizedBox(
-                        height: 280,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          clipBehavior: Clip.none,
-                          itemCount: advProducts.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(width: 16),
-                          itemBuilder: (context, index) {
-                            return AdvProductCard(product: advProducts[index]);
-                          },
-                        ),
-                      );
-                    },
-                    loading: () => const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20.0),
-                        child:
-                            CircularProgressIndicator(color: AppColors.primary),
                       ),
-                    ),
-                    error: (e, _) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: Text('Error loading advertisement products: $e',
-                            style: TextStyle(color: textColor)),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  // [D] RECENT ACTIVITY STRIP
-                  Text(
-                    'Recent Activity',
-                    style: Theme.of(
-                      context,
-                    )
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  ref.watch(customerActivityProvider).when(
-                        data: (events) {
-                          if (events.isEmpty) {
-                            return Center(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 24),
+                      const SizedBox(width: 8),
+                      productsAsync.maybeWhen(
+                        data: (prods) => prods.isNotEmpty
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                                 child: Text(
-                                  'No recent activity found.',
-                                  style: TextStyle(
-                                      color: subtitleColor, fontSize: 13),
+                                  '${prods.length}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        orElse: () {
+                          final cached =
+                              SupabaseCustomerRepository.cachedProducts;
+                          if (cached != null && cached.isNotEmpty) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${cached.length}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
                                 ),
                               ),
                             );
                           }
-                          final recent = events.take(4).toList();
-                          return Column(
-                            children: List.generate(recent.length, (index) {
-                              return _TimelineEventTile(
-                                event: recent[index],
-                                isFirst: index == 0,
-                                isLast: index == recent.length - 1,
-                              );
-                            }),
-                          );
+                          return const SizedBox.shrink();
                         },
-                        loading: () => const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: CircularProgressIndicator(
-                                color: AppColors.accent),
-                          ),
-                        ),
-                        error: (e, _) => Center(
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    tooltip: 'Refresh products',
+                    onPressed: () => ref.refresh(productsProvider),
+                    color: subtitleColor,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              productsAsync.when(
+                data: (products) => _buildProductsList(
+                    context, ref, products, textColor, subtitleColor, isDark),
+                loading: () {
+                  final cached = SupabaseCustomerRepository.cachedProducts ??
+                      productsAsync.valueOrNull;
+                  if (cached != null && cached.isNotEmpty) {
+                    return _buildProductsList(
+                        context, ref, cached, textColor, subtitleColor, isDark);
+                  }
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24.0),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  );
+                },
+                error: (e, _) {
+                  final cached = SupabaseCustomerRepository.cachedProducts;
+                  if (cached != null && cached.isNotEmpty) {
+                    return _buildProductsList(
+                        context, ref, cached, textColor, subtitleColor, isDark);
+                  }
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: Text('Error loading products: $e',
+                          style: TextStyle(color: textColor)),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // [D] QUICK ACTIONS
+              if (ref.watch(amcOptEnabledProvider)) ...[
+                _buildQuickActionCard(
+                  context,
+                  'Opt for AMC',
+                  'Secure your products with scheduled maintenance',
+                  Icons.verified_user,
+                  AppColors.accent,
+                  () => context.push('/amc_avail'),
+                ),
+                const SizedBox(height: 28),
+              ],
+
+              // [C2] ALSO AVAILABLE (ADVERTISEMENT)
+              Text(
+                'Also Available',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Explore other high-performance heating solutions from our catalog',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: subtitleColor,
+                ),
+              ),
+              const SizedBox(height: 12),
+              advProductsAsync.when(
+                data: (advProducts) {
+                  if (advProducts.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return SizedBox(
+                    height: 280,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      clipBehavior: Clip.none,
+                      itemCount: advProducts.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 16),
+                      itemBuilder: (context, index) {
+                        return AdvProductCard(product: advProducts[index]);
+                      },
+                    ),
+                  );
+                },
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20.0),
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  ),
+                ),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Text('Error loading advertisement products: $e',
+                        style: TextStyle(color: textColor)),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // [D] RECENT ACTIVITY STRIP
+              Text(
+                'Recent Activity',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              ref.watch(customerActivityProvider).when(
+                    data: (events) {
+                      if (events.isEmpty) {
+                        return Center(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 24),
-                            child: Text('Error loading activity: $e',
-                                style:
-                                    const TextStyle(color: AppColors.danger)),
+                            child: Text(
+                              'No recent activity found.',
+                              style:
+                                  TextStyle(color: subtitleColor, fontSize: 13),
+                            ),
                           ),
-                        ),
+                        );
+                      }
+                      final recent = events.take(4).toList();
+                      return Column(
+                        children: List.generate(recent.length, (index) {
+                          return _TimelineEventTile(
+                            event: recent[index],
+                            isFirst: index == 0,
+                            isLast: index == recent.length - 1,
+                          );
+                        }),
+                      );
+                    },
+                    loading: () => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child:
+                            CircularProgressIndicator(color: AppColors.accent),
                       ),
-                  const SizedBox(height: 140), // extra padding to fully clear floating bottom nav bar
-                ])),
-              ),
-            ],
+                    ),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Text('Error loading activity: $e',
+                            style: const TextStyle(color: AppColors.danger)),
+                      ),
+                    ),
+                  ),
+              const SizedBox(
+                  height:
+                      140), // extra padding to fully clear floating bottom nav bar
+            ])),
           ),
+        ],
+      ),
     );
   }
 
@@ -715,7 +711,9 @@ class MainDashboard extends ConsumerWidget {
               value: '$activeAmcCount',
               icon: Icons.verified_user_outlined,
               color: const Color(0xFF10B981),
-              onTap: ref.watch(amcOptEnabledProvider) ? () => context.push('/amc_avail') : () {},
+              onTap: ref.watch(amcOptEnabledProvider)
+                  ? () => context.push('/amc_avail')
+                  : () {},
             ),
             _CustomerStatCard(
               title: 'Service\nComplaints',
@@ -1160,4 +1158,3 @@ class _TimelineEventTile extends StatelessWidget {
     );
   }
 }
-

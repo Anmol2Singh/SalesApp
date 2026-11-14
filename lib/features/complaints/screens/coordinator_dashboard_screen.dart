@@ -11,7 +11,6 @@ import '../data/models/complaint_model.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/router/app_router.dart';
-import '../../reports/widgets/daily_report_modal.dart';
 import 'complaints_leaderboard_screen.dart';
 import '../../../core/widgets/dashboard_switcher_button.dart';
 import '../../../core/widgets/network_status_chip.dart';
@@ -20,10 +19,12 @@ class CoordinatorDashboardScreen extends ConsumerStatefulWidget {
   const CoordinatorDashboardScreen({super.key});
 
   @override
-  ConsumerState<CoordinatorDashboardScreen> createState() => _CoordinatorDashboardScreenState();
+  ConsumerState<CoordinatorDashboardScreen> createState() =>
+      _CoordinatorDashboardScreenState();
 }
 
-class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboardScreen>
+class _CoordinatorDashboardScreenState
+    extends ConsumerState<CoordinatorDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -51,7 +52,8 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out of Service Portal?'),
+        content:
+            const Text('Are you sure you want to sign out of Service Portal?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -63,7 +65,8 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               Navigator.pop(ctx);
               await ref.read(authControllerProvider.notifier).signOut();
             },
-            child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -80,8 +83,11 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
         profile?.roles.contains(UserRole.admin) == true;
 
     final rawName = profile?.fullName.trim() ?? '';
-    final displayName = rawName.isNotEmpty ? rawName : (profile?.primaryRole.displayName ?? 'Service Coordinator');
-    final avatarInitial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+    final displayName = rawName.isNotEmpty
+        ? rawName
+        : (profile?.primaryRole.displayName ?? 'Service Coordinator');
+    final avatarInitial =
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
 
     if (isAdmin) {
       return Scaffold(
@@ -99,7 +105,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 context.pop();
               } else {
                 final profile = ref.read(currentProfileProvider);
-                context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+                context.go(profile != null
+                    ? getRoleHome(profile.primaryRole)
+                    : AppRoutes.login);
               }
             },
           ),
@@ -115,14 +123,16 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           actions: [
             const DashboardSwitcherButton(),
             IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
+              icon: const Icon(Icons.settings_outlined,
+                  color: Colors.white, size: 20),
               tooltip: 'Settings',
               onPressed: () => context.push('/complaints/error-codes'),
             ),
             IconButton(
               icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
               tooltip: 'Refresh',
-              onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
+              onPressed: () =>
+                  ref.read(complaintsProvider.notifier).load(refresh: true),
             ),
             const SizedBox(width: 4),
           ],
@@ -132,10 +142,15 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             indicatorWeight: 3,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
-            labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
+            labelStyle: const TextStyle(
+                fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
             tabs: const [
-              Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Tickets & Operations'),
-              Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Technicians Leaderboard'),
+              Tab(
+                  icon: Icon(Icons.dashboard_outlined, size: 18),
+                  text: 'Tickets & Operations'),
+              Tab(
+                  icon: Icon(Icons.emoji_events_outlined, size: 18),
+                  text: 'Technicians Leaderboard'),
             ],
           ),
         ),
@@ -151,7 +166,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
           icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
           label: const Text(
             'Book Complaint',
-            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.bold,
+                color: Colors.white),
           ),
           onPressed: () => context.push('/complaints/book'),
         ),
@@ -178,7 +196,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                   context.pop();
                 } else {
                   final profile = ref.read(currentProfileProvider);
-                  context.go(profile != null ? getRoleHome(profile.primaryRole) : AppRoutes.login);
+                  context.go(profile != null
+                      ? getRoleHome(profile.primaryRole)
+                      : AppRoutes.login);
                 }
               },
             ),
@@ -330,14 +350,16 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             actions: [
               const DashboardSwitcherButton(),
               IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
+                icon: const Icon(Icons.settings_outlined,
+                    color: Colors.white, size: 20),
                 tooltip: 'Settings',
                 onPressed: () => context.push('/complaints/error-codes'),
               ),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
                 tooltip: 'Refresh',
-                onPressed: () => ref.read(complaintsProvider.notifier).load(refresh: true),
+                onPressed: () =>
+                    ref.read(complaintsProvider.notifier).load(refresh: true),
               ),
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white, size: 20),
@@ -352,10 +374,17 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               indicatorWeight: 3,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white70,
-              labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
+              labelStyle: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13),
               tabs: const [
-                Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'Tickets & Operations'),
-                Tab(icon: Icon(Icons.emoji_events_outlined, size: 18), text: 'Technicians Leaderboard'),
+                Tab(
+                    icon: Icon(Icons.dashboard_outlined, size: 18),
+                    text: 'Tickets & Operations'),
+                Tab(
+                    icon: Icon(Icons.emoji_events_outlined, size: 18),
+                    text: 'Technicians Leaderboard'),
               ],
             ),
           ),
@@ -373,20 +402,27 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
         icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
         label: const Text(
           'Book Complaint',
-          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.bold,
+              color: Colors.white),
         ),
         onPressed: () => context.push('/complaints/book'),
       ),
     );
   }
 
-  Widget _buildOperationsTab(List<Complaint> complaints, bool isLoading, {bool isAdmin = false}) {
+  Widget _buildOperationsTab(List<Complaint> complaints, bool isLoading,
+      {bool isAdmin = false}) {
     final profile = ref.watch(currentProfileProvider);
     final pendingCount = complaints.where((c) => c.status == 'pending').length;
-    final inProgressCount = complaints.where((c) => c.status == 'in_progress' || c.status == 'assigned').length;
-    final closedCount = complaints.where((c) => c.status == 'closed' || c.status == 'resolved').length;
+    final inProgressCount = complaints
+        .where((c) => c.status == 'in_progress' || c.status == 'assigned')
+        .length;
+    final closedCount = complaints
+        .where((c) => c.status == 'closed' || c.status == 'resolved')
+        .length;
     final totalCount = complaints.length;
-
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 80.0),
@@ -481,16 +517,23 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
               ),
               child: Column(
                 children: [
-                  Icon(Icons.inbox_outlined, size: 52, color: Colors.grey.shade400),
+                  Icon(Icons.inbox_outlined,
+                      size: 52, color: Colors.grey.shade400),
                   const SizedBox(height: 12),
                   const Text(
                     'No Complaints Found',
-                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Tap "Book Complaint" below to log a new service ticket.',
-                    style: TextStyle(fontFamily: 'Inter', color: Colors.grey.shade600, fontSize: 13),
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.grey.shade600,
+                        fontSize: 13),
                   ),
                 ],
               ),
@@ -511,7 +554,6 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
       ),
     );
   }
-
 
   Widget _buildKpiCard({
     required String title,
@@ -564,7 +606,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                       fontFamily: 'Inter',
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.grey.shade300 : const Color(0xFF1E293B),
+                      color: isDark
+                          ? Colors.grey.shade300
+                          : const Color(0xFF1E293B),
                       height: 1.2,
                     ),
                     maxLines: 2,
@@ -726,19 +770,29 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isStaff ? const Color(0xFFEEF2FF) : const Color(0xFFF0FDF4),
+                        color: isStaff
+                            ? const Color(0xFFEEF2FF)
+                            : const Color(0xFFF0FDF4),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: isStaff ? const Color(0xFFC7D2FE) : const Color(0xFFBBF7D0)),
+                        border: Border.all(
+                            color: isStaff
+                                ? const Color(0xFFC7D2FE)
+                                : const Color(0xFFBBF7D0)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isStaff ? Icons.badge_outlined : Icons.phone_android_outlined,
+                            isStaff
+                                ? Icons.badge_outlined
+                                : Icons.phone_android_outlined,
                             size: 11,
-                            color: isStaff ? const Color(0xFF4F46E5) : const Color(0xFF16A34A),
+                            color: isStaff
+                                ? const Color(0xFF4F46E5)
+                                : const Color(0xFF16A34A),
                           ),
                           const SizedBox(width: 3),
                           Text(
@@ -747,7 +801,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                               fontFamily: 'Inter',
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: isStaff ? const Color(0xFF4F46E5) : const Color(0xFF16A34A),
+                              color: isStaff
+                                  ? const Color(0xFF4F46E5)
+                                  : const Color(0xFF16A34A),
                             ),
                           ),
                         ],
@@ -756,7 +812,8 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
@@ -790,19 +847,27 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 const SizedBox(width: 4),
                 Text(
                   item.customerName,
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: AppColors.textSecondary),
                 ),
-                if (item.productName != null && item.productName!.isNotEmpty) ...[
+                if (item.productName != null &&
+                    item.productName!.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   Text('•', style: TextStyle(color: Colors.grey.shade400)),
                   const SizedBox(width: 8),
-                  const Icon(Icons.solar_power_outlined, size: 14, color: Colors.grey),
+                  const Icon(Icons.solar_power_outlined,
+                      size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
                       item.productName!,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+                      style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -815,18 +880,28 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 Row(
                   children: [
                     Icon(
-                      item.technicianName != null ? Icons.engineering : Icons.person_off_outlined,
+                      item.technicianName != null
+                          ? Icons.engineering
+                          : Icons.person_off_outlined,
                       size: 14,
-                      color: item.technicianName != null ? const Color(0xFF6366F1) : Colors.grey,
+                      color: item.technicianName != null
+                          ? const Color(0xFF6366F1)
+                          : Colors.grey,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      item.technicianName != null ? item.technicianName! : 'Not Assigned',
+                      item.technicianName != null
+                          ? item.technicianName!
+                          : 'Not Assigned',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 12,
-                        fontWeight: item.technicianName != null ? FontWeight.w600 : FontWeight.normal,
-                        color: item.technicianName != null ? const Color(0xFF6366F1) : Colors.grey,
+                        fontWeight: item.technicianName != null
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: item.technicianName != null
+                            ? const Color(0xFF6366F1)
+                            : Colors.grey,
                       ),
                     ),
                   ],
@@ -854,7 +929,9 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
     // Group complaints by product
     final Map<String, int> productCounts = {};
     for (var c in complaints) {
-      final p = (c.productName != null && c.productName!.isNotEmpty) ? c.productName! : 'Other Products';
+      final p = (c.productName != null && c.productName!.isNotEmpty)
+          ? c.productName!
+          : 'Other Products';
       productCounts[p] = (productCounts[p] ?? 0) + 1;
     }
 
@@ -893,7 +970,8 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
             children: [
               const Row(
                 children: [
-                  Icon(Icons.bar_chart_rounded, size: 20, color: Color(0xFF6D28D9)),
+                  Icon(Icons.bar_chart_rounded,
+                      size: 20, color: Color(0xFF6D28D9)),
                   SizedBox(width: 8),
                   Text(
                     'Most Reported Products',
@@ -914,7 +992,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                 ),
                 child: Text(
                   '${sortedEntries.length} Products Tracked',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF6D28D9)),
                 ),
               ),
             ],
@@ -947,7 +1028,8 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                             Container(
                               width: 10,
                               height: 10,
-                              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                              decoration: BoxDecoration(
+                                  color: color, shape: BoxShape.circle),
                             ),
                             const SizedBox(width: 6),
                             Expanded(
@@ -955,7 +1037,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                                 pName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
+                                style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13),
                               ),
                             ),
                           ],
@@ -964,7 +1049,10 @@ class _CoordinatorDashboardScreenState extends ConsumerState<CoordinatorDashboar
                       const SizedBox(width: 8),
                       Text(
                         '$count ticket${count > 1 ? "s" : ""} (${pct.toStringAsFixed(1)}%)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: color),
                       ),
                     ],
                   ),

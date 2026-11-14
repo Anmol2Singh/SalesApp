@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -109,9 +108,12 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
       final newBooking = ServiceRequest(
         requestId: 'req_${Random().nextInt(10000)}',
         customerId: 'mock_user_123',
-        productId: (product.productName.isNotEmpty && product.productName != 'None')
-            ? product.productName
-            : (product.modelNumber.isNotEmpty ? product.modelNumber : 'IZYHEAT System'),
+        productId:
+            (product.productName.isNotEmpty && product.productName != 'None')
+                ? product.productName
+                : (product.modelNumber.isNotEmpty
+                    ? product.modelNumber
+                    : 'IZYHEAT System'),
         problemCode: _generatedProblemCode,
         issueCategory: _errorCodeController.text.trim().isNotEmpty
             ? _errorCodeController.text.trim()
@@ -160,7 +162,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     setState(() => _isLoading = true);
     try {
       final profile = await ref.read(userProfileProvider.future);
-      final addresses = (profile['savedAddresses'] as List?)?.whereType<String>().toList() ?? [];
+      final addresses =
+          (profile['savedAddresses'] as List?)?.whereType<String>().toList() ??
+              [];
       if (addresses.isNotEmpty) {
         final firstAddr = addresses.first;
         final parts = firstAddr.split(',');
@@ -173,11 +177,14 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
           }
         });
         if (mounted) {
-          ToastService.show(context, 'Loaded saved address', type: ToastType.success);
+          ToastService.show(context, 'Loaded saved address',
+              type: ToastType.success);
         }
       } else {
         if (mounted) {
-          ToastService.show(context, 'No saved address found. Please enter address below.', type: ToastType.info);
+          ToastService.show(
+              context, 'No saved address found. Please enter address below.',
+              type: ToastType.info);
         }
       }
     } catch (_) {
@@ -194,7 +201,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
-          ToastService.show(context, 'Please enable device location services.', type: ToastType.warning);
+          ToastService.show(context, 'Please enable device location services.',
+              type: ToastType.warning);
         }
         return;
       }
@@ -204,7 +212,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (mounted) {
-            ToastService.show(context, 'Location permissions are denied.', type: ToastType.error);
+            ToastService.show(context, 'Location permissions are denied.',
+                type: ToastType.error);
           }
           return;
         }
@@ -212,7 +221,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
-          ToastService.show(context, 'Location permissions are permanently denied. Please enable in Settings.', type: ToastType.error);
+          ToastService.show(context,
+              'Location permissions are permanently denied. Please enable in Settings.',
+              type: ToastType.error);
         }
         return;
       }
@@ -225,11 +236,17 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
       );
 
       try {
-        final placemarks = await Geocoding().placemarkFromCoordinates(position.latitude, position.longitude);
+        final placemarks = await Geocoding()
+            .placemarkFromCoordinates(position.latitude, position.longitude);
         if (placemarks.isNotEmpty) {
           final place = placemarks.first;
-          final street = [place.street, place.subLocality].where((s) => s != null && s.trim().isNotEmpty).join(', ');
-          final city = place.locality ?? place.subAdministrativeArea ?? place.administrativeArea ?? '';
+          final street = [place.street, place.subLocality]
+              .where((s) => s != null && s.trim().isNotEmpty)
+              .join(', ');
+          final city = place.locality ??
+              place.subAdministrativeArea ??
+              place.administrativeArea ??
+              '';
           final pin = place.postalCode ?? '';
 
           setState(() {
@@ -239,7 +256,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
           });
 
           if (mounted) {
-            ToastService.show(context, 'Location fetched: $city', type: ToastType.success);
+            ToastService.show(context, 'Location fetched: $city',
+                type: ToastType.success);
           }
           return;
         }
@@ -247,11 +265,14 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
       // Fallback if reverse geocoding is unavailable
       if (mounted) {
-        ToastService.show(context, 'Coordinates fetched: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}', type: ToastType.success);
+        ToastService.show(context,
+            'Coordinates fetched: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+            type: ToastType.success);
       }
     } catch (e) {
       if (mounted) {
-        ToastService.show(context, 'Error fetching location: $e', type: ToastType.error);
+        ToastService.show(context, 'Error fetching location: $e',
+            type: ToastType.error);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -276,7 +297,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: AppColors.primary),
                 title: const Text('Take Photo (Camera)'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -284,7 +306,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: AppColors.accent),
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: AppColors.accent),
                 title: const Text('Choose from Gallery'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -299,35 +322,124 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   }
 
   static const List<Map<String, String>> diagnosticErrorCodes = [
-    {'code': 'E01', 'title': 'No Heating / Low Water Temp', 'desc': 'Water not reaching desired temperature setpoint'},
-    {'code': 'E02', 'title': 'Water Leakage Detected', 'desc': 'Water dripping or pooling near joints, pipes, or valves'},
-    {'code': 'E03', 'title': 'Low Water Pressure / Flow Fault', 'desc': 'Inlet water pressure is below operating limit'},
-    {'code': 'E04', 'title': 'High Pressure Protection (HP)', 'desc': 'Compressor discharge high pressure safety switch tripped'},
-    {'code': 'E05', 'title': 'Low Refrigerant / Low Pressure (LP)', 'desc': 'Refrigerant circuit pressure low or potential leak'},
-    {'code': 'E06', 'title': 'Water Flow Switch Failure', 'desc': 'No circulation detected through the heat exchanger'},
-    {'code': 'E07', 'title': 'Compressor Overload / Overheat', 'desc': 'Motor thermal overload protector tripped'},
-    {'code': 'E08', 'title': 'Inlet Water Sensor Fault', 'desc': 'Inlet temp sensor open, short-circuit, or disconnected'},
-    {'code': 'E09', 'title': 'Outlet Water Sensor Fault', 'desc': 'Outlet temp sensor open, short-circuit, or disconnected'},
-    {'code': 'E10', 'title': 'Ambient Temperature Sensor Fault', 'desc': 'Outdoor air sensor reading abnormal'},
-    {'code': 'E11', 'title': 'Evaporator Coil Sensor Fault', 'desc': 'Defrost / coil temperature sensor open or short'},
-    {'code': 'E12', 'title': 'Exhaust Gas Sensor Fault', 'desc': 'Discharge line temperature sensor abnormal'},
-    {'code': 'E13', 'title': 'Display / PCB Communication Error', 'desc': 'Communication failure between controller and main board'},
-    {'code': 'E14', 'title': 'Phase Sequence / Power Fault', 'desc': 'Reverse phase, missing phase, or abnormal 3-phase power'},
-    {'code': 'E15', 'title': 'Antifreeze Protection Active', 'desc': 'Freeze prevention mode engaged in low temperature'},
-    {'code': 'E16', 'title': 'Fan Motor Abnormal Current', 'desc': 'Fan motor blocked, overloaded, or damaged'},
-    {'code': 'E17', 'title': '4-Way Valve Fault (Defrost)', 'desc': 'Reversing valve malfunction during heating or defrost cycle'},
-    {'code': 'E18', 'title': 'EEV Valve Fault', 'desc': 'Electronic expansion valve drive error'},
-    {'code': 'E19', 'title': 'Supply Voltage Abnormal', 'desc': 'Voltage is out of safe range (<180V or >260V)'},
-    {'code': 'E20', 'title': 'Earth Leakage / MCB Tripping', 'desc': 'Breaker or ELCM trips when power is turned on'},
-    {'code': 'E21', 'title': 'Abnormal Noise or Vibration', 'desc': 'Unusual rattle or vibration from compressor or fan'},
-    {'code': 'E99', 'title': 'Other / General Maintenance', 'desc': 'General service, descaling, or inspection needed'},
+    {
+      'code': 'E01',
+      'title': 'No Heating / Low Water Temp',
+      'desc': 'Water not reaching desired temperature setpoint'
+    },
+    {
+      'code': 'E02',
+      'title': 'Water Leakage Detected',
+      'desc': 'Water dripping or pooling near joints, pipes, or valves'
+    },
+    {
+      'code': 'E03',
+      'title': 'Low Water Pressure / Flow Fault',
+      'desc': 'Inlet water pressure is below operating limit'
+    },
+    {
+      'code': 'E04',
+      'title': 'High Pressure Protection (HP)',
+      'desc': 'Compressor discharge high pressure safety switch tripped'
+    },
+    {
+      'code': 'E05',
+      'title': 'Low Refrigerant / Low Pressure (LP)',
+      'desc': 'Refrigerant circuit pressure low or potential leak'
+    },
+    {
+      'code': 'E06',
+      'title': 'Water Flow Switch Failure',
+      'desc': 'No circulation detected through the heat exchanger'
+    },
+    {
+      'code': 'E07',
+      'title': 'Compressor Overload / Overheat',
+      'desc': 'Motor thermal overload protector tripped'
+    },
+    {
+      'code': 'E08',
+      'title': 'Inlet Water Sensor Fault',
+      'desc': 'Inlet temp sensor open, short-circuit, or disconnected'
+    },
+    {
+      'code': 'E09',
+      'title': 'Outlet Water Sensor Fault',
+      'desc': 'Outlet temp sensor open, short-circuit, or disconnected'
+    },
+    {
+      'code': 'E10',
+      'title': 'Ambient Temperature Sensor Fault',
+      'desc': 'Outdoor air sensor reading abnormal'
+    },
+    {
+      'code': 'E11',
+      'title': 'Evaporator Coil Sensor Fault',
+      'desc': 'Defrost / coil temperature sensor open or short'
+    },
+    {
+      'code': 'E12',
+      'title': 'Exhaust Gas Sensor Fault',
+      'desc': 'Discharge line temperature sensor abnormal'
+    },
+    {
+      'code': 'E13',
+      'title': 'Display / PCB Communication Error',
+      'desc': 'Communication failure between controller and main board'
+    },
+    {
+      'code': 'E14',
+      'title': 'Phase Sequence / Power Fault',
+      'desc': 'Reverse phase, missing phase, or abnormal 3-phase power'
+    },
+    {
+      'code': 'E15',
+      'title': 'Antifreeze Protection Active',
+      'desc': 'Freeze prevention mode engaged in low temperature'
+    },
+    {
+      'code': 'E16',
+      'title': 'Fan Motor Abnormal Current',
+      'desc': 'Fan motor blocked, overloaded, or damaged'
+    },
+    {
+      'code': 'E17',
+      'title': '4-Way Valve Fault (Defrost)',
+      'desc': 'Reversing valve malfunction during heating or defrost cycle'
+    },
+    {
+      'code': 'E18',
+      'title': 'EEV Valve Fault',
+      'desc': 'Electronic expansion valve drive error'
+    },
+    {
+      'code': 'E19',
+      'title': 'Supply Voltage Abnormal',
+      'desc': 'Voltage is out of safe range (<180V or >260V)'
+    },
+    {
+      'code': 'E20',
+      'title': 'Earth Leakage / MCB Tripping',
+      'desc': 'Breaker or ELCM trips when power is turned on'
+    },
+    {
+      'code': 'E21',
+      'title': 'Abnormal Noise or Vibration',
+      'desc': 'Unusual rattle or vibration from compressor or fan'
+    },
+    {
+      'code': 'E99',
+      'title': 'Other / General Maintenance',
+      'desc': 'General service, descaling, or inspection needed'
+    },
   ];
 
   void _openSearchableErrorCodePicker() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final contentBg = isDark ? const Color(0xFF1E293B) : Colors.white;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
     final borderCol = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
 
     showModalBottomSheet(
@@ -350,7 +462,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
               height: MediaQuery.of(context).size.height * 0.75,
               decoration: BoxDecoration(
                 color: contentBg,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 children: [
@@ -366,7 +479,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -375,10 +489,12 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF59E0B).withOpacity(0.12),
+                                color:
+                                    const Color(0xFFF59E0B).withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFFD97706), size: 18),
+                              child: const Icon(Icons.qr_code_2_rounded,
+                                  color: Color(0xFFD97706), size: 18),
                             ),
                             const SizedBox(width: 10),
                             Text(
@@ -400,14 +516,18 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                     child: TextField(
                       autofocus: false,
                       style: TextStyle(color: textColor, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'Search by error code or symptom (e.g. E01, leakage, temp)...',
-                        hintStyle: TextStyle(color: subtitleColor, fontSize: 13),
-                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFFF59E0B)),
+                        hintText:
+                            'Search by error code or symptom (e.g. E01, leakage, temp)...',
+                        hintStyle:
+                            TextStyle(color: subtitleColor, fontSize: 13),
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            size: 20, color: Color(0xFFF59E0B)),
                         suffixIcon: searchQuery.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear_rounded, size: 18),
@@ -416,9 +536,12 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                                 },
                               )
                             : null,
-                        fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF8FAFC),
+                        fillColor: isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : const Color(0xFFF8FAFC),
                         filled: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(color: borderCol),
@@ -429,7 +552,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFF59E0B), width: 1.5),
                         ),
                       ),
                       onChanged: (val) {
@@ -446,16 +570,21 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.search_off_rounded, size: 40, color: subtitleColor),
+                                  Icon(Icons.search_off_rounded,
+                                      size: 40, color: subtitleColor),
                                   const SizedBox(height: 8),
                                   Text(
                                     'No matching error code found',
-                                    style: TextStyle(color: subtitleColor, fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                        color: subtitleColor,
+                                        fontWeight: FontWeight.w600),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'You can select E99 - Other or describe the issue below',
-                                    style: TextStyle(color: subtitleColor.withOpacity(0.8), fontSize: 12),
+                                    style: TextStyle(
+                                        color: subtitleColor.withOpacity(0.8),
+                                        fontSize: 12),
                                     textAlign: TextAlign.center,
                                   ),
                                 ],
@@ -463,24 +592,32 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                             ),
                           )
                         : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 6),
                             itemCount: filteredCodes.length,
-                            separatorBuilder: (_, __) => Divider(height: 1, color: borderCol.withOpacity(0.5)),
+                            separatorBuilder: (_, __) => Divider(
+                                height: 1, color: borderCol.withOpacity(0.5)),
                             itemBuilder: (context, idx) {
                               final item = filteredCodes[idx];
-                              final isSelected = _errorCodeController.text.contains(item['code']!);
+                              final isSelected = _errorCodeController.text
+                                  .contains(item['code']!);
                               return ListTile(
                                 dense: true,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
                                 tileColor: isSelected
-                                    ? const Color(0xFFFEF3C7).withOpacity(isDark ? 0.2 : 0.6)
+                                    ? const Color(0xFFFEF3C7)
+                                        .withOpacity(isDark ? 0.2 : 0.6)
                                     : Colors.transparent,
                                 leading: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: isSelected
                                         ? const Color(0xFFF59E0B)
-                                        : (isDark ? Colors.white10 : const Color(0xFFF1F5F9)),
+                                        : (isDark
+                                            ? Colors.white10
+                                            : const Color(0xFFF1F5F9)),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -491,7 +628,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                                       fontSize: 12,
                                       color: isSelected
                                           ? Colors.white
-                                          : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                          : (isDark
+                                              ? Colors.white70
+                                              : const Color(0xFF1E293B)),
                                     ),
                                   ),
                                 ),
@@ -499,7 +638,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                                   item['title']!,
                                   style: TextStyle(
                                     fontFamily: 'Inter',
-                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
                                     fontSize: 13.5,
                                     color: textColor,
                                   ),
@@ -513,11 +654,13 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                                   ),
                                 ),
                                 trailing: isSelected
-                                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFFD97706), size: 18)
+                                    ? const Icon(Icons.check_circle_rounded,
+                                        color: Color(0xFFD97706), size: 18)
                                     : null,
                                 onTap: () {
                                   setState(() {
-                                    _errorCodeController.text = '${item['code']} - ${item['title']}';
+                                    _errorCodeController.text =
+                                        '${item['code']} - ${item['title']}';
                                   });
                                   Navigator.pop(ctx);
                                 },
@@ -557,29 +700,34 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
 
   Future<void> _pickPhotoFromSource(ImageSource source) async {
     try {
-      final XFile? image = await _imagePicker.pickImage(source: source, imageQuality: 70);
+      final XFile? image =
+          await _imagePicker.pickImage(source: source, imageQuality: 70);
       if (image == null) return;
 
       setState(() => _isLoading = true);
 
       final bytes = await image.readAsBytes();
-      final fileExt = image.name.contains('.') ? image.name.split('.').last : 'jpg';
-      final fileName = 'complaint_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final fileExt =
+          image.name.contains('.') ? image.name.split('.').last : 'jpg';
+      final fileName =
+          'complaint_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
       String uploadedUrl = '';
       try {
         final supabase = Supabase.instance.client;
         await supabase.storage.from('complaint-photos').uploadBinary(
-          fileName,
-          bytes,
-          fileOptions: FileOptions(
-            contentType: image.mimeType ?? 'image/$fileExt',
-            upsert: true,
-          ),
-        );
-        uploadedUrl = supabase.storage.from('complaint-photos').getPublicUrl(fileName);
+              fileName,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: image.mimeType ?? 'image/$fileExt',
+                upsert: true,
+              ),
+            );
+        uploadedUrl =
+            supabase.storage.from('complaint-photos').getPublicUrl(fileName);
       } catch (storageError) {
-        debugPrint('Supabase complaint-photos uploadBinary fallback to data URI: $storageError');
+        debugPrint(
+            'Supabase complaint-photos uploadBinary fallback to data URI: $storageError');
         final base64String = base64Encode(bytes);
         final mime = image.mimeType ?? 'image/jpeg';
         uploadedUrl = 'data:$mime;base64,$base64String';
@@ -591,12 +739,14 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
       });
 
       if (mounted) {
-        ToastService.show(context, 'Photo attached successfully!', type: ToastType.success);
+        ToastService.show(context, 'Photo attached successfully!',
+            type: ToastType.success);
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ToastService.show(context, 'Failed to upload photo: $e', type: ToastType.error);
+        ToastService.show(context, 'Failed to upload photo: $e',
+            type: ToastType.error);
       }
     }
   }
@@ -633,7 +783,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldBg = isDark ? AppColors.bgPrimary : AppColors.bgPrimaryLight;
     final contentBg = isDark ? AppColors.bgSecondary : Colors.white;
-    final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
+    final borderCol =
+        isDark ? AppColors.borderColor : AppColors.borderColorLight;
 
     return Container(
       decoration: BoxDecoration(
@@ -675,9 +826,14 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     final contentBg = isDark ? const Color(0xFF1E293B) : Colors.white;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
     final borderCol = isDark ? Colors.white10 : const Color(0xFFE2E8F0);
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
-    final stepLabels = ['Diagnosis & Symptom', 'Coverage Details', 'Service Location'];
+    final stepLabels = [
+      'Diagnosis & Symptom',
+      'Coverage Details',
+      'Service Location'
+    ];
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
@@ -704,7 +860,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                       color: const Color(0xFF1E1B4B).withOpacity(0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.handyman_rounded, color: Color(0xFF1E1B4B), size: 20),
+                    child: const Icon(Icons.handyman_rounded,
+                        color: Color(0xFF1E1B4B), size: 20),
                   ),
                   const SizedBox(width: 10),
                   Column(
@@ -735,8 +892,10 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
               ),
               IconButton(
                 style: IconButton.styleFrom(
-                  backgroundColor: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  backgroundColor:
+                      isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.close_rounded, size: 18),
                 onPressed: () => context.pop(),
@@ -764,7 +923,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                             ? const Color(0xFF10B981)
                             : (isActive
                                 ? const Color(0xFF1E1B4B)
-                                : (isDark ? Colors.white10 : const Color(0xFFF1F5F9))),
+                                : (isDark
+                                    ? Colors.white10
+                                    : const Color(0xFFF1F5F9))),
                         border: Border.all(
                           color: isCompleted
                               ? const Color(0xFF10B981)
@@ -776,7 +937,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                         boxShadow: isActive
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF1E1B4B).withOpacity(0.2),
+                                  color:
+                                      const Color(0xFF1E1B4B).withOpacity(0.2),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -796,9 +958,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                                   fontFamily: 'Inter',
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
-                                  color: isActive
-                                      ? Colors.white
-                                      : subtitleColor,
+                                  color:
+                                      isActive ? Colors.white : subtitleColor,
                                 ),
                               ),
                       ),
@@ -811,7 +972,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                           decoration: BoxDecoration(
                             color: isCompleted
                                 ? const Color(0xFF10B981)
-                                : (isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                                : (isDark
+                                    ? Colors.white10
+                                    : const Color(0xFFE2E8F0)),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -846,7 +1009,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     final contentBg = isDark ? const Color(0xFF1E293B) : Colors.white;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
     final borderCol = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,7 +1023,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 color: const Color(0xFF3B82F6).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.heat_pump_rounded, color: Color(0xFF2563EB), size: 16),
+              child: const Icon(Icons.heat_pump_rounded,
+                  color: Color(0xFF2563EB), size: 16),
             ),
             const SizedBox(width: 8),
             Text(
@@ -894,7 +1059,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
               isExpanded: true,
               value: _selectedProductId,
               dropdownColor: contentBg,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF64748B)),
               items: allProducts.map((p) {
                 return DropdownMenuItem(
                   value: p.productId,
@@ -906,7 +1072,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Icon(Icons.solar_power_outlined, size: 16, color: Color(0xFF1E293B)),
+                        child: const Icon(Icons.solar_power_outlined,
+                            size: 16, color: Color(0xFF1E293B)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -931,9 +1098,7 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             ),
           ),
         ),
-
         const SizedBox(height: 22),
-
         Row(
           children: [
             Container(
@@ -942,7 +1107,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 color: const Color(0xFFF59E0B).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFFD97706), size: 16),
+              child: const Icon(Icons.qr_code_2_rounded,
+                  color: Color(0xFFD97706), size: 16),
             ),
             const SizedBox(width: 8),
             Text(
@@ -967,7 +1133,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
               color: contentBg,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: _errorCodeController.text.isNotEmpty ? const Color(0xFFF59E0B) : borderCol,
+                color: _errorCodeController.text.isNotEmpty
+                    ? const Color(0xFFF59E0B)
+                    : borderCol,
                 width: _errorCodeController.text.isNotEmpty ? 1.5 : 1.2,
               ),
               boxShadow: [
@@ -980,7 +1148,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.grid_view_rounded, color: Color(0xFFF59E0B), size: 20),
+                const Icon(Icons.grid_view_rounded,
+                    color: Color(0xFFF59E0B), size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _errorCodeController.text.isNotEmpty
@@ -1009,18 +1178,18 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                     onTap: () => setState(() => _errorCodeController.clear()),
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
-                      child: Icon(Icons.cancel_rounded, size: 18, color: subtitleColor),
+                      child: Icon(Icons.cancel_rounded,
+                          size: 18, color: subtitleColor),
                     ),
                   )
                 else
-                  Icon(Icons.arrow_drop_down_rounded, color: subtitleColor, size: 24),
+                  Icon(Icons.arrow_drop_down_rounded,
+                      color: subtitleColor, size: 24),
               ],
             ),
           ),
         ),
-
         const SizedBox(height: 22),
-
         Row(
           children: [
             Container(
@@ -1029,7 +1198,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 color: const Color(0xFF8B5CF6).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.edit_note_rounded, color: Color(0xFF7C3AED), size: 16),
+              child: const Icon(Icons.edit_note_rounded,
+                  color: Color(0xFF7C3AED), size: 16),
             ),
             const SizedBox(width: 8),
             Text(
@@ -1053,7 +1223,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
           decoration: InputDecoration(
             hintText:
                 'Please describe the problem in detail (e.g. error code shown, noise frequency, leakage quantity)...',
-            hintStyle: TextStyle(fontFamily: 'Inter', color: subtitleColor, fontSize: 13.5),
+            hintStyle: TextStyle(
+                fontFamily: 'Inter', color: subtitleColor, fontSize: 13.5),
             fillColor: contentBg,
             filled: true,
             contentPadding: const EdgeInsets.all(16),
@@ -1063,14 +1234,13 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFF1E1B4B), width: 1.8),
+              borderSide:
+                  const BorderSide(color: Color(0xFF1E1B4B), width: 1.8),
             ),
           ),
           onChanged: (_) => setState(() {}),
         ),
-
         const SizedBox(height: 14),
-
         Row(
           children: [
             Container(
@@ -1079,7 +1249,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 color: const Color(0xFF10B981).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.add_a_photo_rounded, color: Color(0xFF059669), size: 16),
+              child: const Icon(Icons.add_a_photo_rounded,
+                  color: Color(0xFF059669), size: 16),
             ),
             const SizedBox(width: 8),
             Text(
@@ -1142,7 +1313,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                     ? Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8FAFC),
+                          color: isDark
+                              ? Colors.white.withOpacity(0.03)
+                              : const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: borderCol),
                         ),
@@ -1174,21 +1347,24 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(14),
-                                child: _buildPhotoThumbnail(_uploadedPhotos[idx]),
+                                child:
+                                    _buildPhotoThumbnail(_uploadedPhotos[idx]),
                               ),
                             ),
                             Positioned(
                               top: 4,
                               right: 14,
                               child: InkWell(
-                                onTap: () => setState(() => _uploadedPhotos.removeAt(idx)),
+                                onTap: () => setState(
+                                    () => _uploadedPhotos.removeAt(idx)),
                                 child: Container(
                                   padding: const EdgeInsets.all(3),
                                   decoration: const BoxDecoration(
                                     color: Colors.red,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.close, color: Colors.white, size: 12),
+                                  child: const Icon(Icons.close,
+                                      color: Colors.white, size: 12),
                                 ),
                               ),
                             ),
@@ -1207,7 +1383,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   Widget _buildStep2(Product product) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
     if (_generatedProblemCode.isEmpty) {
       _generateProblemDetails(product);
@@ -1251,14 +1428,14 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
             color: product.amcStatus == 'active'
                 ? AppColors.success.withOpacity(0.1)
                 : (product.warrantyExpiryDate.isAfter(DateTime.now())
-                      ? AppColors.success.withOpacity(0.1)
-                      : AppColors.warning.withOpacity(0.1)),
+                    ? AppColors.success.withOpacity(0.1)
+                    : AppColors.warning.withOpacity(0.1)),
             border: Border.all(
               color: product.amcStatus == 'active'
                   ? AppColors.success.withOpacity(0.3)
                   : (product.warrantyExpiryDate.isAfter(DateTime.now())
-                        ? AppColors.success.withOpacity(0.3)
-                        : AppColors.warning.withOpacity(0.3)),
+                      ? AppColors.success.withOpacity(0.3)
+                      : AppColors.warning.withOpacity(0.3)),
               width: 1,
             ),
             borderRadius: BorderRadius.circular(16),
@@ -1269,13 +1446,13 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 product.amcStatus == 'active'
                     ? Icons.verified
                     : (product.warrantyExpiryDate.isAfter(DateTime.now())
-                          ? Icons.verified
-                          : Icons.warning_amber_rounded),
+                        ? Icons.verified
+                        : Icons.warning_amber_rounded),
                 color: product.amcStatus == 'active'
                     ? AppColors.success
                     : (product.warrantyExpiryDate.isAfter(DateTime.now())
-                          ? AppColors.success
-                          : AppColors.warning),
+                        ? AppColors.success
+                        : AppColors.warning),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1289,10 +1466,10 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                         color: product.amcStatus == 'active'
                             ? AppColors.success
                             : (product.warrantyExpiryDate.isAfter(
-                                    DateTime.now(),
-                                  )
-                                  ? AppColors.success
-                                  : AppColors.warning),
+                                DateTime.now(),
+                              )
+                                ? AppColors.success
+                                : AppColors.warning),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1300,8 +1477,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                       product.amcStatus == 'active'
                           ? 'Priority technical dispatch will be applied at zero cost.'
                           : (product.warrantyExpiryDate.isAfter(DateTime.now())
-                                ? 'Parts coverage is active under standard manufacturer warranty.'
-                                : 'Service call charges and parts costs will apply after repair.'),
+                              ? 'Parts coverage is active under standard manufacturer warranty.'
+                              : 'Service call charges and parts costs will apply after repair.'),
                       style: TextStyle(
                         fontSize: 12,
                         color: subtitleColor,
@@ -1343,8 +1520,10 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final contentBg = isDark ? AppColors.bgSecondary : Colors.white;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final borderCol =
+        isDark ? AppColors.borderColor : AppColors.borderColorLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1390,7 +1569,9 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.primary.withOpacity(0.12),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5),
+                        border: Border.all(
+                            color: AppColors.primary.withOpacity(0.3),
+                            width: 1.5),
                       ),
                       child: const Icon(
                         Icons.location_on_rounded,
@@ -1440,7 +1621,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
               children: [
                 TextButton.icon(
                   onPressed: _getCurrentLocation,
-                  icon: const Icon(Icons.location_searching, size: 14, color: AppColors.primary),
+                  icon: const Icon(Icons.location_searching,
+                      size: 14, color: AppColors.primary),
                   label: const Text(
                     'Get Location',
                     style: TextStyle(color: AppColors.primary, fontSize: 13),
@@ -1448,7 +1630,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                 ),
                 TextButton.icon(
                   onPressed: _useSavedAddress,
-                  icon: const Icon(Icons.bookmark_outline, size: 14, color: AppColors.accent),
+                  icon: const Icon(Icons.bookmark_outline,
+                      size: 14, color: AppColors.accent),
                   label: const Text(
                     'Use Saved',
                     style: TextStyle(color: AppColors.accent, fontSize: 13),
@@ -1568,8 +1751,10 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
   Widget _buildStep5(Product product) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppColors.textPrimaryLight;
-    final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
+    final borderCol =
+        isDark ? AppColors.borderColor : AppColors.borderColorLight;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.textSecondaryLight;
 
     return Column(
       children: [
@@ -1659,7 +1844,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                       color: AppColors.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_outline, color: AppColors.primary, size: 20),
+                    child: const Icon(Icons.person_outline,
+                        color: AppColors.primary, size: 20),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1737,12 +1923,11 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
                     product.amcStatus == 'active'
                         ? 'AMC COVERED'
                         : (product.warrantyExpiryDate.isAfter(DateTime.now())
-                              ? 'WARRANTY COVERED'
-                              : 'PAID SERVICE'),
+                            ? 'WARRANTY COVERED'
+                            : 'PAID SERVICE'),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color:
-                          product.amcStatus == 'active' ||
+                      color: product.amcStatus == 'active' ||
                               product.warrantyExpiryDate.isAfter(DateTime.now())
                           ? AppColors.success
                           : AppColors.warning,
@@ -1776,7 +1961,8 @@ class _ServiceBookingFlowState extends ConsumerState<ServiceBookingFlow> {
     final isNextEnabled = _isStepValid();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final contentBg = isDark ? AppColors.bgSecondary : Colors.white;
-    final borderCol = isDark ? AppColors.borderColor : AppColors.borderColorLight;
+    final borderCol =
+        isDark ? AppColors.borderColor : AppColors.borderColorLight;
     final buttonIconColor = isDark ? Colors.white : AppColors.textPrimaryLight;
 
     return Container(

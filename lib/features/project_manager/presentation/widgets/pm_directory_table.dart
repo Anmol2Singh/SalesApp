@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/pm_tokens.dart';
-import 'pm_badge.dart';
 import 'pm_button.dart';
 import 'pm_card.dart';
 
@@ -56,7 +55,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
   Future<void> _loadSavedColumns() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = '${_columnsPrefsKey}_${widget.isPurchase ? "purchase" : "sales"}';
+      final key =
+          '${_columnsPrefsKey}_${widget.isPurchase ? "purchase" : "sales"}';
       final saved = prefs.getStringList(key);
       if (saved != null && saved.isNotEmpty) {
         if (mounted) {
@@ -72,7 +72,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
   Future<void> _saveSavedColumns() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = '${_columnsPrefsKey}_${widget.isPurchase ? "purchase" : "sales"}';
+      final key =
+          '${_columnsPrefsKey}_${widget.isPurchase ? "purchase" : "sales"}';
       await prefs.setStringList(key, _visibleColumns.toList());
     } catch (_) {}
   }
@@ -141,7 +142,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(LucideIcons.inbox, size: 48, color: pm.mutedForeground.withOpacity(0.5)),
+              Icon(LucideIcons.inbox,
+                  size: 48, color: pm.mutedForeground.withOpacity(0.5)),
               const SizedBox(height: 12),
               Text(
                 'No records match your criteria.',
@@ -174,15 +176,42 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
         int colCount = 4; // Checkbox, ID, SiteName, Action
         double estimatedContentWidth = 360.0; // base for 4 mandatory columns
 
-        if (_visibleColumns.contains('type')) { colCount++; estimatedContentWidth += 90.0; }
-        if (_visibleColumns.contains('party_name')) { colCount++; estimatedContentWidth += 140.0; }
-        if (_visibleColumns.contains('mobile')) { colCount++; estimatedContentWidth += 100.0; }
-        if (_visibleColumns.contains('address')) { colCount++; estimatedContentWidth += 140.0; }
-        if (_visibleColumns.contains('order_value')) { colCount++; estimatedContentWidth += 100.0; }
-        if (!widget.isPurchase && _visibleColumns.contains('extra_work')) { colCount++; estimatedContentWidth += 90.0; }
-        if (_visibleColumns.contains('payment_recd')) { colCount++; estimatedContentWidth += 100.0; }
-        if (_visibleColumns.contains('balance')) { colCount++; estimatedContentWidth += 100.0; }
-        if (_visibleColumns.contains('reminder_date')) { colCount++; estimatedContentWidth += 100.0; }
+        if (_visibleColumns.contains('type')) {
+          colCount++;
+          estimatedContentWidth += 90.0;
+        }
+        if (_visibleColumns.contains('party_name')) {
+          colCount++;
+          estimatedContentWidth += 140.0;
+        }
+        if (_visibleColumns.contains('mobile')) {
+          colCount++;
+          estimatedContentWidth += 100.0;
+        }
+        if (_visibleColumns.contains('address')) {
+          colCount++;
+          estimatedContentWidth += 140.0;
+        }
+        if (_visibleColumns.contains('order_value')) {
+          colCount++;
+          estimatedContentWidth += 100.0;
+        }
+        if (!widget.isPurchase && _visibleColumns.contains('extra_work')) {
+          colCount++;
+          estimatedContentWidth += 90.0;
+        }
+        if (_visibleColumns.contains('payment_recd')) {
+          colCount++;
+          estimatedContentWidth += 100.0;
+        }
+        if (_visibleColumns.contains('balance')) {
+          colCount++;
+          estimatedContentWidth += 100.0;
+        }
+        if (_visibleColumns.contains('reminder_date')) {
+          colCount++;
+          estimatedContentWidth += 100.0;
+        }
 
         final gaps = colCount > 1 ? colCount - 1 : 1;
         const baseSpacing = 16.0;
@@ -201,7 +230,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
             children: [
               // Table Actions & Column Visibility Toolbar
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: const BoxDecoration(
                   border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
                 ),
@@ -210,7 +240,10 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                     if (_selectedIds.isNotEmpty) ...[
                       Text(
                         '${_selectedIds.length} selected',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: pm.destructive),
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: pm.destructive),
                       ),
                       const SizedBox(width: 12),
                       PmButton(
@@ -234,14 +267,17 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                     PopupMenuButton<String>(
                       tooltip: 'Show / Hide Columns',
                       offset: const Offset(0, 36),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                       itemBuilder: (ctx) {
                         final cols = <String, String>{
                           'type': 'Type',
                           'party_name': 'Party Print Name',
                           'mobile': 'Mobile No.',
                           'address': 'Address',
-                          'order_value': widget.isPurchase ? 'Quotation Value' : 'Order Value',
+                          'order_value': widget.isPurchase
+                              ? 'Quotation Value'
+                              : 'Order Value',
                           if (!widget.isPurchase) 'extra_work': 'Extra Work',
                           'payment_recd': 'Payment Received',
                           'balance': 'Balance',
@@ -254,12 +290,17 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                             child: Row(
                               children: [
                                 Icon(
-                                  isVisible ? LucideIcons.checkSquare : LucideIcons.square,
+                                  isVisible
+                                      ? LucideIcons.checkSquare
+                                      : LucideIcons.square,
                                   size: 16,
-                                  color: isVisible ? const Color(0xFF005CE6) : const Color(0xFF94A3B8),
+                                  color: isVisible
+                                      ? const Color(0xFF005CE6)
+                                      : const Color(0xFF94A3B8),
                                 ),
                                 const SizedBox(width: 10),
-                                Text(entry.value, style: const TextStyle(fontSize: 13)),
+                                Text(entry.value,
+                                    style: const TextStyle(fontSize: 13)),
                               ],
                             ),
                           );
@@ -278,7 +319,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                         _saveSavedColumns();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(8),
@@ -287,11 +329,15 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.slidersHorizontal, size: 14, color: Color(0xFF475569)),
+                            Icon(LucideIcons.slidersHorizontal,
+                                size: 14, color: Color(0xFF475569)),
                             SizedBox(width: 6),
                             Text(
                               'Columns',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF475569)),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF475569)),
                             ),
                           ],
                         ),
@@ -307,7 +353,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                   constraints: BoxConstraints(minWidth: constraints.maxWidth),
                   child: DataTable(
                     showCheckboxColumn: false,
-                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                    headingRowColor:
+                        WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                     headingRowHeight: 44,
                     dataRowMinHeight: 48,
                     dataRowMaxHeight: 52,
@@ -320,312 +367,408 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                     }),
                     horizontalMargin: 12,
                     columnSpacing: dynamicSpacing,
-              columns: [
-                DataColumn(
-                  label: Checkbox(
-                    value: _selectedIds.length == sorted.length && sorted.isNotEmpty,
-                    activeColor: const Color(0xFF005CE6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    side: BorderSide(
-                      color: _selectedIds.isNotEmpty ? const Color(0xFF005CE6) : const Color(0xFF94A3B8),
-                      width: 1.5,
-                    ),
-                    onChanged: (val) => _toggleSelectAll(),
-                  ),
-                ),
-                DataColumn(
-                  label: _SortHeader(
-                    title: widget.isPurchase ? 'VENDOR ID' : 'ID',
-                    isActive: _sortField == 'id_no',
-                    isAsc: _sortAsc,
-                    onTap: () => _setSort('id_no'),
-                  ),
-                ),
-                if (_visibleColumns.contains('type'))
-                  const DataColumn(label: Text('TYPE', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                DataColumn(
-                  label: _SortHeader(
-                    title: widget.isPurchase ? 'VENDOR NAME' : 'CUSTOMER / SITE NAME',
-                    isActive: _sortField == 'site_name',
-                    isAsc: _sortAsc,
-                    onTap: () => _setSort('site_name'),
-                  ),
-                ),
-                if (_visibleColumns.contains('party_name'))
-                  const DataColumn(label: Text('PARTY PRINT NAME', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                if (_visibleColumns.contains('mobile'))
-                  const DataColumn(label: Text('MOBILE NO.', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                if (_visibleColumns.contains('address'))
-                  const DataColumn(label: Text('ADDRESS', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                if (_visibleColumns.contains('order_value'))
-                  DataColumn(
-                    numeric: true,
-                    label: _SortHeader(
-                      title: widget.isPurchase ? 'QUOTATION' : 'ORDER VALUE',
-                      isActive: _sortField == 'order_value',
-                      isAsc: _sortAsc,
-                      onTap: () => _setSort('order_value'),
-                    ),
-                  ),
-                if (!widget.isPurchase && _visibleColumns.contains('extra_work'))
-                  const DataColumn(numeric: true, label: Text('EXTRA WORK', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                if (_visibleColumns.contains('payment_recd'))
-                  const DataColumn(
-                    numeric: true,
-                    label: Text('PAYMENT RECD', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569))),
-                  ),
-                if (_visibleColumns.contains('balance'))
-                  DataColumn(
-                    numeric: true,
-                    label: _SortHeader(
-                      title: 'BALANCE',
-                      isActive: _sortField == 'balance',
-                      isAsc: _sortAsc,
-                      onTap: () => _setSort('balance'),
-                    ),
-                  ),
-                if (_visibleColumns.contains('reminder_date'))
-                  const DataColumn(label: Text('REMINDER DATE', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-                const DataColumn(label: Text('ACTION', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF475569)))),
-              ],
-              rows: sorted.map((rec) {
-                final isSelected = _selectedIds.contains(rec.id);
-                final bal = rec.balance as double;
-                final orderType = (rec.orderType ?? '').toString().toUpperCase();
-                final isSwh = orderType.contains('SWH') || orderType.contains('SOLAR');
-
-                void openLedger() {
-                  context.push('/pm/projects/${rec.id}${widget.isPurchase ? "?mode=purchase" : ""}');
-                }
-
-                Widget wrapCell(Widget child) {
-                  return InkWell(
-                    onTap: openLedger,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: child,
-                    ),
-                  );
-                }
-
-                return DataRow(
-                  selected: isSelected,
-                  cells: [
-                    // Single square checkbox (not highlighted until selected)
-                    DataCell(
-                      Checkbox(
-                        value: isSelected,
-                        activeColor: const Color(0xFF005CE6),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        side: BorderSide(
-                          color: isSelected ? const Color(0xFF005CE6) : const Color(0xFF94A3B8),
-                          width: 1.5,
-                        ),
-                        onChanged: (val) => _toggleSelect(rec.id),
-                      ),
-                    ),
-                    DataCell(
-                      wrapCell(
-                        Text(
-                          '${rec.idNo}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                        ),
-                      ),
-                    ),
-                    if (_visibleColumns.contains('type'))
-                      DataCell(
-                        wrapCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isSwh ? const Color(0xFFE0F2FE) : const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(9999),
-                              border: Border.all(
-                                color: isSwh ? const Color(0xFFBAE6FD) : const Color(0xFFE2E8F0),
-                              ),
-                            ),
-                            child: Text(
-                              rec.orderType.toString().toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.3,
-                                color: isSwh ? const Color(0xFF0284C7) : const Color(0xFF475569),
-                              ),
-                            ),
+                    columns: [
+                      DataColumn(
+                        label: Checkbox(
+                          value: _selectedIds.length == sorted.length &&
+                              sorted.isNotEmpty,
+                          activeColor: const Color(0xFF005CE6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4)),
+                          side: BorderSide(
+                            color: _selectedIds.isNotEmpty
+                                ? const Color(0xFF005CE6)
+                                : const Color(0xFF94A3B8),
+                            width: 1.5,
                           ),
+                          onChanged: (val) => _toggleSelectAll(),
                         ),
                       ),
-                    DataCell(
-                      wrapCell(
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 180),
-                          child: Text(
-                            rec.siteName.toString().toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                      DataColumn(
+                        label: _SortHeader(
+                          title: widget.isPurchase ? 'VENDOR ID' : 'ID',
+                          isActive: _sortField == 'id_no',
+                          isAsc: _sortAsc,
+                          onTap: () => _setSort('id_no'),
                         ),
                       ),
-                    ),
-                    if (_visibleColumns.contains('party_name'))
-                      DataCell(
-                        wrapCell(
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 130),
-                            child: Text(
-                              rec.partyPrintName ?? '-',
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Color(0xFF475569)),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (_visibleColumns.contains('mobile'))
-                      DataCell(
-                        wrapCell(
-                          Text(
-                            rec.mobileNumber != null && rec.mobileNumber!.isNotEmpty ? rec.mobileNumber! : '-',
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Color(0xFF475569)),
-                          ),
-                        ),
-                      ),
-                    if (_visibleColumns.contains('address'))
-                      DataCell(
-                        wrapCell(
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 140),
-                            child: Text(
-                              rec.address ?? '-',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (_visibleColumns.contains('order_value'))
-                      DataCell(
-                        wrapCell(
-                          Text(
-                            '₹${_currencyFormat.format(rec.orderValue)}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
-                          ),
-                        ),
-                      ),
-                    if (!widget.isPurchase && _visibleColumns.contains('extra_work'))
-                      DataCell(
-                        wrapCell(
-                          Text(
-                            rec.extraWorkValue > 0 ? '₹${_currencyFormat.format(rec.extraWorkValue)}' : '-',
-                            style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                          ),
-                        ),
-                      ),
-                    // Light green column background for PAYMENT RECD
-                    if (_visibleColumns.contains('payment_recd'))
-                      DataCell(
-                        wrapCell(
-                          Container(
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0FDF4),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '₹${_currencyFormat.format(rec.paymentReceived)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF16A34A),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (_visibleColumns.contains('balance'))
-                      DataCell(
-                        wrapCell(
-                          Text(
-                            '₹${_currencyFormat.format(bal)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF16A34A),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (_visibleColumns.contains('reminder_date'))
-                      DataCell(
-                        wrapCell(
-                          rec.reminderDate != null
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEFF6FF),
-                                    borderRadius: BorderRadius.circular(9999),
-                                    border: Border.all(color: const Color(0xFFBFDBFE)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(LucideIcons.calendar, size: 11, color: Color(0xFF005CE6)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _dateFormat.format(rec.reminderDate!),
-                                        style: const TextStyle(
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF005CE6),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : const Text('-', style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
-                        ),
-                      ),
-                    DataCell(
-                      InkWell(
-                        onTap: openLedger,
-                        borderRadius: BorderRadius.circular(6),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(LucideIcons.externalLink, size: 13, color: Color(0xFF005CE6)),
-                              SizedBox(width: 4),
-                              Text(
-                                'Ledger',
+                      if (_visibleColumns.contains('type'))
+                        const DataColumn(
+                            label: Text('TYPE',
                                 style: TextStyle(
-                                  fontSize: 12,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569)))),
+                      DataColumn(
+                        label: _SortHeader(
+                          title: widget.isPurchase
+                              ? 'VENDOR NAME'
+                              : 'CUSTOMER / SITE NAME',
+                          isActive: _sortField == 'site_name',
+                          isAsc: _sortAsc,
+                          onTap: () => _setSort('site_name'),
+                        ),
+                      ),
+                      if (_visibleColumns.contains('party_name'))
+                        const DataColumn(
+                            label: Text('PARTY PRINT NAME',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569)))),
+                      if (_visibleColumns.contains('mobile'))
+                        const DataColumn(
+                            label: Text('MOBILE NO.',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569)))),
+                      if (_visibleColumns.contains('address'))
+                        const DataColumn(
+                            label: Text('ADDRESS',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569)))),
+                      if (_visibleColumns.contains('order_value'))
+                        DataColumn(
+                          numeric: true,
+                          label: _SortHeader(
+                            title:
+                                widget.isPurchase ? 'QUOTATION' : 'ORDER VALUE',
+                            isActive: _sortField == 'order_value',
+                            isAsc: _sortAsc,
+                            onTap: () => _setSort('order_value'),
+                          ),
+                        ),
+                      if (!widget.isPurchase &&
+                          _visibleColumns.contains('extra_work'))
+                        const DataColumn(
+                            numeric: true,
+                            label: Text('EXTRA WORK',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569)))),
+                      if (_visibleColumns.contains('payment_recd'))
+                        const DataColumn(
+                          numeric: true,
+                          label: Text('PAYMENT RECD',
+                              style: TextStyle(
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF005CE6),
+                                  color: Color(0xFF475569))),
+                        ),
+                      if (_visibleColumns.contains('balance'))
+                        DataColumn(
+                          numeric: true,
+                          label: _SortHeader(
+                            title: 'BALANCE',
+                            isActive: _sortField == 'balance',
+                            isAsc: _sortAsc,
+                            onTap: () => _setSort('balance'),
+                          ),
+                        ),
+                      if (_visibleColumns.contains('reminder_date'))
+                        const DataColumn(
+                            label: Text('REMINDER DATE',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569)))),
+                      const DataColumn(
+                          label: Text('ACTION',
+                              style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF475569)))),
+                    ],
+                    rows: sorted.map((rec) {
+                      final isSelected = _selectedIds.contains(rec.id);
+                      final bal = rec.balance as double;
+                      final orderType =
+                          (rec.orderType ?? '').toString().toUpperCase();
+                      final isSwh = orderType.contains('SWH') ||
+                          orderType.contains('SOLAR');
+
+                      void openLedger() {
+                        context.push(
+                            '/pm/projects/${rec.id}${widget.isPurchase ? "?mode=purchase" : ""}');
+                      }
+
+                      Widget wrapCell(Widget child) {
+                        return InkWell(
+                          onTap: openLedger,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: child,
+                          ),
+                        );
+                      }
+
+                      return DataRow(
+                        selected: isSelected,
+                        cells: [
+                          // Single square checkbox (not highlighted until selected)
+                          DataCell(
+                            Checkbox(
+                              value: isSelected,
+                              activeColor: const Color(0xFF005CE6),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4)),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? const Color(0xFF005CE6)
+                                    : const Color(0xFF94A3B8),
+                                width: 1.5,
+                              ),
+                              onChanged: (val) => _toggleSelect(rec.id),
+                            ),
+                          ),
+                          DataCell(
+                            wrapCell(
+                              Text(
+                                '${rec.idNo}',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF0F172A)),
+                              ),
+                            ),
+                          ),
+                          if (_visibleColumns.contains('type'))
+                            DataCell(
+                              wrapCell(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isSwh
+                                        ? const Color(0xFFE0F2FE)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(9999),
+                                    border: Border.all(
+                                      color: isSwh
+                                          ? const Color(0xFFBAE6FD)
+                                          : const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    rec.orderType.toString().toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.3,
+                                      color: isSwh
+                                          ? const Color(0xFF0284C7)
+                                          : const Color(0xFF475569),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ],
+                            ),
+                          DataCell(
+                            wrapCell(
+                              ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 180),
+                                child: Text(
+                                  rec.siteName.toString().toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
+                          if (_visibleColumns.contains('party_name'))
+                            DataCell(
+                              wrapCell(
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 130),
+                                  child: Text(
+                                    rec.partyPrintName ?? '-',
+                                    style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF475569)),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_visibleColumns.contains('mobile'))
+                            DataCell(
+                              wrapCell(
+                                Text(
+                                  rec.mobileNumber != null &&
+                                          rec.mobileNumber!.isNotEmpty
+                                      ? rec.mobileNumber!
+                                      : '-',
+                                  style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF475569)),
+                                ),
+                              ),
+                            ),
+                          if (_visibleColumns.contains('address'))
+                            DataCell(
+                              wrapCell(
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 140),
+                                  child: Text(
+                                    rec.address ?? '-',
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Color(0xFF64748B)),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_visibleColumns.contains('order_value'))
+                            DataCell(
+                              wrapCell(
+                                Text(
+                                  '₹${_currencyFormat.format(rec.orderValue)}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF0F172A)),
+                                ),
+                              ),
+                            ),
+                          if (!widget.isPurchase &&
+                              _visibleColumns.contains('extra_work'))
+                            DataCell(
+                              wrapCell(
+                                Text(
+                                  rec.extraWorkValue > 0
+                                      ? '₹${_currencyFormat.format(rec.extraWorkValue)}'
+                                      : '-',
+                                  style: const TextStyle(
+                                      fontSize: 11.5, color: Color(0xFF64748B)),
+                                ),
+                              ),
+                            ),
+                          // Light green column background for PAYMENT RECD
+                          if (_visibleColumns.contains('payment_recd'))
+                            DataCell(
+                              wrapCell(
+                                Container(
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF0FDF4),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '₹${_currencyFormat.format(rec.paymentReceived)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_visibleColumns.contains('balance'))
+                            DataCell(
+                              wrapCell(
+                                Text(
+                                  '₹${_currencyFormat.format(bal)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_visibleColumns.contains('reminder_date'))
+                            DataCell(
+                              wrapCell(
+                                rec.reminderDate != null
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius:
+                                              BorderRadius.circular(9999),
+                                          border: Border.all(
+                                              color: const Color(0xFFBFDBFE)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(LucideIcons.calendar,
+                                                size: 11,
+                                                color: Color(0xFF005CE6)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _dateFormat
+                                                  .format(rec.reminderDate!),
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF005CE6),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : const Text('-',
+                                        style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: Color(0xFF94A3B8))),
+                              ),
+                            ),
+                          DataCell(
+                            InkWell(
+                              onTap: openLedger,
+                              borderRadius: BorderRadius.circular(6),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(LucideIcons.externalLink,
+                                        size: 13, color: Color(0xFF005CE6)),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Ledger',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF005CE6),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
-    ),
-  );
-},
-);
-}
+        );
+      },
+    );
+  }
 
   Widget _buildMobileCards(PmTokens pm, List<dynamic> sorted) {
     return ListView.separated(
@@ -638,11 +781,14 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
         final orderVal = (rec.orderValue as num).toDouble();
         final paidVal = (rec.paymentReceived as num).toDouble();
         final bal = (rec.balance as num).toDouble();
-        final percentCollected = orderVal > 0 ? (paidVal / orderVal).clamp(0.0, 1.0) : 0.0;
+        final percentCollected =
+            orderVal > 0 ? (paidVal / orderVal).clamp(0.0, 1.0) : 0.0;
         final percentInt = (percentCollected * 100).round();
 
-        final hasPhone = rec.mobileNumber != null && rec.mobileNumber!.toString().trim().isNotEmpty;
-        final hasAddress = rec.address != null && rec.address!.toString().trim().isNotEmpty;
+        final hasPhone = rec.mobileNumber != null &&
+            rec.mobileNumber!.toString().trim().isNotEmpty;
+        final hasAddress =
+            rec.address != null && rec.address!.toString().trim().isNotEmpty;
 
         return Container(
           decoration: BoxDecoration(
@@ -663,7 +809,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () {
-                context.push('/pm/projects/${rec.id}${widget.isPurchase ? "?mode=purchase" : ""}');
+                context.push(
+                    '/pm/projects/${rec.id}${widget.isPurchase ? "?mode=purchase" : ""}');
               },
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -677,11 +824,13 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
+                                border: Border.all(
+                                    color: const Color(0xFFCBD5E1), width: 0.8),
                               ),
                               child: Text(
                                 '#${rec.idNo}',
@@ -695,14 +844,18 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEFF6FF),
                                 borderRadius: BorderRadius.circular(9999),
-                                border: Border.all(color: const Color(0xFFBFDBFE), width: 0.8),
+                                border: Border.all(
+                                    color: const Color(0xFFBFDBFE), width: 0.8),
                               ),
                               child: Text(
-                                rec.orderType.toString().isNotEmpty ? rec.orderType.toString() : 'Project',
+                                rec.orderType.toString().isNotEmpty
+                                    ? rec.orderType.toString()
+                                    : 'Project',
                                 style: const TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 11,
@@ -768,7 +921,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Row(
                           children: [
-                            const Icon(LucideIcons.phone, size: 13, color: Color(0xFF2563EB)),
+                            const Icon(LucideIcons.phone,
+                                size: 13, color: Color(0xFF2563EB)),
                             const SizedBox(width: 6),
                             Text(
                               rec.mobileNumber!,
@@ -786,7 +940,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                     if (hasAddress)
                       Row(
                         children: [
-                          const Icon(LucideIcons.mapPin, size: 13, color: Color(0xFF94A3B8)),
+                          const Icon(LucideIcons.mapPin,
+                              size: 13, color: Color(0xFF94A3B8)),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -840,7 +995,9 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                           minHeight: 5,
                           backgroundColor: const Color(0xFFE2E8F0),
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            percentInt >= 100 ? const Color(0xFF16A34A) : const Color(0xFF2563EB),
+                            percentInt >= 100
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFF2563EB),
                           ),
                         ),
                       ),
@@ -849,7 +1006,8 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
 
                     // Financial Stats Box (3 Columns)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(12),
@@ -859,12 +1017,17 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                         children: [
                           Expanded(
                             child: _MobileStatCol(
-                              title: widget.isPurchase ? 'QUOTATION' : 'ORDER VALUE',
+                              title: widget.isPurchase
+                                  ? 'QUOTATION'
+                                  : 'ORDER VALUE',
                               value: '₹${_currencyFormat.format(orderVal)}',
                               color: const Color(0xFF0F172A),
                             ),
                           ),
-                          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+                          Container(
+                              width: 1,
+                              height: 28,
+                              color: const Color(0xFFE2E8F0)),
                           Expanded(
                             child: _MobileStatCol(
                               title: widget.isPurchase ? 'PAID' : 'RECEIVED',
@@ -872,14 +1035,19 @@ class _PmDirectoryTableState extends State<PmDirectoryTable> {
                               color: const Color(0xFF16A34A),
                             ),
                           ),
-                          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+                          Container(
+                              width: 1,
+                              height: 28,
+                              color: const Color(0xFFE2E8F0)),
                           Expanded(
                             child: _MobileStatCol(
                               title: 'BALANCE',
                               value: '₹${_currencyFormat.format(bal)}',
                               color: bal > 0
                                   ? const Color(0xFFEA580C)
-                                  : (bal < 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A)),
+                                  : (bal < 0
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFF16A34A)),
                             ),
                           ),
                         ],
@@ -916,7 +1084,9 @@ class _SortHeader extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           const SizedBox(width: 4),
           Icon(
             isActive
