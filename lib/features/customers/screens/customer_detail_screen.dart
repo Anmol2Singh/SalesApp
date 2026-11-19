@@ -1256,6 +1256,28 @@ class _PipelineItem extends StatelessWidget {
           children: [
             Row(
               children: [
+                if (pipeline.displayDealId.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF2FF),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(
+                          color: const Color(0xFFC7D2FE), width: 0.8),
+                    ),
+                    child: Text(
+                      pipeline.displayDealId,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4338CA),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Text(
                   pipeline.productName,
                   style: const TextStyle(

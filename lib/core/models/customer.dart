@@ -169,6 +169,7 @@ class Customer {
 // Lightweight summary used in lists
 class SalesPipelineSummary {
   final String id;
+  final String? dealId;
   final String productId;
   final String productName;
   final PipelineStep currentStep;
@@ -179,8 +180,12 @@ class SalesPipelineSummary {
 
   bool get hasSalesOrder => _hasSalesOrder ?? false;
 
+  /// Returns the human-readable deal ID (e.g. 'DEAL-26-27-0001').
+  String get displayDealId => (dealId != null && dealId!.trim().isNotEmpty) ? dealId!.trim() : '';
+
   const SalesPipelineSummary({
     required this.id,
+    this.dealId,
     required this.productId,
     required this.productName,
     required this.currentStep,
@@ -206,6 +211,7 @@ class SalesPipelineSummary {
 
     return SalesPipelineSummary(
       id: json['id'] as String? ?? '',
+      dealId: json['deal_id'] as String?,
       productId: json['product_id'] as String? ?? '',
       productName: (json['products'] is Map)
           ? (json['products'] as Map)['name'] as String? ?? 'Unknown Product'

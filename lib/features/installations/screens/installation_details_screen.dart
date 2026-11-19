@@ -698,6 +698,115 @@ class _InstallationDetailsScreenState
             ),
             const SizedBox(height: 14),
 
+            // Installed Items Card (from Delivery Challan)
+            Builder(builder: (context) {
+              final items = _resolveInstalledItems(installation);
+              if (items.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.local_shipping_outlined, size: 18, color: Color(0xFF0284C7)),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Installed Items (Delivery Challan)',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE0F2FE),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${items.length} items',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ...items.map((it) {
+                          final desc = (it['description'] ?? it['name'] ?? 'Item').toString();
+                          final rawQty = it['qty'];
+                          final qtyStr = (rawQty is num && rawQty % 1 == 0)
+                              ? rawQty.toInt().toString()
+                              : (rawQty?.toString() ?? '1');
+                          final uom = (it['uom'] ?? 'NOS').toString();
+                          final remark = it['remark']?.toString();
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        desc,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF1E293B)),
+                                      ),
+                                      if (remark != null && remark.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Remark / S/N: $remark',
+                                          style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                                  ),
+                                  child: Text(
+                                    'Qty: $qtyStr $uom',
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+
             // Technician Assigned Card
             Card(
               elevation: 0,
@@ -1282,5 +1391,39 @@ class _InstallationDetailsScreenState
         },
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _resolveInstalledItems(Installation inst) {
+    final notes = inst.notes ?? '';
+    if (notes.isEmpty) return [];
+    final match = RegExp(r'\[INSTALLED_ITEMS:\s*(\[.*?\])\s*\]').firstMatch(notes);
+    if (match != null) {
+      try {
+        final list = jsonDecode(match.group(1)!) as List<dynamic>;
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (_) {}
+    }
+    final textMatch = RegExp(r'Installed Items:\s*([^\n]+)').firstMatch(notes);
+    if (textMatch != null) {
+      final raw = textMatch.group(1)!;
+      final parts = raw.split(',');
+      final List<Map<String, dynamic>> items = [];
+      for (final p in parts) {
+        final itemStr = p.trim();
+        if (itemStr.isEmpty) continue;
+        final qtyMatch = RegExp(r'^(.*?)\s*\(Qty:\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]*)\)').firstMatch(itemStr);
+        if (qtyMatch != null) {
+          items.add({
+            'description': qtyMatch.group(1)?.trim() ?? itemStr,
+            'qty': qtyMatch.group(2)!,
+            'uom': qtyMatch.group(3)?.trim().isNotEmpty == true ? qtyMatch.group(3)!.trim() : 'NOS',
+          });
+        } else {
+          items.add({'description': itemStr, 'qty': 1, 'uom': 'NOS'});
+        }
+      }
+      return items;
+    }
+    return [];
   }
 }

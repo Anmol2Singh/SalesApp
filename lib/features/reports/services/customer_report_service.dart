@@ -48,6 +48,7 @@ class StaffMemberContribution {
 /// Rich progress information for a customer's sales deal / pipeline.
 class DealProgressInfo {
   final String pipelineId;
+  final String? dealId;
   final String productName;
   final PipelineStep currentStep;
   final PipelineStatus status;
@@ -64,6 +65,7 @@ class DealProgressInfo {
 
   const DealProgressInfo({
     required this.pipelineId,
+    this.dealId,
     required this.productName,
     required this.currentStep,
     required this.status,
@@ -595,6 +597,7 @@ class CustomerReportService {
 
       dealProgress.add(DealProgressInfo(
         pipelineId: pipelineId,
+        dealId: p['deal_id']?.toString(),
         productName: productName,
         currentStep: step,
         status: status,
@@ -787,7 +790,7 @@ class CustomerReportService {
                 cellStyle: const pw.TextStyle(fontSize: 8.5),
                 cellAlignment: pw.Alignment.centerLeft,
                 oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                headers: ['Product', 'Current Stage', 'Progress', 'Quotation #', 'Amount (INR)', 'Approved By / Date'],
+                headers: ['Deal ID', 'Product', 'Current Stage', 'Progress', 'Quotation #', 'Amount (INR)', 'Approved By / Date'],
                 data: dealProgress.map((d) {
                   final amtText = d.quotationAmount != null
                       ? 'Rs. ${formatIndianCurrency(d.quotationAmount)}'
@@ -795,7 +798,11 @@ class CustomerReportService {
                   final approvalText = d.approverName != null
                       ? '${cleanPdfText(d.approverName)}${d.approvalDate != null ? ' (${_shortDateFormat.format(d.approvalDate!)})' : ''}'
                       : (d.quotationStatus != null ? cleanPdfText(d.quotationStatus!) : '-');
+                  final dealIdText = (d.dealId != null && d.dealId!.isNotEmpty)
+                      ? d.dealId!
+                      : _shortId(d.pipelineId);
                   return [
+                    cleanPdfText(dealIdText),
                     cleanPdfText(d.productName),
                     cleanPdfText(d.stageDisplayName),
                     '${d.progressPercent}%',
@@ -978,8 +985,11 @@ class CustomerReportService {
       TextCellValue('Created At'),
     ]);
     for (final dp in dealProgress) {
+      final dealIdCell = (dp.dealId != null && dp.dealId!.isNotEmpty)
+          ? dp.dealId!
+          : _shortId(dp.pipelineId);
       dpSheet.appendRow([
-        TextCellValue(_shortId(dp.pipelineId)),
+        TextCellValue(dealIdCell),
         TextCellValue(dp.productName),
         TextCellValue(dp.stageDisplayName),
         TextCellValue('${dp.progressPercent}%'),

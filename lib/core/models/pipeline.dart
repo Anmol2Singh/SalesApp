@@ -11,6 +11,7 @@ import 'purchase_order.dart';
 
 class SalesPipeline {
   final String id;
+  final String? dealId;
   final String customerId;
   final String productId;
   final String createdBy;
@@ -33,11 +34,15 @@ class SalesPipeline {
   final FactoryOrder? factoryOrder;
   final PurchaseOrder? purchaseOrder;
 
+  /// Returns the human-readable deal ID (e.g. 'DEAL-26-27-0001').
+  String get displayDealId => (dealId != null && dealId!.trim().isNotEmpty) ? dealId!.trim() : '';
+
   /// Returns the main base quotation number without revision suffix (e.g. 'IZY/QT/26-27/0237').
   String get baseQuotationNumber => quotation != null ? quotation!.baseQuotationNumber : '';
 
   const SalesPipeline({
     required this.id,
+    this.dealId,
     required this.customerId,
     required this.productId,
     required this.createdBy,
@@ -65,6 +70,7 @@ class SalesPipeline {
 
     return SalesPipeline(
       id: json['id'] as String? ?? '',
+      dealId: json['deal_id'] as String?,
       customerId: json['customer_id'] as String? ?? '',
       productId: json['product_id'] as String? ?? '',
       createdBy: json['created_by'] as String? ?? '',
@@ -132,12 +138,14 @@ class SalesPipeline {
   }
 
   SalesPipeline copyWith({
+    String? dealId,
     PipelineStep? currentStep,
     PipelineStatus? status,
     String? notes,
   }) {
     return SalesPipeline(
       id: id,
+      dealId: dealId ?? this.dealId,
       customerId: customerId,
       productId: productId,
       createdBy: createdBy,

@@ -1,6 +1,7 @@
 // lib/features/installations/screens/book_installation_screen.dart
 
 import 'dart:convert';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,8 +19,8 @@ import '../../../features/auth/providers/auth_provider.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/widgets/searchable_dropdown.dart';
-
 import '../../../core/models/pipeline.dart';
+import '../../pipelines/widgets/work_progress_box.dart';
 
 class BookInstallationScreen extends ConsumerStatefulWidget {
   final String? initialCustomerId;
@@ -52,7 +53,7 @@ class _BookInstallationScreenState
   String? _selectedProduct;
   List<Map<String, dynamic>> _customerCompletedDeals = [];
   Map<String, dynamic>? _selectedDeal;
-  List<TechnicianInfo> _selectedSupporters = [];
+  final List<TechnicianInfo> _selectedSupporters = [];
   final List<String> _sitePhotosBase64 = [];
   final ImagePicker _picker = ImagePicker();
 
@@ -62,7 +63,8 @@ class _BookInstallationScreenState
   @override
   void initState() {
     super.initState();
-    if (widget.initialCustomerId != null && widget.initialCustomerId!.isNotEmpty) {
+    if (widget.initialCustomerId != null &&
+        widget.initialCustomerId!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadInitialCustomerAndDeal();
       });
@@ -108,46 +110,59 @@ class _BookInstallationScreenState
     if (_selectedDeal == null) return;
 
     final dealId = _selectedDeal!['id']?.toString() ?? '';
-    final dealPrev = _previousInstalledCounts[dealId] ?? _previousInstalledCounts['all'] ?? {};
+    final dealPrev = _previousInstalledCounts[dealId] ??
+        _previousInstalledCounts['all'] ??
+        {};
 
-    final items = (_selectedDeal?['quotations'] as List?)?.isNotEmpty == true &&
-            (_selectedDeal?['quotations'][0]['items'] != null)
-        ? (_selectedDeal!['quotations'][0]['items'] as List)
-        : [];
+    final items = (_selectedDeal?['items'] as List?) ??
+        ((_selectedDeal?['quotations'] as List?)?.isNotEmpty == true &&
+                (_selectedDeal?['quotations'][0]['items'] != null)
+            ? (_selectedDeal!['quotations'][0]['items'] as List)
+            : []);
 
     for (int i = 0; i < items.length; i++) {
       final item = items[i];
-      final desc = (item['description'] ?? item['name'] ?? 'Item $i').toString().trim();
-      final totalQty = int.tryParse(item['qty']?.toString() ?? '1') ?? 1;
+      final desc =
+          (item['description'] ?? item['name'] ?? 'Item $i').toString().trim();
+      final num rawQty = (item['qty'] is num)
+          ? (item['qty'] as num)
+          : (num.tryParse(item['qty']?.toString() ?? '1') ?? 1);
+      final totalQty = rawQty.toInt();
       final prevInstalled = dealPrev[desc] ?? 0;
       final available = (totalQty - prevInstalled).clamp(0, totalQty);
       final defaultQty = available > 0 ? available : 0;
-      _itemQtyControllers[desc] = TextEditingController(text: defaultQty.toString());
+      _itemQtyControllers[desc] =
+          TextEditingController(text: defaultQty.toString());
     }
   }
 
-  Map<String, Map<String, int>> _parsePreviousInstalledItems(List<dynamic> installations) {
+  Map<String, Map<String, int>> _parsePreviousInstalledItems(
+      List<dynamic> installations) {
     final Map<String, Map<String, int>> result = {};
     for (final inst in installations) {
       final notes = (inst['notes'] ?? '').toString();
       if (notes.isEmpty) continue;
 
       String? dealId;
-      final dealMatch = RegExp(r'Deal ID:\s*([a-zA-Z0-9\-]+)').firstMatch(notes);
+      final dealMatch =
+          RegExp(r'Deal ID:\s*([a-zA-Z0-9\-]+)').firstMatch(notes);
       if (dealMatch != null) {
         dealId = dealMatch.group(1)?.trim();
       }
 
-      final itemsMatch = RegExp(r'\[INSTALLED_ITEMS:\s*(\[.*?\])\s*\]').firstMatch(notes);
+      final itemsMatch =
+          RegExp(r'\[INSTALLED_ITEMS:\s*(\[.*?\])\s*\]').firstMatch(notes);
       if (itemsMatch != null) {
         try {
           final jsonStr = itemsMatch.group(1)!;
           final list = jsonDecode(jsonStr) as List<dynamic>;
           for (final item in list) {
-            final desc = (item['description'] ?? item['name'] ?? '').toString().trim();
+            final desc =
+                (item['description'] ?? item['name'] ?? '').toString().trim();
             final qty = int.tryParse(item['qty']?.toString() ?? '0') ?? 0;
             if (desc.isNotEmpty && qty > 0) {
-              final key = (dealId != null && dealId.isNotEmpty) ? dealId : 'all';
+              final key =
+                  (dealId != null && dealId.isNotEmpty) ? dealId : 'all';
               result.putIfAbsent(key, () => {});
               result[key]![desc] = (result[key]![desc] ?? 0) + qty;
             }
@@ -191,10 +206,13 @@ class _BookInstallationScreenState
           .select('id, notes, created_at')
           .eq('customer_id', customer.id);
 
-      final prevMap = _parsePreviousInstalledItems((prevInstRes as List<dynamic>?) ?? []);
-      
+      final prevMap =
+          _parsePreviousInstalledItems((prevInstRes as List<dynamic>?) ?? []);
+
       if (mounted) {
-        final pipelines = (res as List).map((p) => SalesPipeline.fromJson(p as Map<String, dynamic>)).toList();
+        final pipelines = (res as List)
+            .map((p) => SalesPipeline.fromJson(p as Map<String, dynamic>))
+            .toList();
         final completedDeals = pipelines
             .where((p) =>
                 p.currentStep == PipelineStep.completed ||
@@ -204,25 +222,71 @@ class _BookInstallationScreenState
                     p.stepsConfig!.isNotEmpty &&
                     p.stepsConfig!.every((s) => s['is_completed'] == true)))
             .map((p) {
-              return {
-                'id': p.id,
-                'products': p.product != null ? {'name': p.product!.name, 'id': p.product!.id} : null,
-                'quotations': p.quotation != null ? [{'items': p.quotation!.lineItems.map((i) => i.toJson()).toList()}] : [],
-              };
-            })
-            .toList();
+          final challanItems = WorkProgressService.getChallanItems(p);
+          final fallbackItems = p.quotation != null
+              ? p.quotation!.lineItems.map((i) => i.toJson()).toList()
+              : [];
+          final effectiveItems =
+              challanItems.isNotEmpty ? challanItems : fallbackItems;
+
+          return {
+            'id': p.id,
+            'deal_id': p.dealId ?? '',
+            'created_at': p.createdAt,
+            'products': p.product != null
+                ? {'name': p.product!.name, 'id': p.product!.id}
+                : null,
+            'items': effectiveItems,
+            'is_from_challan': challanItems.isNotEmpty,
+            'challan_count': WorkProgressService.getDeliveryChallans(p).length,
+            'quotations': p.quotation != null
+                ? [
+                    {'items': fallbackItems}
+                  ]
+                : [],
+          };
+        }).toList();
 
         Map<String, dynamic>? autoDeal;
         if (widget.initialDealId != null) {
-          autoDeal = completedDeals.where((d) => d['id'] == widget.initialDealId).firstOrNull;
+          autoDeal = completedDeals
+              .where((d) => d['id'] == widget.initialDealId)
+              .firstOrNull;
           if (autoDeal == null) {
             // Find in general pipelines list even if not marked completed yet
-            final directPipe = pipelines.where((p) => p.id == widget.initialDealId).firstOrNull;
+            final directPipe = pipelines
+                .where((p) => p.id == widget.initialDealId)
+                .firstOrNull;
             if (directPipe != null) {
+              final challanItems =
+                  WorkProgressService.getChallanItems(directPipe);
+              final fallbackItems = directPipe.quotation != null
+                  ? directPipe.quotation!.lineItems
+                      .map((i) => i.toJson())
+                      .toList()
+                  : [];
+              final effectiveItems =
+                  challanItems.isNotEmpty ? challanItems : fallbackItems;
+
               autoDeal = {
                 'id': directPipe.id,
-                'products': directPipe.product != null ? {'name': directPipe.product!.name, 'id': directPipe.product!.id} : null,
-                'quotations': directPipe.quotation != null ? [{'items': directPipe.quotation!.lineItems.map((i) => i.toJson()).toList()}] : [],
+                'deal_id': directPipe.dealId ?? '',
+                'created_at': directPipe.createdAt,
+                'products': directPipe.product != null
+                    ? {
+                        'name': directPipe.product!.name,
+                        'id': directPipe.product!.id
+                      }
+                    : null,
+                'items': effectiveItems,
+                'is_from_challan': challanItems.isNotEmpty,
+                'challan_count':
+                    WorkProgressService.getDeliveryChallans(directPipe).length,
+                'quotations': directPipe.quotation != null
+                    ? [
+                        {'items': fallbackItems}
+                      ]
+                    : [],
               };
               completedDeals.add(autoDeal);
             }
@@ -261,8 +325,7 @@ class _BookInstallationScreenState
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 16),
             ListTile(
-              leading:
-                  const Icon(Icons.camera_alt, color: Color(0xFF0284C7)),
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF0284C7)),
               title: const Text('Take Photo with Camera'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -330,7 +393,8 @@ class _BookInstallationScreenState
 
     if (_selectedDeal == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a completed deal/product first')),
+        const SnackBar(
+            content: Text('Please select a completed deal/product first')),
       );
       return;
     }
@@ -357,18 +421,25 @@ class _BookInstallationScreenState
     }
 
     final List<Map<String, dynamic>> installedItemsList = [];
-    final items = (_selectedDeal?['quotations'] as List?)?.isNotEmpty == true &&
-            (_selectedDeal?['quotations'][0]['items'] != null)
-        ? (_selectedDeal!['quotations'][0]['items'] as List)
-        : [];
+    final items = (_selectedDeal?['items'] as List?) ??
+        ((_selectedDeal?['quotations'] as List?)?.isNotEmpty == true &&
+                (_selectedDeal?['quotations'][0]['items'] != null)
+            ? (_selectedDeal!['quotations'][0]['items'] as List)
+            : []);
 
     final dealId = _selectedDeal!['id']?.toString() ?? '';
-    final dealPrev = _previousInstalledCounts[dealId] ?? _previousInstalledCounts['all'] ?? {};
+    final dealPrev = _previousInstalledCounts[dealId] ??
+        _previousInstalledCounts['all'] ??
+        {};
 
     for (int i = 0; i < items.length; i++) {
       final item = items[i];
-      final desc = (item['description'] ?? item['name'] ?? 'Item $i').toString().trim();
-      final totalQty = int.tryParse(item['qty']?.toString() ?? '1') ?? 1;
+      final desc =
+          (item['description'] ?? item['name'] ?? 'Item $i').toString().trim();
+      final num rawQty = (item['qty'] is num)
+          ? (item['qty'] as num)
+          : (num.tryParse(item['qty']?.toString() ?? '1') ?? 1);
+      final totalQty = rawQty.toInt();
       final prevInstalled = dealPrev[desc] ?? 0;
       final available = (totalQty - prevInstalled).clamp(0, totalQty);
 
@@ -376,16 +447,22 @@ class _BookInstallationScreenState
       final entered = int.tryParse(ctrl?.text.trim() ?? '0') ?? 0;
       final validQty = entered.clamp(0, available);
       if (validQty > 0) {
+        final uom = (item['uom'] ?? 'NOS').toString().trim();
+        final remark = item['remark']?.toString().trim();
         installedItemsList.add({
           'description': desc,
           'qty': validQty,
+          'uom': uom.isNotEmpty ? uom : 'NOS',
+          if (remark != null && remark.isNotEmpty) 'remark': remark,
         });
       }
     }
 
     if (items.isNotEmpty && installedItemsList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please specify quantity to install for at least one item.')),
+        const SnackBar(
+            content: Text(
+                'Please specify quantity to install for at least one item.')),
       );
       return;
     }
@@ -397,17 +474,27 @@ class _BookInstallationScreenState
       _selectedProduct = prodName;
     }
 
-    String supportersStr = _selectedSupporters.isNotEmpty 
+    String supportersStr = _selectedSupporters.isNotEmpty
         ? 'Supporters: ${_selectedSupporters.map((s) => s.name).join(", ")}'
         : '';
     String finalNotes = supportersStr;
     if (_selectedDeal != null) {
       if (finalNotes.isNotEmpty) finalNotes += '\n';
-      finalNotes += 'Deal ID: ${_selectedDeal!['id']}';
+      final dNum = _selectedDeal!['deal_id']?.toString().trim();
+      if (dNum != null && dNum.isNotEmpty) {
+        finalNotes += 'Deal ID: $dNum (${_selectedDeal!['id']})';
+      } else {
+        finalNotes += 'Deal ID: ${_selectedDeal!['id']}';
+      }
     }
     if (installedItemsList.isNotEmpty) {
       if (finalNotes.isNotEmpty) finalNotes += '\n';
-      final humanItems = installedItemsList.map((e) => '${e['description']} (Qty: ${e['qty']})').join(', ');
+      final humanItems = installedItemsList.map((e) {
+        final uomStr = (e['uom'] != null && e['uom'].toString().isNotEmpty)
+            ? ' ${e['uom']}'
+            : '';
+        return '${e['description']} (Qty: ${e['qty']}$uomStr)';
+      }).join(', ');
       finalNotes += 'Installed Items: $humanItems\n';
       finalNotes += '[INSTALLED_ITEMS:${jsonEncode(installedItemsList)}]';
     }
@@ -562,7 +649,7 @@ class _BookInstallationScreenState
               ),
             ),
             const SizedBox(height: 16),
-            
+
             if (_selectedCustomer != null) ...[
               Card(
                 elevation: 0,
@@ -585,7 +672,9 @@ class _BookInstallationScreenState
                       ),
                       const SizedBox(height: 12),
                       if (_customerCompletedDeals.isEmpty)
-                        const Text('No completed deals found for this customer.', style: TextStyle(color: Colors.grey))
+                        const Text(
+                            'No completed deals found for this customer.',
+                            style: TextStyle(color: Colors.grey))
                       else
                         DropdownButtonFormField<Map<String, dynamic>>(
                           decoration: const InputDecoration(
@@ -595,15 +684,48 @@ class _BookInstallationScreenState
                           ),
                           value: _selectedDeal,
                           items: _customerCompletedDeals.map((deal) {
-                            final productName = deal['products']?['name'] ?? 'Unknown Product';
+                            final productName =
+                                deal['products']?['name'] ?? 'Unknown Product';
+                            final dealId = (deal['deal_id'] != null &&
+                                    deal['deal_id']
+                                        .toString()
+                                        .trim()
+                                        .isNotEmpty)
+                                ? deal['deal_id'].toString().trim()
+                                : '';
+                            final dt = deal['created_at'];
+                            String dateStr = '';
+                            if (dt is DateTime) {
+                              dateStr = DateFormat('dd MMM yy').format(dt);
+                            } else if (dt != null) {
+                              final parsed = DateTime.tryParse(dt.toString());
+                              if (parsed != null) {
+                                dateStr =
+                                    DateFormat('dd MMM yy').format(parsed);
+                              }
+                            }
+                            final prefix =
+                                dealId.isNotEmpty ? '[$dealId] ' : '';
+                            final suffix =
+                                dateStr.isNotEmpty ? ' ($dateStr)' : '';
                             return DropdownMenuItem(
                               value: deal,
-                              child: Text(productName),
+                              child: Text(
+                                '$prefix$productName$suffix',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             );
                           }).toList(),
                           onChanged: (deal) {
                             setState(() {
                               _selectedDeal = deal;
+                              if (deal != null) {
+                                final prodName =
+                                    deal['products']?['name'] ?? 'System';
+                                _selectedProduct = prodName;
+                                _titleController.text =
+                                    'Installation: $prodName';
+                              }
                               _initItemQuantities();
                             });
                           },
@@ -642,7 +764,8 @@ class _BookInstallationScreenState
                       controller: _descController,
                       decoration: const InputDecoration(
                         labelText: 'Scope / Technical Notes',
-                        hintText: 'e.g. Structure erection, panel wiring, inverter setup',
+                        hintText:
+                            'e.g. Structure erection, panel wiring, inverter setup',
                         border: OutlineInputBorder(),
                       ),
                       maxLines: 3,
@@ -658,11 +781,17 @@ class _BookInstallationScreenState
                               border: OutlineInputBorder(),
                               isDense: true,
                             ),
-                            items: ['High Priority', 'Medium Priority', 'Low Priority']
-                                .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                            items: [
+                              'High Priority',
+                              'Medium Priority',
+                              'Low Priority'
+                            ]
+                                .map((p) =>
+                                    DropdownMenuItem(value: p, child: Text(p)))
                                 .toList(),
                             onChanged: (v) {
-                              if (v != null) setState(() => _selectedPriority = v);
+                              if (v != null)
+                                setState(() => _selectedPriority = v);
                             },
                           ),
                         ),
@@ -721,7 +850,8 @@ class _BookInstallationScreenState
                                     child: Text(t.name),
                                   ))
                               .toList(),
-                          onChanged: (t) => setState(() => _selectedTechnician = t),
+                          onChanged: (t) =>
+                              setState(() => _selectedTechnician = t),
                         );
                       },
                       loading: () => const LinearProgressIndicator(),
@@ -749,7 +879,8 @@ class _BookInstallationScreenState
                                 children: _selectedSupporters.map((t) {
                                   return Chip(
                                     label: Text(t.name),
-                                    deleteIcon: const Icon(Icons.close, size: 16),
+                                    deleteIcon:
+                                        const Icon(Icons.close, size: 16),
                                     onDeleted: () {
                                       setState(() {
                                         _selectedSupporters.remove(t);
@@ -765,7 +896,8 @@ class _BookInstallationScreenState
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF14B8A6),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
                               ),
                               onPressed: () {
                                 showDialog(
@@ -780,19 +912,25 @@ class _BookInstallationScreenState
                                             child: ListView(
                                               shrinkWrap: true,
                                               children: technicians
-                                                  .where((t) => t != _selectedTechnician)
+                                                  .where((t) =>
+                                                      t != _selectedTechnician)
                                                   .map((t) {
-                                                final isSelected = _selectedSupporters.contains(t);
+                                                final isSelected =
+                                                    _selectedSupporters
+                                                        .contains(t);
                                                 return CheckboxListTile(
                                                   title: Text(t.name),
                                                   value: isSelected,
-                                                  activeColor: const Color(0xFF14B8A6),
+                                                  activeColor:
+                                                      const Color(0xFF14B8A6),
                                                   onChanged: (val) {
                                                     setStateDialog(() {
                                                       if (val == true) {
-                                                        _selectedSupporters.add(t);
+                                                        _selectedSupporters
+                                                            .add(t);
                                                       } else {
-                                                        _selectedSupporters.remove(t);
+                                                        _selectedSupporters
+                                                            .remove(t);
                                                       }
                                                     });
                                                     setState(() {});
@@ -803,8 +941,12 @@ class _BookInstallationScreenState
                                           ),
                                           actions: [
                                             TextButton(
-                                              onPressed: () => Navigator.pop(context),
-                                              child: const Text('Done', style: TextStyle(color: Color(0xFF14B8A6))),
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                              child: const Text('Done',
+                                                  style: TextStyle(
+                                                      color:
+                                                          Color(0xFF14B8A6))),
                                             ),
                                           ],
                                         );
@@ -851,7 +993,8 @@ class _BookInstallationScreenState
                         ),
                         TextButton.icon(
                           onPressed: _showPhotoSourceSheet,
-                          icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                          icon:
+                              const Icon(Icons.add_a_photo_outlined, size: 18),
                           label: const Text('Add Photo'),
                         ),
                       ],
@@ -871,7 +1014,8 @@ class _BookInstallationScreenState
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: Image.memory(
-                                    base64Decode(str.substring(str.indexOf(',') + 1)),
+                                    base64Decode(
+                                        str.substring(str.indexOf(',') + 1)),
                                     width: 90,
                                     height: 90,
                                     fit: BoxFit.cover,
@@ -882,7 +1026,8 @@ class _BookInstallationScreenState
                                   right: 4,
                                   child: GestureDetector(
                                     onTap: () {
-                                      setState(() => _sitePhotosBase64.removeAt(idx));
+                                      setState(() =>
+                                          _sitePhotosBase64.removeAt(idx));
                                     },
                                     child: Container(
                                       decoration: const BoxDecoration(
@@ -890,7 +1035,8 @@ class _BookInstallationScreenState
                                         shape: BoxShape.circle,
                                       ),
                                       padding: const EdgeInsets.all(2),
-                                      child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                      child: const Icon(Icons.close,
+                                          size: 14, color: Colors.white),
                                     ),
                                   ),
                                 ),
@@ -913,7 +1059,8 @@ class _BookInstallationScreenState
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0F172A),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _isSubmitting ? null : _submitInstallation,
                 child: _isSubmitting
@@ -938,20 +1085,44 @@ class _BookInstallationScreenState
   Widget _buildQuotationItemsSection() {
     if (_selectedDeal == null) return const SizedBox.shrink();
 
-    final items = (_selectedDeal?['quotations'] as List?)?.isNotEmpty == true &&
-            (_selectedDeal?['quotations'][0]['items'] != null)
-        ? (_selectedDeal!['quotations'][0]['items'] as List)
-        : [];
+    final items = (_selectedDeal?['items'] as List?) ??
+        ((_selectedDeal?['quotations'] as List?)?.isNotEmpty == true &&
+                (_selectedDeal?['quotations'][0]['items'] != null)
+            ? (_selectedDeal!['quotations'][0]['items'] as List)
+            : []);
 
     if (items.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Text('No items found in quotation.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFFECACA)),
+          ),
+          child: Row(
+            children: const [
+              Icon(Icons.info_outline, size: 18, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No delivery challan or quotation items found for this deal.',
+                  style: TextStyle(color: Color(0xFFB91C1C), fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
+    final bool isFromChallan = _selectedDeal?['is_from_challan'] == true;
+    final int challanCount = _selectedDeal?['challan_count'] ?? 0;
     final dealId = _selectedDeal!['id']?.toString() ?? '';
-    final dealPrev = _previousInstalledCounts[dealId] ?? _previousInstalledCounts['all'] ?? {};
+    final dealPrev = _previousInstalledCounts[dealId] ??
+        _previousInstalledCounts['all'] ??
+        {};
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -960,24 +1131,53 @@ class _BookInstallationScreenState
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Quotation Items (from Deal)',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Color(0xFF1E293B),
-              ),
+            Row(
+              children: [
+                Icon(
+                  isFromChallan
+                      ? Icons.local_shipping_outlined
+                      : Icons.description_outlined,
+                  size: 18,
+                  color: isFromChallan
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFF0284C7),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isFromChallan
+                      ? 'Delivery Challan Items (from Deal)'
+                      : 'Quotation Items (from Deal)',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: isFromChallan
+                    ? const Color(0xFFDCFCE7)
+                    : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(6),
+                border: isFromChallan
+                    ? Border.all(color: const Color(0xFF86EFAC))
+                    : null,
               ),
               child: Text(
-                '${items.length} items',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                isFromChallan
+                    ? '${challanCount > 1 ? "$challanCount Challans • " : ""}${items.length} items'
+                    : '${items.length} items',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isFromChallan
+                      ? const Color(0xFF166534)
+                      : const Color(0xFF64748B),
+                ),
               ),
             ),
           ],
@@ -985,8 +1185,15 @@ class _BookInstallationScreenState
         const SizedBox(height: 10),
         ...List.generate(items.length, (idx) {
           final item = items[idx];
-          final desc = (item['description'] ?? item['name'] ?? 'Item $idx').toString().trim();
-          final totalQty = int.tryParse(item['qty']?.toString() ?? '1') ?? 1;
+          final desc = (item['description'] ?? item['name'] ?? 'Item $idx')
+              .toString()
+              .trim();
+          final num rawQty = (item['qty'] is num)
+              ? (item['qty'] as num)
+              : (num.tryParse(item['qty']?.toString() ?? '1') ?? 1);
+          final totalQty = rawQty.toInt();
+          final uom = (item['uom'] ?? 'NOS').toString().trim();
+          final remark = item['remark']?.toString().trim();
           final prevInstalled = dealPrev[desc] ?? 0;
           final isSubsequentSchedule = prevInstalled > 0;
           final availableQty = (totalQty - prevInstalled).clamp(0, totalQty);
@@ -998,7 +1205,8 @@ class _BookInstallationScreenState
 
           final enteredQty = int.tryParse(ctrl.text.trim()) ?? 0;
           final currentInstalling = enteredQty.clamp(0, availableQty);
-          final remainingQty = (availableQty - currentInstalling).clamp(0, availableQty);
+          final remainingQty =
+              (availableQty - currentInstalling).clamp(0, availableQty);
           final isFullyInstalled = availableQty == 0;
 
           return Container(
@@ -1008,7 +1216,9 @@ class _BookInstallationScreenState
               color: isFullyInstalled ? const Color(0xFFF8FAFC) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isFullyInstalled ? const Color(0xFFE2E8F0) : const Color(0xFFCBD5E1),
+                color: isFullyInstalled
+                    ? const Color(0xFFE2E8F0)
+                    : const Color(0xFFCBD5E1),
                 width: 1.2,
               ),
               boxShadow: [
@@ -1031,13 +1241,21 @@ class _BookInstallationScreenState
                       decoration: BoxDecoration(
                         color: isFullyInstalled
                             ? const Color(0xFFE2E8F0)
-                            : const Color(0xFF0284C7).withOpacity(0.1),
+                            : (isFromChallan
+                                ? const Color(0xFF16A34A).withOpacity(0.1)
+                                : const Color(0xFF0284C7).withOpacity(0.1)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
-                        Icons.inventory_2_outlined,
+                        isFromChallan
+                            ? Icons.local_shipping_outlined
+                            : Icons.inventory_2_outlined,
                         size: 18,
-                        color: isFullyInstalled ? const Color(0xFF64748B) : const Color(0xFF0284C7),
+                        color: isFullyInstalled
+                            ? const Color(0xFF64748B)
+                            : (isFromChallan
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFF0284C7)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1051,9 +1269,22 @@ class _BookInstallationScreenState
                               fontFamily: 'Inter',
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: isFullyInstalled ? const Color(0xFF64748B) : const Color(0xFF0F172A),
+                              color: isFullyInstalled
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF0F172A),
                             ),
                           ),
+                          if (remark != null && remark.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              'Remark / S/N: $remark',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontStyle: FontStyle.italic,
+                                color: Color(0xFF0284C7),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 6),
                           // Quantities stats badges
                           Wrap(
@@ -1061,20 +1292,24 @@ class _BookInstallationScreenState
                             runSpacing: 4,
                             children: [
                               _buildQtyBadge(
-                                label: 'Total Qty: $totalQty',
+                                label: 'Total Dispatched: $totalQty $uom',
                                 bgColor: const Color(0xFFF1F5F9),
                                 textColor: const Color(0xFF475569),
                               ),
                               if (isSubsequentSchedule) ...[
                                 _buildQtyBadge(
-                                  label: 'Installed: $prevInstalled',
+                                  label: 'Installed: $prevInstalled $uom',
                                   bgColor: const Color(0xFFEEF2FF),
                                   textColor: const Color(0xFF4F46E5),
                                 ),
                                 _buildQtyBadge(
-                                  label: 'Available: $availableQty',
-                                  bgColor: isFullyInstalled ? const Color(0xFFF1F5F9) : const Color(0xFFECFDF5),
-                                  textColor: isFullyInstalled ? const Color(0xFF94A3B8) : const Color(0xFF059669),
+                                  label: 'Available: $availableQty $uom',
+                                  bgColor: isFullyInstalled
+                                      ? const Color(0xFFF1F5F9)
+                                      : const Color(0xFFECFDF5),
+                                  textColor: isFullyInstalled
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF059669),
                                 ),
                               ],
                               if (isFullyInstalled)
@@ -1103,22 +1338,29 @@ class _BookInstallationScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Installing Now',
+                          'Installing Now ($uom)',
                           style: TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
-                            color: isFullyInstalled ? Colors.grey : const Color(0xFF334155),
+                            color: isFullyInstalled
+                                ? Colors.grey
+                                : const Color(0xFF334155),
                           ),
                         ),
                         const SizedBox(height: 6),
                         if (isFullyInstalled)
-                          const Text('0', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey))
+                          const Text('0',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.grey))
                         else
                           Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                              border:
+                                  Border.all(color: const Color(0xFFCBD5E1)),
                               color: const Color(0xFFF8FAFC),
                             ),
                             child: Row(
@@ -1126,12 +1368,14 @@ class _BookInstallationScreenState
                               children: [
                                 IconButton(
                                   icon: const Icon(Icons.remove, size: 16),
-                                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                                  constraints: const BoxConstraints(
+                                      minWidth: 34, minHeight: 34),
                                   padding: EdgeInsets.zero,
                                   onPressed: currentInstalling > 0
                                       ? () {
                                           setState(() {
-                                            ctrl.text = (currentInstalling - 1).toString();
+                                            ctrl.text = (currentInstalling - 1)
+                                                .toString();
                                           });
                                         }
                                       : null,
@@ -1142,11 +1386,14 @@ class _BookInstallationScreenState
                                     controller: ctrl,
                                     keyboardType: TextInputType.number,
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14),
                                     decoration: const InputDecoration(
                                       isDense: true,
                                       border: InputBorder.none,
-                                      contentPadding: EdgeInsets.symmetric(vertical: 6),
+                                      contentPadding:
+                                          EdgeInsets.symmetric(vertical: 6),
                                     ),
                                     onChanged: (val) {
                                       setState(() {});
@@ -1155,12 +1402,14 @@ class _BookInstallationScreenState
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.add, size: 16),
-                                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                                  constraints: const BoxConstraints(
+                                      minWidth: 34, minHeight: 34),
                                   padding: EdgeInsets.zero,
                                   onPressed: currentInstalling < availableQty
                                       ? () {
                                           setState(() {
-                                            ctrl.text = (currentInstalling + 1).toString();
+                                            ctrl.text = (currentInstalling + 1)
+                                                .toString();
                                           });
                                         }
                                       : null,
@@ -1173,7 +1422,8 @@ class _BookInstallationScreenState
 
                     // Remaining Quantity display (Auto Calculate)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: remainingQty == 0
                             ? const Color(0xFFECFDF5)
@@ -1194,17 +1444,21 @@ class _BookInstallationScreenState
                               fontFamily: 'Inter',
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: remainingQty == 0 ? const Color(0xFF047857) : const Color(0xFFB45309),
+                              color: remainingQty == 0
+                                  ? const Color(0xFF047857)
+                                  : const Color(0xFFB45309),
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '$remainingQty',
+                            '$remainingQty $uom',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: remainingQty == 0 ? const Color(0xFF047857) : const Color(0xFFB45309),
+                              color: remainingQty == 0
+                                  ? const Color(0xFF047857)
+                                  : const Color(0xFFB45309),
                             ),
                           ),
                         ],
@@ -1220,7 +1474,10 @@ class _BookInstallationScreenState
     );
   }
 
-  Widget _buildQtyBadge({required String label, required Color bgColor, required Color textColor}) {
+  Widget _buildQtyBadge(
+      {required String label,
+      required Color bgColor,
+      required Color textColor}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(

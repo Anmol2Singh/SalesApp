@@ -98,6 +98,59 @@ class WorkProgressService {
     return [];
   }
 
+  /// Extracts all dispatched items across all delivery challans for this pipeline.
+  /// If multiple challans exist, items with the same name are combined and their dispatched quantities summed.
+  static List<Map<String, dynamic>> getChallanItems(SalesPipeline pipeline) {
+    final challans = getDeliveryChallans(pipeline);
+    if (challans.isEmpty) return [];
+
+    final Map<String, Map<String, dynamic>> combined = {};
+
+    for (final ch in challans) {
+      final rawItems = ch['items'];
+      if (rawItems is List) {
+        for (final raw in rawItems) {
+          if (raw is Map) {
+            final item = Map<String, dynamic>.from(raw);
+            final name = (item['name'] ?? item['description'] ?? '').toString().trim();
+            if (name.isEmpty) continue;
+
+            final double qty = (item['qty'] is num)
+                ? (item['qty'] as num).toDouble()
+                : (double.tryParse(item['qty']?.toString() ?? '1') ?? 1.0);
+            final uom = (item['uom'] ?? 'NOS').toString().trim();
+            final remark = item['remark']?.toString().trim();
+
+            if (combined.containsKey(name)) {
+              final existing = combined[name]!;
+              final double prevQty = (existing['qty'] is num) ? (existing['qty'] as num).toDouble() : 0.0;
+              existing['qty'] = prevQty + qty;
+              if (remark != null && remark.isNotEmpty) {
+                final existingRem = existing['remark']?.toString() ?? '';
+                if (existingRem.isNotEmpty && !existingRem.contains(remark)) {
+                  existing['remark'] = '$existingRem; $remark';
+                } else if (existingRem.isEmpty) {
+                  existing['remark'] = remark;
+                }
+              }
+            } else {
+              combined[name] = {
+                'name': name,
+                'description': name,
+                'qty': qty,
+                'uom': uom.isNotEmpty ? uom : 'NOS',
+                if (remark != null && remark.isNotEmpty) 'remark': remark,
+                if (item['required_qty'] != null) 'required_qty': item['required_qty'],
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return combined.values.toList();
+  }
+
   /// Records a newly generated delivery challan for this pipeline.
   static Future<void> recordDeliveryChallan(
     SupabaseClient supabase,
@@ -898,7 +951,6 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
   Future<void> _generateNoc() async {
     final pipeline = widget.pipeline;
-    final profile = ref.read(currentProfileProvider);
     final supabase = ref.read(supabaseClientProvider);
 
     try {
@@ -1685,16 +1737,13 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
   Widget _buildTopStepperItem(String title, bool isDone, bool isActive) {
     Color iconBg;
-    Color iconFg;
     Widget iconChild;
 
     if (isDone) {
       iconBg = const Color(0xFF10B981);
-      iconFg = Colors.white;
       iconChild = const Icon(Icons.check, size: 12, color: Colors.white);
     } else if (isActive) {
       iconBg = const Color(0xFF2563EB);
-      iconFg = Colors.white;
       iconChild = Container(
         width: 6,
         height: 6,
@@ -1705,7 +1754,6 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       );
     } else {
       iconBg = const Color(0xFFE2E8F0);
-      iconFg = const Color(0xFF94A3B8);
       iconChild = const SizedBox.shrink();
     }
 

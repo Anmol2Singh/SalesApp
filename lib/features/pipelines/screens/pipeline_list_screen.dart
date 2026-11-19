@@ -297,7 +297,7 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                             },
                             decoration: InputDecoration(
                               hintText:
-                                  'Search by customer, product, quote #...',
+                                  'Search by Deal ID, customer, product, quote #...',
                               hintStyle: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 13,
@@ -495,8 +495,15 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                     final quoteNo =
                         (p.quotation?.quotationNumber ?? '').toLowerCase();
                     final baseQuoteNo = p.baseQuotationNumber.toLowerCase();
+                    final dealId = (p.dealId ?? '').toLowerCase();
+                    final cleanDealNum = dealId.replaceAll(RegExp(r'[^0-9]'), '');
+                    final cleanQ = q.replaceAll(RegExp(r'[^0-9]'), '');
+                    final matchesDealId = dealId.contains(q) ||
+                        (cleanQ.isNotEmpty && cleanDealNum.endsWith(cleanQ));
 
-                    final matches = custName.contains(q) ||
+                    final matches = dealId.contains(q) ||
+                        matchesDealId ||
+                        custName.contains(q) ||
                         compName.contains(q) ||
                         phone.contains(q) ||
                         prod.contains(q) ||
