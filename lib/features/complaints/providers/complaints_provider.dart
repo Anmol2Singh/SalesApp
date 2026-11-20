@@ -15,7 +15,7 @@ class ComplaintsNotifier extends StateNotifier<List<Complaint>> {
 
   ComplaintsNotifier(this.ref) : super([]) {
     _clearStaleCache();
-    _loadFromDatabase();
+    Future.microtask(() => _loadFromDatabase());
   }
 
   /// Permanently clean up any legacy local cache so deleted complaints are never resurrected

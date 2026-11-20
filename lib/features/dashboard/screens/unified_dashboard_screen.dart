@@ -1005,6 +1005,12 @@ class _UnifiedQuickActionsGrid extends ConsumerWidget {
               color: const Color(0xFF4F46E5),
               onTap: () => context.push(AppRoutes.assignedWork),
             ),
+            _QuickActionBtn(
+              label: 'Attendance',
+              icon: Icons.fingerprint,
+              color: const Color(0xFFD97706),
+              onTap: () => context.push(AppRoutes.attendanceDashboard),
+            ),
           ],
         ),
         _QuickActionCategory(
@@ -1017,6 +1023,12 @@ class _UnifiedQuickActionsGrid extends ConsumerWidget {
               icon: Icons.grid_view_outlined,
               color: const Color(0xFF0D9488),
               onTap: () => context.push('/products'),
+            ),
+            _QuickActionBtn(
+              label: 'Attendance',
+              icon: Icons.fingerprint,
+              color: const Color(0xFF6B4515),
+              onTap: () => context.push(AppRoutes.attendanceDashboard),
             ),
             _QuickActionBtn(
               label: 'Daily Report',
@@ -1108,10 +1120,22 @@ class _UnifiedQuickActionsGrid extends ConsumerWidget {
               onTap: () => context.push(AppRoutes.assignedWork),
             ),
             _QuickActionBtn(
+              label: 'Attendance',
+              icon: Icons.fingerprint,
+              color: const Color(0xFFD97706),
+              onTap: () => context.push(AppRoutes.attendanceDashboard),
+            ),
+            _QuickActionBtn(
               label: 'Daily Tasks',
               icon: Icons.fact_check_outlined,
               color: const Color(0xFF8B5CF6),
               onTap: () => context.push(AppRoutes.dailyTasks),
+            ),
+            _QuickActionBtn(
+              label: 'Attendance',
+              icon: Icons.fingerprint,
+              color: const Color(0xFFD97706),
+              onTap: () => context.push(AppRoutes.attendanceDashboard),
             ),
           ],
         ),
@@ -1167,6 +1191,12 @@ class _UnifiedQuickActionsGrid extends ConsumerWidget {
               icon: Icons.bar_chart_outlined,
               color: const Color(0xFF10B981),
               onTap: () => context.push('/reports/activity'),
+            ),
+            _QuickActionBtn(
+              label: 'Attendance',
+              icon: Icons.fingerprint,
+              color: const Color(0xFF6B4515),
+              onTap: () => context.push(AppRoutes.attendanceDashboard),
             ),
             if (hasSales)
               _QuickActionBtn(

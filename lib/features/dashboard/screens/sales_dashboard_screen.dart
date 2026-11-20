@@ -376,6 +376,12 @@ class SalesDashboardScreen extends ConsumerWidget {
                         color: const Color(0xFF4F46E5),
                         onTap: () => context.push(AppRoutes.assignedWork),
                       ),
+                      _QuickActionBtn(
+                        icon: Icons.fingerprint,
+                        label: 'Attendance',
+                        color: const Color(0xFFD97706),
+                        onTap: () => context.push(AppRoutes.attendanceDashboard),
+                      ),
                     ];
                     categories.add(
                       _QuickActionCategory(
@@ -423,6 +429,12 @@ class SalesDashboardScreen extends ConsumerWidget {
                         label: "Today's Report",
                         color: const Color(0xFF10B981),
                         onTap: () => context.push('/reports/activity'),
+                      ),
+                      _QuickActionBtn(
+                        icon: Icons.fingerprint,
+                        label: 'Attendance',
+                        color: const Color(0xFF6B4515),
+                        onTap: () => context.push(AppRoutes.attendanceDashboard),
                       ),
                       _QuickActionBtn(
                         icon: Icons.contact_page_outlined,

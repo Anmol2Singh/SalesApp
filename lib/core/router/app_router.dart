@@ -86,6 +86,11 @@ import '../../features/project_manager/presentation/screens/pm_daily_transaction
 import '../../features/assigned_work/presentation/screens/assigned_work_screen.dart';
 import '../widgets/app_not_found_screen.dart';
 import '../../features/sales_order/screens/sales_order_resolver_screen.dart';
+import '../../features/attendance/dashboard/screens/attendance_employee_dashboard_screen.dart';
+import '../../features/attendance/reports/screens/attendance_employee_report_screen.dart';
+import '../../features/attendance/check_in/screens/attendance_check_in_screen.dart';
+import '../../features/attendance/manager/screens/attendance_manager_dashboard_screen.dart';
+import '../../features/attendance/admin/screens/attendance_admin_dashboard_screen.dart';
 
 // Customer app imports
 import '../../features/customer_app/features/auth/screens/otp_screen.dart';
@@ -170,6 +175,11 @@ class AppRoutes {
   static const String customerReport = '/reports/customer';
   static const String products = '/products';
   static const String assignedWork = '/assigned-work';
+  static const String attendanceDashboard = '/attendance/dashboard';
+  static const String attendanceCheckIn = '/attendance/check-in';
+  static const String attendanceReports = '/attendance/reports';
+  static const String attendanceAdmin = '/attendance/admin';
+  static const String attendanceManager = '/attendance/manager';
 
   // Helper path generators to eliminate hardcoded string concatenation bugs
   static String quotationFormPath(String pipelineId) =>
@@ -969,6 +979,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/deals',
         redirect: (context, state) => AppRoutes.pipelines,
+      ),
+      GoRoute(
+        path: AppRoutes.attendanceDashboard,
+        builder: (context, state) => const AttendanceEmployeeDashboardScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.attendanceCheckIn,
+        builder: (context, state) => const AttendanceCheckInScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.attendanceReports,
+        builder: (context, state) => const AttendanceEmployeeReportScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.attendanceAdmin,
+        builder: (context, state) => const AttendanceAdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.attendanceManager,
+        builder: (context, state) => const AttendanceManagerDashboardScreen(),
       ),
     ],
     errorBuilder: (context, state) => AppNotFoundScreen(state: state),

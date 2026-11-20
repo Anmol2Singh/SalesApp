@@ -306,7 +306,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                   profile.primaryRole != UserRole.customer &&
                   !widget.currentRoute.startsWith('/inventory') &&
                   widget.currentRoute != AppRoutes.inventory &&
-                  !widget.currentRoute.startsWith('/crm');
+                  !widget.currentRoute.startsWith('/crm') &&
+                  !widget.currentRoute.startsWith('/attendance');
 
               if (isWide && profile.primaryRole != UserRole.customer) {
                 return Row(
@@ -347,9 +348,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                   profile.primaryRole != UserRole.customer &&
                   !widget.currentRoute.startsWith('/inventory') &&
                   widget.currentRoute != AppRoutes.inventory &&
-                  !widget.currentRoute.startsWith('/crm')
+                  !widget.currentRoute.startsWith('/crm') &&
+                  !widget.currentRoute.startsWith('/attendance')
               ? _buildNavBar(context, profile.roles, unreadCount, false)
-              : null,
+              : null
         ),
       ),
     );
@@ -994,6 +996,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedBgColor: selectedBgColor,
                     badgeCount: unreadCount,
                   ),
+
+                // Attendance Module
+                _buildNavItemTile(
+                  route: AppRoutes.attendanceDashboard,
+                  label: 'Attendance',
+                  icon: const Icon(Icons.fingerprint),
+                  selectedIcon: const Icon(Icons.fingerprint),
+                  selectedTextColor: selectedTextColor,
+                  unselectedTextColor: unselectedTextColor,
+                  selectedBgColor: selectedBgColor,
+                ),
 
                 // Specific role tasks for technicians, factory, purchase, boq
                 if (isTechnician) ...[

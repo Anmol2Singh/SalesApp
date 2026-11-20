@@ -319,6 +319,11 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                   },
                 ),
                 IconButton(
+                  icon: const Icon(Icons.fingerprint, color: Colors.white),
+                  tooltip: 'Attendance & Check In',
+                  onPressed: () => context.push(AppRoutes.attendanceDashboard),
+                ),
+                IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   tooltip: 'Refresh',
                   onPressed: () {
@@ -343,6 +348,10 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  // Daily Attendance Quick Punch In Banner
+                  _buildAttendanceBanner(context),
+                  const SizedBox(height: 14),
+
                   // 1. KPI Metric Cards Grid (2x2)
                   GridView.count(
                     crossAxisCount: isWide ? 4 : 2,
@@ -884,6 +893,89 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceBanner(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push(AppRoutes.attendanceDashboard),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF6B4515), Color(0xFF8B5A1E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6B4515).withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.fingerprint, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Attendance & Geofence Punch',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Mark attendance, view working hours & reports',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Punch',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_ios, color: Colors.white, size: 10),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -913,6 +913,18 @@ class _QuickActionsGrid extends ConsumerWidget {
             color: const Color(0xFF8B5CF6),
             onTap: () => context.push(AppRoutes.dailyTasks),
           ),
+          _QuickActionBtn(
+            label: 'Attendance',
+            icon: Icons.fingerprint,
+            color: const Color(0xFFD97706),
+            onTap: () => context.push(AppRoutes.attendanceDashboard),
+          ),
+          _QuickActionBtn(
+            label: 'Attendance Admin',
+            icon: Icons.admin_panel_settings_outlined,
+            color: const Color(0xFFB45309),
+            onTap: () => context.push(AppRoutes.attendanceAdmin),
+          ),
         ],
       ),
       _QuickActionCategory(
@@ -965,6 +977,12 @@ class _QuickActionsGrid extends ConsumerWidget {
               icon: Icons.bar_chart_outlined,
               color: const Color(0xFF10B981),
               onTap: () => context.push('/reports/activity'),
+            ),
+            _QuickActionBtn(
+              label: 'Attendance',
+              icon: Icons.fingerprint,
+              color: const Color(0xFF6B4515),
+              onTap: () => context.push(AppRoutes.attendanceDashboard),
             ),
             _QuickActionBtn(
               label: 'Customer 360',

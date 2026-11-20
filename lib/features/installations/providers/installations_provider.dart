@@ -12,7 +12,7 @@ class InstallationsNotifier extends StateNotifier<List<Installation>> {
   final Ref ref;
 
   InstallationsNotifier(this.ref) : super([]) {
-    _loadFromDatabase();
+    Future.microtask(() => _loadFromDatabase());
   }
 
   Future<void> _loadFromDatabase({bool refresh = false}) async {
