@@ -424,7 +424,10 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            if (currentRoles.contains(UserRole.serviceHead) && !currentRoles.contains(UserRole.admin) && !currentRoles.contains(UserRole.manager))
+                            if (currentRoles.contains(UserRole.serviceHead) &&
+                                !currentRoles.contains(UserRole.admin) &&
+                                !currentRoles.contains(UserRole.manager) &&
+                                !currentRoles.contains(UserRole.salesHead))
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -441,7 +444,9 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                                   ),
                                 ),
                               )
-                            else if (currentRoles.contains(UserRole.salesHead) && !currentRoles.contains(UserRole.admin) && !currentRoles.contains(UserRole.manager))
+                            else if (currentRoles.contains(UserRole.salesHead) &&
+                                !currentRoles.contains(UserRole.admin) &&
+                                !currentRoles.contains(UserRole.manager))
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -449,7 +454,7 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: const Text(
-                                  'Sales Team Only',
+                                  'All Staff (Excl. Admins)',
                                   style: TextStyle(
                                     fontFamily: 'Inter',
                                     fontSize: 10,
@@ -465,7 +470,10 @@ class _AddEditWorkDialogState extends ConsumerState<AddEditWorkDialog> {
                           data: (users) {
                             if (users.isEmpty) {
                               return Text(
-                                currentRoles.contains(UserRole.serviceHead) && !currentRoles.contains(UserRole.admin) && !currentRoles.contains(UserRole.manager)
+                                currentRoles.contains(UserRole.serviceHead) &&
+                                        !currentRoles.contains(UserRole.admin) &&
+                                        !currentRoles.contains(UserRole.manager) &&
+                                        !currentRoles.contains(UserRole.salesHead)
                                     ? 'No technicians found'
                                     : 'No assignable users found',
                                 style: TextStyle(color: Colors.grey.shade600, fontSize: 13),

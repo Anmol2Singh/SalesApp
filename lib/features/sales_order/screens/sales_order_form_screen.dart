@@ -10,10 +10,13 @@ import '../../../core/models/product.dart';
 import '../../../core/models/sales_order.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/widgets/inventory_autocomplete.dart';
+import '../../../core/widgets/searchable_dropdown.dart';
 import '../../../core/models/quotation.dart';
+import '../../../core/models/supplementary_item.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../pipelines/providers/pipelines_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../admin/providers/inventory_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/services/notification_backend_helper.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
@@ -52,6 +55,47 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
 
   // Line items
   final List<Map<String, dynamic>> _lineItems = [];
+
+  // Supplementary items
+  final List<Map<String, dynamic>> _supplementaryItems = [];
+
+  // Payment terms stages & controllers (identical to quotation)
+  final List<Map<String, dynamic>> _paymentTerms = [];
+  final List<TextEditingController> _paymentTermNameControllers = [];
+  final List<TextEditingController> _paymentPercentControllers = [];
+  final List<TextEditingController> _paymentAmountControllers = [];
+
+  static final List<Map<String, dynamic>> _defaultPaymentTemplates = [
+    {
+      'name': '100% Advance',
+      'stages': [
+        {'term': 'Advance with Order', 'percent': 100.0},
+      ],
+    },
+    {
+      'name': '50% - 50%',
+      'stages': [
+        {'term': 'Advance with PO', 'percent': 50.0},
+        {'term': 'Before Dispatch', 'percent': 50.0},
+      ],
+    },
+    {
+      'name': '30% - 60% - 10%',
+      'stages': [
+        {'term': 'Advance with PO', 'percent': 30.0},
+        {'term': 'Against Proforma / Before Dispatch', 'percent': 60.0},
+        {'term': 'After Installation / Handover', 'percent': 10.0},
+      ],
+    },
+    {
+      'name': '40% - 50% - 10%',
+      'stages': [
+        {'term': 'Advance with Order', 'percent': 40.0},
+        {'term': 'Before Dispatch', 'percent': 50.0},
+        {'term': 'After Testing & Commissioning', 'percent': 10.0},
+      ],
+    },
+  ];
 
   // GST rates
   double _cgstRate = 9.0;
@@ -97,6 +141,23 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       (item['uom'] as TextEditingController).dispose();
       (item['rate'] as TextEditingController).dispose();
       (item['disc_percent'] as TextEditingController).dispose();
+      (item['remark'] as TextEditingController?)?.dispose();
+    }
+    for (final item in _supplementaryItems) {
+      (item['name'] as TextEditingController).dispose();
+      (item['qty'] as TextEditingController).dispose();
+      (item['rate'] as TextEditingController).dispose();
+      (item['gst_percent'] as TextEditingController).dispose();
+      (item['type'] as TextEditingController).dispose();
+    }
+    for (final c in _paymentTermNameControllers) {
+      c.dispose();
+    }
+    for (final c in _paymentPercentControllers) {
+      c.dispose();
+    }
+    for (final c in _paymentAmountControllers) {
+      c.dispose();
     }
     super.dispose();
   }
@@ -178,10 +239,33 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             'rate': TextEditingController(text: InventoryAutocomplete.formatIndianPrice(item.rate)),
             'disc_percent':
                 TextEditingController(text: item.discPercent.toString()),
+            'remark': TextEditingController(text: item.remark ?? ''),
           });
         }
         _cgstRate = _existingSalesOrder!.cgstRate;
         _sgstRate = _existingSalesOrder!.sgstRate;
+
+        // Prefill supplementary items from existing sales order
+        _supplementaryItems.clear();
+        if (_existingSalesOrder!.supplementaryTerms != null &&
+            _existingSalesOrder!.supplementaryTerms!.isNotEmpty) {
+          for (final supp in _existingSalesOrder!.supplementaryTerms!) {
+            _supplementaryItems.add({
+              'name': TextEditingController(text: supp.name),
+              'qty': TextEditingController(text: supp.qty.toInt().toString()),
+              'rate': TextEditingController(text: supp.rate.toString()),
+              'gst_percent': TextEditingController(text: supp.gstPercent.toString()),
+              'type': TextEditingController(text: supp.type.isNotEmpty ? supp.type : 'Extra'),
+            });
+          }
+        }
+
+        // Prefill payment terms stages from existing sales order
+        _paymentTerms.clear();
+        if (_existingSalesOrder!.paymentTermsStages != null &&
+            _existingSalesOrder!.paymentTermsStages!.isNotEmpty) {
+          _paymentTerms.addAll(List<Map<String, dynamic>>.from(_existingSalesOrder!.paymentTermsStages!));
+        }
       } else {
         // First-time prefill from customer and quotation
         _isEditing = true;
@@ -215,10 +299,38 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
               'rate': TextEditingController(
                   text: InventoryAutocomplete.formatIndianPrice(item.unitPrice)),
               'disc_percent': TextEditingController(text: item.discPercent.toString()),
+              'remark': TextEditingController(text: item.remark ?? ''),
             });
+          }
+
+          // Prefill supplementary items from quotation
+          _supplementaryItems.clear();
+          if (_quotation!.supplementaryTerms != null &&
+              _quotation!.supplementaryTerms!.isNotEmpty) {
+            for (final supp in _quotation!.supplementaryTerms!) {
+              _supplementaryItems.add({
+                'name': TextEditingController(text: supp.name),
+                'qty': TextEditingController(text: supp.qty.toInt().toString()),
+                'rate': TextEditingController(text: supp.rate.toString()),
+                'gst_percent': TextEditingController(text: supp.gstPercent.toString()),
+                'type': TextEditingController(text: supp.type.isNotEmpty ? supp.type : 'Extra'),
+              });
+            }
+          }
+
+          // Prefill payment terms stages from quotation
+          _paymentTerms.clear();
+          if (_quotation!.paymentTerms != null &&
+              _quotation!.paymentTerms!.isNotEmpty) {
+            _paymentTerms.addAll(List<Map<String, dynamic>>.from(_quotation!.paymentTerms!));
           }
         }
       }
+
+      if (_paymentTerms.isEmpty) {
+        _paymentTerms.add({'term': 'Advance with Order', 'percent': 100.0, 'amount': 0.0});
+      }
+      _syncPaymentTermControllers();
 
       if (_lineItems.isEmpty) _addLineItem();
     } catch (e) {
@@ -245,6 +357,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
         'uom': TextEditingController(text: 'NOS'),
         'rate': TextEditingController(text: '0.00'),
         'disc_percent': TextEditingController(text: '0.0'),
+        'remark': TextEditingController(),
       });
     });
   }
@@ -260,6 +373,36 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       (item['uom'] as TextEditingController).dispose();
       (item['rate'] as TextEditingController).dispose();
       (item['disc_percent'] as TextEditingController).dispose();
+      (item['remark'] as TextEditingController?)?.dispose();
+    });
+  }
+
+  void _addSupplementaryItem({
+    String name = '',
+    double rate = 0,
+    double gst = 18.0,
+    String type = 'Extra',
+    int qty = 1,
+  }) {
+    setState(() {
+      _supplementaryItems.add({
+        'name': TextEditingController(text: name),
+        'qty': TextEditingController(text: qty.toString()),
+        'rate': TextEditingController(text: rate.toString()),
+        'gst_percent': TextEditingController(text: gst.toString()),
+        'type': TextEditingController(text: type),
+      });
+    });
+  }
+
+  void _removeSupplementaryItem(int index) {
+    setState(() {
+      final item = _supplementaryItems.removeAt(index);
+      (item['name'] as TextEditingController).dispose();
+      (item['qty'] as TextEditingController).dispose();
+      (item['rate'] as TextEditingController).dispose();
+      (item['gst_percent'] as TextEditingController).dispose();
+      (item['type'] as TextEditingController).dispose();
     });
   }
 
@@ -278,10 +421,667 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
     return total;
   }
 
+  double _calcSupplementarySubtotal() {
+    double total = 0;
+    for (final item in _supplementaryItems) {
+      final type = (item['type'] as TextEditingController).text.trim();
+      if (type.toLowerCase() == 'included') continue;
+      final qty = int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final rate = double.tryParse((item['rate'] as TextEditingController).text) ?? 0;
+      total += qty * rate;
+    }
+    return total;
+  }
+
+  void _syncPaymentTermAmounts() {
+    for (int i = 0; i < _paymentTerms.length; i++) {
+      final p = (_paymentTerms[i]['percent'] as num?)?.toDouble() ?? 0.0;
+      _paymentTerms[i]['amount'] = (_grandTotal * (p / 100.0)).roundToDouble();
+    }
+  }
+
+  void _syncPaymentTermControllers() {
+    while (_paymentTermNameControllers.length < _paymentTerms.length) {
+      final idx = _paymentTermNameControllers.length;
+      final item = _paymentTerms[idx];
+      final t = item['term']?.toString() ?? '';
+      final p = (item['percent'] as num?)?.toDouble() ?? 0.0;
+      final a = (item['amount'] as num?)?.toDouble() ??
+          (_grandTotal * (p / 100.0)).roundToDouble();
+      _paymentTermNameControllers.add(TextEditingController(text: t));
+      _paymentPercentControllers.add(TextEditingController(
+          text: p.toStringAsFixed(p == p.roundToDouble() ? 0 : 1)));
+      _paymentAmountControllers.add(TextEditingController(
+          text: a > 0 ? a.round().toString() : '0'));
+    }
+    while (_paymentTermNameControllers.length > _paymentTerms.length) {
+      _paymentTermNameControllers.removeLast().dispose();
+      _paymentPercentControllers.removeLast().dispose();
+      _paymentAmountControllers.removeLast().dispose();
+    }
+    for (int i = 0; i < _paymentTerms.length; i++) {
+      final item = _paymentTerms[i];
+      final t = item['term']?.toString() ?? '';
+      final p = (item['percent'] as num?)?.toDouble() ?? 0.0;
+      final a = (item['amount'] as num?)?.toDouble() ??
+          (_grandTotal * (p / 100.0)).roundToDouble();
+      if (_paymentTermNameControllers[i].text != t) {
+        _paymentTermNameControllers[i].text = t;
+      }
+      final pText = p.toStringAsFixed(p == p.roundToDouble() ? 0 : 1);
+      if (_paymentPercentControllers[i].text != pText) {
+        _paymentPercentControllers[i].text = pText;
+      }
+      final aText = a > 0 ? a.round().toString() : '0';
+      if (_paymentAmountControllers[i].text != aText) {
+        _paymentAmountControllers[i].text = aText;
+      }
+    }
+    _syncPaymentTermsController();
+  }
+
+  void _syncPaymentTermsController() {
+    if (_paymentTerms.isNotEmpty) {
+      _paymentTermsController.text = _paymentTerms.map((t) {
+        final p = (t['percent'] ?? t['percentage'] as num?)?.toDouble() ?? 0.0;
+        final name = t['term'] ?? t['condition'] ?? t['stage'] ?? '';
+        return '${p.toStringAsFixed(0)}% $name';
+      }).join(', ');
+    }
+  }
+
+  void _onPaymentPercentChanged(int idx, String val) {
+    if (idx >= _paymentTerms.length) return;
+    final parsed = double.tryParse(val) ?? 0.0;
+    _paymentTerms[idx]['percent'] = parsed;
+    final calcAmt = (_grandTotal * (parsed / 100.0)).roundToDouble();
+    _paymentTerms[idx]['amount'] = calcAmt;
+    if (idx < _paymentAmountControllers.length) {
+      final aText = calcAmt > 0 ? calcAmt.round().toString() : '0';
+      if (_paymentAmountControllers[idx].text != aText) {
+        _paymentAmountControllers[idx].text = aText;
+      }
+    }
+    _syncPaymentTermsController();
+    setState(() {});
+  }
+
+  void _onPaymentAmountChanged(int idx, String val) {
+    if (idx >= _paymentTerms.length) return;
+    final clean = val.replaceAll(',', '').trim();
+    final parsedAmt = double.tryParse(clean) ?? 0.0;
+    _paymentTerms[idx]['amount'] = parsedAmt;
+    final calcPct = _grandTotal > 0 ? (parsedAmt / _grandTotal * 100.0) : 0.0;
+    final roundedPct = double.parse(calcPct.toStringAsFixed(2));
+    _paymentTerms[idx]['percent'] = roundedPct;
+    if (idx < _paymentPercentControllers.length) {
+      final pText = roundedPct.toStringAsFixed(
+          roundedPct == roundedPct.roundToDouble() ? 0 : 1);
+      if (_paymentPercentControllers[idx].text != pText) {
+        _paymentPercentControllers[idx].text = pText;
+      }
+    }
+    _syncPaymentTermsController();
+    setState(() {});
+  }
+
+  void _applyPaymentTemplate(Map<String, dynamic> t) {
+    final stages = t['stages'] as List<dynamic>? ?? [];
+    if (stages.isEmpty) return;
+    setState(() {
+      _paymentTerms.clear();
+      for (final s in stages) {
+        final st = Map<String, dynamic>.from(s as Map);
+        final pct = (st['percent'] as num?)?.toDouble() ?? 0.0;
+        final amt = (_grandTotal * (pct / 100.0)).roundToDouble();
+        _paymentTerms.add({
+          'term': st['term']?.toString() ?? '',
+          'percent': pct,
+          'amount': amt,
+        });
+      }
+      _syncPaymentTermControllers();
+    });
+  }
+
+  Widget _buildPaymentTermsCard(bool enabled) {
+    _syncPaymentTermAmounts();
+    final double totalPercent = _paymentTerms.fold<double>(
+      0.0,
+      (sum, item) => sum + ((item['percent'] as num?)?.toDouble() ?? 0.0),
+    );
+    final bool isFull100 = (totalPercent - 100.0).abs() < 0.01;
+
+    final defaultStageNames = [
+      'Advance',
+      'Dispatch',
+      'Installation',
+      'Completion'
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Card
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_outlined,
+                      size: 20, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Payment Terms & Milestones',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Default stages: Advance, Dispatch, Installation, Completion',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 100% Status Badge
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isFull100
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isFull100
+                          ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                          : const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isFull100
+                            ? Icons.check_circle
+                            : Icons.pie_chart_outline,
+                        size: 13,
+                        color: isFull100
+                            ? const Color(0xFF059669)
+                            : const Color(0xFFD97706),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isFull100
+                            ? '100%'
+                            : '${totalPercent.toStringAsFixed(totalPercent == totalPercent.roundToDouble() ? 0 : 1)}%',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isFull100
+                              ? const Color(0xFF059669)
+                              : const Color(0xFFD97706),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // Template selector row
+          if (enabled) ...[
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              color: AppColors.background.withValues(alpha: 0.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.auto_awesome,
+                          size: 14, color: AppColors.primary),
+                      SizedBox(width: 6),
+                      Text(
+                        'Payment Templates:',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ..._defaultPaymentTemplates.map((t) {
+                          final name = t['name'] as String;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              onTap: () => _applyPaymentTemplate(t),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.02),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.check_circle_outline,
+                                        size: 13, color: AppColors.primary),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+
+          // Table Section
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                // Table header
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F2744),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      SizedBox(width: 30),
+                      Expanded(
+                        flex: 5,
+                        child: Text(
+                          'Payment Term / Stage',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          'Percentage (%)',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          'Amount (₹)',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      SizedBox(width: 36),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Table rows
+                ..._paymentTerms.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final item = entry.value;
+                  final termName = item['term']?.toString() ?? '';
+                  final pct = (item['percent'] as num?)?.toDouble() ?? 0.0;
+                  final amt = (_grandTotal * (pct / 100.0)).roundToDouble();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        // Milestone number badge
+                        Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F2744),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${idx + 1}',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 5,
+                          child: enabled
+                              ? TextFormField(
+                                  controller: _paymentTermNameControllers.length > idx
+                                      ? _paymentTermNameControllers[idx]
+                                      : null,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: idx < defaultStageNames.length
+                                        ? defaultStageNames[idx]
+                                        : 'Stage ${idx + 1}',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                  onChanged: (val) {
+                                    item['term'] = val;
+                                    _syncPaymentTermsController();
+                                  },
+                                )
+                              : Text(
+                                  termName,
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: enabled
+                              ? TextFormField(
+                                  controller: _paymentPercentControllers.length > idx
+                                      ? _paymentPercentControllers[idx]
+                                      : null,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  textAlign: TextAlign.center,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    suffixText: '%',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
+                                  onChanged: (val) =>
+                                      _onPaymentPercentChanged(idx, val),
+                                )
+                              : Text(
+                                  '${pct.toStringAsFixed(pct == pct.roundToDouble() ? 0 : 1)}%',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 4,
+                          child: enabled
+                              ? TextFormField(
+                                  controller: _paymentAmountControllers.length > idx
+                                      ? _paymentAmountControllers[idx]
+                                      : null,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  textAlign: TextAlign.right,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    prefixText: '₹',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                  onChanged: (val) =>
+                                      _onPaymentAmountChanged(idx, val),
+                                )
+                              : Text(
+                                  '₹${InventoryAutocomplete.formatIndianPrice(amt)}',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                        ),
+                        if (enabled) ...[
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline,
+                                size: 20, color: AppColors.error),
+                            tooltip: 'Remove stage',
+                            onPressed: _paymentTerms.length <= 1
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _paymentTerms.removeAt(idx);
+                                      _syncPaymentTermAmounts();
+                                      _syncPaymentTermControllers();
+                                    });
+                                  },
+                          ),
+                        ] else ...[
+                          const SizedBox(width: 36),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+
+                // Add Stage Button
+                if (enabled && totalPercent < 99.99) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(
+                            color: AppColors.primary, width: 1.2),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                      ),
+                      onPressed: () {
+                        final remaining =
+                            (100.0 - totalPercent).clamp(0.0, 100.0);
+                        final nextName =
+                            _paymentTerms.length < defaultStageNames.length
+                                ? defaultStageNames[_paymentTerms.length]
+                                : 'Stage ${_paymentTerms.length + 1}';
+                        setState(() {
+                          _paymentTerms.add({
+                            'term': nextName,
+                            'percent': remaining,
+                            'amount': (_grandTotal * (remaining / 100.0)).roundToDouble(),
+                          });
+                          _syncPaymentTermControllers();
+                        });
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 18),
+                      label: Text(
+                        'Add Stage (${_paymentTerms.length < defaultStageNames.length ? defaultStageNames[_paymentTerms.length] : "Stage ${_paymentTerms.length + 1}"}) • ${(100.0 - totalPercent).toStringAsFixed(0)}% Left',
+                        style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool get _isLocalGst {
     final state = _placeOfSupplyController.text.trim().toLowerCase();
     return state == 'maharashtra' || state == '27' || state == 'mh';
   }
+
+  double get _taxableSubtotal => _calcSubtotal() + _calcSupplementarySubtotal();
 
   double get _totalGstAmount {
     double gstSum = 0;
@@ -293,6 +1093,14 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       final taxable = (qty * rate) * (1 - disc / 100);
       gstSum += taxable * (gst / 100);
     }
+    for (final item in _supplementaryItems) {
+      final type = (item['type'] as TextEditingController).text.trim();
+      if (type.toLowerCase() == 'included') continue;
+      final qty = int.tryParse((item['qty'] as TextEditingController).text) ?? 0;
+      final rate = double.tryParse((item['rate'] as TextEditingController).text) ?? 0;
+      final gst = double.tryParse((item['gst_percent'] as TextEditingController).text) ?? 18.0;
+      gstSum += (qty * rate) * (gst / 100);
+    }
     return gstSum;
   }
 
@@ -300,7 +1108,7 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
   double get _sgstAmount => _isLocalGst ? _totalGstAmount / 2 : 0.0;
   double get _igstAmount => !_isLocalGst ? _totalGstAmount : 0.0;
   double get _unroundedTotal =>
-      _calcSubtotal() + _cgstAmount + _sgstAmount + _igstAmount;
+      _taxableSubtotal + _cgstAmount + _sgstAmount + _igstAmount;
   double get _grandTotal => _unroundedTotal.roundToDouble();
   double get _roundOffAmount => _grandTotal - _unroundedTotal;
 
@@ -644,6 +1452,26 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
         'rate': rate,
         'disc_percent': disc,
         'amount': (qty * rate) * (1 - disc / 100),
+        'remark': (item['remark'] as TextEditingController?)?.text.trim().isNotEmpty == true
+            ? (item['remark'] as TextEditingController).text.trim()
+            : null,
+      };
+    }).toList();
+
+    final supplementaryTermsJson = _supplementaryItems.map((item) {
+      final name = (item['name'] as TextEditingController).text.trim();
+      final qty = int.tryParse((item['qty'] as TextEditingController).text) ?? 1;
+      final rate = double.tryParse((item['rate'] as TextEditingController).text) ?? 0.0;
+      final gst = double.tryParse((item['gst_percent'] as TextEditingController).text) ?? 18.0;
+      final type = (item['type'] as TextEditingController).text.trim();
+      final isInc = type.toLowerCase() == 'included';
+      return {
+        'name': name,
+        'qty': qty,
+        'rate': rate,
+        'gst_percent': gst,
+        'type': type.isEmpty ? 'Extra' : type,
+        'amount': isInc ? 0.0 : (qty * rate),
       };
     }).toList();
 
@@ -669,8 +1497,13 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
           ? 'Maharashtra'
           : _placeOfSupplyController.text.trim(),
       'payment_terms': _paymentTermsController.text.trim().isEmpty
-          ? null
+          ? (_paymentTerms.isNotEmpty
+              ? _paymentTerms.map((t) => '${(t['percent'] ?? t['percentage'] as num?)?.toDouble().toStringAsFixed(0) ?? "0"}% ${t['term'] ?? t['condition'] ?? t['stage'] ?? ""}').join(', ')
+              : null)
           : _paymentTermsController.text.trim(),
+      'payment_terms_stages': _paymentTerms,
+      'supplementary_terms': supplementaryTermsJson,
+      'supplementary_subtotal': _calcSupplementarySubtotal(),
       'billing_address': _billingAddressController.text.trim().isEmpty
           ? null
           : _billingAddressController.text.trim(),
@@ -723,15 +1556,15 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             .eq('id', _existingSalesOrder!.id);
       } catch (err) {
         final errStr = err.toString();
-        if (errStr.contains('expected_dispatch_date')) {
-          final fallbackData = Map<String, dynamic>.from(data)..remove('expected_dispatch_date');
-          await supabase
-              .from('sales_orders')
-              .update(fallbackData)
-              .eq('id', _existingSalesOrder!.id);
-        } else {
-          rethrow;
-        }
+        final fallbackData = Map<String, dynamic>.from(data);
+        if (errStr.contains('expected_dispatch_date')) fallbackData.remove('expected_dispatch_date');
+        if (errStr.contains('supplementary_terms')) fallbackData.remove('supplementary_terms');
+        if (errStr.contains('supplementary_subtotal')) fallbackData.remove('supplementary_subtotal');
+        if (errStr.contains('payment_terms_stages')) fallbackData.remove('payment_terms_stages');
+        await supabase
+            .from('sales_orders')
+            .update(fallbackData)
+            .eq('id', _existingSalesOrder!.id);
       }
       return _existingSalesOrder!.id;
     } else {
@@ -744,17 +1577,17 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
         return (response as Map)['id'] as String;
       } catch (err) {
         final errStr = err.toString();
-        if (errStr.contains('expected_dispatch_date')) {
-          final fallbackData = Map<String, dynamic>.from(data)..remove('expected_dispatch_date');
-          final response = await supabase
-              .from('sales_orders')
-              .insert(fallbackData)
-              .select('id')
-              .single();
-          return (response as Map)['id'] as String;
-        } else {
-          rethrow;
-        }
+        final fallbackData = Map<String, dynamic>.from(data);
+        if (errStr.contains('expected_dispatch_date')) fallbackData.remove('expected_dispatch_date');
+        if (errStr.contains('supplementary_terms')) fallbackData.remove('supplementary_terms');
+        if (errStr.contains('supplementary_subtotal')) fallbackData.remove('supplementary_subtotal');
+        if (errStr.contains('payment_terms_stages')) fallbackData.remove('payment_terms_stages');
+        final response = await supabase
+            .from('sales_orders')
+            .insert(fallbackData)
+            .select('id')
+            .single();
+        return (response as Map)['id'] as String;
       }
     }
   }
@@ -1103,14 +1936,6 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Payment terms
-            TextFormField(
-              controller: _paymentTermsController,
-              enabled: enabled,
-              decoration: const InputDecoration(labelText: 'Payment Terms'),
-            ),
-            const SizedBox(height: 20),
-
             // Item grid
             _SectionHeader('Line Items'),
             const SizedBox(height: 12),
@@ -1133,6 +1958,62 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
               ),
             const SizedBox(height: 20),
 
+            // Supplementary Terms
+            _SectionHeader('Supplementary Terms'),
+            const SizedBox(height: 12),
+            ..._supplementaryItems.asMap().entries.map(
+                  (entry) => _SalesOrderSupplementaryRow(
+                    index: entry.key,
+                    item: entry.value,
+                    onRemove: !enabled
+                        ? null
+                        : () => _removeSupplementaryItem(entry.key),
+                    onChanged: () => setState(() {}),
+                    enabled: enabled,
+                  ),
+                ),
+            if (_supplementaryItems.isNotEmpty) ...[
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Supplementary Total',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      '₹${currencyFormat.format(_calcSupplementarySubtotal())}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (enabled)
+              TextButton.icon(
+                onPressed: () => _addSupplementaryItem(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Supplementary Term'),
+              ),
+            const SizedBox(height: 20),
+
             // Totals block
             Container(
               padding: const EdgeInsets.all(14),
@@ -1145,6 +2026,14 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                 children: [
                   _TotalRow(
                       'Subtotal', '₹${currencyFormat.format(_calcSubtotal())}'),
+                  if (_calcSupplementarySubtotal() > 0) ...[
+                    const SizedBox(height: 4),
+                    _TotalRow('Supplementary Subtotal',
+                        '₹${currencyFormat.format(_calcSupplementarySubtotal())}'),
+                    const SizedBox(height: 4),
+                    _TotalRow('Taxable Amount',
+                        '₹${currencyFormat.format(_taxableSubtotal)}'),
+                  ],
                   const SizedBox(height: 10),
                   if (_isLocalGst) ...[
                     _TotalRow(
@@ -1170,6 +2059,12 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+
+            // Payment Terms Section (Same as Quotation UI)
+            _SectionHeader('Payment Terms'),
+            const SizedBox(height: 8),
+            _buildPaymentTermsCard(enabled),
             const SizedBox(height: 20),
 
             // Remarks
@@ -1483,6 +2378,231 @@ class _SalesOrderLineItemRow extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: item['remark'] as TextEditingController?,
+            enabled: enabled,
+            decoration: const InputDecoration(
+              labelText: 'Remark (Optional)',
+              hintText: 'Item notes printed under item name',
+              isDense: true,
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SalesOrderSupplementaryRow extends ConsumerWidget {
+  final int index;
+  final Map<String, dynamic> item;
+  final VoidCallback? onRemove;
+  final VoidCallback onChanged;
+  final bool enabled;
+
+  const _SalesOrderSupplementaryRow({
+    required this.index,
+    required this.item,
+    this.onRemove,
+    required this.onChanged,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final qtyCtrl = item['qty'] as TextEditingController;
+    final rateCtrl = item['rate'] as TextEditingController;
+    final gstCtrl = item['gst_percent'] as TextEditingController;
+    final nameCtrl = item['name'] as TextEditingController;
+    final typeCtrl = item['type'] as TextEditingController;
+
+    final isIncluded = typeCtrl.text == 'Included';
+
+    final q = double.tryParse(qtyCtrl.text) ?? 0;
+    final r = double.tryParse(rateCtrl.text) ?? 0;
+    final total = isIncluded ? 0.0 : q * r;
+
+    final suppAsync = ref.watch(supplementaryItemsProvider);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Term #${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const Spacer(),
+              if (onRemove != null)
+                IconButton(
+                  icon: const Icon(Icons.delete,
+                      color: AppColors.error, size: 20),
+                  onPressed: onRemove,
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 5,
+                child: SearchableDropdown<String>(
+                  label: 'Supplementary Term',
+                  hint: 'Search term...',
+                  value: nameCtrl.text.isEmpty ? null : nameCtrl.text,
+                  items: (suppAsync.value ?? []).map((e) => e.name).toList(),
+                  itemLabel: (item) => item,
+                  enabled: enabled,
+                  decoration: const InputDecoration(
+                    labelText: 'Supplementary Term',
+                    hintText: 'Search term...',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  onChanged: (val) {
+                    if (val != null) {
+                      nameCtrl.text = val;
+                      final suppList = suppAsync.value ?? [];
+                      final found = suppList
+                          .cast<SupplementaryItem?>()
+                          .firstWhere((e) => e?.name == val, orElse: () => null);
+                      if (found != null) {
+                        rateCtrl.text = found.rate.toString();
+                        gstCtrl.text = found.gstPercent.toString();
+                      }
+                      onChanged();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String>(
+                  value: typeCtrl.text.isEmpty ? 'Extra' : typeCtrl.text,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Type',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Extra', child: Text('Extra')),
+                    DropdownMenuItem(value: 'Included', child: Text('Included')),
+                  ],
+                  onChanged: enabled
+                      ? (val) {
+                          if (val != null) {
+                            typeCtrl.text = val;
+                            onChanged();
+                          }
+                        }
+                      : null,
+                ),
+              ),
+            ],
+          ),
+          if (isIncluded) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF047857)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Included in base package (No extra charge)',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF047857),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Included',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF047857),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: qtyCtrl,
+                    enabled: enabled && !isIncluded,
+                    decoration:
+                        const InputDecoration(labelText: 'Qty', isDense: true),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: rateCtrl,
+                    enabled: enabled && !isIncluded,
+                    decoration:
+                        const InputDecoration(labelText: 'Rate', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: gstCtrl,
+                    enabled: enabled && !isIncluded,
+                    decoration:
+                        const InputDecoration(labelText: 'GST %', isDense: true),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Total: ₹${NumberFormat('#,##,##0.00', 'en_IN').format(total)}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: AppColors.primary),
+              ),
+            ),
+          ],
         ],
       ),
     );

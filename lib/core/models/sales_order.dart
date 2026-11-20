@@ -1,5 +1,7 @@
 // lib/core/models/sales_order.dart
 
+import 'supplementary_item.dart';
+
 class SalesOrderLineItem {
   final String description;
   final String? hsnSac;
@@ -125,6 +127,9 @@ class SalesOrder {
   final String? salesman;
   final String? partyContactPerson;
   final List<SalesOrderLineItem> lineItems;
+  final List<SupplementaryItem>? supplementaryTerms;
+  final double supplementarySubtotal;
+  final List<Map<String, dynamic>>? paymentTermsStages;
   final double subtotal;
   final double cgstRate;
   final double sgstRate;
@@ -161,6 +166,9 @@ class SalesOrder {
     this.salesman,
     this.partyContactPerson,
     required this.lineItems,
+    this.supplementaryTerms,
+    this.supplementarySubtotal = 0.0,
+    this.paymentTermsStages,
     required this.subtotal,
     this.cgstRate = 9.0,
     this.sgstRate = 9.0,
@@ -205,6 +213,13 @@ class SalesOrder {
       lineItems: (json['line_items'] as List<dynamic>? ?? [])
           .map((item) => SalesOrderLineItem.fromJson(item as Map<String, dynamic>))
           .toList(),
+      supplementaryTerms: (json['supplementary_terms'] as List<dynamic>?)
+          ?.map((e) => SupplementaryItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      supplementarySubtotal: (json['supplementary_subtotal'] as num? ?? 0.0).toDouble(),
+      paymentTermsStages: (json['payment_terms_stages'] as List<dynamic>?)
+          ?.map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
       subtotal: (json['subtotal'] as num? ?? 0).toDouble(),
       cgstRate: (json['cgst_rate'] as num? ?? 9.0).toDouble(),
       sgstRate: (json['sgst_rate'] as num? ?? 9.0).toDouble(),
@@ -246,6 +261,10 @@ class SalesOrder {
     'salesman': salesman,
     'party_contact_person': partyContactPerson,
     'line_items': lineItems.map((item) => item.toJson()).toList(),
+    if (supplementaryTerms != null)
+      'supplementary_terms': supplementaryTerms!.map((item) => item.toJson()).toList(),
+    'supplementary_subtotal': supplementarySubtotal,
+    if (paymentTermsStages != null) 'payment_terms_stages': paymentTermsStages,
     'subtotal': subtotal,
     'cgst_rate': cgstRate,
     'sgst_rate': sgstRate,
@@ -281,6 +300,9 @@ class SalesOrder {
     String? salesman,
     String? partyContactPerson,
     List<SalesOrderLineItem>? lineItems,
+    List<SupplementaryItem>? supplementaryTerms,
+    double? supplementarySubtotal,
+    List<Map<String, dynamic>>? paymentTermsStages,
     double? subtotal,
     double? cgstRate,
     double? sgstRate,
@@ -317,6 +339,9 @@ class SalesOrder {
       salesman: salesman ?? this.salesman,
       partyContactPerson: partyContactPerson ?? this.partyContactPerson,
       lineItems: lineItems ?? this.lineItems,
+      supplementaryTerms: supplementaryTerms ?? this.supplementaryTerms,
+      supplementarySubtotal: supplementarySubtotal ?? this.supplementarySubtotal,
+      paymentTermsStages: paymentTermsStages ?? this.paymentTermsStages,
       subtotal: subtotal ?? this.subtotal,
       cgstRate: cgstRate ?? this.cgstRate,
       sgstRate: sgstRate ?? this.sgstRate,

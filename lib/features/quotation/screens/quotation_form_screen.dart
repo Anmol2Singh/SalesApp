@@ -1037,6 +1037,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
                 text: InventoryAutocomplete.formatIndianPrice(item.unitPrice)),
             'disc_percent':
                 TextEditingController(text: item.discPercent.toString()),
+            'remark': TextEditingController(text: item.remark ?? ''),
           }),
     );
 
@@ -1419,6 +1420,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         'uom': TextEditingController(text: 'NOS'),
         'unit_price': TextEditingController(text: '0'),
         'disc_percent': TextEditingController(text: '0.0'),
+        'remark': TextEditingController(),
       });
     });
   }
@@ -1433,6 +1435,7 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
       (item['uom'] as TextEditingController).dispose();
       (item['unit_price'] as TextEditingController).dispose();
       (item['disc_percent'] as TextEditingController).dispose();
+      (item['remark'] as TextEditingController?)?.dispose();
     });
   }
 
@@ -2121,6 +2124,13 @@ class _QuotationFormScreenState extends ConsumerState<QuotationFormScreen> {
         'unit_price': price,
         'disc_percent': disc,
         'total': total,
+        'remark': (item['remark'] as TextEditingController?)
+                    ?.text
+                    .trim()
+                    .isNotEmpty ==
+                true
+            ? (item['remark'] as TextEditingController).text.trim()
+            : null,
       };
     }).toList();
 
@@ -4579,6 +4589,18 @@ class _LineItemRow extends StatelessWidget {
               if (n == null || n < 0) return 'Invalid rate';
               return null;
             },
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: item['remark'] as TextEditingController?,
+            enabled: enabled,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Remark (Optional)',
+              hintText: 'Notes to print under item name',
+              isDense: true,
+            ),
+            onChanged: (_) => onChanged(),
           ),
         ],
       ),

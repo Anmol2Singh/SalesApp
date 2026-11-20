@@ -805,6 +805,31 @@ class PmPdfService {
                   ],
                 );
               }),
+              // Totals Row
+              () {
+                double totalPct = 0;
+                double totalAmt = 0;
+                double totalRec = 0;
+                double totalPend = 0;
+                for (final t in terms) {
+                  totalPct += t.termPercentage;
+                  totalAmt += t.amount;
+                  totalRec += t.receivedAmount;
+                  totalPend += t.pendingAmount;
+                }
+                return pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColor(0.93, 0.94, 0.96)),
+                  children: [
+                    _tc('', pw.Alignment.center),
+                    _tc('TOTAL', pw.Alignment.centerLeft, isBold: true),
+                    _tc('${totalPct.toStringAsFixed(0)}%', pw.Alignment.center, isBold: true),
+                    _tc('Rs. ${_currencyFormat.format(totalAmt)}', pw.Alignment.centerRight, isBold: true),
+                    _tc('Rs. ${_currencyFormat.format(totalRec)}', pw.Alignment.centerRight, isBold: true),
+                    _tc('Rs. ${_currencyFormat.format(totalPend)}', pw.Alignment.centerRight, isBold: true),
+                    _tc('', pw.Alignment.centerLeft),
+                  ],
+                );
+              }(),
             ],
           ),
       ],
@@ -865,6 +890,22 @@ class PmPdfService {
                     ],
                   );
                 }),
+                // Total Expenses Row
+                () {
+                  double totalExp = 0;
+                  for (final exp in expenses) {
+                    totalExp += exp.expense;
+                  }
+                  return pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColor(0.93, 0.94, 0.96)),
+                    children: [
+                      _tc('', pw.Alignment.center),
+                      _tc('', pw.Alignment.center),
+                      _tc('TOTAL EXPENSES', pw.Alignment.centerLeft, isBold: true),
+                      _tc('Rs. ${_currencyFormat.format(totalExp)}', pw.Alignment.centerRight, isBold: true),
+                    ],
+                  );
+                }(),
               ],
             ),
             pw.SizedBox(height: 6),
@@ -1000,6 +1041,28 @@ class PmPdfService {
             ],
           );
         }),
+        // Total Quantities Row
+        () {
+          double totalReq = 0;
+          double totalDispatch = 0;
+          double totalInstalled = 0;
+          for (final item in items) {
+            totalReq += item.reqQty;
+            totalDispatch += item.dispatchQty;
+            totalInstalled += item.installedQty;
+          }
+          return pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColor(0.93, 0.94, 0.96)),
+            children: [
+              _tc('', pw.Alignment.center),
+              _tc('TOTAL QTY', pw.Alignment.centerLeft, isBold: true),
+              _tc(totalReq.toStringAsFixed(totalReq.truncateToDouble() == totalReq ? 0 : 1), pw.Alignment.center, isBold: true),
+              _tc(totalDispatch.toStringAsFixed(totalDispatch.truncateToDouble() == totalDispatch ? 0 : 1), pw.Alignment.center, isBold: true),
+              _tc(totalInstalled.toStringAsFixed(totalInstalled.truncateToDouble() == totalInstalled ? 0 : 1), pw.Alignment.center, isBold: true),
+              _tc('', pw.Alignment.centerLeft),
+            ],
+          );
+        }(),
       ],
     );
   }

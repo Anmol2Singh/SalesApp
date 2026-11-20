@@ -449,10 +449,18 @@ class PdfService {
           createdBy: createdByName,
         ),
         build: (context) {
-          final totalQty = quotation.lineItems
+          double totalQty = quotation.lineItems
               .fold<double>(0, (sum, item) => sum + item.qty);
-          final totalAmount = quotation.lineItems
+          double totalAmount = quotation.lineItems
               .fold<double>(0, (sum, item) => sum + item.total);
+          if (quotation.supplementaryTerms != null) {
+            for (final supp in quotation.supplementaryTerms!) {
+              if (supp.type.toLowerCase() != 'included') {
+                totalQty += supp.qty;
+                totalAmount += supp.amount;
+              }
+            }
+          }
 
           final taxTiers = _calculateTaxTiers(
             lineItems: quotation.lineItems,
@@ -698,8 +706,25 @@ class PdfService {
                               textAlign: pw.TextAlign.center)),
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(item.description,
-                              style: const pw.TextStyle(fontSize: 7.5))),
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(item.description,
+                                  style: const pw.TextStyle(fontSize: 7.5)),
+                              if (item.remark != null &&
+                                  item.remark!.trim().isNotEmpty) ...[
+                                pw.SizedBox(height: 1),
+                                pw.Text(
+                                  item.remark!.trim(),
+                                  style: pw.TextStyle(
+                                    fontSize: 6.5,
+                                    fontStyle: pw.FontStyle.italic,
+                                    color: PdfColors.grey700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )),
                       pw.Padding(
                           padding: const pw.EdgeInsets.all(4),
                           child: pw.Text(item.hsnSac ?? '',
@@ -740,6 +765,82 @@ class PdfService {
                     ],
                   );
                 }),
+                // Appended Supplementary items in Quotation
+                if (quotation.supplementaryTerms != null &&
+                    quotation.supplementaryTerms!.isNotEmpty)
+                  ...quotation.supplementaryTerms!.asMap().entries.map((suppEntry) {
+                    final suppIdx = suppEntry.key;
+                    final supp = suppEntry.value;
+                    final isIncluded = supp.type.toLowerCase() == 'included';
+                    final rowNumber = (quotation.lineItems.length + suppIdx + 1).toString();
+                    return pw.TableRow(
+                      children: [
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(rowNumber,
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.center)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(
+                                  supp.type.trim().isEmpty || isIncluded
+                                      ? supp.name
+                                      : '${supp.name} (${supp.type})',
+                                  style: const pw.TextStyle(fontSize: 7.5),
+                                ),
+                              ],
+                            )),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text('-',
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.center)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                                isIncluded ? '-' : supp.qty.toInt().toString(),
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(isIncluded ? '-' : 'NOS',
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.center)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                                isIncluded
+                                    ? '-'
+                                    : _currencyFormat.format(supp.rate),
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text('-',
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                                isIncluded
+                                    ? '-'
+                                    : '${supp.gstPercent.toStringAsFixed(0)}%',
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                                isIncluded
+                                    ? 'Included'
+                                    : _currencyFormat.format(supp.amount),
+                                style: const pw.TextStyle(fontSize: 7.5),
+                                textAlign: pw.TextAlign.right)),
+                      ],
+                    );
+                  }),
                 // Totals Row
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.grey100),
@@ -1041,82 +1142,112 @@ class PdfService {
                             'We declare that this invoice shows the actual price of the goods/services described and that all particulars are true and correct.',
                             style: const pw.TextStyle(fontSize: 7),
                           ),
-                          if (quotation.paymentTerms != null &&
-                              quotation.paymentTerms!.isNotEmpty) ...[
-                            pw.SizedBox(height: 6),
-                            pw.Text('Payment Terms:',
-                                style: pw.TextStyle(
-                                    fontSize: 7.5,
-                                    fontWeight: pw.FontWeight.bold)),
-                            pw.SizedBox(height: 3),
-                            pw.Table(
-                              border: pw.TableBorder.all(
-                                  color: PdfColors.grey400, width: 0.5),
+                          () {
+                            final effectivePaymentTerms = (quotation.paymentTerms != null &&
+                                    quotation.paymentTerms!.isNotEmpty)
+                                ? quotation.paymentTerms!
+                                : (quotation.productSpecs?['payment_terms'] is List
+                                    ? (quotation.productSpecs!['payment_terms'] as List)
+                                        .whereType<Map>()
+                                        .map((m) => Map<String, dynamic>.from(m))
+                                        .toList()
+                                    : <Map<String, dynamic>>[]);
+                            if (effectivePaymentTerms.isEmpty) {
+                              final pSent = quotation.productSpecs?['payment_sentence']?.toString() ??
+                                  quotation.productSpecs?['payment_terms_sentence']?.toString();
+                              if (pSent != null && pSent.trim().isNotEmpty) {
+                                return pw.Padding(
+                                  padding: const pw.EdgeInsets.only(top: 4),
+                                  child: pw.Text('Payment Terms: $pSent',
+                                      style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                                );
+                              }
+                              return pw.SizedBox();
+                            }
+                            return pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
                               children: [
-                                pw.TableRow(
-                                  decoration: const pw.BoxDecoration(
-                                      color: PdfColors.grey200),
+                                pw.SizedBox(height: 4),
+                                pw.Text('Payment Terms:',
+                                    style: pw.TextStyle(
+                                        fontSize: 7.5,
+                                        fontWeight: pw.FontWeight.bold)),
+                                pw.SizedBox(height: 2),
+                                pw.Table(
+                                  border: pw.TableBorder.all(
+                                      color: PdfColors.grey400, width: 0.5),
                                   children: [
-                                    pw.Padding(
-                                        padding: const pw.EdgeInsets.all(3),
-                                        child: pw.Text('Term / Stage',
-                                            style: pw.TextStyle(
-                                                fontSize: 6.5,
-                                                fontWeight:
-                                                    pw.FontWeight.bold))),
-                                    pw.Padding(
-                                        padding: const pw.EdgeInsets.all(3),
-                                        child: pw.Text('Percentage',
-                                            style: pw.TextStyle(
-                                                fontSize: 6.5,
-                                                fontWeight: pw.FontWeight.bold),
-                                            textAlign: pw.TextAlign.center)),
-                                    pw.Padding(
-                                        padding: const pw.EdgeInsets.all(3),
-                                        child: pw.Text('Amount (Rs.)',
-                                            style: pw.TextStyle(
-                                                fontSize: 6.5,
-                                                fontWeight: pw.FontWeight.bold),
-                                            textAlign: pw.TextAlign.right)),
+                                    pw.TableRow(
+                                      decoration: const pw.BoxDecoration(
+                                          color: PdfColors.grey200),
+                                      children: [
+                                        pw.Padding(
+                                            padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                            child: pw.Text('Term / Stage',
+                                                style: pw.TextStyle(
+                                                    fontSize: 6.5,
+                                                    fontWeight:
+                                                        pw.FontWeight.bold))),
+                                        pw.Padding(
+                                            padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                            child: pw.Text('Percentage',
+                                                style: pw.TextStyle(
+                                                    fontSize: 6.5,
+                                                    fontWeight: pw.FontWeight.bold),
+                                                textAlign: pw.TextAlign.center)),
+                                        pw.Padding(
+                                            padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                            child: pw.Text('Amount (Rs.)',
+                                                style: pw.TextStyle(
+                                                    fontSize: 6.5,
+                                                    fontWeight: pw.FontWeight.bold),
+                                                textAlign: pw.TextAlign.right)),
+                                      ],
+                                    ),
+                                    ...effectivePaymentTerms.map((term) {
+                                      final name = term['term']?.toString() ??
+                                          term['condition']?.toString() ??
+                                          term['stage']?.toString() ??
+                                          term['name']?.toString() ?? '';
+                                      final pct =
+                                          term['percent']?.toString() ??
+                                          term['percentage']?.toString() ??
+                                          '0';
+                                      final pctNum = double.tryParse(pct) ??
+                                          ((term['percent'] as num?)?.toDouble() ??
+                                           (term['percentage'] as num?)?.toDouble() ??
+                                              0.0);
+                                      final amt =
+                                          (finalRoundedTotal * (pctNum / 100.0))
+                                              .roundToDouble();
+                                      return pw.TableRow(
+                                        children: [
+                                          pw.Padding(
+                                              padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                              child: pw.Text(name,
+                                                  style: const pw.TextStyle(
+                                                      fontSize: 6.5))),
+                                          pw.Padding(
+                                              padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                              child: pw.Text('$pct%',
+                                                  style: const pw.TextStyle(
+                                                      fontSize: 6.5),
+                                                  textAlign: pw.TextAlign.center)),
+                                          pw.Padding(
+                                              padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                              child: pw.Text(
+                                                  _currencyFormat.format(amt),
+                                                  style: const pw.TextStyle(
+                                                      fontSize: 6.5),
+                                                  textAlign: pw.TextAlign.right)),
+                                        ],
+                                      );
+                                    }),
                                   ],
                                 ),
-                                ...quotation.paymentTerms!.map((term) {
-                                  final name = term['term']?.toString() ?? '';
-                                  final pct =
-                                      term['percent']?.toString() ?? '0';
-                                  final pctNum = double.tryParse(pct) ??
-                                      ((term['percent'] as num?)?.toDouble() ??
-                                          0.0);
-                                  // Calculate payment term amount on round-off value only
-                                  final amt =
-                                      (finalRoundedTotal * (pctNum / 100.0))
-                                          .roundToDouble();
-                                  return pw.TableRow(
-                                    children: [
-                                      pw.Padding(
-                                          padding: const pw.EdgeInsets.all(3),
-                                          child: pw.Text(name,
-                                              style: const pw.TextStyle(
-                                                  fontSize: 6.5))),
-                                      pw.Padding(
-                                          padding: const pw.EdgeInsets.all(3),
-                                          child: pw.Text('$pct%',
-                                              style: const pw.TextStyle(
-                                                  fontSize: 6.5),
-                                              textAlign: pw.TextAlign.center)),
-                                      pw.Padding(
-                                          padding: const pw.EdgeInsets.all(3),
-                                          child: pw.Text(
-                                              _currencyFormat.format(amt),
-                                              style: const pw.TextStyle(
-                                                  fontSize: 6.5),
-                                              textAlign: pw.TextAlign.right)),
-                                    ],
-                                  );
-                                }),
                               ],
-                            ),
-                          ],
+                            );
+                          }(),
                           if (quotation.supplementaryTerms != null &&
                               quotation.supplementaryTerms!.isNotEmpty) ...[
                             pw.SizedBox(height: 6),
@@ -2490,9 +2621,14 @@ class PdfService {
             salesOrder.placeOfSupply?.trim().toLowerCase() == 'mh' ||
             salesOrder.cgstAmount > 0);
 
+    final effectiveSupplementary =
+        salesOrder.supplementaryTerms ?? resolvedQuotation?.supplementaryTerms;
+    final effectivePaymentTermsStages =
+        salesOrder.paymentTermsStages ?? resolvedQuotation?.paymentTerms;
+
     final taxTiers = _calculateTaxTiers(
       lineItems: salesOrder.lineItems,
-      supplementaryItems: resolvedQuotation?.supplementaryTerms,
+      supplementaryItems: effectiveSupplementary,
       isInterstate: isInterstate,
       defaultRate: salesOrder.cgstRate + salesOrder.sgstRate,
     );
@@ -2809,7 +2945,7 @@ class PdfService {
           _buildSalesOrderItemsTable(
             salesOrder,
             variant,
-            supplementaryItems: resolvedQuotation?.supplementaryTerms,
+            supplementaryItems: effectiveSupplementary,
           ),
           pw.SizedBox(height: 8),
 
@@ -2885,7 +3021,7 @@ class PdfService {
 
           // Payment Terms: Commercial variant ONLY!
           () {
-            final payTerms = resolvedQuotation?.paymentTerms;
+            final payTerms = effectivePaymentTermsStages;
             if (variant != 'commercial' ||
                 payTerms == null ||
                 payTerms.isEmpty) {
@@ -3557,8 +3693,9 @@ class PdfService {
                       colIdx == 8)
                   : (colIdx == 2);
 
-              if ((variant == 'technical' || variant == 'challan') &&
-                  colIdx == 1) {
+              if (colIdx == 1) {
+                final isBoldTitle = variant == 'technical' || variant == 'challan';
+                final isBoq = variant == 'boq';
                 return pw.Padding(
                   padding:
                       const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
@@ -3569,10 +3706,11 @@ class PdfService {
                         _cleanText(val),
                         style: pw.TextStyle(
                           fontSize: 8,
-                          fontWeight: pw.FontWeight.bold,
+                          fontWeight: isBoldTitle ? pw.FontWeight.bold : pw.FontWeight.normal,
                         ),
                       ),
-                      if (item.remark != null &&
+                      if (!isBoq &&
+                          item.remark != null &&
                           item.remark!.trim().isNotEmpty) ...[
                         pw.SizedBox(height: 1),
                         pw.Text(

@@ -237,7 +237,7 @@ final todayTasksForCurrentUserProvider = FutureProvider<List<AssignedWorkItem>>(
 
 /// Returns list of profiles that the current user is authorized to assign tasks to:
 /// - Admin & Manager: Can assign to ANY staff member.
-/// - Sales Head: Can assign ONLY to Sales Persons.
+/// - Sales Head: Can assign to all users & technicians EXCEPT admins.
 /// - Service Head: Can assign ONLY to Technicians.
 /// - Others: Can only assign to themselves.
 final assignableUsersProvider = FutureProvider<List<Profile>>((ref) async {
@@ -270,27 +270,14 @@ final assignableUsersProvider = FutureProvider<List<Profile>>((ref) async {
       return allProfiles;
     }
 
-    if (isServiceHead && !isSalesHead) {
+    if (isSalesHead) {
+      // Sales Head can assign to all users & technicians except admins
+      return allProfiles.where((p) => !p.roles.contains(UserRole.admin)).toList();
+    }
+
+    if (isServiceHead) {
       // Service Head can assign ONLY to Technicians
-      return allProfiles.where((p) {
-        return p.roles.contains(UserRole.technician);
-      }).toList();
-    }
-
-    if (isSalesHead && !isServiceHead) {
-      // Sales Head can assign ONLY to Sales Person (and Sales Head)
-      return allProfiles.where((p) {
-        return p.roles.contains(UserRole.sales) || p.roles.contains(UserRole.salesHead);
-      }).toList();
-    }
-
-    if (isSalesHead && isServiceHead) {
-      // If user holds both roles, allow both Sales and Technicians
-      return allProfiles.where((p) {
-        return p.roles.contains(UserRole.sales) ||
-            p.roles.contains(UserRole.salesHead) ||
-            p.roles.contains(UserRole.technician);
-      }).toList();
+      return allProfiles.where((p) => p.roles.contains(UserRole.technician)).toList();
     }
 
     return [currentProfile];

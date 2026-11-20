@@ -249,7 +249,16 @@ class PdfListHubScreen extends ConsumerWidget {
               // Document Category Buttons Grid
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final crossAxisCount = constraints.maxWidth >= 720 ? 3 : 2;
+                  final width = constraints.maxWidth;
+                  final int crossAxisCount;
+                  if (width >= 1200) {
+                    crossAxisCount = 4;
+                  } else if (width >= 750) {
+                    crossAxisCount = 3;
+                  } else {
+                    crossAxisCount = 2; // Always 2 columns on phone screens
+                  }
+
                   return GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -257,7 +266,7 @@ class PdfListHubScreen extends ConsumerWidget {
                       crossAxisCount: crossAxisCount,
                       mainAxisSpacing: 14,
                       crossAxisSpacing: 14,
-                      childAspectRatio: constraints.maxWidth >= 720 ? 1.65 : 1.35,
+                      mainAxisExtent: 144,
                     ),
                     itemCount: _kPdfCategories.length,
                     itemBuilder: (context, index) {
@@ -298,16 +307,16 @@ class _PdfCategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       elevation: 0,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         hoverColor: category.color.withValues(alpha: 0.05),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
@@ -354,7 +363,7 @@ class _PdfCategoryCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -376,7 +385,7 @@ class _PdfCategoryCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 11,
+                      fontSize: 11.5,
                       color: Color(0xFF64748B),
                       height: 1.25,
                     ),

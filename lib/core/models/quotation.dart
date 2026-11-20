@@ -15,6 +15,7 @@ class LineItem {
   final double total; // amount
   final String? modelId;
   final String? productId;
+  final String? remark;
 
   const LineItem({
     required this.description,
@@ -28,6 +29,7 @@ class LineItem {
     required this.total,
     this.modelId,
     this.productId,
+    this.remark,
   });
 
   factory LineItem.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,7 @@ class LineItem {
       total: (json['total'] as num? ?? json['amount'] as num? ?? defaultTotal).toDouble(),
       modelId: json['model_id'] as String? ?? json['modelId'] as String?,
       productId: json['product_id'] as String? ?? json['productId'] as String?,
+      remark: json['remark'] as String? ?? json['remarks'] as String?,
     );
   }
 
@@ -62,6 +65,7 @@ class LineItem {
     'total': total,
     if (modelId != null) 'model_id': modelId,
     if (productId != null) 'product_id': productId,
+    if (remark != null && remark!.isNotEmpty) 'remark': remark,
   };
 
   LineItem copyWith({
@@ -75,6 +79,7 @@ class LineItem {
     double? discPercent,
     String? modelId,
     String? productId,
+    String? remark,
   }) {
     final newQty = qty ?? this.qty;
     final newPrice = unitPrice ?? this.unitPrice;
@@ -88,9 +93,10 @@ class LineItem {
       uom: uom ?? this.uom,
       unitPrice: newPrice,
       discPercent: newDisc,
-      total: newQty * newPrice * (1 - newDisc / 100),
+      total: (newQty * newPrice) * (1 - newDisc / 100),
       modelId: modelId ?? this.modelId,
       productId: productId ?? this.productId,
+      remark: remark ?? this.remark,
     );
   }
 }

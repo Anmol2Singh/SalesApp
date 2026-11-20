@@ -52,9 +52,12 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
               (it.remark != null && it.remark!.toLowerCase().contains(q));
         }).toList();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -194,51 +197,49 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                       DataColumn(label: Text('REMARK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
                     ],
-                    rows: filteredItems.map((item) {
+                    rows: filteredItems.asMap().entries.map((entry) {
+                      final index = entry.key + 1;
+                      final item = entry.value;
                       final balQty = item.reqQty - item.dispatchQty;
                       return DataRow(
                         cells: [
-                          DataCell(Text('#${item.srNo}', style: TextStyle(fontSize: 11, color: pm.mutedForeground, fontWeight: FontWeight.bold))),
+                          DataCell(Text('#$index', style: TextStyle(fontSize: 11, color: pm.mutedForeground, fontWeight: FontWeight.bold))),
                           DataCell(Text(item.itemName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
                           DataCell(Text('${item.reqQty}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                          DataCell(Checkbox(
-                            value: item.customerScope,
-                            onChanged: (val) async {
-                              final newCust = val ?? false;
-                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {
-                                'customer_scope': newCust,
-                                if (newCust) 'our_scope': false,
-                              });
-                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
-                            },
-                          )),
-                          DataCell(Checkbox(
-                            value: item.ourScope,
-                            onChanged: (val) async {
-                              final newOur = val ?? false;
-                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {
-                                'our_scope': newOur,
-                                if (newOur) 'customer_scope': false,
-                              });
-                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
-                            },
-                          )),
+                          DataCell(
+                            IgnorePointer(
+                              child: Checkbox(
+                                value: item.customerScope,
+                                onChanged: (_) {},
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            IgnorePointer(
+                              child: Checkbox(
+                                value: item.ourScope,
+                                onChanged: (_) {},
+                              ),
+                            ),
+                          ),
                           DataCell(Text('${item.dispatchQty}', style: const TextStyle(fontSize: 12))),
-                          DataCell(Checkbox(
-                            value: item.dispatchYesNo,
-                            onChanged: (val) async {
-                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'dispatch_yes_no': val ?? false});
-                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
-                            },
-                          )),
+                          DataCell(
+                            IgnorePointer(
+                              child: Checkbox(
+                                value: item.dispatchYesNo,
+                                onChanged: (_) {},
+                              ),
+                            ),
+                          ),
                           DataCell(Text('${item.installedQty}', style: const TextStyle(fontSize: 12))),
-                          DataCell(Checkbox(
-                            value: item.installationYesNo,
-                            onChanged: (val) async {
-                              await ref.read(pmLedgerRepositoryProvider).updateChecklistItem(item.id, {'installation_yes_no': val ?? false});
-                              ref.invalidate(pmChecklistItemsProvider(widget.projectId));
-                            },
-                          )),
+                          DataCell(
+                            IgnorePointer(
+                              child: Checkbox(
+                                value: item.installationYesNo,
+                                onChanged: (_) {},
+                              ),
+                            ),
+                          ),
                           DataCell(Text(
                             '$balQty',
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: balQty > 0 ? pm.warning : pm.success),
@@ -250,10 +251,12 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                               children: [
                                 IconButton(
                                   icon: const Icon(LucideIcons.pencil, size: 14),
+                                  tooltip: 'Edit Item',
                                   onPressed: () => _showAddEditModal(context, ref, item),
                                 ),
                                 IconButton(
                                   icon: Icon(LucideIcons.trash2, size: 14, color: pm.destructive),
+                                  tooltip: 'Delete Item',
                                   onPressed: () async {
                                     await ref.read(pmLedgerRepositoryProvider).deleteChecklistItem(item.id);
                                     ref.invalidate(pmChecklistItemsProvider(widget.projectId));
@@ -272,7 +275,8 @@ class _PmSwhChecklistTabState extends ConsumerState<PmSwhChecklistTab> {
                 ),
               ),
           ],
-        );
+        ),
+      );
       },
     );
   }
@@ -532,7 +536,7 @@ class _ChecklistDialogState extends ConsumerState<_ChecklistDialog> {
                       Expanded(
                         child: TextFormField(
                           controller: _reqQtyCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: InputDecoration(
                             labelText: 'Required Qty',
                             isDense: true,
@@ -544,9 +548,21 @@ class _ChecklistDialogState extends ConsumerState<_ChecklistDialog> {
                       Expanded(
                         child: TextFormField(
                           controller: _dispatchQtyCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: InputDecoration(
                             labelText: 'Dispatched Qty',
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(pm.radiusMd)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _installedQtyCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: 'Installed Qty',
                             isDense: true,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(pm.radiusMd)),
                           ),
@@ -555,38 +571,88 @@ class _ChecklistDialogState extends ConsumerState<_ChecklistDialog> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: CheckboxListTile(
-                          title: const Text('Our Scope', style: TextStyle(fontSize: 12)),
-                          value: _ourScope,
-                          onChanged: (val) {
-                            setState(() {
-                              _ourScope = val ?? false;
-                              if (_ourScope) _customerScope = false;
-                            });
-                          },
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
+                  // Scope options
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: pm.border),
+                      borderRadius: BorderRadius.circular(pm.radiusMd),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text('Our Scope', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            value: _ourScope,
+                            dense: true,
+                            onChanged: (val) {
+                              setState(() {
+                                _ourScope = val ?? false;
+                                if (_ourScope) _customerScope = false;
+                              });
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: CheckboxListTile(
-                          title: const Text('Customer Scope', style: TextStyle(fontSize: 12)),
-                          value: _customerScope,
-                          onChanged: (val) {
-                            setState(() {
-                              _customerScope = val ?? false;
-                              if (_customerScope) _ourScope = false;
-                            });
-                          },
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text('Customer Scope', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            value: _customerScope,
+                            dense: true,
+                            onChanged: (val) {
+                              setState(() {
+                                _customerScope = val ?? false;
+                                if (_customerScope) _ourScope = false;
+                              });
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  // Dispatched & Installed options
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: pm.border),
+                      borderRadius: BorderRadius.circular(pm.radiusMd),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text('Dispatched', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            subtitle: const Text('Mark item as dispatched', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            value: _dispatchYesNo,
+                            dense: true,
+                            onChanged: (val) {
+                              setState(() => _dispatchYesNo = val ?? false);
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        Expanded(
+                          child: CheckboxListTile(
+                            title: const Text('Installed', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            subtitle: const Text('Mark item as installed', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            value: _installationYesNo,
+                            dense: true,
+                            onChanged: (val) {
+                              setState(() => _installationYesNo = val ?? false);
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   TextFormField(
                     controller: _remarkCtrl,
                     decoration: InputDecoration(

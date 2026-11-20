@@ -499,12 +499,28 @@ class PdfBoomBarrierBuilder {
             _td('$srNo', align: pw.TextAlign.center),
             pw.Padding(
               padding: const pw.EdgeInsets.all(3),
-              child: pw.Text(
-                desc,
-                style: const pw.TextStyle(fontSize: 8),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    desc,
+                    style: const pw.TextStyle(fontSize: 8),
+                  ),
+                  if (item['remark'] != null && item['remark'].toString().trim().isNotEmpty) ...[
+                    pw.SizedBox(height: 1),
+                    pw.Text(
+                      item['remark'].toString().trim(),
+                      style: pw.TextStyle(
+                        fontSize: 6.5,
+                        fontStyle: pw.FontStyle.italic,
+                        color: _mutedText,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            _td(qty > 0 ? '' : '', align: pw.TextAlign.center),
+            _td(qty > 0 ? '$qty' : '', align: pw.TextAlign.center),
             _td(rateStr, align: pw.TextAlign.right),
             _td('', align: pw.TextAlign.center),
             _td(
