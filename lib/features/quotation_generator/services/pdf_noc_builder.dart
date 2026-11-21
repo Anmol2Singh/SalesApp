@@ -1,5 +1,6 @@
 // lib/features/quotation_generator/services/pdf_noc_builder.dart
 
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -52,6 +53,17 @@ class PdfNocBuilder {
     }
     finalStamp ??= await _loadImageBytes('assets/images/company_stamp.png');
 
+    // 2b. Resolve Verification Signatures
+    Uint8List? customerSignatureBytes;
+    if (payload.customerSignatureUrl != null && payload.customerSignatureUrl!.isNotEmpty) {
+      customerSignatureBytes = await _loadImageBytes(payload.customerSignatureUrl!);
+    }
+
+    Uint8List? techSignatureBytes;
+    if (payload.technicianSignatureUrl != null && payload.technicianSignatureUrl!.isNotEmpty) {
+      techSignatureBytes = await _loadImageBytes(payload.technicianSignatureUrl!);
+    }
+
     // 3. Load Fonts if available, otherwise default Helvetica
     pw.Font? regularFont;
     pw.Font? boldFont;
@@ -82,6 +94,11 @@ class PdfNocBuilder {
     final effectiveCompanyWebsite = payload.companyWebsite.isNotEmpty
         ? payload.companyWebsite
         : (isBoomBarrier ? 'www.insiyacorp.com' : 'www.izyheat.com');
+
+    final bool hasDigitalSignatures = customerSignatureBytes != null ||
+        techSignatureBytes != null ||
+        (payload.technicianName != null && payload.technicianName!.isNotEmpty) ||
+        (payload.customerSignatoryName != null && payload.customerSignatoryName!.isNotEmpty);
 
     pdf.addPage(
       pw.Page(
@@ -478,58 +495,165 @@ class PdfNocBuilder {
               pw.Spacer(),
 
               // ─── SIGNATURE BLOCK ─────────────────────────────────────────────
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Customer', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                  pw.Text(effectiveCompanyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                ],
-              ),
-              pw.SizedBox(height: 2),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Authorized Signatory', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Authorised Signatory', style: const pw.TextStyle(fontSize: 8.5)),
-                ],
-              ),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.SizedBox(height: 3),
-                      pw.Text('Name: ', style: const pw.TextStyle(fontSize: 8.5)),
-                      pw.SizedBox(height: 3),
-                      pw.Text('Designation: ', style: const pw.TextStyle(fontSize: 8.5)),
-                      pw.SizedBox(height: 3),
-                      pw.Text('Signature: ', style: const pw.TextStyle(fontSize: 8.5)),
-                      pw.SizedBox(height: 3),
-                      pw.Text('Seal: ', style: const pw.TextStyle(fontSize: 8.5)),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
-                    children: [
-                      if (finalStamp != null)
-                        pw.Container(
-                          width: 80,
-                          height: 72,
-                          alignment: pw.Alignment.center,
-                          child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
-                        )
-                      else
-                        pw.SizedBox(height: 60),
-                      if (isExact) ...[
+              if (!hasDigitalSignatures && isExact) ...[
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Customer', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(effectiveCompanyName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Authorized Signatory', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Authorised Signatory', style: const pw.TextStyle(fontSize: 8.5)),
+                  ],
+                ),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.SizedBox(height: 3),
+                        pw.Text('Name: ', style: const pw.TextStyle(fontSize: 8.5)),
+                        pw.SizedBox(height: 3),
+                        pw.Text('Designation: ', style: const pw.TextStyle(fontSize: 8.5)),
+                        pw.SizedBox(height: 3),
+                        pw.Text('Signature: ', style: const pw.TextStyle(fontSize: 8.5)),
+                        pw.SizedBox(height: 3),
+                        pw.Text('Seal: ', style: const pw.TextStyle(fontSize: 8.5)),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.center,
+                      children: [
+                        if (finalStamp != null)
+                          pw.Container(
+                            width: 80,
+                            height: 72,
+                            alignment: pw.Alignment.center,
+                            child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
+                          )
+                        else
+                          pw.SizedBox(height: 60),
                         pw.SizedBox(height: 3),
                         pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 8.5)),
                       ],
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Customer Verification', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _navyColor)),
+                    pw.Text('For $effectiveCompanyName', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _navyColor)),
+                  ],
+                ),
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Authorized Customer Signature', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic)),
+                    pw.Text('Authorized Technician / Engineer', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic)),
+                  ],
+                ),
+                pw.SizedBox(height: 3),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    // Left side: Customer
+                    pw.Container(
+                      width: 210,
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          if (customerSignatureBytes != null)
+                            pw.Container(
+                              height: 44,
+                              width: 145,
+                              alignment: pw.Alignment.centerLeft,
+                              child: pw.Image(pw.MemoryImage(customerSignatureBytes), fit: pw.BoxFit.contain),
+                            )
+                          else
+                            pw.Container(height: 32),
+                          pw.Container(
+                            width: 155,
+                            decoration: const pw.BoxDecoration(border: pw.Border(top: pw.BorderSide(color: PdfColors.grey500, width: 0.5))),
+                            padding: const pw.EdgeInsets.only(top: 2),
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(
+                                  'Signatory: ${payload.customerSignatoryName?.isNotEmpty == true ? payload.customerSignatoryName! : payload.customerName}',
+                                  style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                                ),
+                                pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Right side: Company Stamp & Technician
+                    pw.Container(
+                      width: 230,
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        mainAxisAlignment: pw.MainAxisAlignment.end,
+                        children: [
+                          if (finalStamp != null)
+                            pw.Container(
+                              width: 62,
+                              height: 56,
+                              margin: const pw.EdgeInsets.only(right: 6),
+                              alignment: pw.Alignment.center,
+                              child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
+                            ),
+                          pw.Container(
+                            width: 155,
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                if (techSignatureBytes != null)
+                                  pw.Container(
+                                    height: 44,
+                                    width: 145,
+                                    alignment: pw.Alignment.centerLeft,
+                                    child: pw.Image(pw.MemoryImage(techSignatureBytes), fit: pw.BoxFit.contain),
+                                  )
+                                else
+                                  pw.Container(height: 32),
+                                pw.Container(
+                                  width: 155,
+                                  decoration: const pw.BoxDecoration(border: pw.Border(top: pw.BorderSide(color: PdfColors.grey500, width: 0.5))),
+                                  padding: const pw.EdgeInsets.only(top: 2),
+                                  child: pw.Column(
+                                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                    children: [
+                                      pw.Text(
+                                        'Technician: ${payload.technicianName?.isNotEmpty == true ? payload.technicianName! : 'Authorized Technician'}',
+                                        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                                      ),
+                                      pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               pw.SizedBox(height: 6),
 
               // ─── FOOTER (ENHANCED MODE) ──────────────────────────────────────
@@ -568,15 +692,21 @@ class PdfNocBuilder {
   static Future<Uint8List?> _loadImageBytes(String pathOrUrl) async {
     try {
       if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-        final res = await http.get(Uri.parse(pathOrUrl));
+        final res = await http.get(Uri.parse(pathOrUrl)).timeout(const Duration(seconds: 8));
         if (res.statusCode == 200) return res.bodyBytes;
       } else if (pathOrUrl.startsWith('assets/')) {
         final data = await rootBundle.load(pathOrUrl);
         return data.buffer.asUint8List();
+      } else if (pathOrUrl.contains('base64,')) {
+        final base64Str = pathOrUrl.split('base64,').last;
+        return base64Decode(base64Str);
       } else {
         final file = File(pathOrUrl);
         if (await file.exists()) {
           return await file.readAsBytes();
+        }
+        if (pathOrUrl.length > 50 && !pathOrUrl.contains('/') && !pathOrUrl.contains('\\')) {
+          return base64Decode(pathOrUrl);
         }
       }
     } catch (_) {}

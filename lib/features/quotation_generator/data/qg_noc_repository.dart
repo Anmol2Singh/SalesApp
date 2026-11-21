@@ -456,6 +456,10 @@ class QgNocRepository {
     List<String>? confirmations,
     String? closingSentence,
     String? overrideReason,
+    String? customerSignatureUrl,
+    String? customerSignatoryName,
+    String? technicianSignatureUrl,
+    String? technicianName,
   }) async {
     final client = Supabase.instance.client;
     final pipelineId = dealId ?? '00000000-0000-0000-0000-000000000000';
@@ -470,6 +474,10 @@ class QgNocRepository {
       'company_snapshot': companySnapshot,
       if (confirmations != null && confirmations.isNotEmpty) 'confirmations': confirmations,
       if (closingSentence != null && closingSentence.isNotEmpty) 'closing_sentence': closingSentence,
+      if (customerSignatureUrl != null && customerSignatureUrl.isNotEmpty) 'customer_signature_url': customerSignatureUrl,
+      if (customerSignatoryName != null && customerSignatoryName.isNotEmpty) 'customer_signatory_name': customerSignatoryName,
+      if (technicianSignatureUrl != null && technicianSignatureUrl.isNotEmpty) 'technician_signature_url': technicianSignatureUrl,
+      if (technicianName != null && technicianName.isNotEmpty) 'technician_name': technicianName,
     };
 
     // Generate virtual pdf reference (no file stored in Supabase storage as per requirement)
@@ -505,6 +513,27 @@ class QgNocRepository {
       } catch (e) {
         debugPrint('Warning: Check existing NOC error: $e');
       }
+    }
+
+    // Ensure deal has completed operational step so finalize RPC passes
+    if (pipelineId != '00000000-0000-0000-0000-000000000000') {
+      try {
+        final dCheck = await client
+            .from('sales_pipelines')
+            .select('status, current_step')
+            .eq('id', pipelineId)
+            .maybeSingle();
+        if (dCheck != null) {
+          final s = dCheck['status']?.toString();
+          final cs = dCheck['current_step']?.toString();
+          if (s != 'completed' && cs != 'completed') {
+            await client
+                .from('sales_pipelines')
+                .update({'current_step': 'completed'})
+                .eq('id', pipelineId);
+          }
+        }
+      } catch (_) {}
     }
 
     final effectiveOverrideReason = (overrideReason != null && overrideReason.trim().isNotEmpty)

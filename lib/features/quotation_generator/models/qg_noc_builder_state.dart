@@ -160,6 +160,12 @@ class QgNocPayload {
   final List<String> confirmations;
   final String closingSentence;
 
+  // Signatures & Verification
+  final String? customerSignatureUrl;
+  final String? customerSignatoryName;
+  final String? technicianSignatureUrl;
+  final String? technicianName;
+
   // Mode
   final NocWordingMode wordingMode;
 
@@ -190,6 +196,10 @@ class QgNocPayload {
     required this.remark,
     required this.confirmations,
     required this.closingSentence,
+    this.customerSignatureUrl,
+    this.customerSignatoryName,
+    this.technicianSignatureUrl,
+    this.technicianName,
     this.wordingMode = NocWordingMode.enhanced,
   });
 
@@ -221,6 +231,14 @@ class QgNocPayload {
       'remark': remark,
       'confirmations': confirmations,
       'closing_sentence': closingSentence,
+      if (customerSignatureUrl != null && customerSignatureUrl!.isNotEmpty)
+        'customer_signature_url': customerSignatureUrl,
+      if (customerSignatoryName != null && customerSignatoryName!.isNotEmpty)
+        'customer_signatory_name': customerSignatoryName,
+      if (technicianSignatureUrl != null && technicianSignatureUrl!.isNotEmpty)
+        'technician_signature_url': technicianSignatureUrl,
+      if (technicianName != null && technicianName!.isNotEmpty)
+        'technician_name': technicianName,
       'wording_mode': wordingMode.name,
     };
   }
@@ -252,10 +270,14 @@ class QgNocPayload {
       address: map['address']?.toString() ?? '',
       productName: map['product_name']?.toString() ?? '',
       subject: map['subject']?.toString() ?? '',
-      date: map['date'] != null ? DateTime.tryParse(map['date'].toString()) ?? DateTime.now() : DateTime.now(),
+      date: map['date'] != null
+          ? DateTime.tryParse(map['date'].toString()) ?? DateTime.now()
+          : DateTime.now(),
       quotationNumber: map['quotation_number']?.toString(),
       installationTicketNo: map['installation_ticket_no']?.toString(),
-      installationDate: map['installation_date'] != null ? DateTime.tryParse(map['installation_date'].toString()) : null,
+      installationDate: map['installation_date'] != null
+          ? DateTime.tryParse(map['installation_date'].toString())
+          : null,
       equipmentLabel: map['equipment_label']?.toString() ?? '',
       equipmentLines: lines,
       workType: map['work_type']?.toString() ?? '',
@@ -265,7 +287,13 @@ class QgNocPayload {
       remark: map['remark']?.toString() ?? '',
       confirmations: confs,
       closingSentence: map['closing_sentence']?.toString() ?? '',
-      wordingMode: map['wording_mode'] == 'templateExact' ? NocWordingMode.templateExact : NocWordingMode.enhanced,
+      customerSignatureUrl: map['customer_signature_url']?.toString(),
+      customerSignatoryName: map['customer_signatory_name']?.toString(),
+      technicianSignatureUrl: map['technician_signature_url']?.toString(),
+      technicianName: map['technician_name']?.toString(),
+      wordingMode: map['wording_mode'] == 'template_exact' || map['wording_mode'] == 'templateExact'
+          ? NocWordingMode.templateExact
+          : NocWordingMode.enhanced,
     );
   }
 }

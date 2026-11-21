@@ -579,18 +579,22 @@ class _InstallationDashboardScreenState
               children: [
                 const Icon(Icons.person_outline, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),
-                Text(
-                  item.customerName,
-                  style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: AppColors.textSecondary),
+                Flexible(
+                  child: Text(
+                    item.customerName,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: AppColors.textSecondary),
+                  ),
                 ),
                 if (item.productName != null &&
                     item.productName!.isNotEmpty) ...[
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text('•', style: TextStyle(color: Colors.grey.shade400)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   const Icon(Icons.solar_power_outlined,
                       size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
@@ -598,6 +602,7 @@ class _InstallationDashboardScreenState
                     child: Text(
                       item.productName!,
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                       style: const TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 12,
@@ -611,35 +616,42 @@ class _InstallationDashboardScreenState
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      item.technicianName != null
-                          ? Icons.engineering
-                          : Icons.person_off_outlined,
-                      size: 14,
-                      color: item.technicianName != null
-                          ? const Color(0xFF0284C7)
-                          : Colors.grey,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      item.technicianName != null
-                          ? item.technicianName!
-                          : 'Not Assigned',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        fontWeight: item.technicianName != null
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(
+                        item.technicianName != null
+                            ? Icons.engineering
+                            : Icons.person_off_outlined,
+                        size: 14,
                         color: item.technicianName != null
                             ? const Color(0xFF0284C7)
                             : Colors.grey,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          item.technicianName != null
+                              ? item.technicianName!
+                              : 'Not Assigned',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: item.technicianName != null
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: item.technicianName != null
+                                ? const Color(0xFF0284C7)
+                                : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   item.tatRemaining,
                   style: const TextStyle(

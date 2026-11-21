@@ -14,6 +14,8 @@ import '../../models/qg_noc_document.dart';
 import '../../models/qg_noc_profile.dart';
 import '../../services/pdf_noc_builder.dart';
 import '../../services/qg_noc_extractor.dart';
+import '../widgets/noc_signatures_dialog.dart';
+import '../../../auth/providers/auth_provider.dart';
 
 class NocBuilderScreen extends ConsumerStatefulWidget {
   final String? dealId;
@@ -384,54 +386,79 @@ class _NocBuilderScreenState extends ConsumerState<NocBuilderScreen> {
       return;
     }
 
-    final confirm = await showDialog<bool>(
+    // Prompt for Customer & Technician Signatures
+    final sigResult = await NocSignaturesDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Issue Final NOC?'),
-        content: const Text(
-          'Finalizing will generate an official immutable NOC document number and issue the certificate. Proceed?',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF286B37),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Confirm & Issue'),
-          ),
-        ],
-      ),
+      customerName: payload.customerName,
+      initialSignatoryName: payload.customerName,
+      initialTechnicianName: ref.read(currentProfileProvider)?.fullName,
     );
 
-    if (confirm != true) return;
+    if (sigResult == null) return;
+
+    final signedPayload = QgNocPayload(
+      companyName: payload.companyName,
+      companyAddress: payload.companyAddress,
+      companyEmail: payload.companyEmail,
+      companyPhone: payload.companyPhone,
+      companyWebsite: payload.companyWebsite,
+      logoUrl: payload.logoUrl,
+      stampImagePath: payload.stampImagePath,
+      salutation: payload.salutation,
+      customerName: payload.customerName,
+      recipient: payload.recipient,
+      address: payload.address,
+      productName: payload.productName,
+      subject: payload.subject,
+      date: payload.date,
+      quotationNumber: payload.quotationNumber,
+      installationTicketNo: payload.installationTicketNo,
+      installationDate: payload.installationDate,
+      equipmentLabel: payload.equipmentLabel,
+      equipmentLines: payload.equipmentLines,
+      workType: payload.workType,
+      leakage: payload.leakage,
+      wiring: payload.wiring,
+      testing: payload.testing,
+      remark: payload.remark,
+      confirmations: payload.confirmations,
+      closingSentence: payload.closingSentence,
+      customerSignatureUrl: sigResult.customerSignature,
+      customerSignatoryName: sigResult.customerSignatoryName,
+      technicianSignatureUrl: sigResult.technicianSignature,
+      technicianName: sigResult.technicianName,
+      wordingMode: payload.wordingMode,
+    );
 
     setState(() => _isSaving = true);
     try {
       // 1. Build PDF bytes
-      final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
+      final pdfBytes = await PdfNocBuilder.buildNocPdf(signedPayload);
 
       // 2. Finalize via RPC
       final finalDoc = await QgNocRepository.finalizeAndIssueNoc(
         dealId: widget.dealId,
         quotationId: widget.quotationId,
-        customerName: payload.customerName,
-        siteAddress: payload.address,
-        productName: payload.productName,
-        wordingMode: payload.wordingMode,
-        equipmentLines: payload.equipmentLines,
+        customerName: signedPayload.customerName,
+        siteAddress: signedPayload.address,
+        productName: signedPayload.productName,
+        wordingMode: signedPayload.wordingMode,
+        equipmentLines: signedPayload.equipmentLines,
         pdfBytes: pdfBytes,
         companySnapshot: {
-          'company_name': payload.companyName,
-          'short_address': payload.companyAddress,
-          'email': payload.companyEmail,
-          'phone': payload.companyPhone,
-          'website': payload.companyWebsite,
+          'company_name': signedPayload.companyName,
+          'short_address': signedPayload.companyAddress,
+          'email': signedPayload.companyEmail,
+          'phone': signedPayload.companyPhone,
+          'website': signedPayload.companyWebsite,
         },
-        confirmations: payload.confirmations,
-        closingSentence: payload.closingSentence,
-        overrideReason: 'Completed deal installation & commissioning verified for ${payload.productName}',
+        confirmations: signedPayload.confirmations,
+        closingSentence: signedPayload.closingSentence,
+        customerSignatureUrl: sigResult.customerSignature,
+        customerSignatoryName: sigResult.customerSignatoryName,
+        technicianSignatureUrl: sigResult.technicianSignature,
+        technicianName: sigResult.technicianName,
+        overrideReason: 'Completed deal installation & commissioning verified for ${signedPayload.productName}',
       );
 
       if (mounted) {

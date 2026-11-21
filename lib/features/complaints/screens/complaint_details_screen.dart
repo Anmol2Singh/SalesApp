@@ -35,6 +35,7 @@ class ComplaintDetailsScreen extends ConsumerStatefulWidget {
 
 class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen> {
   final ImagePicker _picker = ImagePicker();
+  bool _isPdfActionBusy = false;
 
   Widget _buildImage(String url, {double? height, double? width, BoxFit fit = BoxFit.cover}) {
     if (url.startsWith('data:image')) {
@@ -1503,20 +1504,9 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6D28D9)),
                             icon: const Icon(Icons.picture_as_pdf, color: Colors.white, size: 18),
                             label: const Text('View PDF', style: TextStyle(color: Colors.white)),
-                            onPressed: () async {
-                              final pdfBytes = await ComplaintPdfService.generateCompletionReportPdf(complaint);
-                              if (mounted) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (ctx) => PdfPreviewScreen(
-                                      pdfBytes: pdfBytes,
-                                      fileName: 'CompletionReport_${complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
+                            onPressed: _isPdfActionBusy
+                                ? null
+                                : () => _viewComplaintPdf(complaint),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1525,7 +1515,9 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
                             icon: const Icon(Icons.share, color: Colors.white, size: 18),
                             label: const Text('Share PDF', style: TextStyle(color: Colors.white)),
-                            onPressed: () => ComplaintPdfService.shareCompletionReport(complaint),
+                            onPressed: _isPdfActionBusy
+                                ? null
+                                : () => _shareComplaintPdf(complaint),
                           ),
                         ),
                       ],
@@ -1539,6 +1531,117 @@ class _ComplaintDetailsScreenState extends ConsumerState<ComplaintDetailsScreen>
         ),
       ),
     );
+  }
+
+  void _showPdfLoadingDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Card(
+            elevation: 8,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewComplaintPdf(Complaint complaint) async {
+    if (_isPdfActionBusy) return;
+    setState(() => _isPdfActionBusy = true);
+
+    _showPdfLoadingDialog('Generating Service Report...');
+
+    try {
+      final pdfBytes = await ComplaintPdfService.generateCompletionReportPdf(complaint);
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => PdfPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: 'CompletionReport_${complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate report: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPdfActionBusy = false);
+      } else {
+        _isPdfActionBusy = false;
+      }
+    }
+  }
+
+  Future<void> _shareComplaintPdf(Complaint complaint) async {
+    if (_isPdfActionBusy) return;
+    setState(() => _isPdfActionBusy = true);
+
+    _showPdfLoadingDialog('Preparing PDF for sharing...');
+
+    try {
+      final pdfBytes = await ComplaintPdfService.generateCompletionReportPdf(complaint);
+      final safeTicket = complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
+      final filename = 'CompletionReport_$safeTicket.pdf';
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      await ComplaintPdfService.sharePdfBytes(
+        pdfBytes,
+        filename,
+        'Service Completion Report for ${complaint.ticketNumber}',
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to share report: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPdfActionBusy = false);
+      } else {
+        _isPdfActionBusy = false;
+      }
+    }
   }
 
   Widget _detailRow(String label, String value) {

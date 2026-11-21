@@ -27,6 +27,7 @@ import '../../quotation_generator/models/qg_noc_document.dart';
 import '../../quotation_generator/models/qg_noc_builder_state.dart';
 import '../../quotation_generator/services/pdf_noc_builder.dart';
 import '../../quotation_generator/services/qg_noc_extractor.dart';
+import '../../quotation_generator/ui/widgets/noc_signatures_dialog.dart';
 import '../../quotation/services/quotation_pdf_launcher.dart';
 
 /// Helper service for Work Progress metadata persistence & live evaluations.
@@ -269,47 +270,150 @@ class WorkProgressService {
   static Map<String, dynamic>? resolveInstallationForPipeline({
     required List<dynamic> installations,
     required String pipelineId,
-    required bool customerHasMultipleDeals,
+    String? dealNumber,
+    String? productName,
+    DateTime? dealCreatedAt,
+    bool customerHasMultipleDeals = false,
   }) {
-    // 1. Strict match by tagged Deal ID
+    if (installations.isEmpty) return null;
+
+    final cleanPipeId = pipelineId.trim().toLowerCase();
+    final cleanDealNum = dealNumber?.trim().toLowerCase();
+    final cleanProdName = productName?.trim().toLowerCase();
+
+    // 1. Strict match: Check if notes explicitly tags this deal (by UUID, dealNumber, or "Deal ID: ...")
     for (final item in installations) {
       final m = Map<String, dynamic>.from(item as Map);
       final notes = (m['notes'] ?? '').toString();
-      final dealMatch = RegExp(r'Deal ID:\s*([a-zA-Z0-9\-]+)').firstMatch(notes);
+      final notesLower = notes.toLowerCase();
+
+      // Check if DB columns match directly (if present)
+      final colPipeId = m['pipeline_id']?.toString().toLowerCase();
+      final colDealId = m['deal_id']?.toString().toLowerCase();
+      if ((colPipeId != null && colPipeId == cleanPipeId) ||
+          (cleanDealNum != null && cleanDealNum.isNotEmpty && colDealId != null && colDealId == cleanDealNum)) {
+        return m;
+      }
+
+      // Check explicit "Deal ID: <tag>" pattern in notes
+      final dealMatch = RegExp(r'Deal ID:\s*([^\s\(\)\n]+)').firstMatch(notes);
       if (dealMatch != null) {
-        final matchedDealId = dealMatch.group(1)?.trim();
-        if (matchedDealId == pipelineId) {
+        final matchedTag = dealMatch.group(1)?.trim().toLowerCase();
+        if (matchedTag == cleanPipeId ||
+            (cleanDealNum != null && cleanDealNum.isNotEmpty && matchedTag == cleanDealNum)) {
+          return m;
+        }
+      }
+
+      // Check if notes contains the pipeline UUID or formatted deal number
+      if (cleanPipeId.isNotEmpty && notesLower.contains(cleanPipeId)) {
+        return m;
+      }
+      if (cleanDealNum != null && cleanDealNum.isNotEmpty && notesLower.contains(cleanDealNum)) {
+        return m;
+      }
+    }
+
+    // Helper: Determine if an installation belongs to a DIFFERENT deal
+    bool belongsToDifferentDeal(Map<String, dynamic> m) {
+      final notes = (m['notes'] ?? '').toString();
+      final dealMatch = RegExp(r'Deal ID:\s*([^\s\(\)\n]+)').firstMatch(notes);
+      if (dealMatch != null) {
+        final otherTag = dealMatch.group(1)?.trim().toLowerCase();
+        if (otherTag != null && otherTag.isNotEmpty) {
+          if (otherTag == cleanPipeId || (cleanDealNum != null && otherTag == cleanDealNum)) {
+            return false;
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // 2. Product name match among unassigned installations (or installations not belonging to another deal)
+    if (cleanProdName != null && cleanProdName.isNotEmpty) {
+      for (final item in installations) {
+        final m = Map<String, dynamic>.from(item as Map);
+        if (belongsToDifferentDeal(m)) continue;
+
+        final instProd = (m['product_name'] ?? '').toString().toLowerCase();
+        final instTitle = (m['title'] ?? '').toString().toLowerCase();
+        if ((instProd.isNotEmpty && (instProd.contains(cleanProdName) || cleanProdName.contains(instProd))) ||
+            (instTitle.isNotEmpty && (instTitle.contains(cleanProdName) || cleanProdName.contains(instTitle)))) {
           return m;
         }
       }
     }
 
-    // 2. Fallback only if the customer has strictly 1 deal AND the ticket is not assigned to a different deal
-    if (!customerHasMultipleDeals) {
-      for (final item in installations) {
-        final m = Map<String, dynamic>.from(item as Map);
-        final notes = (m['notes'] ?? '').toString();
-        final dealMatch = RegExp(r'Deal ID:\s*([a-zA-Z0-9\-]+)').firstMatch(notes);
-        if (dealMatch == null) {
-          return m;
+    // 3. Fallback: If customer has strictly 1 deal OR only 1 installation exists
+    final unassigned = installations
+        .map((it) => Map<String, dynamic>.from(it as Map))
+        .where((m) => !belongsToDifferentDeal(m))
+        .toList();
+
+    if (unassigned.isNotEmpty) {
+      // If customer has 1 deal, or if there's only 1 unassigned installation for this customer
+      if (!customerHasMultipleDeals || unassigned.length == 1) {
+        return unassigned.first;
+      }
+
+      // If multiple unassigned exist, pick the newest created on or after deal creation
+      if (dealCreatedAt != null) {
+        for (final m in unassigned) {
+          final cAtStr = m['created_at']?.toString();
+          if (cAtStr != null) {
+            final cAt = DateTime.tryParse(cAtStr);
+            if (cAt != null && !cAt.isBefore(dealCreatedAt)) {
+              return m;
+            }
+          }
         }
       }
+
+      return unassigned.first;
     }
 
     return null;
   }
 
-  /// Checks whether an installation ticket for this customer & pipeline is completed (resolved or closed).
+  /// Checks whether an installation ticket for this customer & pipeline is completed (resolved, closed, or completed).
   static Future<bool> isInstallationComplete(
     SupabaseClient supabase,
     String customerId,
-    String pipelineId,
-  ) async {
+    String pipelineId, {
+    String? dealNumber,
+    String? productName,
+    DateTime? dealCreatedAt,
+  }) async {
     try {
       final instList = await supabase
           .from('installations')
-          .select('id, status, notes, customer_id')
-          .eq('customer_id', customerId);
+          .select('id, status, notes, customer_id, product_name, title, created_at')
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: false);
+
+      String? effectiveDealNumber = dealNumber;
+      String? effectiveProductName = productName;
+      DateTime? effectiveCreatedAt = dealCreatedAt;
+
+      if (effectiveDealNumber == null || effectiveProductName == null) {
+        try {
+          final pipeRow = await supabase
+              .from('sales_pipelines')
+              .select('id, deal_id, created_at, products(name)')
+              .eq('id', pipelineId)
+              .maybeSingle();
+          if (pipeRow != null) {
+            effectiveDealNumber ??= pipeRow['deal_id']?.toString();
+            if (pipeRow['created_at'] != null) {
+              effectiveCreatedAt ??= DateTime.tryParse(pipeRow['created_at'].toString());
+            }
+            if (pipeRow['products'] is Map) {
+              effectiveProductName ??= pipeRow['products']['name']?.toString();
+            }
+          }
+        } catch (_) {}
+      }
 
       bool hasMultipleDeals = false;
       try {
@@ -326,12 +430,15 @@ class WorkProgressService {
       final ticket = resolveInstallationForPipeline(
         installations: (instList as List? ?? []),
         pipelineId: pipelineId,
+        dealNumber: effectiveDealNumber,
+        productName: effectiveProductName,
+        dealCreatedAt: effectiveCreatedAt,
         customerHasMultipleDeals: hasMultipleDeals,
       );
 
       if (ticket != null) {
-        final s = (ticket['status']?.toString() ?? '').toLowerCase();
-        return s == 'resolved' || s == 'closed';
+        final s = (ticket['status']?.toString() ?? '').toLowerCase().trim();
+        return s == 'resolved' || s == 'closed' || s == 'completed';
       }
     } catch (_) {}
     return false;
@@ -361,7 +468,14 @@ class WorkProgressService {
     if (!factoryDispatched && !siteDispatched) return false;
 
     // 4. Installation
-    final isInstallDone = await isInstallationComplete(supabase, pipeline.customerId, pipeline.id);
+    final isInstallDone = await isInstallationComplete(
+      supabase,
+      pipeline.customerId,
+      pipeline.id,
+      dealNumber: pipeline.dealId,
+      productName: pipeline.product?.name,
+      dealCreatedAt: pipeline.createdAt,
+    );
     if (!isInstallDone) return false;
 
     // 5. NOC
@@ -399,7 +513,14 @@ class WorkProgressService {
     }
 
     // 4. Installation
-    final isInstallDone = await isInstallationComplete(supabase, pipeline.customerId, pipeline.id);
+    final isInstallDone = await isInstallationComplete(
+      supabase,
+      pipeline.customerId,
+      pipeline.id,
+      dealNumber: pipeline.dealId,
+      productName: pipeline.product?.name,
+      dealCreatedAt: pipeline.createdAt,
+    );
     if (!isInstallDone) {
       return 'Installation';
     }
@@ -442,6 +563,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
   bool _isInstallationCreated = false;
   bool _isInstallationCompleted = false;
   String? _installationTicketNumber;
+  String? _installationId;
   String _installationStatus = 'none';
 
   QgNocDocument? _nocDoc;
@@ -472,7 +594,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       // 1. Check installations strictly for this deal / pipeline
       final instList = await supabase
           .from('installations')
-          .select('id, ticket_number, status, notes, customer_id')
+          .select('id, ticket_number, status, notes, customer_id, product_name, title, created_at')
           .eq('customer_id', custId)
           .order('created_at', ascending: false);
 
@@ -491,20 +613,25 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       final ticket = WorkProgressService.resolveInstallationForPipeline(
         installations: (instList as List? ?? []),
         pipelineId: pId,
+        dealNumber: widget.pipeline.dealId,
+        productName: widget.pipeline.product?.name,
+        dealCreatedAt: widget.pipeline.createdAt,
         customerHasMultipleDeals: hasMultipleDeals,
       );
 
       bool isCreated = false;
       bool isDone = false;
       String? tNum;
+      String? tId;
       String sStatus = 'none';
 
       if (ticket != null) {
         isCreated = true;
+        tId = ticket['id']?.toString();
         tNum = ticket['ticket_number']?.toString();
-        final s = (ticket['status']?.toString() ?? '').toLowerCase();
+        final s = (ticket['status']?.toString() ?? '').toLowerCase().trim();
         sStatus = s;
-        if (s == 'resolved' || s == 'closed') {
+        if (s == 'resolved' || s == 'closed' || s == 'completed') {
           isDone = true;
         }
       }
@@ -531,6 +658,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           _isInstallationCreated = isCreated;
           _isInstallationCompleted = isDone;
           _installationTicketNumber = tNum;
+          _installationId = tId;
           _installationStatus = sStatus;
           _nocDoc = noc;
           _isNocCompleted = noc != null;
@@ -862,9 +990,10 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                context.push('${AppRoutes.bookInstallation}?customerId=${widget.pipeline.customerId}&dealId=${widget.pipeline.id}');
+                await context.push('${AppRoutes.bookInstallation}?customerId=${widget.pipeline.customerId}&dealId=${widget.pipeline.id}');
+                _fetchAuxData();
               },
               child: const Text('Book Installation Ticket'),
             )
@@ -875,11 +1004,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                context.go(AppRoutes.installationsList);
+                if (_installationId != null && _installationId!.isNotEmpty) {
+                  await context.push('/installations/details/$_installationId');
+                } else {
+                  await context.push(AppRoutes.installationsList);
+                }
+                _fetchAuxData();
               },
-              child: const Text('Go to Installations'),
+              child: const Text('View Installation Ticket'),
             ),
         ],
       ),
@@ -954,15 +1088,6 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     final supabase = ref.read(supabaseClientProvider);
 
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      final qRes = await supabase.from('quotations').select().eq('pipeline_id', pipeline.id).maybeSingle();
-      final qData = qRes != null ? Map<String, dynamic>.from(qRes) : null;
-
       final custRes = await supabase.from('customers').select().eq('id', pipeline.customerId).maybeSingle();
       final cRes = custRes != null ? Map<String, dynamic>.from(custRes) : null;
 
@@ -971,6 +1096,45 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           pipeline.customer?.companyName ??
           'Valued Customer';
       final siteAddress = cRes?['address']?.toString() ?? pipeline.customer?.address ?? '';
+
+      // Check for existing installation to pre-populate signatures & technician name
+      Map<String, dynamic>? ticket;
+      try {
+        final instList = await supabase
+            .from('installations')
+            .select('id, customer_signature_url, technician_signature_url, technician_name, notes, product_name, title, created_at')
+            .eq('customer_id', pipeline.customerId)
+            .order('created_at', ascending: false);
+        ticket = WorkProgressService.resolveInstallationForPipeline(
+          installations: (instList as List? ?? []),
+          pipelineId: pipeline.id,
+          dealNumber: pipeline.dealId,
+          productName: pipeline.product?.name,
+          dealCreatedAt: pipeline.createdAt,
+        );
+      } catch (_) {}
+
+      final prefillTechName = ticket?['technician_name']?.toString() ?? ref.read(currentProfileProvider)?.fullName;
+
+      // Prompt for Customer & Technician Signatures (fresh new signatures taken for NOC)
+      if (!mounted) return;
+      final sigResult = await NocSignaturesDialog.show(
+        context: context,
+        customerName: customerName,
+        initialTechnicianName: prefillTechName,
+      );
+
+      if (sigResult == null) return; // User cancelled
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final qRes = await supabase.from('quotations').select().eq('pipeline_id', pipeline.id).maybeSingle();
+      final qData = qRes != null ? Map<String, dynamic>.from(qRes) : null;
 
       final rawLines = (qData?['line_items'] is List)
           ? List<Map<String, dynamic>>.from(qData!['line_items'] as List)
@@ -1044,6 +1208,10 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         remark: 'All Installation & Commissioning work Completed as per work order',
         confirmations: profileConfirmations,
         closingSentence: profileClosing,
+        customerSignatureUrl: sigResult.customerSignature,
+        customerSignatoryName: sigResult.customerSignatoryName,
+        technicianSignatureUrl: sigResult.technicianSignature,
+        technicianName: sigResult.technicianName,
         wordingMode: NocWordingMode.templateExact,
         quotationNumber: quoteNumber,
       );
@@ -1062,8 +1230,28 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         companySnapshot: compConfig,
         confirmations: profileConfirmations,
         closingSentence: profileClosing,
+        customerSignatureUrl: sigResult.customerSignature,
+        customerSignatoryName: sigResult.customerSignatoryName,
+        technicianSignatureUrl: sigResult.technicianSignature,
+        technicianName: sigResult.technicianName,
         overrideReason: 'Completed deal installation & commissioning verified for $productName',
       );
+
+      // Back-propagate signatures to installation ticket if missing
+      if (ticket != null && ticket['id'] != null) {
+        try {
+          final updates = <String, dynamic>{};
+          if ((ticket['customer_signature_url'] == null || ticket['customer_signature_url'].toString().isEmpty) && sigResult.customerSignature.isNotEmpty) {
+            updates['customer_signature_url'] = sigResult.customerSignature;
+          }
+          if ((ticket['technician_signature_url'] == null || ticket['technician_signature_url'].toString().isEmpty) && sigResult.technicianSignature.isNotEmpty) {
+            updates['technician_signature_url'] = sigResult.technicianSignature;
+          }
+          if (updates.isNotEmpty) {
+            await supabase.from('installations').update(updates).eq('id', ticket['id']);
+          }
+        } catch (_) {}
+      }
 
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -1617,7 +1805,9 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             statusText: step4InstallDone
                 ? 'Done'
                 : (_isInstallationCreated
-                    ? 'In Progress'
+                    ? (_installationStatus == 'in_progress'
+                        ? 'In Progress'
+                        : (_installationStatus == 'assigned' ? 'Assigned' : 'Created'))
                     : (step3DispatchDone ? 'Ready' : 'Locked')),
             statusColor: step4InstallDone
                 ? AppColors.success
@@ -1634,12 +1824,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
+                              color: step4InstallDone ? const Color(0xFFD1FAE5) : const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               _installationTicketNumber!,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: step4InstallDone ? const Color(0xFF065F46) : const Color(0xFFB45309),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),

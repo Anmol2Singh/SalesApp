@@ -196,6 +196,7 @@ class AssignInstallationTechnicianScreen extends ConsumerWidget {
         Expanded(
           child: DropdownButtonFormField<TechnicianInfo>(
             value: selectedTech,
+            isExpanded: true,
             decoration: InputDecoration(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -223,7 +224,13 @@ class AssignInstallationTechnicianScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(tech.name, style: const TextStyle(fontSize: 13)),
+                    Expanded(
+                      child: Text(
+                        tech.name,
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               );

@@ -23,6 +23,7 @@ class QgNocEligibilityService {
 
     // 2. Installation resolution check
     final dealId = deal['id']?.toString() ?? '';
+    final dealNumber = (deal['deal_id'] ?? deal['dealId'] ?? '')?.toString().trim() ?? '';
     final dealCustomerId = deal['customer_id']?.toString() ?? '';
     final dealCreatedAtStr = deal['created_at']?.toString();
     final dealCreatedAt = dealCreatedAtStr != null ? DateTime.tryParse(dealCreatedAtStr) : null;
@@ -30,10 +31,14 @@ class QgNocEligibilityService {
 
     Map<String, dynamic>? matched;
 
-    // Preferred: Explicit Deal ID match in notes
+    // Preferred: Explicit Deal ID match in notes (UUID or formatted deal number like DEAL-XX-XX-XXXX)
     for (final inst in installations) {
       final notes = inst['notes']?.toString() ?? '';
-      if (notes.contains('Deal ID: $dealId')) {
+      final notesLower = notes.toLowerCase();
+      final bool matchesExplicit =
+          (dealId.isNotEmpty && (notes.contains('Deal ID: $dealId') || notesLower.contains(dealId.toLowerCase()))) ||
+          (dealNumber.isNotEmpty && (notes.contains('Deal ID: $dealNumber') || notesLower.contains(dealNumber.toLowerCase())));
+      if (matchesExplicit) {
         matched = inst;
         break;
       }
@@ -66,9 +71,9 @@ class QgNocEligibilityService {
       }
     }
 
-    // Status check on matched installation
-    final instStatus = matched?['status']?.toString().toLowerCase() ?? '';
-    final isInstCompleted = matched != null && (instStatus == 'resolved' || instStatus == 'closed');
+    // Status check on matched installation (resolved, closed, or completed)
+    final instStatus = matched?['status']?.toString().toLowerCase().trim() ?? '';
+    final isInstCompleted = matched != null && (instStatus == 'resolved' || instStatus == 'closed' || instStatus == 'completed');
 
     if (!isInstCompleted) {
       reasons.add('Installation not completed');

@@ -20,6 +20,9 @@ import 'package:salesapp/features/customer_app/features/service_request/screens/
 import 'package:http/http.dart' as http;
 import 'package:salesapp/core/widgets/pdf_preview_screen.dart';
 import 'package:salesapp/core/utils/currency_helper.dart';
+import 'package:salesapp/features/quotation_generator/models/qg_noc_document.dart';
+import 'package:salesapp/features/quotation_generator/data/qg_noc_repository.dart';
+import 'package:salesapp/features/quotation_generator/services/pdf_noc_builder.dart';
 import 'product_booking_confirmed_screen.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
@@ -35,14 +38,97 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   bool _isRenewing = false;
   bool _isBooking = false;
+  bool _isPdfActionBusy = false;
   String? _bookingStatus; // null, 'requested', 'pending', 'accepted'
   int _currentImageIndex = 0;
   final PageController _imagePageController = PageController(initialPage: 5000);
+  QgNocDocument? _nocDoc;
 
   @override
   void initState() {
     super.initState();
     _checkRequestStatus();
+    _checkNocStatus();
+  }
+
+  Future<void> _checkNocStatus() async {
+    try {
+      final docs = await QgNocRepository.instance.getDocumentsForPipeline(widget.productId);
+      if (docs.isNotEmpty && mounted) {
+        setState(() => _nocDoc = docs.first);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _viewNocPdf(BuildContext context, QgNocDocument doc) async {
+    if (_isPdfActionBusy) return;
+    setState(() => _isPdfActionBusy = true);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Card(
+            elevation: 8,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                  SizedBox(width: 16),
+                  Text(
+                    'Opening NOC Certificate...',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final bytes = await PdfNocBuilder.buildNocPdf(doc.toPayload());
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfPreviewScreen(
+              pdfBytes: bytes,
+              fileName: '${doc.nocNumber.replaceAll('/', '_')}.pdf',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ToastService.show(context, 'Failed to open NOC certificate: $e', type: ToastType.error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPdfActionBusy = false);
+      } else {
+        _isPdfActionBusy = false;
+      }
+    }
   }
 
   Future<void> _checkRequestStatus() async {
@@ -1754,6 +1840,83 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   ),
                 ),
 
+                // ─── NO OBJECTION CERTIFICATE (NOC) ───────────────────────────
+                if (isPurchased && _nocDoc != null) ...[
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Icon(Icons.verified_user_rounded,
+                          color: Color(0xFF10B981), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Official Certificates',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : AppColors.textPrimaryLight,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  GlassCard(
+                    padding: const EdgeInsets.all(16),
+                    borderRadius: 16,
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.assignment_turned_in_rounded,
+                              color: Color(0xFF10B981), size: 24),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'No Objection Certificate (NOC)',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Certificate: ${_nocDoc!.nocNumber} • Issued',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                          ),
+                          icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                          label: const Text('View NOC',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13)),
+                          onPressed: _isPdfActionBusy ? null : () => _viewNocPdf(context, _nocDoc!),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
 
                 // Included Equipment & Quotation Items Purchased
@@ -2569,6 +2732,31 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           onPressed: () => _viewBrochure(context, product),
                         ),
                       ] else ...[
+                        if (_nocDoc != null) ...[
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 14),
+                            ),
+                            icon: const Icon(Icons.verified_outlined,
+                                size: 18),
+                            label: const Text(
+                              'NOC',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            onPressed: _isPdfActionBusy ? null : () => _viewNocPdf(context, _nocDoc!),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                         Expanded(
                           child: GradientButton(
                             label: 'Request Service',

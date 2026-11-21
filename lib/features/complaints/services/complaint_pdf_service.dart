@@ -588,11 +588,11 @@ class ComplaintPdfService {
     );
   }
 
-  static Future<void> shareCompletionReport(Complaint complaint) async {
-    final pdfBytes = await generateCompletionReportPdf(complaint);
-    final safeTicket =
-        complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
-    final filename = 'CompletionReport_$safeTicket.pdf';
+  static Future<void> sharePdfBytes(
+    Uint8List pdfBytes,
+    String filename,
+    String text,
+  ) async {
     try {
       await Printing.sharePdf(bytes: pdfBytes, filename: filename);
     } catch (_) {
@@ -601,8 +601,20 @@ class ComplaintPdfService {
       await file.writeAsBytes(pdfBytes);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Service Completion Report for ${complaint.ticketNumber}',
+        text: text,
       );
     }
+  }
+
+  static Future<void> shareCompletionReport(Complaint complaint) async {
+    final pdfBytes = await generateCompletionReportPdf(complaint);
+    final safeTicket =
+        complaint.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
+    final filename = 'CompletionReport_$safeTicket.pdf';
+    await sharePdfBytes(
+      pdfBytes,
+      filename,
+      'Service Completion Report for ${complaint.ticketNumber}',
+    );
   }
 }

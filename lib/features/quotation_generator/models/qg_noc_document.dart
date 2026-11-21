@@ -109,8 +109,48 @@ class QgNocDocument {
     }
     return const [];
   }
+  String? get customerSignatureUrl => payload['customer_signature_url']?.toString();
+  String? get customerSignatoryName => payload['customer_signatory_name']?.toString();
+  String? get technicianSignatureUrl => payload['technician_signature_url']?.toString();
+  String? get technicianName => payload['technician_name']?.toString();
   String? get closingSentence => payload['closing_sentence']?.toString();
   String get equipmentSummary => equipmentLines.isNotEmpty
       ? equipmentLines.map((e) => '${e.model} (${e.quantity} ${e.uom})').join(', ')
       : productName;
+
+  QgNocPayload toPayload() {
+    return QgNocPayload(
+      companyName: companySnapshot['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION',
+      companyAddress: companySnapshot['short_address']?.toString() ?? companySnapshot['company_address']?.toString() ?? '',
+      companyEmail: companySnapshot['email']?.toString() ?? companySnapshot['company_email']?.toString() ?? '',
+      companyPhone: companySnapshot['phone']?.toString() ?? companySnapshot['company_phone']?.toString() ?? '',
+      companyWebsite: companySnapshot['website']?.toString() ?? companySnapshot['company_website']?.toString() ?? '',
+      logoUrl: companySnapshot['logo_url']?.toString(),
+      stampImagePath: companySnapshot['stamp_url']?.toString() ?? companySnapshot['stamp_image_path']?.toString(),
+      salutation: payload['salutation']?.toString() ?? 'M/s',
+      customerName: customerName,
+      recipient: payload['recipient']?.toString() ?? 'The Project Mannager.',
+      address: siteAddress,
+      productName: productName,
+      subject: payload['subject']?.toString() ?? 'No Objection Certificate for Installation & Commissioning of $productName.',
+      date: issuedOn,
+      quotationNumber: quotationNumber,
+      installationTicketNo: payload['installation_ticket_no']?.toString(),
+      installationDate: payload['installation_date'] != null ? DateTime.tryParse(payload['installation_date'].toString()) : null,
+      equipmentLabel: payload['equipment_label']?.toString() ?? productName,
+      equipmentLines: equipmentLines,
+      workType: payload['work_type']?.toString() ?? '$productName Installation work',
+      leakage: payload['leakage']?.toString() ?? 'Done',
+      wiring: payload['wiring']?.toString() ?? 'Done',
+      testing: payload['testing']?.toString() ?? 'Done',
+      remark: payload['remark']?.toString() ?? 'All Installation & Commissioning work Completed as per work order',
+      confirmations: confirmations,
+      closingSentence: closingSentence ?? '',
+      customerSignatureUrl: customerSignatureUrl,
+      customerSignatoryName: customerSignatoryName,
+      technicianSignatureUrl: technicianSignatureUrl,
+      technicianName: technicianName,
+      wordingMode: wordingMode,
+    );
+  }
 }

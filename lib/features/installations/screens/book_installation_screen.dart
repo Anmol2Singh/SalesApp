@@ -677,6 +677,7 @@ class _BookInstallationScreenState
                             style: TextStyle(color: Colors.grey))
                       else
                         DropdownButtonFormField<Map<String, dynamic>>(
+                          isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Select Deal / Product',
                             border: OutlineInputBorder(),
@@ -713,6 +714,7 @@ class _BookInstallationScreenState
                               child: Text(
                                 '$prefix$productName$suffix',
                                 overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             );
                           }).toList(),
@@ -776,33 +778,46 @@ class _BookInstallationScreenState
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _selectedPriority,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Priority',
                               border: OutlineInputBorder(),
                               isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 10),
                             ),
                             items: [
                               'High Priority',
                               'Medium Priority',
                               'Low Priority'
                             ]
-                                .map((p) =>
-                                    DropdownMenuItem(value: p, child: Text(p)))
+                                .map((p) => DropdownMenuItem(
+                                      value: p,
+                                      child: Text(
+                                        p,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ))
                                 .toList(),
                             onChanged: (v) {
-                              if (v != null)
+                              if (v != null) {
                                 setState(() => _selectedPriority = v);
+                              }
                             },
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: TextField(
                             controller: _sealNumberBeforeController,
                             decoration: const InputDecoration(
-                              labelText: 'Initial Seal # (Optional)',
+                              labelText: 'Initial Seal # (Opt)',
                               border: OutlineInputBorder(),
                               isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 10),
                             ),
                           ),
                         ),
@@ -839,7 +854,11 @@ class _BookInstallationScreenState
                       data: (technicians) {
                         return DropdownButtonFormField<TechnicianInfo>(
                           value: _selectedTechnician,
-                          hint: const Text('Select Installer / Technician'),
+                          isExpanded: true,
+                          hint: const Text(
+                            'Select Installer / Technician',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
                             isDense: true,
@@ -847,7 +866,10 @@ class _BookInstallationScreenState
                           items: technicians
                               .map((t) => DropdownMenuItem(
                                     value: t,
-                                    child: Text(t.name),
+                                    child: Text(
+                                      t.name,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ))
                               .toList(),
                           onChanged: (t) =>

@@ -30,6 +30,7 @@ import '../../quotation_generator/models/qg_noc_document.dart';
 import '../../quotation_generator/models/qg_noc_builder_state.dart';
 import '../../quotation_generator/services/pdf_noc_builder.dart';
 import '../../quotation_generator/services/qg_noc_extractor.dart';
+import '../../quotation_generator/ui/widgets/noc_signatures_dialog.dart';
 import '../widgets/work_progress_box.dart';
 import '../../../core/widgets/sliding_marquee_text.dart';
 
@@ -2943,6 +2944,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         supabase,
         widget.pipeline.customerId,
         widget.pipeline.id,
+        dealNumber: widget.pipeline.dealId,
+        productName: widget.pipeline.product?.name,
+        dealCreatedAt: widget.pipeline.createdAt,
       );
 
       final results = await Future.wait([docsFuture, instFuture]);
@@ -3034,6 +3038,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       supabase,
       pipeline.customerId,
       pipeline.id,
+      dealNumber: pipeline.dealId,
+      productName: pipeline.product?.name,
+      dealCreatedAt: pipeline.createdAt,
     );
     if (!isInstallationComplete) {
       if (mounted) {
@@ -3046,6 +3053,40 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       }
       return;
     }
+
+    // 1. Fetch live customer & installation info to prefill signatures
+    Map<String, dynamic>? ticket;
+    try {
+      final instList = await supabase
+          .from('installations')
+          .select('id, customer_signature_url, technician_signature_url, technician_name, notes, product_name, title, created_at')
+          .eq('customer_id', pipeline.customerId)
+          .order('created_at', ascending: false);
+      ticket = WorkProgressService.resolveInstallationForPipeline(
+        installations: (instList as List? ?? []),
+        pipelineId: pipeline.id,
+        dealNumber: pipeline.dealId,
+        productName: pipeline.product?.name,
+        dealCreatedAt: pipeline.createdAt,
+      );
+    } catch (_) {}
+
+    final customerName = (pipeline.customer?.companyName.trim().isNotEmpty == true)
+        ? pipeline.customer!.companyName.trim()
+        : (pipeline.customer?.customerName.trim().isNotEmpty == true
+            ? pipeline.customer!.customerName.trim()
+            : 'Valued Customer');
+    final prefillTechName = ticket?['technician_name']?.toString() ?? ref.read(currentProfileProvider)?.fullName;
+
+    // 2. Prompt for Customer & Technician Signatures (fresh new signatures taken for NOC)
+    if (!mounted) return;
+    final sigResult = await NocSignaturesDialog.show(
+      context: context,
+      customerName: customerName,
+      initialTechnicianName: prefillTechName,
+    );
+
+    if (sigResult == null) return; // User cancelled
 
     if (!mounted) return;
     showDialog(
@@ -3224,6 +3265,10 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         remark: 'All Installation & Commissioning work Completed as per work order',
         confirmations: profileConfirmations,
         closingSentence: profileClosing,
+        customerSignatureUrl: sigResult.customerSignature,
+        customerSignatoryName: sigResult.customerSignatoryName,
+        technicianSignatureUrl: sigResult.technicianSignature,
+        technicianName: sigResult.technicianName,
         wordingMode: NocWordingMode.templateExact,
         quotationNumber: quoteNumber,
       );
@@ -3244,8 +3289,28 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         companySnapshot: compConfig,
         confirmations: profileConfirmations,
         closingSentence: profileClosing,
+        customerSignatureUrl: sigResult.customerSignature,
+        customerSignatoryName: sigResult.customerSignatoryName,
+        technicianSignatureUrl: sigResult.technicianSignature,
+        technicianName: sigResult.technicianName,
         overrideReason: 'Completed deal installation & commissioning verified for $productName',
       );
+
+      // Back-propagate signatures to installation ticket if missing
+      if (ticket != null && ticket['id'] != null) {
+        try {
+          final updates = <String, dynamic>{};
+          if ((ticket['customer_signature_url'] == null || ticket['customer_signature_url'].toString().isEmpty) && sigResult.customerSignature.isNotEmpty) {
+            updates['customer_signature_url'] = sigResult.customerSignature;
+          }
+          if ((ticket['technician_signature_url'] == null || ticket['technician_signature_url'].toString().isEmpty) && sigResult.technicianSignature.isNotEmpty) {
+            updates['technician_signature_url'] = sigResult.technicianSignature;
+          }
+          if (updates.isNotEmpty) {
+            await supabase.from('installations').update(updates).eq('id', ticket['id']);
+          }
+        } catch (_) {}
+      }
 
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog

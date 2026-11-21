@@ -766,11 +766,11 @@ class InstallationPdfService {
     );
   }
 
-  static Future<void> shareCompletionReport(Installation installation) async {
-    final pdfBytes = await generateCompletionReportPdf(installation);
-    final safeTicket =
-        installation.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
-    final filename = 'InstallationReport_$safeTicket.pdf';
+  static Future<void> sharePdfBytes(
+    Uint8List pdfBytes,
+    String filename,
+    String text,
+  ) async {
     try {
       await Printing.sharePdf(bytes: pdfBytes, filename: filename);
     } catch (_) {
@@ -780,9 +780,21 @@ class InstallationPdfService {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path)],
-          text: 'Installation Report for ${installation.ticketNumber}',
+          text: text,
         ),
       );
     }
+  }
+
+  static Future<void> shareCompletionReport(Installation installation) async {
+    final pdfBytes = await generateCompletionReportPdf(installation);
+    final safeTicket =
+        installation.ticketNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_');
+    final filename = 'InstallationReport_$safeTicket.pdf';
+    await sharePdfBytes(
+      pdfBytes,
+      filename,
+      'Installation Report for ${installation.ticketNumber}',
+    );
   }
 }
