@@ -428,10 +428,13 @@ class AdminDashboardScreen extends ConsumerWidget {
 
                     final displayActiveDeals = pipelinesAsync.value != null
                         ? activeDealsInPeriod.length
-                        : (stats['active_deals'] ?? stats['active_pipelines'] ?? 0);
+                        : (stats['active_deals'] ??
+                            stats['active_pipelines'] ??
+                            0);
                     final displayRevenue = pipelinesAsync.value != null
                         ? revenueInPeriod
-                        : (stats['revenue_in_pipeline'] as num? ?? 0.0).toDouble();
+                        : (stats['revenue_in_pipeline'] as num? ?? 0.0)
+                            .toDouble();
                     final displayLeads = leadsAsync.value != null
                         ? periodLeadsCount
                         : (stats['customer_leads'] ?? 0);
@@ -530,10 +533,12 @@ class AdminDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 pipelinesAsync.when(
                   data: (pipelines) {
-                    final activeDeals = pipelines.where((p) =>
-                        p.status != PipelineStatus.completed &&
-                        p.currentStep != PipelineStep.completed &&
-                        p.status != PipelineStatus.cancelled).toList();
+                    final activeDeals = pipelines
+                        .where((p) =>
+                            p.status != PipelineStatus.completed &&
+                            p.currentStep != PipelineStep.completed &&
+                            p.status != PipelineStatus.cancelled)
+                        .toList();
                     final recent = (activeDeals
                           ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
                         .take(5)
@@ -691,7 +696,7 @@ class _StatsGrid extends StatelessWidget {
               onTap: () => context.go(AppRoutes.pipelines),
             ),
             _StatCard(
-              title: 'Pipeline\nRevenue',
+              title: 'Deal\nRevenue',
               value: _formatCompactRevenue(pipelineRevenue),
               icon: Icons.currency_rupee,
               color: const Color(0xFF10B981),
@@ -852,8 +857,8 @@ class _QuickActionsGrid extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final userProfile = ref.watch(currentProfileProvider);
     final roles = userProfile?.roles ?? [];
-    final isAccountsOnly = roles.contains(UserRole.accounts) &&
-        !roles.contains(UserRole.admin);
+    final isAccountsOnly =
+        roles.contains(UserRole.accounts) && !roles.contains(UserRole.admin);
 
     final categories = <_QuickActionCategory>[
       if (!isAccountsOnly)
@@ -1074,11 +1079,10 @@ class _QuickActionsGrid extends ConsumerWidget {
                   onTap: a.onTap,
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color:
-                          isDark ? const Color(0xFF1E293B) : Colors.white,
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isDark
@@ -1913,7 +1917,9 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
   Future<void> _acceptRequest(
       BuildContext context, WidgetRef ref, ProductInterestItem item) async {
     try {
-      final res = await ref.read(productInquiriesServiceProvider).acceptAndCreateDeal(item);
+      final res = await ref
+          .read(productInquiriesServiceProvider)
+          .acceptAndCreateDeal(item);
       if (context.mounted) {
         if (res.isUnavailable) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2166,7 +2172,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                          color:
+                              const Color(0xFF2563EB).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -2187,7 +2194,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                     TextButton(
                       onPressed: () => context.go(AppRoutes.productInterests),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -2204,7 +2212,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                             ),
                           ),
                           SizedBox(width: 2),
-                          Icon(Icons.chevron_right, size: 16, color: Color(0xFF2563EB)),
+                          Icon(Icons.chevron_right,
+                              size: 16, color: Color(0xFF2563EB)),
                         ],
                       ),
                     ),
@@ -2214,7 +2223,8 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                           size: 18, color: AppColors.textSecondary),
                       tooltip: 'Refresh inquiries',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
                       onPressed: () => ref.invalidate(productInquiriesProvider),
                     ),
                   ],
@@ -2235,12 +2245,10 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                        color:
-                            const Color(0xFF2563EB).withValues(alpha: 0.2)),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.2)),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            const Color(0xFF2563EB).withValues(alpha: 0.04),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.04),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -2316,8 +2324,7 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                 Row(
                                   children: [
                                     Icon(Icons.schedule,
-                                        size: 13,
-                                        color: Colors.grey.shade500),
+                                        size: 13, color: Colors.grey.shade500),
                                     const SizedBox(width: 4),
                                     Text(
                                       DateFormat('dd MMM yyyy, hh:mm a')
@@ -2336,8 +2343,7 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                         color: item.status == 'accepted'
                                             ? Colors.green.shade50
                                             : Colors.amber.shade50,
-                                        borderRadius:
-                                            BorderRadius.circular(4),
+                                        borderRadius: BorderRadius.circular(4),
                                         border: Border.all(
                                           color: item.status == 'accepted'
                                               ? Colors.green.shade300
@@ -2366,7 +2372,6 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                       const SizedBox(height: 12),
                       const Divider(height: 1),
                       const SizedBox(height: 10),
-
                       Wrap(
                         alignment: WrapAlignment.spaceBetween,
                         crossAxisAlignment: WrapCrossAlignment.center,
@@ -2398,14 +2403,12 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                   side: const BorderSide(
                                       color: Color(0xFF16A34A), width: 1.2),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(8)),
+                                      borderRadius: BorderRadius.circular(8)),
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 6),
                                   visualDensity: VisualDensity.compact,
                                 ),
-                                icon: const Icon(Icons.chat_outlined,
-                                    size: 14),
+                                icon: const Icon(Icons.chat_outlined, size: 14),
                                 label: const Text('WhatsApp',
                                     style: TextStyle(
                                         fontSize: 11,
@@ -2419,8 +2422,7 @@ class _CustomerProductInterestsSection extends ConsumerWidget {
                                   backgroundColor: const Color(0xFF2563EB),
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(8)),
+                                      borderRadius: BorderRadius.circular(8)),
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 6),
                                   visualDensity: VisualDensity.compact,

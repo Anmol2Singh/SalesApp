@@ -579,37 +579,20 @@ class _InstallationDashboardScreenState
               children: [
                 const Icon(Icons.person_outline, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),
-                Flexible(
+                Expanded(
                   child: Text(
-                    item.customerName,
+                    item.productName != null && item.productName!.isNotEmpty
+                        ? '${item.customerName} • ${item.productName}'
+                        : item.customerName,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        color: AppColors.textSecondary),
-                  ),
-                ),
-                if (item.productName != null &&
-                    item.productName!.isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Text('•', style: TextStyle(color: Colors.grey.shade400)),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.solar_power_outlined,
-                      size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      item.productName!,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          color: AppColors.textSecondary),
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ],
+                ),
               ],
             ),
             const SizedBox(height: 8),

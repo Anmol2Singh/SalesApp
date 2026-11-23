@@ -1270,9 +1270,10 @@ class _SalesOrderFormScreenState extends ConsumerState<SalesOrderFormScreen> {
       final custName = _pipeline?.customer?.companyName ?? '';
       final prodName = _product?.name ?? _pipeline?.product?.name ?? 'deal';
       final custSuffix = custName.isNotEmpty ? ' for $custName ($prodName)' : '';
-      await NotificationBackendHelper.notifyUser(
+      await NotificationBackendHelper.notifyWorkflowStep(
         supabase: supabase,
-        userId: supabase.auth.currentUser!.id,
+        targetRoles: ['boq', 'service_head'],
+        dealOwnerId: _pipeline?.createdBy,
         title: 'BOQ Stage Unlocked',
         body: 'Sales Order confirmed$custSuffix. BOQ step is now available.',
         type: 'step_unlocked',

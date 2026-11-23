@@ -549,22 +549,6 @@ class PdfNocBuilder {
               ] else ...[
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Customer Verification', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _navyColor)),
-                    pw.Text('For $effectiveCompanyName', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _navyColor)),
-                  ],
-                ),
-                pw.SizedBox(height: 2),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Authorized Customer Signature', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic)),
-                    pw.Text('Authorized Technician / Engineer', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic)),
-                  ],
-                ),
-                pw.SizedBox(height: 3),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     // Left side: Customer
@@ -573,27 +557,63 @@ class PdfNocBuilder {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
+                          pw.Text(
+                            'Customer Verification',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: _navyColor,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Authorized Customer Signature',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontStyle: pw.FontStyle.italic,
+                            ),
+                          ),
+                          pw.SizedBox(height: 3),
                           if (customerSignatureBytes != null)
                             pw.Container(
                               height: 44,
                               width: 145,
                               alignment: pw.Alignment.centerLeft,
-                              child: pw.Image(pw.MemoryImage(customerSignatureBytes), fit: pw.BoxFit.contain),
+                              child: pw.Image(
+                                pw.MemoryImage(customerSignatureBytes),
+                                fit: pw.BoxFit.contain,
+                              ),
                             )
                           else
                             pw.Container(height: 32),
                           pw.Container(
-                            width: 155,
-                            decoration: const pw.BoxDecoration(border: pw.Border(top: pw.BorderSide(color: PdfColors.grey500, width: 0.5))),
+                            width: 165,
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                top: pw.BorderSide(
+                                  color: PdfColors.grey500,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
                             padding: const pw.EdgeInsets.only(top: 2),
                             child: pw.Column(
                               crossAxisAlignment: pw.CrossAxisAlignment.start,
                               children: [
                                 pw.Text(
                                   'Signatory: ${payload.customerSignatoryName?.isNotEmpty == true ? payload.customerSignatoryName! : payload.customerName}',
-                                  style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                                  style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
                                 ),
-                                pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                                pw.Text(
+                                  'Date: $dateStr',
+                                  style: const pw.TextStyle(
+                                    fontSize: 7.5,
+                                    color: PdfColors.grey700,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -601,48 +621,79 @@ class PdfNocBuilder {
                       ),
                     ),
 
-                    // Right side: Company Stamp & Technician
+                    // Right side: Company Stamp upside (above) 'For Insiya...' text & Technician
                     pw.Container(
-                      width: 230,
-                      child: pw.Row(
-                        crossAxisAlignment: pw.CrossAxisAlignment.end,
-                        mainAxisAlignment: pw.MainAxisAlignment.end,
+                      width: 200,
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          if (finalStamp != null)
+                          if (finalStamp != null) ...[
                             pw.Container(
-                              width: 62,
-                              height: 56,
-                              margin: const pw.EdgeInsets.only(right: 6),
-                              alignment: pw.Alignment.center,
-                              child: pw.Image(pw.MemoryImage(finalStamp), fit: pw.BoxFit.contain),
+                              width: 82,
+                              height: 78,
+                              alignment: pw.Alignment.centerLeft,
+                              child: pw.Image(
+                                pw.MemoryImage(finalStamp),
+                                fit: pw.BoxFit.contain,
+                              ),
                             ),
+                            pw.SizedBox(height: 6),
+                          ],
+                          pw.Text(
+                            'For $effectiveCompanyName',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: _navyColor,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Authorized Technician / Engineer',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontStyle: pw.FontStyle.italic,
+                            ),
+                          ),
+                          pw.SizedBox(height: 3),
+                          if (techSignatureBytes != null)
+                            pw.Container(
+                              height: 44,
+                              width: 145,
+                              alignment: pw.Alignment.centerLeft,
+                              child: pw.Image(
+                                pw.MemoryImage(techSignatureBytes),
+                                fit: pw.BoxFit.contain,
+                              ),
+                            )
+                          else
+                            pw.Container(height: 32),
                           pw.Container(
-                            width: 155,
+                            width: 165,
+                            decoration: const pw.BoxDecoration(
+                              border: pw.Border(
+                                top: pw.BorderSide(
+                                  color: PdfColors.grey500,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            padding: const pw.EdgeInsets.only(top: 2),
                             child: pw.Column(
                               crossAxisAlignment: pw.CrossAxisAlignment.start,
                               children: [
-                                if (techSignatureBytes != null)
-                                  pw.Container(
-                                    height: 44,
-                                    width: 145,
-                                    alignment: pw.Alignment.centerLeft,
-                                    child: pw.Image(pw.MemoryImage(techSignatureBytes), fit: pw.BoxFit.contain),
-                                  )
-                                else
-                                  pw.Container(height: 32),
-                                pw.Container(
-                                  width: 155,
-                                  decoration: const pw.BoxDecoration(border: pw.Border(top: pw.BorderSide(color: PdfColors.grey500, width: 0.5))),
-                                  padding: const pw.EdgeInsets.only(top: 2),
-                                  child: pw.Column(
-                                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                                    children: [
-                                      pw.Text(
-                                        'Technician: ${payload.technicianName?.isNotEmpty == true ? payload.technicianName! : 'Authorized Technician'}',
-                                        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
-                                      ),
-                                      pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
-                                    ],
+                                pw.Text(
+                                  'Technician: ${payload.technicianName?.isNotEmpty == true ? payload.technicianName! : 'Authorized Technician'}',
+                                  style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                                pw.Text(
+                                  'Date: $dateStr',
+                                  style: const pw.TextStyle(
+                                    fontSize: 7.5,
+                                    color: PdfColors.grey700,
                                   ),
                                 ),
                               ],
@@ -654,7 +705,7 @@ class PdfNocBuilder {
                   ],
                 ),
               ],
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 40),
 
               // ─── FOOTER (ENHANCED MODE) ──────────────────────────────────────
               if (!isExact) ...[

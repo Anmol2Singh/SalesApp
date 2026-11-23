@@ -13,6 +13,7 @@ import '../../../core/models/profile.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/quotation.dart';
+import '../../../core/models/boq.dart';
 import '../../../core/widgets/step_tracker.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -70,53 +71,26 @@ class PipelineDetailScreen extends ConsumerWidget {
                 onPressed: () async {
                   // Admin Unlock logic
                   final db = ref.read(supabaseClientProvider);
-                  await db.from('sales_pipelines').update({'status': 'in_progress'}).eq('id', pipelineId);
+                  await db
+                      .from('sales_pipelines')
+                      .update({'status': 'in_progress'}).eq('id', pipelineId);
                   ref.invalidate(pipelineDetailProvider(pipelineId));
-                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deal unlocked')));
+                  if (context.mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Deal unlocked')));
                 },
                 icon: const Icon(Icons.lock_open, color: Colors.white),
-                label: const Text('Unlock', style: TextStyle(color: Colors.white)),
+                label:
+                    const Text('Unlock', style: TextStyle(color: Colors.white)),
               )
-            else if (pipelineAsync.valueOrNull != null && _checkAllStepsCompleted(pipelineAsync.valueOrNull!))
-              TextButton.icon(
-                onPressed: () async {
-                  final pipe = pipelineAsync.valueOrNull!;
-                  final db = ref.read(supabaseClientProvider);
-                  final isWorkDone = await WorkProgressService.isWorkProgressComplete(
-                    supabase: db,
-                    pipeline: pipe,
-                  );
-                  if (!isWorkDone) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Cannot mark deal complete: Both work progress and deal progress must reach 100%.'),
-                          backgroundColor: Color(0xFFD97706),
-                        ),
-                      );
-                    }
-                    return;
-                  }
-                  await db.from('sales_pipelines').update({
-                    'current_step': 'completed',
-                    'status': 'completed',
-                  }).eq('id', pipelineId);
-                  ref.invalidate(pipelineDetailProvider(pipelineId));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Deal marked 100% Complete!'), backgroundColor: AppColors.success),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.check_circle, color: Colors.white),
-                label: const Text('Mark 100% Complete', style: TextStyle(color: Colors.white)),
-              ),
           ],
-          if (profile?.primaryRole == UserRole.admin || profile?.roles.contains(UserRole.admin) == true)
+          if (profile?.primaryRole == UserRole.admin ||
+              profile?.roles.contains(UserRole.admin) == true)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.white),
               tooltip: 'Delete Deal (Admin Only)',
-              onPressed: () => _confirmDeleteDeal(context, ref, pipelineAsync.valueOrNull),
+              onPressed: () =>
+                  _confirmDeleteDeal(context, ref, pipelineAsync.valueOrNull),
             ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -129,7 +103,8 @@ class PipelineDetailScreen extends ConsumerWidget {
                       SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       ),
                       SizedBox(width: 10),
                       Text('Refreshing deal...'),
@@ -141,7 +116,9 @@ class PipelineDetailScreen extends ConsumerWidget {
               try {
                 ref.invalidate(pipelineDetailProvider(pipelineId));
                 await ref.read(pipelineDetailProvider(pipelineId).future);
-                ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
+                ref
+                    .read(pipelinesNotifierProvider.notifier)
+                    .load(refresh: true);
                 ref.invalidate(pendingQuotationsProvider);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -156,7 +133,9 @@ class PipelineDetailScreen extends ConsumerWidget {
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Refresh failed: $e'), backgroundColor: AppColors.error),
+                    SnackBar(
+                        content: Text('Refresh failed: $e'),
+                        backgroundColor: AppColors.error),
                   );
                 }
               }
@@ -176,12 +155,14 @@ class PipelineDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: AppColors.textSecondary),
+              const Icon(Icons.error_outline,
+                  size: 48, color: AppColors.textSecondary),
               const SizedBox(height: 12),
               Text('Error: $e'),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: () => ref.invalidate(pipelineDetailProvider(pipelineId)),
+                onPressed: () =>
+                    ref.invalidate(pipelineDetailProvider(pipelineId)),
                 child: const Text('Retry'),
               ),
             ],
@@ -191,12 +172,14 @@ class PipelineDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _confirmDeleteDeal(BuildContext context, WidgetRef ref, SalesPipeline? pipeline) {
+  void _confirmDeleteDeal(
+      BuildContext context, WidgetRef ref, SalesPipeline? pipeline) {
     final dealName = pipeline?.customer?.companyName ?? 'this deal';
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Deal?', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Delete Deal?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
           'Are you sure you want to permanently delete deal "$dealName"?\n\nThis will remove all associated quotations, orders, and records. This action cannot be undone.',
           style: const TextStyle(fontFamily: 'Inter'),
@@ -207,67 +190,141 @@ class PipelineDetailScreen extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444)),
             onPressed: () async {
               Navigator.pop(ctx);
               try {
                 final db = ref.read(supabaseClientProvider);
                 try {
-                  await db.rpc('delete_sales_pipeline', params: {'p_pipeline_id': pipelineId});
+                  await db.rpc('delete_sales_pipeline',
+                      params: {'p_pipeline_id': pipelineId});
                 } catch (_) {}
 
                 try {
                   // 1. Get associated AMC contract IDs if any
                   List amcIds = [];
                   try {
-                    final amcRows = await db.from('amc_contracts').select('id').eq('pipeline_id', pipelineId);
+                    final amcRows = await db
+                        .from('amc_contracts')
+                        .select('id')
+                        .eq('pipeline_id', pipelineId);
                     amcIds = (amcRows as List).map((r) => r['id']).toList();
                   } catch (_) {}
 
                   // 2. Delete step_audit_log entries linked to pipeline or AMC contracts
                   try {
-                    await db.from('step_audit_log').delete().eq('pipeline_id', pipelineId);
+                    await db
+                        .from('step_audit_log')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
                   } catch (_) {}
 
                   if (amcIds.isNotEmpty) {
                     for (final aid in amcIds) {
                       try {
-                        await db.from('step_audit_log').delete().eq('amc_contract_id', aid);
+                        await db
+                            .from('step_audit_log')
+                            .delete()
+                            .eq('amc_contract_id', aid);
                       } catch (_) {}
                       try {
-                        await db.from('amc_service_visits').delete().eq('amc_contract_id', aid);
+                        await db
+                            .from('amc_service_visits')
+                            .delete()
+                            .eq('amc_contract_id', aid);
                       } catch (_) {}
                     }
                     try {
-                      await db.from('amc_contracts').delete().eq('pipeline_id', pipelineId);
+                      await db
+                          .from('amc_contracts')
+                          .delete()
+                          .eq('pipeline_id', pipelineId);
                     } catch (_) {}
                   }
 
                   // 3. Delete deal_audit_log
                   try {
-                    await db.from('deal_audit_log').delete().eq('pipeline_id', pipelineId);
+                    await db
+                        .from('deal_audit_log')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
                   } catch (_) {}
 
                   // 4. Delete step documents
-                  try { await db.from('stage_signatures').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('proforma_invoices').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('tax_invoices').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('purchase_orders').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('factory_orders').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('boqs').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('sales_orders').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('quotations').delete().eq('pipeline_id', pipelineId); } catch (_) {}
-                  try { await db.from('warranty_cards').delete().eq('pipeline_id', pipelineId); } catch (_) {}
+                  try {
+                    await db
+                        .from('stage_signatures')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('proforma_invoices')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('tax_invoices')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('purchase_orders')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('factory_orders')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('boqs')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('sales_orders')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('quotations')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
+                  try {
+                    await db
+                        .from('warranty_cards')
+                        .delete()
+                        .eq('pipeline_id', pipelineId);
+                  } catch (_) {}
 
                   // 5. Delete sales_pipelines
-                  await db.from('sales_pipelines').delete().eq('id', pipelineId);
+                  await db
+                      .from('sales_pipelines')
+                      .delete()
+                      .eq('id', pipelineId);
                 } catch (e) {
-                  final check = await db.from('sales_pipelines').select('id').eq('id', pipelineId).maybeSingle();
+                  final check = await db
+                      .from('sales_pipelines')
+                      .select('id')
+                      .eq('id', pipelineId)
+                      .maybeSingle();
                   if (check != null) {
                     rethrow;
                   }
                 }
-                ref.read(pipelinesNotifierProvider.notifier).load(refresh: true);
+                ref
+                    .read(pipelinesNotifierProvider.notifier)
+                    .load(refresh: true);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -284,12 +341,15 @@ class PipelineDetailScreen extends ConsumerWidget {
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting deal: $e'), backgroundColor: const Color(0xFFEF4444)),
+                    SnackBar(
+                        content: Text('Error deleting deal: $e'),
+                        backgroundColor: const Color(0xFFEF4444)),
                   );
                 }
               }
             },
-            child: const Text('Delete Deal', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete Deal',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -306,7 +366,8 @@ bool _checkAllStepsCompleted(SalesPipeline pipeline) {
       if (key == 'sales_order' && pipeline.salesOrder == null) return false;
       if (key == 'boq' && pipeline.boq == null) return false;
       if (key == 'factory_order' && pipeline.factoryOrder == null) return false;
-      if (key == 'purchase_order' && pipeline.purchaseOrder == null) return false;
+      if (key == 'purchase_order' && pipeline.purchaseOrder == null)
+        return false;
     }
     return true;
   }
@@ -317,7 +378,8 @@ bool _checkAllStepsCompleted(SalesPipeline pipeline) {
       pipeline.purchaseOrder != null;
 }
 
-final workProgressCompleteProvider = FutureProvider.family<bool, String>((ref, pipelineId) async {
+final workProgressCompleteProvider =
+    FutureProvider.family<bool, String>((ref, pipelineId) async {
   final pipeline = await ref.watch(pipelineDetailProvider(pipelineId).future);
   final supabase = ref.read(supabaseClientProvider);
   return WorkProgressService.isWorkProgressComplete(
@@ -333,10 +395,12 @@ class _PipelineDetailContent extends ConsumerStatefulWidget {
   const _PipelineDetailContent({required this.pipeline, this.userRole});
 
   @override
-  ConsumerState<_PipelineDetailContent> createState() => _PipelineDetailContentState();
+  ConsumerState<_PipelineDetailContent> createState() =>
+      _PipelineDetailContentState();
 }
 
-class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> {
+class _PipelineDetailContentState
+    extends ConsumerState<_PipelineDetailContent> {
   late final ScrollController _leftScrollController;
   late final ScrollController _middleScrollController;
   late final ScrollController _rightScrollController;
@@ -376,7 +440,9 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
     final userRole = widget.userRole;
     final profile = ref.watch(currentProfileProvider);
     final allDealStepsFilled = _checkAllStepsCompleted(pipeline);
-    final asyncWorkDone = ref.watch(workProgressCompleteProvider(pipeline.id)).valueOrNull ?? false;
+    final asyncWorkDone =
+        ref.watch(workProgressCompleteProvider(pipeline.id)).valueOrNull ??
+            false;
     final isWorkProgress100 = _liveWorkProgressComplete ?? asyncWorkDone;
     final isDealCompleted = allDealStepsFilled && isWorkProgress100;
 
@@ -392,7 +458,8 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
           ref.invalidate(pipelineDetailProvider(pipeline.id));
         } catch (_) {}
       });
-    } else if (!isDealCompleted && pipeline.status == PipelineStatus.completed) {
+    } else if (!isDealCompleted &&
+        pipeline.status == PipelineStatus.completed) {
       // Revert premature completed status in DB if work progress is not 100%
       Future.microtask(() async {
         try {
@@ -415,7 +482,8 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                 profile?.roles.contains(UserRole.salesHead) == true);
 
         final banners = _buildBanners(pipeline, profile, isDealCompleted);
-        final dealProgressTracker = _buildDealProgressTracker(context, ref, pipeline, profile, isDealCompleted);
+        final dealProgressTracker = _buildDealProgressTracker(
+            context, ref, pipeline, profile, isDealCompleted);
         final stepCards = _buildStepCards(pipeline, userRole);
         final rightCards = _buildRightCards(pipeline);
 
@@ -438,7 +506,8 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _HeaderCard(pipeline: pipeline, isCompleted: isDealCompleted),
+                      _HeaderCard(
+                          pipeline: pipeline, isCompleted: isDealCompleted),
                       const SizedBox(height: 16),
                       ...banners,
                       WorkProgressBox(
@@ -485,15 +554,19 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                             child: SingleChildScrollView(
                               controller: _leftScrollController,
                               physics: const ClampingScrollPhysics(),
-                              padding: const EdgeInsets.only(right: 8, bottom: 24),
+                              padding:
+                                  const EdgeInsets.only(right: 8, bottom: 24),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  _HeaderCard(pipeline: pipeline, isCompleted: isDealCompleted),
+                                  _HeaderCard(
+                                      pipeline: pipeline,
+                                      isCompleted: isDealCompleted),
                                   const SizedBox(height: 16),
                                   WorkProgressBox(
                                     pipeline: pipeline,
-                                    onProgressEvaluated: _onWorkProgressEvaluated,
+                                    onProgressEvaluated:
+                                        _onWorkProgressEvaluated,
                                   ),
                                 ],
                               ),
@@ -510,11 +583,13 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                             child: SingleChildScrollView(
                               controller: _middleScrollController,
                               physics: const ClampingScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               child: Padding(
                                 padding: const EdgeInsets.only(bottom: 24),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     dealProgressTracker,
                                     const SizedBox(height: 16),
@@ -536,9 +611,11 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                               child: SingleChildScrollView(
                                 controller: _rightScrollController,
                                 physics: const ClampingScrollPhysics(),
-                                padding: const EdgeInsets.only(left: 8, bottom: 24),
+                                padding:
+                                    const EdgeInsets.only(left: 8, bottom: 24),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: rightCards,
                                 ),
                               ),
@@ -557,12 +634,14 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
     );
   }
 
-  List<Widget> _buildBanners(SalesPipeline pipeline, Profile? profile, bool isDealCompleted) {
+  List<Widget> _buildBanners(
+      SalesPipeline pipeline, Profile? profile, bool isDealCompleted) {
     return [
       if (pipeline.quotation?.status == QuotationStatus.pendingApproval) ...[
         _ApprovalAlertBanner(
           pipeline: pipeline,
-          canApprove: profile?.roles.any((r) => r.canApproveQuotations) ?? false,
+          canApprove:
+              profile?.roles.any((r) => r.canApproveQuotations) ?? false,
         ),
         const SizedBox(height: 16),
       ] else if (pipeline.quotation?.status == QuotationStatus.rejected) ...[
@@ -709,7 +788,8 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
           StepTrackerWidget(
             productId: pipeline.productId,
             currentStep: () {
-              final roles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
+              final roles = profile?.roles ??
+                  (profile != null ? [profile.primaryRole] : <UserRole>[]);
               final isBoqOnly = roles.contains(UserRole.boq) &&
                   !roles.contains(UserRole.admin) &&
                   !roles.contains(UserRole.manager) &&
@@ -717,35 +797,64 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                   !roles.contains(UserRole.factory) &&
                   !roles.contains(UserRole.purchase);
               if (isBoqOnly) {
-                return pipeline.boq != null ? PipelineStep.factoryOrder : PipelineStep.boq;
+                return pipeline.boq != null
+                    ? PipelineStep.factoryOrder
+                    : PipelineStep.boq;
               }
-              return isDealCompleted ? PipelineStep.completed : pipeline.currentStep;
+              return isDealCompleted
+                  ? PipelineStep.completed
+                  : pipeline.currentStep;
             }(),
             stepsConfig: pipeline.stepsConfig,
             pdfUrls: {
-              if (profile?.primaryRole == UserRole.admin || profile?.primaryRole == UserRole.sales || profile?.primaryRole == UserRole.salesHead) ...{
-                PipelineStep.quotation: (pipeline.quotation != null && ((profile?.roles.any((r) => r.canApproveQuotations) ?? false) || pipeline.quotation?.status == QuotationStatus.confirmed)) ? 'available' : null,
-                PipelineStep.salesOrder: pipeline.salesOrder != null ? 'available' : null,
+              if (profile?.primaryRole == UserRole.admin ||
+                  profile?.primaryRole == UserRole.sales ||
+                  profile?.primaryRole == UserRole.salesHead) ...{
+                PipelineStep.quotation: (pipeline.quotation != null &&
+                        ((profile?.roles.any((r) => r.canApproveQuotations) ??
+                                false) ||
+                            pipeline.quotation?.status ==
+                                QuotationStatus.confirmed))
+                    ? 'available'
+                    : null,
+                PipelineStep.salesOrder:
+                    pipeline.salesOrder != null ? 'available' : null,
                 PipelineStep.boq: pipeline.boq != null ? 'available' : null,
-                PipelineStep.factoryOrder: pipeline.factoryOrder != null ? 'available' : null,
-                PipelineStep.purchaseOrder: pipeline.purchaseOrder != null ? 'available' : null,
+                PipelineStep.factoryOrder:
+                    pipeline.factoryOrder != null ? 'available' : null,
+                PipelineStep.purchaseOrder:
+                    pipeline.purchaseOrder != null ? 'available' : null,
               } else ...{
-                if ((profile?.primaryRole == UserRole.boq || (profile?.roles.contains(UserRole.boq) ?? false) || (profile?.roles.contains(UserRole.serviceHead) ?? false)) && pipeline.boq != null)
+                if ((profile?.primaryRole == UserRole.boq ||
+                        (profile?.roles.contains(UserRole.boq) ?? false) ||
+                        (profile?.roles.contains(UserRole.serviceHead) ??
+                            false)) &&
+                    pipeline.boq != null)
                   PipelineStep.boq: 'available',
-                if ((profile?.primaryRole == UserRole.boq || (profile?.roles.contains(UserRole.boq) ?? false) || (profile?.roles.contains(UserRole.serviceHead) ?? false)) && pipeline.salesOrder != null)
+                if ((profile?.primaryRole == UserRole.boq ||
+                        (profile?.roles.contains(UserRole.boq) ?? false) ||
+                        (profile?.roles.contains(UserRole.serviceHead) ??
+                            false)) &&
+                    pipeline.salesOrder != null)
                   PipelineStep.salesOrder: 'available',
-                if (profile?.primaryRole == UserRole.factory && pipeline.factoryOrder != null)
+                if (profile?.primaryRole == UserRole.factory &&
+                    pipeline.factoryOrder != null)
                   PipelineStep.factoryOrder: 'available',
-                if (profile?.primaryRole == UserRole.purchase && pipeline.purchaseOrder != null)
+                if (profile?.primaryRole == UserRole.purchase &&
+                    pipeline.purchaseOrder != null)
                   PipelineStep.purchaseOrder: 'available',
               }
             },
             onStepTap: (step) async {
-              final canApproveQuotes = profile?.roles.any((r) => r.canApproveQuotations) ?? false;
-              if (step == PipelineStep.quotation && !canApproveQuotes && pipeline.quotation?.status != QuotationStatus.confirmed) {
+              final canApproveQuotes =
+                  profile?.roles.any((r) => r.canApproveQuotations) ?? false;
+              if (step == PipelineStep.quotation &&
+                  !canApproveQuotes &&
+                  pipeline.quotation?.status != QuotationStatus.confirmed) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Quotation PDF is locked until approved by Sales Head / Admin.'),
+                    content: Text(
+                        'Quotation PDF is locked until approved by Sales Head / Admin.'),
                     backgroundColor: AppColors.warning,
                   ),
                 );
@@ -760,8 +869,10 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                     quotation: pipeline.quotation!,
                     customer: pipeline.customer,
                     product: pipeline.product,
-                    leadOrDealTitle: pipeline.product?.name ?? pipeline.customer?.companyName,
-                    salesmanName: pipeline.createdByProfile?.fullName ?? pipeline.quotation?.salesman,
+                    leadOrDealTitle: pipeline.product?.name ??
+                        pipeline.customer?.companyName,
+                    salesmanName: pipeline.createdByProfile?.fullName ??
+                        pipeline.quotation?.salesman,
                   );
                 }
                 return;
@@ -788,83 +899,24 @@ class _PipelineDetailContentState extends ConsumerState<_PipelineDetailContent> 
                   break;
               }
 
-              final userRoles = profile?.roles ?? (profile != null ? [profile.primaryRole] : <UserRole>[]);
-              final isAllowed = (userRoles.contains(UserRole.admin) || userRoles.contains(UserRole.sales) || userRoles.contains(UserRole.salesHead) || userRoles.contains(UserRole.manager) || userRoles.contains(UserRole.serviceHead)) ||
-                  (userRoles.contains(UserRole.factory) && step == PipelineStep.factoryOrder) ||
-                  (userRoles.contains(UserRole.purchase) && step == PipelineStep.purchaseOrder) ||
-                  ((userRoles.contains(UserRole.boq) || userRoles.contains(UserRole.serviceHead)) && (step == PipelineStep.boq || step == PipelineStep.salesOrder));
+              final userRoles = profile?.roles ??
+                  (profile != null ? [profile.primaryRole] : <UserRole>[]);
+              final isAllowed = (userRoles.contains(UserRole.admin) ||
+                      userRoles.contains(UserRole.sales) ||
+                      userRoles.contains(UserRole.salesHead) ||
+                      userRoles.contains(UserRole.manager) ||
+                      userRoles.contains(UserRole.serviceHead)) ||
+                  (userRoles.contains(UserRole.factory) &&
+                      step == PipelineStep.factoryOrder) ||
+                  (userRoles.contains(UserRole.purchase) &&
+                      step == PipelineStep.purchaseOrder) ||
+                  ((userRoles.contains(UserRole.boq) ||
+                          userRoles.contains(UserRole.serviceHead)) &&
+                      (step == PipelineStep.boq ||
+                          step == PipelineStep.salesOrder));
 
               if (isAvailable && isAllowed) {
-                String? variant;
-                if (step == PipelineStep.salesOrder) {
-                  final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
-                  final hasCommercial = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead);
-                  final hasTechnical = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead);
-                  final hasProduction = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory);
-
-                  final availableCount = (hasCommercial ? 1 : 0) + (hasTechnical ? 1 : 0) + (hasProduction ? 1 : 0);
-                  if (availableCount > 1) {
-                    variant = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Select PDF Variant'),
-                        content: const Text(
-                          'Choose the variant of Sales Order you want to view:',
-                          style: TextStyle(fontFamily: 'Inter'),
-                        ),
-                        actions: [
-                          if (hasCommercial)
-                            TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
-                          if (hasTechnical)
-                            TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
-                          if (hasProduction)
-                            TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
-                        ],
-                      ),
-                    );
-                    if (variant == null) return;
-                  } else if (hasTechnical) {
-                    variant = 'technical';
-                  } else if (hasProduction) {
-                    variant = 'production';
-                  } else {
-                    variant = 'commercial';
-                  }
-                }
-
-                if (!context.mounted) return;
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (ctx) => const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  ),
-                );
-                try {
-                  final bytes = await _generatePdfOnTheFly(ref, pipeline, step, variant: variant);
-                  if (context.mounted) Navigator.pop(context);
-                  if (context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PdfPreviewScreen(
-                          pdfBytes: bytes,
-                          fileName: _getStepPdfFileName(pipeline, step, variant: variant),
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) Navigator.pop(context);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to open PDF: $e'),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                  }
-                }
+                await _openStepPdf(context, ref, pipeline, step);
               }
             },
           ),
@@ -976,11 +1028,15 @@ class _HeaderCard extends StatelessWidget {
               ),
               Builder(
                 builder: (context) {
-                  final isPendingApproval = pipeline.quotation?.status == QuotationStatus.pendingApproval;
+                  final isPendingApproval = pipeline.quotation?.status ==
+                      QuotationStatus.pendingApproval;
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isPendingApproval ? const Color(0xFFD97706) : Colors.white.withValues(alpha: 0.15),
+                      color: isPendingApproval
+                          ? const Color(0xFFD97706)
+                          : Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -1100,30 +1156,43 @@ class _StepActionCard extends ConsumerWidget {
         hasData = false;
     }
 
-    final isQuotationApproved = pipeline.quotation?.status == QuotationStatus.confirmed;
-    final isQuotationPending = pipeline.quotation?.status == QuotationStatus.pendingApproval;
-    final isQuotationRejected = pipeline.quotation?.status == QuotationStatus.rejected;
+    final isQuotationApproved =
+        pipeline.quotation?.status == QuotationStatus.confirmed;
+    final isQuotationPending =
+        pipeline.quotation?.status == QuotationStatus.pendingApproval;
+    final isQuotationRejected =
+        pipeline.quotation?.status == QuotationStatus.rejected;
 
     // Subsequent steps are strictly locked if quotation is not confirmed
-    final isStepBlockedByApproval = step.stepIndex > PipelineStep.quotation.stepIndex && !isQuotationApproved;
-    final isLocked = (!hasData && (stepIndex > currentStepIndex)) || isStepBlockedByApproval;
+    final isStepBlockedByApproval =
+        step.stepIndex > PipelineStep.quotation.stepIndex &&
+            !isQuotationApproved;
+    final isLocked =
+        (!hasData && (stepIndex > currentStepIndex)) || isStepBlockedByApproval;
 
     // A step is only visually "completed" if it actually has data filled in
     final currentRoles = ref.watch(currentProfileProvider)?.roles ?? [];
     final isAdmin = currentRoles.contains(UserRole.admin);
     final isSalesHead = currentRoles.contains(UserRole.salesHead);
     final is100PercentComplete = pipeline.status == PipelineStatus.completed;
-    final canApproveQuotations = currentRoles.any((r) => r.canApproveQuotations);
+    final canApproveQuotations =
+        currentRoles.any((r) => r.canApproveQuotations);
 
-    final displayCompleted = hasData &&
-        (step != PipelineStep.quotation || !isQuotationPending);
+    final isSkippable = _stepKey != null;
+    final isSkipped = isSkippable && pipeline.isStepSkipped(_stepKey!);
+
+    final displayCompleted =
+        hasData && (step != PipelineStep.quotation || !isQuotationPending);
     final displayActive = !hasData && !isLocked && (isActive || isCompleted);
 
     // Show action section when: the step is the current active step OR step has data (completed)
     // Or when the step is earlier than current (so Sales Head/Admin can fill missing steps)
-    final showActionSection = !isLocked && (isActive || isCompleted || hasData);
-    
-    bool isButtonEnabled = !isLocked;
+    // Or if the step is skipped so the user can unskip
+    final showActionSection =
+        (!isLocked && (isActive || isCompleted || hasData)) ||
+            (isSkipped && canApproveQuotations || isSkipped);
+
+    bool isButtonEnabled = !isLocked && !isSkipped;
     String buttonText = hasData ? 'View / Edit' : 'Fill In';
 
     if (step == PipelineStep.quotation) {
@@ -1154,8 +1223,11 @@ class _StepActionCard extends ConsumerWidget {
 
     // PDF visibility: role-based
     bool isPdfVisible = false;
-    final roles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
-    if (roles.contains(UserRole.admin) || roles.contains(UserRole.manager) || roles.contains(UserRole.salesHead)) {
+    final roles =
+        ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
+    if (roles.contains(UserRole.admin) ||
+        roles.contains(UserRole.manager) ||
+        roles.contains(UserRole.salesHead)) {
       isPdfVisible = true;
     } else {
       switch (step) {
@@ -1164,14 +1236,19 @@ class _StepActionCard extends ConsumerWidget {
           if (roles.contains(UserRole.sales) && !canApproveQuotations) {
             isPdfVisible = isQuotationApproved;
           } else {
-            isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead);
+            isPdfVisible = roles.contains(UserRole.sales) ||
+                roles.contains(UserRole.salesHead);
           }
           break;
         case PipelineStep.salesOrder:
-          isPdfVisible = roles.contains(UserRole.sales) || roles.contains(UserRole.salesHead) || roles.contains(UserRole.serviceHead) || roles.contains(UserRole.boq);
+          isPdfVisible = roles.contains(UserRole.sales) ||
+              roles.contains(UserRole.salesHead) ||
+              roles.contains(UserRole.serviceHead) ||
+              roles.contains(UserRole.boq);
           break;
         case PipelineStep.boq:
-          isPdfVisible = roles.contains(UserRole.boq) || roles.contains(UserRole.serviceHead);
+          isPdfVisible = roles.contains(UserRole.boq) ||
+              roles.contains(UserRole.serviceHead);
           break;
         case PipelineStep.factoryOrder:
           isPdfVisible = roles.contains(UserRole.factory);
@@ -1189,7 +1266,12 @@ class _StepActionCard extends ConsumerWidget {
     IconData statusIcon;
     Color iconColor;
 
-    if (step == PipelineStep.quotation && isQuotationPending) {
+    if (isSkipped) {
+      borderColor = const Color(0xFFCBD5E1);
+      bgColor = const Color(0xFFF1F5F9);
+      statusIcon = Icons.redo_rounded;
+      iconColor = const Color(0xFF64748B);
+    } else if (step == PipelineStep.quotation && isQuotationPending) {
       borderColor = const Color(0xFFF59E0B);
       bgColor = const Color(0xFFFFFDF5);
       statusIcon = Icons.hourglass_top_rounded;
@@ -1242,16 +1324,62 @@ class _StepActionCard extends ConsumerWidget {
                             fontFamily: 'Inter',
                             fontSize: 14.5,
                             fontWeight: FontWeight.w600,
-                            color: isLocked
+                            color: (isLocked || isSkipped)
                                 ? AppColors.textDisabled
                                 : AppColors.textPrimary,
                           ),
                         ),
                       ),
-                      if (step == PipelineStep.quotation && isQuotationPending) ...[
+                      if (isSkipped) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFF94A3B8)),
+                          ),
+                          child: const Text(
+                            'Skipped',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                      ] else if (step == PipelineStep.boq &&
+                          (pipeline.allBoqs.isNotEmpty || pipeline.boq != null)) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFF86EFAC)),
+                          ),
+                          child: Text(
+                            pipeline.allBoqs.length > 1
+                                ? '${pipeline.allBoqs.length} BOQs'
+                                : '1 BOQ',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF166534),
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (step == PipelineStep.quotation &&
+                          isQuotationPending) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF3C7),
                             borderRadius: BorderRadius.circular(4),
@@ -1267,10 +1395,12 @@ class _StepActionCard extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      ] else if (step == PipelineStep.quotation && isQuotationRejected) ...[
+                      ] else if (step == PipelineStep.quotation &&
+                          isQuotationRejected) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEE2E2),
                             borderRadius: BorderRadius.circular(4),
@@ -1316,19 +1446,24 @@ class _StepActionCard extends ConsumerWidget {
                       onTap: () async {
                         if (step == PipelineStep.quotation) {
                           if (pipeline.quotation != null) {
-                            await QuotationPdfLauncher.showFormatSelectionAndLaunch(
+                            await QuotationPdfLauncher
+                                .showFormatSelectionAndLaunch(
                               context: context,
                               ref: ref,
                               quotation: pipeline.quotation!,
                               customer: pipeline.customer,
                               product: pipeline.product,
-                              leadOrDealTitle: pipeline.product?.name ?? pipeline.customer?.companyName,
-                              salesmanName: pipeline.createdByProfile?.fullName ?? pipeline.quotation?.salesman,
+                              leadOrDealTitle: pipeline.product?.name ??
+                                  pipeline.customer?.companyName,
+                              salesmanName:
+                                  pipeline.createdByProfile?.fullName ??
+                                      pipeline.quotation?.salesman,
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('PDF data not available for this step.'),
+                                content: Text(
+                                    'PDF data not available for this step.'),
                                 backgroundColor: AppColors.error,
                               ),
                             );
@@ -1336,133 +1471,7 @@ class _StepActionCard extends ConsumerWidget {
                           return;
                         }
 
-                        bool isAvailable = false;
-                        switch (step) {
-                          case PipelineStep.quotation:
-                            isAvailable = pipeline.quotation != null;
-                            break;
-                          case PipelineStep.salesOrder:
-                            isAvailable = pipeline.salesOrder != null;
-                            break;
-                          case PipelineStep.boq:
-                            isAvailable = pipeline.boq != null;
-                            break;
-                          case PipelineStep.factoryOrder:
-                            isAvailable = pipeline.factoryOrder != null;
-                            break;
-                          case PipelineStep.purchaseOrder:
-                            isAvailable = pipeline.purchaseOrder != null;
-                            break;
-                          default:
-                            break;
-                        }
-                        if (!isAvailable) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('PDF data not available for this step.'),
-                              backgroundColor: AppColors.error,
-                            ),
-                          );
-                          return;
-                        }
-
-                        String? variant;
-                        if (step == PipelineStep.salesOrder) {
-                          final currentRoles = ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
-                          final hasCommercial = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.sales) || currentRoles.contains(UserRole.salesHead);
-                          final hasTechnical = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.boq) || currentRoles.contains(UserRole.serviceHead);
-                          final hasProduction = currentRoles.contains(UserRole.admin) || currentRoles.contains(UserRole.manager) || currentRoles.contains(UserRole.factory);
-
-                          final availableCount = (hasCommercial ? 1 : 0) + (hasTechnical ? 1 : 0) + (hasProduction ? 1 : 0);
-                          if (availableCount > 1) {
-                            variant = await showDialog<String>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Select PDF Variant'),
-                                content: const Text(
-                                  'Choose the variant of Sales Order you want to view:',
-                                  style: TextStyle(fontFamily: 'Inter'),
-                                ),
-                                actions: [
-                                  if (hasCommercial)
-                                    TextButton(onPressed: () => Navigator.pop(ctx, 'commercial'), child: const Text('Commercial (Main)')),
-                                  if (hasTechnical)
-                                    TextButton(onPressed: () => Navigator.pop(ctx, 'technical'), child: const Text('Technical (BOQ)')),
-                                  if (hasProduction)
-                                    TextButton(onPressed: () => Navigator.pop(ctx, 'production'), child: const Text('Production (Factory)')),
-                                ],
-                              ),
-                            );
-                            if (variant == null) return;
-                          } else if (hasTechnical) {
-                            variant = 'technical';
-                          } else if (hasProduction) {
-                            variant = 'production';
-                          } else {
-                            variant = 'commercial';
-                          }
-                        } else if (step == PipelineStep.boq) {
-                          variant = await showDialog<String>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Select BOQ Scope'),
-                              content: const Text(
-                                'Choose the version of BOQ PDF you want to view:',
-                                style: TextStyle(fontFamily: 'Inter'),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, 'all'),
-                                  child: const Text('Main BOQ (All)'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, 'company'),
-                                  child: const Text('Company Scope'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, 'customer'),
-                                  child: const Text('Customer Scope'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (variant == null) return;
-                        }
-
-                        if (!context.mounted) return;
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (ctx) => const Center(
-                            child: CircularProgressIndicator(color: AppColors.primary),
-                          ),
-                        );
-                        try {
-                          final bytes = await _generatePdfOnTheFly(ref, pipeline, step, variant: variant);
-                          if (context.mounted) Navigator.pop(context);
-                          if (context.mounted) {
-                            final fileName = _getStepPdfFileName(pipeline, step, variant: variant);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PdfPreviewScreen(
-                                  pdfBytes: bytes,
-                                  fileName: fileName,
-                                ),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) Navigator.pop(context);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to open PDF: $e'),
-                                backgroundColor: AppColors.error,
-                              ),
-                            );
-                          }
-                        }
+                        await _openStepPdf(context, ref, pipeline, step);
                       },
                       child: Row(
                         children: [
@@ -1486,7 +1495,9 @@ class _StepActionCard extends ConsumerWidget {
                     ),
                   ],
                   const Spacer(),
-                  if (step == PipelineStep.quotation && isQuotationPending && canApproveQuotations) ...[
+                  if (step == PipelineStep.quotation &&
+                      isQuotationPending &&
+                      canApproveQuotations) ...[
                     OutlinedButton(
                       onPressed: () => _navigate(context),
                       style: OutlinedButton.styleFrom(
@@ -1506,7 +1517,8 @@ class _StepActionCard extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton.icon(
-                      onPressed: () => _showReviewAndApproveModal(context, ref, pipeline),
+                      onPressed: () =>
+                          _showReviewAndApproveModal(context, ref, pipeline),
                       icon: const Icon(Icons.rate_review_outlined, size: 14),
                       label: const Text(
                         'Review & Approve',
@@ -1527,11 +1539,13 @@ class _StepActionCard extends ConsumerWidget {
                         minimumSize: const Size(0, 36),
                       ),
                     ),
-                  ] else if (canAct) ...[
+                  ] else if (canAct && !isSkipped) ...[
                     ElevatedButton(
-                      onPressed: isButtonEnabled ? () => _navigate(context) : null,
+                      onPressed:
+                          isButtonEnabled ? () => _navigate(context) : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: (step == PipelineStep.quotation && isQuotationRejected)
+                        backgroundColor: (step == PipelineStep.quotation &&
+                                isQuotationRejected)
                             ? const Color(0xFFEA580C)
                             : null,
                         padding: const EdgeInsets.symmetric(
@@ -1558,6 +1572,19 @@ class _StepActionCard extends ConsumerWidget {
     );
   }
 
+  String? get _stepKey {
+    switch (step) {
+      case PipelineStep.boq:
+        return 'boq';
+      case PipelineStep.factoryOrder:
+        return 'factory_order';
+      case PipelineStep.purchaseOrder:
+        return 'purchase_order';
+      default:
+        return null;
+    }
+  }
+
   String _getStepTitle() {
     switch (step) {
       case PipelineStep.quotation:
@@ -1578,7 +1605,8 @@ class _StepActionCard extends ConsumerWidget {
   bool _canUserAct(WidgetRef ref) {
     final roles = ref.read(currentProfileProvider)?.roles ?? [];
     if (roles.isEmpty) return false;
-    if (pipeline.status == PipelineStatus.suspended && pipeline.quotation?.status != QuotationStatus.rejected) return false;
+    if (pipeline.status == PipelineStatus.suspended &&
+        pipeline.quotation?.status != QuotationStatus.rejected) return false;
 
     // Manager role has strictly read-only permission (cannot act on steps)
     if (roles.contains(UserRole.manager) && !roles.contains(UserRole.admin)) {
@@ -1586,7 +1614,7 @@ class _StepActionCard extends ConsumerWidget {
     }
 
     bool hasRole(UserRole r) => roles.contains(r);
-    
+
     if (hasRole(UserRole.admin) || hasRole(UserRole.salesHead)) return true;
 
     switch (step) {
@@ -1617,7 +1645,11 @@ class _StepActionCard extends ConsumerWidget {
         );
         break;
       case PipelineStep.boq:
-        context.push(AppRoutes.boqForm.replaceAll(':id', pipeline.id));
+        if (pipeline.allBoqs.isNotEmpty || pipeline.boq != null) {
+          context.push(AppRoutes.boqList.replaceAll(':id', pipeline.id));
+        } else {
+          context.push(AppRoutes.boqForm.replaceAll(':id', pipeline.id));
+        }
         break;
       case PipelineStep.factoryOrder:
         context.push(
@@ -1635,7 +1667,252 @@ class _StepActionCard extends ConsumerWidget {
   }
 }
 
-Future<Map<String, dynamic>> _fetchTemplateConfig(WidgetRef ref, String docType) async {
+Future<void> _openStepPdf(
+  BuildContext context,
+  WidgetRef ref,
+  SalesPipeline pipeline,
+  PipelineStep step,
+) async {
+  String? variant;
+  Boq? targetBoq;
+  String? customFileName;
+
+  if (step == PipelineStep.quotation) {
+    if (pipeline.quotation != null) {
+      await QuotationPdfLauncher.showFormatSelectionAndLaunch(
+        context: context,
+        ref: ref,
+        quotation: pipeline.quotation!,
+        customer: pipeline.customer,
+        product: pipeline.product,
+        leadOrDealTitle:
+            pipeline.product?.name ?? pipeline.customer?.companyName,
+        salesmanName:
+            pipeline.createdByProfile?.fullName ?? pipeline.quotation?.salesman,
+      );
+    }
+    return;
+  }
+
+  bool isAvailable = false;
+  switch (step) {
+    case PipelineStep.salesOrder:
+      isAvailable = pipeline.salesOrder != null;
+      break;
+    case PipelineStep.boq:
+      isAvailable = pipeline.boq != null || pipeline.allBoqs.isNotEmpty;
+      break;
+    case PipelineStep.factoryOrder:
+      isAvailable = pipeline.factoryOrder != null;
+      break;
+    case PipelineStep.purchaseOrder:
+      isAvailable = pipeline.purchaseOrder != null;
+      break;
+    default:
+      break;
+  }
+
+  if (!isAvailable) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('PDF data not available for this step.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
+    return;
+  }
+
+  if (step == PipelineStep.salesOrder) {
+    final currentRoles =
+        ref.read(currentProfileProvider)?.roles ?? [UserRole.customer];
+    final hasCommercial = currentRoles.contains(UserRole.admin) ||
+        currentRoles.contains(UserRole.manager) ||
+        currentRoles.contains(UserRole.sales) ||
+        currentRoles.contains(UserRole.salesHead);
+    final hasTechnical = currentRoles.contains(UserRole.admin) ||
+        currentRoles.contains(UserRole.manager) ||
+        currentRoles.contains(UserRole.boq) ||
+        currentRoles.contains(UserRole.serviceHead);
+    final hasProduction = currentRoles.contains(UserRole.admin) ||
+        currentRoles.contains(UserRole.manager) ||
+        currentRoles.contains(UserRole.factory);
+
+    final availableCount = (hasCommercial ? 1 : 0) +
+        (hasTechnical ? 1 : 0) +
+        (hasProduction ? 1 : 0);
+    if (availableCount > 1) {
+      variant = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Select PDF Variant'),
+          content: const Text(
+            'Choose the variant of Sales Order you want to view:',
+            style: TextStyle(fontFamily: 'Inter'),
+          ),
+          actions: [
+            if (hasCommercial)
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'commercial'),
+                  child: const Text('Commercial (Main)')),
+            if (hasTechnical)
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'technical'),
+                  child: const Text('Technical (BOQ)')),
+            if (hasProduction)
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'production'),
+                  child: const Text('Production (Factory)')),
+          ],
+        ),
+      );
+      if (variant == null) return;
+    } else if (hasTechnical) {
+      variant = 'technical';
+    } else if (hasProduction) {
+      variant = 'production';
+    } else {
+      variant = 'commercial';
+    }
+  } else if (step == PipelineStep.boq) {
+    final boqs = List<Boq>.from(pipeline.allBoqs);
+    boqs.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (boqs.isEmpty && pipeline.boq != null) {
+      boqs.add(pipeline.boq!);
+    }
+
+    if (boqs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No BOQ data found.')),
+      );
+      return;
+    }
+
+    // Always show vertical list with v1, v2, v3...
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select BOQ Version',
+            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: boqs.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (c, idx) {
+              final b = boqs[idx];
+              final dtStr = DateFormat('dd MMM yyyy, hh:mm a')
+                  .format(b.createdAt.toLocal());
+              return ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                  child: Text('v${idx + 1}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary)),
+                ),
+                title: Text('BOQ v${idx + 1}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('${b.items.length} items • $dtStr',
+                    style: const TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                onTap: () => Navigator.pop(ctx, idx),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+    if (chosen == null) return;
+    if (!context.mounted) return;
+
+    targetBoq = boqs[chosen];
+    final versionIndex = chosen + 1;
+
+    final scope = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Select Scope (BOQ v$versionIndex)',
+            style: const TextStyle(
+                fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Choose the scope version of the BOQ PDF you want to view:',
+          style: TextStyle(fontFamily: 'Inter'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'all'),
+            child: const Text('Main BOQ (All)'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'company'),
+            child: const Text('Company Scope'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'customer'),
+            child: const Text('Customer Scope'),
+          ),
+        ],
+      ),
+    );
+    if (scope == null) return;
+    variant = scope;
+    final custName =
+        pipeline.customer?.companyName.replaceAll(' ', '_') ?? 'Customer';
+    customFileName = '${custName}_BOQ_v${versionIndex}_$variant.pdf';
+  }
+
+  if (!context.mounted) return;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => const Center(
+      child: CircularProgressIndicator(color: AppColors.primary),
+    ),
+  );
+  try {
+    final bytes = await _generatePdfOnTheFly(
+      ref,
+      pipeline,
+      step,
+      variant: variant,
+      targetBoq: targetBoq,
+    );
+    if (context.mounted) Navigator.pop(context);
+    if (context.mounted) {
+      final fileName = customFileName ??
+          _getStepPdfFileName(pipeline, step, variant: variant);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PdfPreviewScreen(
+            pdfBytes: bytes,
+            fileName: fileName,
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) Navigator.pop(context);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to open PDF: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+}
+
+Future<Map<String, dynamic>> _fetchTemplateConfig(
+    WidgetRef ref, String docType) async {
   try {
     final supabase = ref.read(supabaseClientProvider);
     final templateData = await supabase
@@ -1652,25 +1929,29 @@ Future<Map<String, dynamic>> _fetchTemplateConfig(WidgetRef ref, String docType)
       'company_email': 'info@izyheat.com',
       'company_gst': '27AAAAA1111A1Z1',
       'footer_text': 'Thank you for your business.',
-      'terms_default': '1. Payment: 50% advance, 50% before delivery.\n2. Delivery: 2-3 weeks.',
+      'terms_default':
+          '1. Payment: 50% advance, 50% before delivery.\n2. Delivery: 2-3 weeks.',
     };
   }
 }
 
-Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, PipelineStep step, {String? variant}) async {
+Future<Uint8List> _generatePdfOnTheFly(
+    WidgetRef ref, SalesPipeline pipeline, PipelineStep step,
+    {String? variant, Boq? targetBoq}) async {
   final supabase = ref.read(supabaseClientProvider);
 
   // Safely resolve customer and product with fallbacks in case of RLS filters or missing relations
-  Customer customer = pipeline.customer ?? Customer(
-    id: pipeline.customerId,
-    companyName: 'Default Customer',
-    contactPerson: 'Contact Person',
-    phone: '',
-    email: '',
-    createdBy: '',
-    createdAt: DateTime.now(),
-    updatedAt: DateTime.now(),
-  );
+  Customer customer = pipeline.customer ??
+      Customer(
+        id: pipeline.customerId,
+        companyName: 'Default Customer',
+        contactPerson: 'Contact Person',
+        phone: '',
+        email: '',
+        createdBy: '',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
   if (pipeline.customer == null) {
     try {
       final customerData = await supabase
@@ -1682,15 +1963,17 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
     } catch (_) {}
   }
 
-  Product product = pipeline.product ?? Product(
-    id: pipeline.productId,
-    name: 'Default Product',
-    category: 'HVAC',
-    baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
-    isActive: true,
-    createdAt: DateTime.now(),
-    updatedAt: DateTime.now(),
-  );
+  Product product = pipeline.product ??
+      Product(
+        id: pipeline.productId,
+        name: 'Default Product',
+        category: 'HVAC',
+        baseSpecs:
+            const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
   if (pipeline.product == null) {
     try {
       final productData = await supabase
@@ -1704,7 +1987,8 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
 
   switch (step) {
     case PipelineStep.quotation:
-      if (pipeline.quotation == null) throw Exception('Quotation data not found');
+      if (pipeline.quotation == null)
+        throw Exception('Quotation data not found');
       final templateConfig = await _fetchTemplateConfig(ref, 'quotation');
       return await PdfService.generateQuotationPdf(
         quotation: pipeline.quotation!,
@@ -1713,7 +1997,8 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
         templateConfig: templateConfig,
       );
     case PipelineStep.salesOrder:
-      if (pipeline.salesOrder == null) throw Exception('Sales Order data not found');
+      if (pipeline.salesOrder == null)
+        throw Exception('Sales Order data not found');
       final templateConfig = await _fetchTemplateConfig(ref, 'sales_order');
       return await PdfService.generateSalesOrderPdf(
         salesOrder: pipeline.salesOrder!,
@@ -1724,11 +2009,13 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
         quotation: pipeline.quotation,
       );
     case PipelineStep.boq:
-      if (pipeline.boq == null) throw Exception('BOQ data not found');
+      final boqToUse = targetBoq ?? pipeline.boq;
+      if (boqToUse == null) throw Exception('BOQ data not found');
       final templateConfig = await _fetchTemplateConfig(ref, 'boq');
-      if (pipeline.quotation == null) throw Exception('Quotation data not found for BOQ reference');
+      if (pipeline.quotation == null)
+        throw Exception('Quotation data not found for BOQ reference');
       return await PdfService.generateBoqPdf(
-        boq: pipeline.boq!,
+        boq: boqToUse,
         customer: customer,
         product: product,
         quotation: pipeline.quotation!,
@@ -1736,7 +2023,8 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
         scopeFilter: variant ?? 'all',
       );
     case PipelineStep.factoryOrder:
-      if (pipeline.factoryOrder == null) throw Exception('Factory order data not found');
+      if (pipeline.factoryOrder == null)
+        throw Exception('Factory order data not found');
       final templateConfig = await _fetchTemplateConfig(ref, 'factory_order');
       return await PdfService.generateFactoryOrderPdf(
         factoryOrder: pipeline.factoryOrder!,
@@ -1745,7 +2033,8 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
         templateConfig: templateConfig,
       );
     case PipelineStep.purchaseOrder:
-      if (pipeline.purchaseOrder == null) throw Exception('Material Requisition data not found');
+      if (pipeline.purchaseOrder == null)
+        throw Exception('Material Requisition data not found');
       final templateConfig = await _fetchTemplateConfig(ref, 'purchase_order');
       return await PdfService.generatePurchaseOrderPdf(
         purchaseOrder: pipeline.purchaseOrder!,
@@ -1758,15 +2047,18 @@ Future<Uint8List> _generatePdfOnTheFly(WidgetRef ref, SalesPipeline pipeline, Pi
   }
 }
 
-String _getStepPdfFileName(SalesPipeline pipeline, PipelineStep step, {String? variant}) {
+String _getStepPdfFileName(SalesPipeline pipeline, PipelineStep step,
+    {String? variant}) {
   switch (step) {
     case PipelineStep.quotation:
-      if (pipeline.quotation?.quotationNumber != null && pipeline.quotation!.quotationNumber.isNotEmpty) {
+      if (pipeline.quotation?.quotationNumber != null &&
+          pipeline.quotation!.quotationNumber.isNotEmpty) {
         return '${pipeline.quotation!.quotationNumber.replaceAll('/', '_')}.pdf';
       }
       break;
     case PipelineStep.salesOrder:
-      if (pipeline.salesOrder?.salesOrderNumber != null && pipeline.salesOrder!.salesOrderNumber.isNotEmpty) {
+      if (pipeline.salesOrder?.salesOrderNumber != null &&
+          pipeline.salesOrder!.salesOrderNumber.isNotEmpty) {
         final formattedSo = PdfService.formatSalesOrderNumber(
           pipeline.salesOrder!.salesOrderNumber,
           pipeline.salesOrder?.orderDate ?? pipeline.createdAt,
@@ -1776,7 +2068,8 @@ String _getStepPdfFileName(SalesPipeline pipeline, PipelineStep step, {String? v
       }
       break;
     case PipelineStep.boq:
-      if (pipeline.boq?.boqNumber != null && pipeline.boq!.boqNumber.isNotEmpty) {
+      if (pipeline.boq?.boqNumber != null &&
+          pipeline.boq!.boqNumber.isNotEmpty) {
         final base = pipeline.boq!.boqNumber.replaceAll('/', '_');
         if (variant == 'company') return '${base}_CompanyScope.pdf';
         if (variant == 'customer') return '${base}_CustomerScope.pdf';
@@ -1784,12 +2077,14 @@ String _getStepPdfFileName(SalesPipeline pipeline, PipelineStep step, {String? v
       }
       break;
     case PipelineStep.factoryOrder:
-      if (pipeline.factoryOrder?.orderNumber != null && pipeline.factoryOrder!.orderNumber.isNotEmpty) {
+      if (pipeline.factoryOrder?.orderNumber != null &&
+          pipeline.factoryOrder!.orderNumber.isNotEmpty) {
         return '${pipeline.factoryOrder!.orderNumber.replaceAll('/', '_')}.pdf';
       }
       break;
     case PipelineStep.purchaseOrder:
-      if (pipeline.purchaseOrder?.poNumber != null && pipeline.purchaseOrder!.poNumber.isNotEmpty) {
+      if (pipeline.purchaseOrder?.poNumber != null &&
+          pipeline.purchaseOrder!.poNumber.isNotEmpty) {
         return '${pipeline.purchaseOrder!.poNumber.replaceAll('/', '_')}.pdf';
       }
       break;
@@ -1806,7 +2101,8 @@ class _AmcActionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(pipeline)) {
+    if (pipeline.status != PipelineStatus.completed &&
+        !_checkAllStepsCompleted(pipeline)) {
       return const SizedBox.shrink();
     }
 
@@ -1822,7 +2118,8 @@ class _AmcActionCard extends ConsumerWidget {
           return _buildAmcCard(
             context,
             title: 'Annual Maintenance Contract (AMC)',
-            subtitle: 'This pipeline is completed. Avail AMC to manage scheduled maintenance, visits, and renewals for this product.',
+            subtitle:
+                'This pipeline is completed. Avail AMC to manage scheduled maintenance, visits, and renewals for this product.',
             buttonText: 'Avail AMC',
             icon: Icons.shield_outlined,
             color: AppColors.primary,
@@ -1839,7 +2136,8 @@ class _AmcActionCard extends ConsumerWidget {
           return _buildAmcCard(
             context,
             title: 'Annual Maintenance Contract (AMC)',
-            subtitle: 'Customer expressed interest in AMC during quotation. Complete and activate the contract now.',
+            subtitle:
+                'Customer expressed interest in AMC during quotation. Complete and activate the contract now.',
             buttonText: 'Finalize AMC Contract',
             icon: Icons.assignment_turned_in_outlined,
             color: Colors.amber[800]!,
@@ -1854,7 +2152,8 @@ class _AmcActionCard extends ConsumerWidget {
           return _buildAmcCard(
             context,
             title: 'Annual Maintenance Contract (AMC)',
-            subtitle: 'AMC has been requested post-sale. Complete the terms, amount, and schedule visits to activate.',
+            subtitle:
+                'AMC has been requested post-sale. Complete the terms, amount, and schedule visits to activate.',
             buttonText: 'Complete Setup',
             icon: Icons.assignment_turned_in_outlined,
             color: Colors.amber[800]!,
@@ -1891,7 +2190,8 @@ class _AmcActionCard extends ConsumerWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: amc.status.color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -1993,7 +2293,8 @@ class _AmcActionCard extends ConsumerWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: onPressed,
-                  icon: const Icon(Icons.shield_outlined, size: 16, color: Colors.white),
+                  icon: const Icon(Icons.shield_outlined,
+                      size: 16, color: Colors.white),
                   label: Text(buttonText),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: color,
@@ -2016,7 +2317,8 @@ class _WarrantyCardActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(pipeline)) {
+    if (pipeline.status != PipelineStatus.completed &&
+        !_checkAllStepsCompleted(pipeline)) {
       return const SizedBox.shrink();
     }
 
@@ -2032,7 +2334,8 @@ class _WarrantyCardActionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.card_membership, color: AppColors.accent, size: 22),
+              const Icon(Icons.card_membership,
+                  color: AppColors.accent, size: 22),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
@@ -2050,11 +2353,15 @@ class _WarrantyCardActionCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Generate, activate, or download official Warranty Certificate for this deal.',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                color: AppColors.textSecondary),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: () => context.push('/warranty/${pipeline.id}?customerId=${pipeline.customerId}'),
+            onPressed: () => context.push(
+                '/warranty/${pipeline.id}?customerId=${pipeline.customerId}'),
             icon: const Icon(Icons.verified_outlined, size: 16),
             label: const Text('Open Warranty Card'),
             style: ElevatedButton.styleFrom(
@@ -2100,10 +2407,16 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
     if (rawLines.isNotEmpty) {
       final first = rawLines.first;
       if (first is Map) {
-        productName = (first['description'] ?? first['item_name'] ?? first['name'])?.toString().trim() ?? '';
+        productName =
+            (first['description'] ?? first['item_name'] ?? first['name'])
+                    ?.toString()
+                    .trim() ??
+                '';
       }
     }
-    if (productName.isEmpty && pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+    if (productName.isEmpty &&
+        pipeline.quotation != null &&
+        pipeline.quotation!.lineItems.isNotEmpty) {
       productName = pipeline.quotation!.lineItems.first.description.trim();
     }
     if (productName.isEmpty) {
@@ -2120,9 +2433,8 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
       }
     }
 
-    String customerName = pipeline.customer?.companyName ??
-        pipeline.customer?.customerName ??
-        '';
+    String customerName =
+        pipeline.customer?.companyName ?? pipeline.customer?.customerName ?? '';
     if (customerName.isEmpty && pipeline.customerId.isNotEmpty) {
       final cRes = await supabase
           .from('customers')
@@ -2138,8 +2450,8 @@ Future<Map<String, dynamic>> _fetchLiveQuotationInfo(
 
     final grandTotal = (qData?['grand_total'] as num?)?.toDouble() ??
         (pipeline.quotation?.grandTotal ?? 0.0);
-    final rawQuoteNumber = qData?['quotation_number']?.toString() ??
-        pipeline.baseQuotationNumber;
+    final rawQuoteNumber =
+        qData?['quotation_number']?.toString() ?? pipeline.baseQuotationNumber;
     final quoteNumber = rawQuoteNumber.isNotEmpty
         ? FinancialYearHelper.extractBaseNumber(rawQuoteNumber)
         : '';
@@ -2202,11 +2514,13 @@ class _ApprovalAlertBanner extends ConsumerWidget {
       builder: (context, snapshot) {
         final data = snapshot.data ?? {};
         final submitter = data['salesman']?.toString() ?? 'Sales Executive';
-        final productName = data['productName']?.toString() ?? 'Standard System';
+        final productName =
+            data['productName']?.toString() ?? 'Standard System';
         final customerName = data['customerName']?.toString() ?? 'Customer';
         final quoteNumber = data['quoteNumber']?.toString() ?? '';
         final grandTotal = (data['grandTotal'] as num?)?.toDouble() ?? 0.0;
-        final totalStr = '₹${NumberFormat('#,##,##0.00', 'en_IN').format(grandTotal)}';
+        final totalStr =
+            '₹${NumberFormat('#,##,##0.00', 'en_IN').format(grandTotal)}';
 
         final quotation = pipeline.quotation;
         final dateStr = quotation != null
@@ -2273,7 +2587,8 @@ class _ApprovalAlertBanner extends ConsumerWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFD97706),
                       borderRadius: BorderRadius.circular(6),
@@ -2413,28 +2728,36 @@ class _ApprovalAlertBanner extends ConsumerWidget {
               if (canApprove) ...[
                 const Text(
                   'Please review the quotation details and pricing terms before advancing the pipeline to Sales Order.',
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 12.5, color: Color(0xFF78350F)),
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12.5,
+                      color: Color(0xFF78350F)),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _executeApprovalFlow(context, ref, pipeline, isApprove: false),
+                        onPressed: () => _executeApprovalFlow(
+                            context, ref, pipeline,
+                            isApprove: false),
                         icon: const Icon(Icons.close_rounded, size: 16),
                         label: const Text('Reject / Request Changes'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.error,
                           side: const BorderSide(color: AppColors.error),
                           padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () => _executeApprovalFlow(context, ref, pipeline, isApprove: true),
+                        onPressed: () => _executeApprovalFlow(
+                            context, ref, pipeline,
+                            isApprove: true),
                         icon: const Icon(Icons.check_rounded, size: 16),
                         label: const Text('Approve Quotation'),
                         style: ElevatedButton.styleFrom(
@@ -2442,7 +2765,8 @@ class _ApprovalAlertBanner extends ConsumerWidget {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
@@ -2451,7 +2775,8 @@ class _ApprovalAlertBanner extends ConsumerWidget {
               ] else ...[
                 Row(
                   children: const [
-                    Icon(Icons.hourglass_top_rounded, size: 16, color: Color(0xFFB45309)),
+                    Icon(Icons.hourglass_top_rounded,
+                        size: 16, color: Color(0xFFB45309)),
                     SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -2499,7 +2824,8 @@ class _RejectionFeedbackBanner extends StatelessWidget {
               color: const Color(0xFFEA580C).withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.assignment_return_rounded, color: Color(0xFFEA580C), size: 22),
+            child: const Icon(Icons.assignment_return_rounded,
+                color: Color(0xFFEA580C), size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2577,7 +2903,8 @@ void _showReviewAndApproveModal(
           final salesman = data['salesman']?.toString() ?? 'Sales Executive';
           final quoteNum = data['quoteNumber']?.toString() ?? '';
           final grandTotal = (data['grandTotal'] as num?)?.toDouble() ?? 0.0;
-          final totalStr = '₹${NumberFormat('#,##,##0.00', 'en_IN').format(grandTotal)}';
+          final totalStr =
+              '₹${NumberFormat('#,##,##0.00', 'en_IN').format(grandTotal)}';
 
           return Padding(
             padding: EdgeInsets.fromLTRB(
@@ -2728,13 +3055,15 @@ void _showReviewAndApproveModal(
                       child: OutlinedButton(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _executeApprovalFlow(context, ref, pipeline, isApprove: false);
+                          _executeApprovalFlow(context, ref, pipeline,
+                              isApprove: false);
                         },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.error,
                           side: const BorderSide(color: AppColors.error),
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                         child: const Text('Reject / Request Changes'),
                       ),
@@ -2744,14 +3073,16 @@ void _showReviewAndApproveModal(
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _executeApprovalFlow(context, ref, pipeline, isApprove: true);
+                          _executeApprovalFlow(context, ref, pipeline,
+                              isApprove: true);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.success,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                         child: const Text('Approve Quotation'),
                       ),
@@ -2832,13 +3163,15 @@ Future<void> _executeApprovalFlow(
             onPressed: () {
               if (controller.text.trim().isEmpty) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Please enter a rejection reason.')),
+                  const SnackBar(
+                      content: Text('Please enter a rejection reason.')),
                 );
                 return;
               }
               Navigator.pop(ctx, true);
             },
-            child: const Text('Confirm Rejection', style: TextStyle(color: Colors.white)),
+            child: const Text('Confirm Rejection',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -2865,7 +3198,8 @@ Future<void> _executeApprovalFlow(
       await supabase.from('sales_pipelines').update({
         'current_step': 'sales_order',
         'status': 'in_progress',
-        'notes': 'Quotation approved by ${profile?.fullName ?? "Sales Head / Admin"}.',
+        'notes':
+            'Quotation approved by ${profile?.fullName ?? "Sales Head / Admin"}.',
       }).eq('id', pipeline.id);
       await QgDraftsService.deleteDraft(quotationId);
       await QgBoomBarrierDraftsService.deleteDraft(quotationId);
@@ -2969,37 +3303,7 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
 
   Future<void> _viewNocPdf(QgNocDocument doc) async {
     try {
-      final payload = QgNocPayload(
-        companyName: doc.companySnapshot['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION',
-        companyAddress: doc.companySnapshot['company_address']?.toString() ?? doc.companySnapshot['short_address']?.toString() ?? '',
-        companyEmail: doc.companySnapshot['company_email']?.toString() ?? doc.companySnapshot['email']?.toString() ?? '',
-        companyPhone: doc.companySnapshot['company_phone']?.toString() ?? doc.companySnapshot['phone']?.toString() ?? '',
-        companyWebsite: doc.companySnapshot['company_website']?.toString() ?? doc.companySnapshot['website']?.toString() ?? 'www.izyheat.com',
-        logoUrl: doc.companySnapshot['logo_url']?.toString(),
-        salutation: 'M/s',
-        customerName: doc.customerName,
-        address: doc.siteAddress,
-        productName: doc.productName,
-        subject: 'No Objection Certificate for Installation & Commissioning of ${doc.productName}.',
-        date: doc.issuedDate,
-        equipmentLabel: doc.productName,
-        equipmentLines: doc.equipmentLines,
-        workType: '${doc.productName} Installation work',
-        wiring: 'Done',
-        testing: 'Done',
-        remark: 'All Installation & Commissioning work Completed as per work order',
-        confirmations: doc.confirmations.isNotEmpty
-            ? doc.confirmations
-            : (await QgNocRepository.instance.getProfileForProduct(doc.productName))
-                .confirmationLines
-                .map((l) => l.replaceAll('{Product}', doc.productName))
-                .toList(),
-        closingSentence: doc.closingSentence ??
-            'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
-        wordingMode: NocWordingMode.templateExact,
-        quotationNumber: doc.quotationNumber,
-      );
-
+      final payload = doc.toPayload();
       final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
 
       if (mounted) {
@@ -3015,7 +3319,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error viewing NOC: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error viewing NOC: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
@@ -3023,10 +3329,12 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
 
   Future<void> _generateNocDirectly() async {
     final pipeline = widget.pipeline;
-    if (pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(pipeline)) {
+    if (pipeline.status != PipelineStatus.completed &&
+        !_checkAllStepsCompleted(pipeline)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('NOC Certificate can only be generated once the deal is 100% completed.'),
+          content: Text(
+              'NOC Certificate can only be generated once the deal is 100% completed.'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -3034,7 +3342,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
     }
 
     final supabase = ref.read(supabaseClientProvider);
-    final isInstallationComplete = await WorkProgressService.isInstallationComplete(
+    final isInstallationComplete =
+        await WorkProgressService.isInstallationComplete(
       supabase,
       pipeline.customerId,
       pipeline.id,
@@ -3046,7 +3355,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cannot generate NOC: Customer installation must be completed (status: Resolved/Closed) first.'),
+            content: Text(
+                'Cannot generate NOC: Customer installation must be completed (status: Resolved/Closed) first.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -3059,7 +3369,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
     try {
       final instList = await supabase
           .from('installations')
-          .select('id, customer_signature_url, technician_signature_url, technician_name, notes, product_name, title, created_at')
+          .select(
+              'id, customer_signature_url, technician_signature_url, technician_name, notes, product_name, title, created_at')
           .eq('customer_id', pipeline.customerId)
           .order('created_at', ascending: false);
       ticket = WorkProgressService.resolveInstallationForPipeline(
@@ -3071,12 +3382,14 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       );
     } catch (_) {}
 
-    final customerName = (pipeline.customer?.companyName.trim().isNotEmpty == true)
-        ? pipeline.customer!.companyName.trim()
-        : (pipeline.customer?.customerName.trim().isNotEmpty == true
-            ? pipeline.customer!.customerName.trim()
-            : 'Valued Customer');
-    final prefillTechName = ticket?['technician_name']?.toString() ?? ref.read(currentProfileProvider)?.fullName;
+    final customerName =
+        (pipeline.customer?.companyName.trim().isNotEmpty == true)
+            ? pipeline.customer!.companyName.trim()
+            : (pipeline.customer?.customerName.trim().isNotEmpty == true
+                ? pipeline.customer!.customerName.trim()
+                : 'Valued Customer');
+    final prefillTechName = ticket?['technician_name']?.toString() ??
+        ref.read(currentProfileProvider)?.fullName;
 
     // 2. Prompt for Customer & Technician Signatures (fresh new signatures taken for NOC)
     if (!mounted) return;
@@ -3103,7 +3416,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
                 SizedBox(width: 16),
                 Text(
                   'Generating NOC Certificate...',
-                  style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontFamily: 'Inter', fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -3119,7 +3433,11 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       // 1. Fetch live quotation info if present
       Map<String, dynamic>? qData;
       if (pipeline.quotation?.id != null) {
-        final res = await supabase.from('quotations').select().eq('id', pipeline.quotation!.id).maybeSingle();
+        final res = await supabase
+            .from('quotations')
+            .select()
+            .eq('id', pipeline.quotation!.id)
+            .maybeSingle();
         if (res != null) qData = res;
       }
       if (qData == null) {
@@ -3139,11 +3457,16 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         customerName = pipeline.customer?.customerName.trim() ?? '';
       }
       if (customerName.isEmpty && pipeline.customerId.isNotEmpty) {
-        final cRes = await supabase.from('customers').select().eq('id', pipeline.customerId).maybeSingle();
+        final cRes = await supabase
+            .from('customers')
+            .select()
+            .eq('id', pipeline.customerId)
+            .maybeSingle();
         if (cRes != null) {
-          customerName = (cRes['company_name'] as String?)?.trim().isNotEmpty == true
-              ? cRes['company_name']
-              : (cRes['customer_name'] ?? '');
+          customerName =
+              (cRes['company_name'] as String?)?.trim().isNotEmpty == true
+                  ? cRes['company_name']
+                  : (cRes['customer_name'] ?? '');
         }
       }
       if (customerName.isEmpty) customerName = 'Customer';
@@ -3151,52 +3474,77 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       // 3. Site Address
       Map<String, dynamic>? instData;
       try {
-        final instRes = await supabase.from('installations').select().eq('customer_id', pipeline.customerId).limit(1).maybeSingle();
+        final instRes = await supabase
+            .from('installations')
+            .select()
+            .eq('customer_id', pipeline.customerId)
+            .limit(1)
+            .maybeSingle();
         if (instRes != null) instData = instRes;
       } catch (_) {}
 
       final siteAddress = QgNocExtractor.resolveSiteAddress(
         installation: instData,
         quotation: qData,
-        customer: pipeline.customer != null ? {'address': pipeline.customer!.address} : null,
+        customer: pipeline.customer != null
+            ? {'address': pipeline.customer!.address}
+            : null,
       );
 
       // 4. Quotation line items & inventory products filtering
       final rawLines = (qData?['line_items'] as List?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
-          (pipeline.quotation?.lineItems.map((i) => {
-                'description': i.description,
-                'qty': i.qty,
-                'unit': i.uom,
-              }).toList() ??
+          (pipeline.quotation?.lineItems
+                  .map((i) => {
+                        'description': i.description,
+                        'qty': i.qty,
+                        'unit': i.uom,
+                      })
+                  .toList() ??
               []);
 
-      final itemsTreatedAsProducts = await QgNocExtractor.fetchItemsTreatedAsProducts(supabase);
+      final itemsTreatedAsProducts =
+          await QgNocExtractor.fetchItemsTreatedAsProducts(supabase);
 
       // 5. Product name derivation (take from quotation only from deals)
       String productName = '';
       if (rawLines.isNotEmpty) {
-        final firstDesc = (rawLines.first['description'] ?? rawLines.first['item_name'] ?? rawLines.first['name'])?.toString().trim() ?? '';
+        final firstDesc = (rawLines.first['description'] ??
+                    rawLines.first['item_name'] ??
+                    rawLines.first['name'])
+                ?.toString()
+                .trim() ??
+            '';
         if (firstDesc.isNotEmpty) {
           productName = firstDesc;
         }
       }
-      if (productName.isEmpty && pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+      if (productName.isEmpty &&
+          pipeline.quotation != null &&
+          pipeline.quotation!.lineItems.isNotEmpty) {
         productName = pipeline.quotation!.lineItems.first.description.trim();
       }
       if (productName.isEmpty) {
         productName = pipeline.product?.name ?? '';
       }
       if (productName.isEmpty && pipeline.productId.isNotEmpty) {
-        final pRes = await supabase.from('products').select('name').eq('id', pipeline.productId).maybeSingle();
+        final pRes = await supabase
+            .from('products')
+            .select('name')
+            .eq('id', pipeline.productId)
+            .maybeSingle();
         if (pRes != null && pRes['name'] != null) {
           productName = pRes['name'].toString();
         }
       }
 
-      if (productName.isEmpty || productName.toLowerCase() == 'standard system' || productName.toLowerCase() == 'product') {
-        final descStr = rawLines.map((e) => (e['description'] ?? '').toString().toLowerCase()).join(' ');
+      if (productName.isEmpty ||
+          productName.toLowerCase() == 'standard system' ||
+          productName.toLowerCase() == 'product') {
+        final descStr = rawLines
+            .map((e) => (e['description'] ?? '').toString().toLowerCase())
+            .join(' ');
         if (descStr.contains('heat pump') || descStr.contains('iz-')) {
           productName = 'Heat Pump';
         } else if (descStr.contains('barrier')) {
@@ -3220,28 +3568,45 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         productId: pipeline.productId,
         productName: productName,
       );
-      final companyName = compConfig['company_name']?.toString() ?? 'INSIYA TRADING CORPORATION';
-      final companyAddress = compConfig['company_address']?.toString() ?? compConfig['address']?.toString() ?? '';
-      final companyPhone = compConfig['company_phone']?.toString() ?? compConfig['phone']?.toString() ?? '';
-      final companyEmail = compConfig['company_email']?.toString() ?? compConfig['email']?.toString() ?? '';
-      final companyWebsite = compConfig['company_website']?.toString() ?? compConfig['website']?.toString() ?? 'www.izyheat.com';
+      final companyName = compConfig['company_name']?.toString() ??
+          'INSIYA TRADING CORPORATION';
+      final companyAddress = compConfig['company_address']?.toString() ??
+          compConfig['address']?.toString() ??
+          '';
+      final companyPhone = compConfig['company_phone']?.toString() ??
+          compConfig['phone']?.toString() ??
+          '';
+      final companyEmail = compConfig['company_email']?.toString() ??
+          compConfig['email']?.toString() ??
+          '';
+      final companyWebsite = compConfig['company_website']?.toString() ??
+          compConfig['website']?.toString() ??
+          'www.izyheat.com';
       final logoUrl = compConfig['logo_url']?.toString();
 
       // 7. Auto-generated Subject
-      final subject = 'No Objection Certificate for Installation & Commissioning of $productName.';
-      final rawQuote = qData?['quotation_number']?.toString() ?? pipeline.baseQuotationNumber;
-      final quoteNumber = rawQuote.isNotEmpty ? FinancialYearHelper.extractBaseNumber(rawQuote) : null;
+      final subject =
+          'No Objection Certificate for Installation & Commissioning of $productName.';
+      final rawQuote = qData?['quotation_number']?.toString() ??
+          pipeline.baseQuotationNumber;
+      final quoteNumber = rawQuote.isNotEmpty
+          ? FinancialYearHelper.extractBaseNumber(rawQuote)
+          : null;
 
       // 8. Fetch Profile and Build Payload
-      final nocProfile = await QgNocRepository.instance.getProfileForProduct(productName);
+      final nocProfile =
+          await QgNocRepository.instance.getProfileForProduct(productName);
       final profileConfirmations = nocProfile.confirmationLines.isNotEmpty
-          ? nocProfile.confirmationLines.map((l) => l.replaceAll('{Product}', productName)).toList()
+          ? nocProfile.confirmationLines
+              .map((l) => l.replaceAll('{Product}', productName))
+              .toList()
           : [
               '1. The installation of the $productName system is permitted at the above location.',
               '2. The system installed as per standard safety norms and guidelines.',
               '3. Necessary precautions has been taken to avoid noise, vibration, or water leakage issues.',
             ];
-      final profileClosing = (nocProfile.closingSentence ?? 'This NOC is issued upon request for installation and operation of the {Product} System.')
+      final profileClosing = (nocProfile.closingSentence ??
+              'This NOC is issued upon request for installation and operation of the {Product} System.')
           .replaceAll('{Product}', productName);
 
       final payload = QgNocPayload(
@@ -3262,7 +3627,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         workType: '$productName Installation work',
         wiring: 'Done',
         testing: 'Done',
-        remark: 'All Installation & Commissioning work Completed as per work order',
+        remark:
+            'All Installation & Commissioning work Completed as per work order',
         confirmations: profileConfirmations,
         closingSentence: profileClosing,
         customerSignatureUrl: sigResult.customerSignature,
@@ -3293,27 +3659,13 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         customerSignatoryName: sigResult.customerSignatoryName,
         technicianSignatureUrl: sigResult.technicianSignature,
         technicianName: sigResult.technicianName,
-        overrideReason: 'Completed deal installation & commissioning verified for $productName',
+        overrideReason:
+            'Completed deal installation & commissioning verified for $productName',
       );
 
-      // Back-propagate signatures to installation ticket if missing
-      if (ticket != null && ticket['id'] != null) {
-        try {
-          final updates = <String, dynamic>{};
-          if ((ticket['customer_signature_url'] == null || ticket['customer_signature_url'].toString().isEmpty) && sigResult.customerSignature.isNotEmpty) {
-            updates['customer_signature_url'] = sigResult.customerSignature;
-          }
-          if ((ticket['technician_signature_url'] == null || ticket['technician_signature_url'].toString().isEmpty) && sigResult.technicianSignature.isNotEmpty) {
-            updates['technician_signature_url'] = sigResult.technicianSignature;
-          }
-          if (updates.isNotEmpty) {
-            await supabase.from('installations').update(updates).eq('id', ticket['id']);
-          }
-        } catch (_) {}
-      }
-
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+        Navigator.of(context, rootNavigator: true)
+            .pop(); // dismiss loading dialog
         setState(() {
           _nocDocs = [issuedDoc];
         });
@@ -3330,16 +3682,20 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+        Navigator.of(context, rootNavigator: true)
+            .pop(); // dismiss loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating NOC: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error generating NOC: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     }
   }
 
   String _getNocProductName(QgNocDocument doc, SalesPipeline pipeline) {
-    if (pipeline.quotation != null && pipeline.quotation!.lineItems.isNotEmpty) {
+    if (pipeline.quotation != null &&
+        pipeline.quotation!.lineItems.isNotEmpty) {
       final qDesc = pipeline.quotation!.lineItems.first.description.trim();
       if (qDesc.isNotEmpty) return qDesc;
     }
@@ -3348,12 +3704,15 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
         doc.productName.toLowerCase() != 'standard system') {
       return doc.productName;
     }
-    return doc.productName.isNotEmpty ? doc.productName : (pipeline.product?.name ?? 'Heat Pump');
+    return doc.productName.isNotEmpty
+        ? doc.productName
+        : (pipeline.product?.name ?? 'Heat Pump');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.pipeline.status != PipelineStatus.completed && !_checkAllStepsCompleted(widget.pipeline)) {
+    if (widget.pipeline.status != PipelineStatus.completed &&
+        !_checkAllStepsCompleted(widget.pipeline)) {
       return const SizedBox.shrink();
     }
     if (_loading) return const SizedBox.shrink();
@@ -3361,7 +3720,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
     final docs = _nocDocs ?? [];
     final hasDocs = docs.isNotEmpty;
     final profile = ref.watch(currentProfileProvider);
-    final bool isManagerOnly = (profile?.roles.contains(UserRole.manager) ?? false) && !(profile?.roles.contains(UserRole.admin) ?? false);
+    final bool isManagerOnly =
+        (profile?.roles.contains(UserRole.manager) ?? false) &&
+            !(profile?.roles.contains(UserRole.admin) ?? false);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -3379,7 +3740,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  hasDocs ? 'Installation NOC Issued' : 'Installation NOC Certificate',
+                  hasDocs
+                      ? 'Installation NOC Issued'
+                      : 'Installation NOC Certificate',
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 15,
@@ -3390,7 +3753,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
               ),
               if (hasDocs) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFF286B37).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
@@ -3416,9 +3780,11 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF2F2),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFECACA), width: 0.8),
+                          border: Border.all(
+                              color: const Color(0xFFFECACA), width: 0.8),
                         ),
-                        child: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
+                        child: const Icon(Icons.delete_outline_rounded,
+                            size: 16, color: AppColors.error),
                       ),
                     ),
                   ),
@@ -3436,7 +3802,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 13,
-              color: !_isInstallationComplete && !hasDocs ? const Color(0xFFD97706) : AppColors.textSecondary,
+              color: !_isInstallationComplete && !hasDocs
+                  ? const Color(0xFFD97706)
+                  : AppColors.textSecondary,
               height: 1.4,
             ),
           ),
@@ -3446,7 +3814,9 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
             child: ElevatedButton.icon(
               onPressed: hasDocs
                   ? () => _viewNocPdf(docs.first)
-                  : ((isManagerOnly || !_isInstallationComplete) ? null : () => _generateNocDirectly()),
+                  : ((isManagerOnly || !_isInstallationComplete)
+                      ? null
+                      : () => _generateNocDirectly()),
               icon: Icon(
                 hasDocs
                     ? Icons.picture_as_pdf
@@ -3472,7 +3842,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
                 disabledForegroundColor: Colors.grey.shade600,
                 elevation: 0,
                 minimumSize: const Size.fromHeight(44),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
@@ -3512,7 +3883,8 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('NOC deleted successfully. You can now re-generate it.'),
+              content:
+                  Text('NOC deleted successfully. You can now re-generate it.'),
               backgroundColor: AppColors.success,
             ),
           );
@@ -3520,11 +3892,12 @@ class _NocActionCardState extends ConsumerState<_NocActionCard> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting NOC: $e'), backgroundColor: AppColors.error),
+            SnackBar(
+                content: Text('Error deleting NOC: $e'),
+                backgroundColor: AppColors.error),
           );
         }
       }
     }
   }
 }
-

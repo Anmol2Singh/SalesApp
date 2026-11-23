@@ -7,6 +7,7 @@ import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/pipeline.dart';
 import '../../../core/models/sales_order.dart';
+import '../../../core/models/boq.dart';
 import '../../../core/providers/supabase_provider.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -86,16 +87,39 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   bool _initialized = false;
   bool _isGenerating = false;
 
+  bool get _canGenerateChallan {
+    final vNum = _vehicleNumberController.text.trim();
+    final ship = _shippingCompanyController.text.trim();
+    final person = _deliveryPersonController.text.trim().isNotEmpty
+        ? _deliveryPersonController.text.trim()
+        : (_selectedDeliveryPerson?.trim() ?? '');
+    return vNum.isNotEmpty &&
+        ship.isNotEmpty &&
+        person.isNotEmpty &&
+        _items.isNotEmpty &&
+        _items.every((it) => it.qty > 0);
+  }
+
   @override
   void initState() {
     super.initState();
+    _vehicleNumberController.addListener(_onFormFieldChanged);
+    _shippingCompanyController.addListener(_onFormFieldChanged);
+    _deliveryPersonController.addListener(_onFormFieldChanged);
     _loadCustomDeliveryPersons();
     // Prefetch technicians immediately so they are cached before the user taps "Select person..."
     ref.read(availableTechniciansProvider.future).catchError((_) => <TechnicianInfo>[]);
   }
 
+  void _onFormFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _vehicleNumberController.removeListener(_onFormFieldChanged);
+    _shippingCompanyController.removeListener(_onFormFieldChanged);
+    _deliveryPersonController.removeListener(_onFormFieldChanged);
     _vehicleNumberController.dispose();
     _shippingCompanyController.dispose();
     _driverContactController.dispose();
@@ -535,28 +559,58 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     });
   }
 
+  List<BoqItem> _getAllBoqItems(SalesPipeline pipeline, {required bool customerScope}) {
+    final List<BoqItem> all = [];
+    if (pipeline.allBoqs.isNotEmpty) {
+      for (final b in pipeline.allBoqs) {
+        all.addAll(b.items);
+      }
+    } else if (pipeline.boq != null) {
+      all.addAll(pipeline.boq!.items);
+    }
+    return all.where((item) {
+      final isCust = item.scope.trim().toLowerCase() == 'customer';
+      return customerScope ? isCust : !isCust;
+    }).toList();
+  }
+
   void _loadFromBoq(SalesPipeline pipeline) {
     setState(() {
       _currentSource = 'boq';
       _items.clear();
       final alreadySent = _getAlreadySentMap(pipeline);
-      final boqItems = (pipeline.boq?.items ?? [])
-          .where((item) => item.scope.trim().toLowerCase() != 'customer')
-          .toList();
+      final boqItems = _getAllBoqItems(pipeline, customerScope: false);
+      final Map<String, _ChallanItemRow> combined = {};
+
       for (final item in boqItems) {
+        final key = item.component.trim().toLowerCase();
         final req = item.qty > 0 ? item.qty : 1.0;
-        final sent = alreadySent[item.component.trim().toLowerCase()] ?? 0.0;
-        final pending = (req - sent).clamp(0.0, req);
-        if (pending <= 0) continue; // Don't show items with zero pending quantity
-        _items.add(_ChallanItemRow(
-          name: item.component,
-          uom: item.unit.isNotEmpty ? item.unit : 'NOS',
-          qty: pending,
-          requiredQty: req,
-          sentQty: sent,
-          remark: item.remarks,
-        ));
+        final sent = alreadySent[key] ?? 0.0;
+
+        if (combined.containsKey(key)) {
+          final existing = combined[key]!;
+          final totalReq = (existing.requiredQty ?? existing.qty) + req;
+          final pending = (totalReq - sent).clamp(0.0, totalReq);
+          existing.requiredQty = totalReq;
+          existing.sentQty = sent;
+          existing.qty = pending > 0 ? pending : 1.0;
+          if (item.remarks != null && item.remarks!.isNotEmpty) {
+            existing.remark = existing.remark != null ? '${existing.remark}; ${item.remarks}' : item.remarks;
+          }
+        } else {
+          final pending = (req - sent).clamp(0.0, req);
+          if (pending <= 0) continue; // Don't show items with zero pending quantity
+          combined[key] = _ChallanItemRow(
+            name: item.component,
+            uom: item.unit.isNotEmpty ? item.unit : 'NOS',
+            qty: pending,
+            requiredQty: req,
+            sentQty: sent,
+            remark: item.remarks,
+          );
+        }
       }
+      _items.addAll(combined.values.where((it) => it.pendingQty > 0));
       _syncControllers();
     });
   }
@@ -566,23 +620,38 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
       _currentSource = 'boq_customer';
       _items.clear();
       final alreadySent = _getAlreadySentMap(pipeline);
-      final boqItems = (pipeline.boq?.items ?? [])
-          .where((item) => item.scope.trim().toLowerCase() == 'customer')
-          .toList();
+      final boqItems = _getAllBoqItems(pipeline, customerScope: true);
+      final Map<String, _ChallanItemRow> combined = {};
+
       for (final item in boqItems) {
+        final key = item.component.trim().toLowerCase();
         final req = item.qty > 0 ? item.qty : 1.0;
-        final sent = alreadySent[item.component.trim().toLowerCase()] ?? 0.0;
-        final pending = (req - sent).clamp(0.0, req);
-        if (pending <= 0) continue; // Don't show items with zero pending quantity
-        _items.add(_ChallanItemRow(
-          name: item.component,
-          uom: item.unit.isNotEmpty ? item.unit : 'NOS',
-          qty: pending,
-          requiredQty: req,
-          sentQty: sent,
-          remark: item.remarks,
-        ));
+        final sent = alreadySent[key] ?? 0.0;
+
+        if (combined.containsKey(key)) {
+          final existing = combined[key]!;
+          final totalReq = (existing.requiredQty ?? existing.qty) + req;
+          final pending = (totalReq - sent).clamp(0.0, totalReq);
+          existing.requiredQty = totalReq;
+          existing.sentQty = sent;
+          existing.qty = pending > 0 ? pending : 1.0;
+          if (item.remarks != null && item.remarks!.isNotEmpty) {
+            existing.remark = existing.remark != null ? '${existing.remark}; ${item.remarks}' : item.remarks;
+          }
+        } else {
+          final pending = (req - sent).clamp(0.0, req);
+          if (pending <= 0) continue; // Don't show items with zero pending quantity
+          combined[key] = _ChallanItemRow(
+            name: item.component,
+            uom: item.unit.isNotEmpty ? item.unit : 'NOS',
+            qty: pending,
+            requiredQty: req,
+            sentQty: sent,
+            remark: item.remarks,
+          );
+        }
       }
+      _items.addAll(combined.values.where((it) => it.pendingQty > 0));
       _syncControllers();
     });
   }
@@ -629,10 +698,8 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         }
       }
 
-      // 2. BOQ items (company scope only)
-      final boqItems = (pipeline.boq?.items ?? [])
-          .where((item) => item.scope.trim().toLowerCase() != 'customer')
-          .toList();
+      // 2. BOQ items across all BOQs (company scope only)
+      final boqItems = _getAllBoqItems(pipeline, customerScope: false);
       for (final item in boqItems) {
         final key = item.component.trim().toLowerCase();
         final req = item.qty > 0 ? item.qty : 1.0;
@@ -691,6 +758,39 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   }
 
   Future<void> _generateChallan(SalesPipeline pipeline) async {
+    final vNum = _vehicleNumberController.text.trim();
+    final ship = _shippingCompanyController.text.trim();
+    final person = _deliveryPersonController.text.trim().isNotEmpty
+        ? _deliveryPersonController.text.trim()
+        : (_selectedDeliveryPerson?.trim() ?? '');
+
+    if (vNum.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter Vehicle Number before generating challan.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    if (ship.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter Shipping / Transport Company.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    if (person.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select or enter the person taking delivery.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -699,6 +799,17 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
         ),
       );
       return;
+    }
+    for (int i = 0; i < _items.length; i++) {
+      if (_items[i].qty <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Item #${i + 1} (${_items[i].name}) must have quantity > 0.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
     }
 
     final profile = ref.read(currentProfileProvider);
@@ -1611,9 +1722,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                       disabledBackgroundColor: Colors.grey.shade300,
                       disabledForegroundColor: Colors.grey.shade500,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      elevation: (_isGenerating || _items.isEmpty) ? 0 : 2,
+                      elevation: (_isGenerating || !_canGenerateChallan) ? 0 : 2,
                     ),
-                    onPressed: (_isGenerating || _items.isEmpty) ? null : () => _generateChallan(pipeline),
+                    onPressed: (_isGenerating || !_canGenerateChallan)
+                        ? null
+                        : () => _generateChallan(pipeline),
                     icon: _isGenerating
                         ? const SizedBox(
                             width: 18,
@@ -1622,7 +1735,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                           )
                         : const Icon(Icons.picture_as_pdf_outlined, size: 20),
                     label: Text(
-                      _isGenerating ? 'Generating Challan PDF...' : 'Generate Delivery Challan',
+                      _isGenerating
+                          ? 'Generating Challan PDF...'
+                          : (!_canGenerateChallan
+                              ? 'Fill All Required Fields to Generate'
+                              : 'Generate Delivery Challan'),
                       style: const TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ),

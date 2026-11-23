@@ -517,6 +517,26 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
                   return true;
                 }).toList();
 
+                final notifier = ref.read(pipelinesNotifierProvider.notifier);
+                final expectedCount = _selectedTabIndex == 0
+                    ? (counts?.needsAction ?? 0)
+                    : (_selectedTabIndex == 1
+                        ? (counts?.active ?? 0)
+                        : (counts?.completed ?? 0));
+                if (_searchQuery.isEmpty &&
+                    _quickFilter == 'all' &&
+                    _selectedStep.isEmpty &&
+                    _selectedStatus.isEmpty &&
+                    pipelines.length < expectedCount &&
+                    notifier.hasMore &&
+                    !notifier.isLoading) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && notifier.hasMore && !notifier.isLoading) {
+                      notifier.load();
+                    }
+                  });
+                }
+
                 if (pipelines.isEmpty) {
                   return SliverFillRemaining(
                     child: Center(
@@ -656,6 +676,10 @@ class _PipelineListScreenState extends ConsumerState<PipelineListScreen> {
             _searchController.clear();
             _searchQuery = '';
           });
+          final notifier = ref.read(pipelinesNotifierProvider.notifier);
+          if (notifier.hasMore && !notifier.isLoading) {
+            notifier.load();
+          }
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),

@@ -14,6 +14,7 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/services/notification_backend_helper.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/widgets/inventory_autocomplete.dart';
+import '../../pipelines/widgets/work_progress_box.dart';
 
 class PurchaseOrderScreen extends ConsumerStatefulWidget {
   final String pipelineId;
@@ -35,6 +36,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditing = false;
+  bool _isSkipped = false;
   PurchaseOrder? _existingPO;
   SalesPipeline? _pipeline;
 
@@ -67,6 +69,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
           .single();
 
       _pipeline = SalesPipeline.fromJson(pipelineData);
+      _isSkipped = _pipeline?.isStepSkipped('purchase_order') ?? false;
 
       final poData = await supabase
           .from('purchase_orders')
@@ -273,7 +276,7 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
           'performed_by': supabase.auth.currentUser!.id,
         });
 
-        // Notify sales team
+        // Notify sales executive who created the pipeline, admins, managers, and service head
         final salesPipeline = await supabase
             .from('sales_pipelines')
             .select('created_by')
@@ -284,13 +287,14 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
         final productName = _pipeline?.product?.name ?? 'product';
         final custSuffix = customerName.isNotEmpty ? ' ($customerName)' : '';
 
-        await NotificationBackendHelper.notifyUser(
+        await NotificationBackendHelper.notifyWorkflowStep(
           supabase: supabase,
-          userId: (salesPipeline as Map)['created_by'],
+          targetRoles: ['sales', 'service_head'],
+          dealOwnerId: (salesPipeline as Map)['created_by']?.toString(),
           title: 'Deal Completed!',
           body:
               'Material Requisition has been completed. Deal for $productName$custSuffix is now complete.',
-          type: 'step_unlocked',
+          type: 'step_completed',
           relatedPipelineId: widget.pipelineId,
         );
       } else {
@@ -412,6 +416,55 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
           ),
         ),
       );
+    }
+  }
+
+  Future<void> _togglePurchaseSkip() async {
+    final supabase = ref.read(supabaseClientProvider);
+    if (!_isSkipped) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text('Skip Material Requisition Step?'),
+          content: const Text(
+            'Are you sure you want to skip Material Requisition? It will be marked as skipped and the deal will proceed to completion.',
+            style: TextStyle(fontFamily: 'Inter'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF64748B),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Skip Step'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+      await WorkProgressService.setStepSkipped(supabase, widget.pipelineId, 'purchase_order', true);
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Material Requisition step marked as skipped.')),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      await WorkProgressService.setStepSkipped(supabase, widget.pipelineId, 'purchase_order', false);
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      if (mounted) {
+        setState(() => _isSkipped = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Material Requisition step unskipped.')),
+        );
+      }
     }
   }
 
@@ -584,6 +637,26 @@ class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Skip Step Button (placed just before Complete/Save Changes button)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isSaving ? null : _togglePurchaseSkip,
+                icon: Icon(_isSkipped ? Icons.undo : Icons.skip_next, size: 18),
+                label: Text(
+                  _isSkipped ? 'Unskip Material Requisition Step' : 'Skip Material Requisition Step (Not Required)',
+                  style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _isSkipped ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                  side: BorderSide(color: _isSkipped ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
 
             if (!isPlaced || _isEditing)
               SizedBox(

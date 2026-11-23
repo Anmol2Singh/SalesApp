@@ -1,5 +1,6 @@
 // lib/core/models/pipeline.dart
 
+import 'dart:convert';
 import 'customer.dart';
 import 'product.dart';
 import 'profile.dart';
@@ -31,6 +32,7 @@ class SalesPipeline {
   final Quotation? quotation;
   final SalesOrder? salesOrder;
   final Boq? boq;
+  final List<Boq> allBoqs;
   final FactoryOrder? factoryOrder;
   final PurchaseOrder? purchaseOrder;
 
@@ -59,6 +61,7 @@ class SalesPipeline {
     this.quotation,
     this.salesOrder,
     this.boq,
+    this.allBoqs = const [],
     this.factoryOrder,
     this.purchaseOrder,
   }) : _dbCurrentStep = currentStep;
@@ -113,6 +116,14 @@ class SalesPipeline {
                   : null)
               : SalesOrder.fromJson(json['sales_orders'] as Map<String, dynamic>))
           : null,
+      allBoqs: json['boqs'] != null
+          ? (json['boqs'] is List
+              ? (json['boqs'] as List)
+                  .where((e) => e is Map)
+                  .map((e) => Boq.fromJson(e as Map<String, dynamic>))
+                  .toList()
+              : [Boq.fromJson(json['boqs'] as Map<String, dynamic>)])
+          : const [],
       boq: json['boqs'] != null
           ? (json['boqs'] is List
               ? ((json['boqs'] as List).isNotEmpty
@@ -142,6 +153,7 @@ class SalesPipeline {
     PipelineStep? currentStep,
     PipelineStatus? status,
     String? notes,
+    List<Boq>? allBoqs,
   }) {
     return SalesPipeline(
       id: id,
@@ -162,31 +174,61 @@ class SalesPipeline {
       quotation: quotation,
       salesOrder: salesOrder,
       boq: boq,
+      allBoqs: allBoqs ?? this.allBoqs,
       factoryOrder: factoryOrder,
       purchaseOrder: purchaseOrder,
     );
   }
 
+  List<String> get skippedSteps {
+    if (notes == null || !notes!.contains('[WORK_PROGRESS:')) return const [];
+    try {
+      final start = notes!.indexOf('[WORK_PROGRESS:') + '[WORK_PROGRESS:'.length;
+      int end = notes!.indexOf(':WORK_PROGRESS]', start);
+      if (end == -1) end = notes!.lastIndexOf(']');
+      if (end != -1 && end > start) {
+        final parsed = jsonDecode(notes!.substring(start, end));
+        if (parsed is Map && parsed['skipped_steps'] is List) {
+          return List<String>.from((parsed['skipped_steps'] as List).map((e) => e.toString()));
+        }
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  bool isStepSkipped(String stepKey) => skippedSteps.contains(stepKey);
+
   PipelineStep get currentStep {
     if (status == PipelineStatus.completed) {
       return PipelineStep.completed;
     }
-    if (purchaseOrder != null &&
+    final skipped = skippedSteps;
+    final boqSkipped = skipped.contains('boq');
+    final foSkipped = skipped.contains('factory_order');
+    final poSkipped = skipped.contains('purchase_order');
+
+    final bool poDone = purchaseOrder != null &&
         (purchaseOrder!.status == PurchaseOrderStatus.ordered ||
-            purchaseOrder!.status == PurchaseOrderStatus.received)) {
+            purchaseOrder!.status == PurchaseOrderStatus.received);
+    final bool foDone = factoryOrder != null &&
+        factoryOrder!.status == FactoryOrderStatus.completed;
+    final bool boqDone = boq != null && boq!.status == BoqStatus.submitted;
+    final bool soDone = salesOrder != null && salesOrder!.status == SalesOrderStatus.confirmed;
+    final bool qDone = quotation != null && quotation!.status == QuotationStatus.confirmed;
+
+    if (poDone || (poSkipped && (foDone || foSkipped) && (boqDone || boqSkipped) && soDone)) {
       return PipelineStep.completed;
     }
-    if (factoryOrder != null &&
-        factoryOrder!.status == FactoryOrderStatus.completed) {
+    if (foDone || (foSkipped && (boqDone || boqSkipped) && soDone)) {
       return PipelineStep.purchaseOrder;
     }
-    if (boq != null && boq!.status == BoqStatus.submitted) {
+    if (boqDone || (boqSkipped && soDone)) {
       return PipelineStep.factoryOrder;
     }
-    if (salesOrder != null && salesOrder!.status == SalesOrderStatus.confirmed) {
+    if (soDone) {
       return PipelineStep.boq;
     }
-    if (quotation != null && quotation!.status == QuotationStatus.confirmed) {
+    if (qDone) {
       return PipelineStep.salesOrder;
     }
     return _dbCurrentStep;

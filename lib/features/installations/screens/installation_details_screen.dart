@@ -1724,14 +1724,6 @@ class _InstallationDetailsScreenState
         overrideReason: 'Completed deal installation & commissioning verified for $productName',
       );
 
-      try {
-        await supabase.from('installations').update({
-          'customer_signature_url': sigResult.customerSignature,
-          'technician_signature_url': sigResult.technicianSignature,
-        }).eq('id', installation.id);
-        ref.read(installationsProvider.notifier).load(refresh: true);
-      } catch (_) {}
-
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
         setState(() {

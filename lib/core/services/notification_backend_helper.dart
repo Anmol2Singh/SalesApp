@@ -2,6 +2,41 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 class NotificationBackendHelper {
+  /// Broadcast workflow step notifications to target operational roles, admins, managers,
+  /// sales heads, and the deal creator (salesperson).
+  static Future<void> notifyWorkflowStep({
+    required SupabaseClient supabase,
+    required List<String> targetRoles,
+    String? dealOwnerId,
+    required String title,
+    required String body,
+    required String type,
+    String? relatedPipelineId,
+  }) async {
+    final rolesToNotify = Set<String>.from(targetRoles);
+    rolesToNotify.addAll(['admin', 'manager', 'sales_head']);
+
+    await notifyRoles(
+      supabase: supabase,
+      roles: rolesToNotify.toList(),
+      title: title,
+      body: body,
+      type: type,
+      relatedPipelineId: relatedPipelineId,
+    );
+
+    if (dealOwnerId != null && dealOwnerId.isNotEmpty) {
+      await notifyUser(
+        supabase: supabase,
+        userId: dealOwnerId,
+        title: title,
+        body: body,
+        type: type,
+        relatedPipelineId: relatedPipelineId,
+      );
+    }
+  }
+
   static Future<void> notifyRoles({
     required SupabaseClient supabase,
     required List<String> roles,
@@ -84,7 +119,7 @@ class NotificationBackendHelper {
       }
 
       final existing = await check.limit(1);
-      if (existing is List && existing.isNotEmpty) {
+      if (existing.isNotEmpty) {
         debugPrint('Skipping duplicate notification for user $userId: $title');
         return;
       }

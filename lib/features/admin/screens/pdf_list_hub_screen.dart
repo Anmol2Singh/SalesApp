@@ -27,6 +27,8 @@ import '../../complaints/data/models/complaint_model.dart';
 import '../../complaints/services/complaint_pdf_service.dart';
 import '../../installations/data/models/installation_model.dart';
 import '../../installations/services/installation_pdf_service.dart';
+import '../../../core/models/pipeline.dart';
+import '../../pipelines/widgets/work_progress_box.dart';
 
 enum PdfCategoryType {
   quotation,
@@ -36,6 +38,7 @@ enum PdfCategoryType {
   materialRequisition,
   complaints,
   installation,
+  deliveryChallan,
   amcWarranty,
 }
 
@@ -115,6 +118,14 @@ const List<PdfCategoryInfo> _kPdfCategories = [
     docPrefix: 'INS',
   ),
   PdfCategoryInfo(
+    type: PdfCategoryType.deliveryChallan,
+    title: 'Delivery Challan',
+    subtitle: 'Material dispatch notes & transport delivery receipts',
+    icon: Icons.local_shipping_outlined,
+    color: Color(0xFF2563EB), // Blue
+    docPrefix: 'DC',
+  ),
+  PdfCategoryInfo(
     type: PdfCategoryType.amcWarranty,
     title: 'AMC & Warranty',
     subtitle: 'Annual maintenance contracts & warranty cards',
@@ -151,7 +162,8 @@ class PdfListHubScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      backgroundColor:
+          isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text(
           'List of PDFs',
@@ -277,7 +289,8 @@ class PdfListHubScreen extends ConsumerWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PdfCategoryListScreen(category: cat),
+                              builder: (_) =>
+                                  PdfCategoryListScreen(category: cat),
                             ),
                           );
                         },
@@ -346,7 +359,8 @@ class _PdfCategoryCard extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(6),
@@ -437,7 +451,8 @@ class PdfCategoryListScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<PdfCategoryListScreen> createState() => _PdfCategoryListScreenState();
+  ConsumerState<PdfCategoryListScreen> createState() =>
+      _PdfCategoryListScreenState();
 }
 
 class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
@@ -510,11 +525,15 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                   row['quotation_number']?.toString() ?? 'Quotation',
                   DateTime.tryParse(row['created_at']?.toString() ?? ''),
                 ),
-                customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                customerName: cust['customer_name']?.toString() ??
+                    cust['company_name']?.toString() ??
+                    'Customer',
                 customerPhone: cust['phone']?.toString(),
-                productName: prod['name']?.toString() ?? row['product_name']?.toString(),
+                productName:
+                    prod['name']?.toString() ?? row['product_name']?.toString(),
                 date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
-                amount: (row['final_total'] ?? row['total_amount'] as num?)?.toDouble(),
+                amount: (row['final_total'] ?? row['total_amount'] as num?)
+                    ?.toDouble(),
                 status: row['status']?.toString(),
                 rawData: row as Map<String, dynamic>,
               ),
@@ -541,10 +560,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                 id: row['id']?.toString() ?? '',
                 docType: 'sales_order',
                 docNumber: PdfService.formatSalesOrderNumber(
-                  row['sales_order_number']?.toString() ?? row['so_number']?.toString() ?? 'Sales Order',
+                  row['sales_order_number']?.toString() ??
+                      row['so_number']?.toString() ??
+                      'Sales Order',
                   DateTime.tryParse(row['created_at']?.toString() ?? ''),
                 ),
-                customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                customerName: cust['customer_name']?.toString() ??
+                    cust['company_name']?.toString() ??
+                    'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
                 date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -559,7 +582,8 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
         case PdfCategoryType.boq:
           final res = await supabase
               .from('boqs')
-              .select('*, sales_pipelines(*, customers(*), products(*), quotations(*))')
+              .select(
+                  '*, sales_pipelines(*, customers(*), products(*), quotations(*))')
               .order('created_at', ascending: false)
               .limit(100);
 
@@ -578,7 +602,9 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                   row['boq_number']?.toString() ?? 'BOQ',
                   DateTime.tryParse(row['created_at']?.toString() ?? ''),
                 ),
-                customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                customerName: cust['customer_name']?.toString() ??
+                    cust['company_name']?.toString() ??
+                    'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
                 date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -608,10 +634,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                 id: row['id']?.toString() ?? '',
                 docType: 'factory_order',
                 docNumber: FinancialYearHelper.formatDocumentNumber(
-                  row['fo_number']?.toString() ?? row['order_number']?.toString() ?? 'Factory Order',
+                  row['fo_number']?.toString() ??
+                      row['order_number']?.toString() ??
+                      'Factory Order',
                   DateTime.tryParse(row['created_at']?.toString() ?? ''),
                 ),
-                customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                customerName: cust['customer_name']?.toString() ??
+                    cust['company_name']?.toString() ??
+                    'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
                 date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -644,7 +674,9 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                   row['po_number']?.toString() ?? 'Purchase Order',
                   DateTime.tryParse(row['created_at']?.toString() ?? ''),
                 ),
-                customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                customerName: cust['customer_name']?.toString() ??
+                    cust['company_name']?.toString() ??
+                    'Customer',
                 customerPhone: cust['phone']?.toString(),
                 productName: prod['name']?.toString(),
                 date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -712,6 +744,51 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
           }
           break;
 
+        case PdfCategoryType.deliveryChallan:
+          final res = await supabase
+              .from('sales_pipelines')
+              .select(
+                  '*, customers(*), products(*), quotations(*), sales_orders(*)')
+              .ilike('notes', '%delivery_challans%')
+              .order('updated_at', ascending: false)
+              .limit(100);
+
+          for (final row in (res as List? ?? [])) {
+            final pipe = SalesPipeline.fromJson(row as Map<String, dynamic>);
+            final challans = WorkProgressService.getDeliveryChallans(pipe);
+            final cust = row['customers'] as Map<String, dynamic>? ?? {};
+            final prod = row['products'] as Map<String, dynamic>? ?? {};
+
+            for (int i = 0; i < challans.length; i++) {
+              final challan = challans[i];
+              final challanNo = challan['challan_number']?.toString() ??
+                  challan['challanNumber']?.toString() ??
+                  'DC #${i + 1}';
+              final dt = DateTime.tryParse(challan['date']?.toString() ?? '') ??
+                  DateTime.tryParse(row['updated_at']?.toString() ?? '');
+
+              list.add(
+                _PdfDocItem(
+                  id: '${row['id']}_dc_$i',
+                  docType: 'delivery_challan',
+                  docNumber: challanNo,
+                  customerName: cust['customer_name']?.toString() ??
+                      cust['company_name']?.toString() ??
+                      'Customer',
+                  customerPhone: cust['phone']?.toString(),
+                  productName: prod['name']?.toString(),
+                  date: dt,
+                  status: 'Dispatched',
+                  rawData: {
+                    'pipeline': row,
+                    'challan': challan,
+                  },
+                ),
+              );
+            }
+          }
+          break;
+
         case PdfCategoryType.amcWarranty:
           // Combine AMC contracts and Warranty cards
           try {
@@ -731,7 +808,9 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                   id: row['id']?.toString() ?? '',
                   docType: 'amc_contract',
                   docNumber: row['contract_number']?.toString() ?? 'AMC',
-                  customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                  customerName: cust['customer_name']?.toString() ??
+                      cust['company_name']?.toString() ??
+                      'Customer',
                   customerPhone: cust['phone']?.toString(),
                   date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
                   amount: (row['contract_amount'] as num?)?.toDouble(),
@@ -753,7 +832,8 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               final st = row['status']?.toString().toLowerCase() ?? '';
               if (st == 'cancelled' || st == 'deleted') continue;
 
-              final pipe = row['sales_pipelines'] as Map<String, dynamic>? ?? {};
+              final pipe =
+                  row['sales_pipelines'] as Map<String, dynamic>? ?? {};
               final cust = pipe['customers'] as Map<String, dynamic>? ?? {};
               final prod = pipe['products'] as Map<String, dynamic>? ?? {};
               list.add(
@@ -761,7 +841,9 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                   id: row['id']?.toString() ?? '',
                   docType: 'warranty_card',
                   docNumber: row['invoice_number']?.toString() ?? 'WC',
-                  customerName: cust['customer_name']?.toString() ?? cust['company_name']?.toString() ?? 'Customer',
+                  customerName: cust['customer_name']?.toString() ??
+                      cust['company_name']?.toString() ??
+                      'Customer',
                   customerPhone: cust['phone']?.toString(),
                   productName: prod['name']?.toString(),
                   date: DateTime.tryParse(row['created_at']?.toString() ?? ''),
@@ -807,14 +889,20 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
   }
 
   Future<Uint8List?> _generatePdfBytes(_PdfDocItem item) async {
-    final templateConfig = (await _fetchTemplateConfig(item.docType)) ?? <String, dynamic>{};
+    final templateConfig =
+        (await _fetchTemplateConfig(item.docType)) ?? <String, dynamic>{};
 
     switch (item.docType) {
       case 'quotation':
         final quotation = Quotation.fromJson(item.rawData);
-        final pipe = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
-        final customer = Customer.fromJson(pipe['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
-        final product = Product.fromJson(pipe['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
+        final pipe =
+            item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
+        final customer = Customer.fromJson(
+            pipe['customers'] as Map<String, dynamic>? ??
+                {'id': '', 'company_name': item.customerName});
+        final product = Product.fromJson(
+            pipe['products'] as Map<String, dynamic>? ??
+                {'id': '', 'name': item.productName ?? 'Product'});
         return PdfService.generateQuotationPdf(
           quotation: quotation,
           customer: customer,
@@ -824,9 +912,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
 
       case 'sales_order':
         final so = SalesOrder.fromJson(item.rawData);
-        final pipe = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
-        final customer = Customer.fromJson(pipe['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
-        final product = Product.fromJson(pipe['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
+        final pipe =
+            item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
+        final customer = Customer.fromJson(
+            pipe['customers'] as Map<String, dynamic>? ??
+                {'id': '', 'company_name': item.customerName});
+        final product = Product.fromJson(
+            pipe['products'] as Map<String, dynamic>? ??
+                {'id': '', 'name': item.productName ?? 'Product'});
         return PdfService.generateSalesOrderPdf(
           salesOrder: so,
           customer: customer,
@@ -837,9 +930,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
 
       case 'boq':
         final boq = Boq.fromJson(item.rawData);
-        final pipe = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
-        final customer = Customer.fromJson(pipe['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
-        final product = Product.fromJson(pipe['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
+        final pipe =
+            item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
+        final customer = Customer.fromJson(
+            pipe['customers'] as Map<String, dynamic>? ??
+                {'id': '', 'company_name': item.customerName});
+        final product = Product.fromJson(
+            pipe['products'] as Map<String, dynamic>? ??
+                {'id': '', 'name': item.productName ?? 'Product'});
         Map<String, dynamic> quotData;
         final rawQuot = pipe['quotations'];
         if (rawQuot is Map<String, dynamic>) {
@@ -847,7 +945,13 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
         } else if (rawQuot is List && rawQuot.isNotEmpty) {
           quotData = rawQuot.first as Map<String, dynamic>;
         } else {
-          quotData = <String, dynamic>{'id': '', 'pipeline_id': boq.pipelineId, 'quotation_number': 'REF', 'product_id': boq.id, 'status': 'draft'};
+          quotData = <String, dynamic>{
+            'id': '',
+            'pipeline_id': boq.pipelineId,
+            'quotation_number': 'REF',
+            'product_id': boq.id,
+            'status': 'draft'
+          };
         }
         final quotation = Quotation.fromJson(quotData);
         return PdfService.generateBoqPdf(
@@ -860,9 +964,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
 
       case 'factory_order':
         final fo = FactoryOrder.fromJson(item.rawData);
-        final pipe = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
-        final customer = Customer.fromJson(pipe['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
-        final product = Product.fromJson(pipe['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
+        final pipe =
+            item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
+        final customer = Customer.fromJson(
+            pipe['customers'] as Map<String, dynamic>? ??
+                {'id': '', 'company_name': item.customerName});
+        final product = Product.fromJson(
+            pipe['products'] as Map<String, dynamic>? ??
+                {'id': '', 'name': item.productName ?? 'Product'});
         return PdfService.generateFactoryOrderPdf(
           factoryOrder: fo,
           customer: customer,
@@ -872,9 +981,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
 
       case 'purchase_order':
         final po = PurchaseOrder.fromJson(item.rawData);
-        final pipe = item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
-        final customer = Customer.fromJson(pipe['customers'] as Map<String, dynamic>? ?? {'id': '', 'company_name': item.customerName});
-        final product = Product.fromJson(pipe['products'] as Map<String, dynamic>? ?? {'id': '', 'name': item.productName ?? 'Product'});
+        final pipe =
+            item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
+        final customer = Customer.fromJson(
+            pipe['customers'] as Map<String, dynamic>? ??
+                {'id': '', 'company_name': item.customerName});
+        final product = Product.fromJson(
+            pipe['products'] as Map<String, dynamic>? ??
+                {'id': '', 'name': item.productName ?? 'Product'});
         return PdfService.generatePurchaseOrderPdf(
           purchaseOrder: po,
           customer: customer,
@@ -889,6 +1003,83 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
       case 'installation':
         final installation = Installation.fromJson(item.rawData);
         return InstallationPdfService.generateCompletionReportPdf(installation);
+
+      case 'delivery_challan':
+        final pipeJson = item.rawData['pipeline'] as Map<String, dynamic>;
+        final challanJson = item.rawData['challan'] as Map<String, dynamic>;
+        final pipeline = SalesPipeline.fromJson(pipeJson);
+        final customer = pipeline.customer ??
+            Customer.fromJson(pipeJson['customers'] as Map<String, dynamic>? ??
+                {'id': '', 'company_name': item.customerName});
+        final product = pipeline.product ??
+            Product.fromJson(pipeJson['products'] as Map<String, dynamic>? ??
+                {'id': '', 'name': item.productName ?? 'Product'});
+        final itemsRaw = (challanJson['items'] as List? ?? []);
+        final customLineItems = itemsRaw.map((it) {
+          final m = Map<String, dynamic>.from(it as Map);
+          return SalesOrderLineItem(
+            description: m['name']?.toString() ?? '',
+            qty: (m['qty'] as num?)?.toDouble() ?? 1.0,
+            uom: m['uom']?.toString() ?? 'NOS',
+            remark: m['remark']?.toString() ?? m['remarks']?.toString(),
+            rate: 0.0,
+            discPercent: 0.0,
+            amount: 0.0,
+          );
+        }).toList();
+
+        final so = pipeline.salesOrder;
+        final effectiveSalesOrder = so != null
+            ? so.copyWith(
+                vehicleNumber: challanJson['vehicle_number']?.toString(),
+                shippingCompany: challanJson['shipping_company']?.toString() ??
+                    challanJson['transport']?.toString(),
+                lineItems: customLineItems,
+              )
+            : SalesOrder(
+                id: 'so_temp',
+                pipelineId: pipeline.id,
+                salesOrderNumber: pipeline.baseQuotationNumber,
+                orderDate:
+                    DateTime.tryParse(challanJson['date']?.toString() ?? '') ??
+                        DateTime.now(),
+                vehicleNumber: challanJson['vehicle_number']?.toString(),
+                shippingCompany: challanJson['shipping_company']?.toString() ??
+                    challanJson['transport']?.toString(),
+                billingAddress: customer.address,
+                shippingAddress: customer.address,
+                lineItems: customLineItems,
+                subtotal: 0,
+                cgstRate: 0,
+                sgstRate: 0,
+                cgstAmount: 0,
+                sgstAmount: 0,
+                igstAmount: 0,
+                grandTotal: 0,
+                status: SalesOrderStatus.confirmed,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              );
+
+        final challanDate =
+            DateTime.tryParse(challanJson['date']?.toString() ?? '') ??
+                DateTime.now();
+        final challanNo = challanJson['challan_number']?.toString() ??
+            challanJson['challanNumber']?.toString() ??
+            item.docNumber;
+
+        return PdfService.generateDeliveryChallanPdf(
+          salesOrder: effectiveSalesOrder,
+          customer: customer,
+          product: product,
+          templateConfig: templateConfig,
+          quotationNumber: pipeline.baseQuotationNumber,
+          challanDate: challanDate,
+          customLineItems: customLineItems,
+          customChallanNumber: challanNo,
+          deliveryTakenBy: challanJson['delivery_taken_by']?.toString() ??
+              challanJson['receiver_name']?.toString(),
+        );
 
       case 'amc_contract':
         final contract = AmcContract.fromJson(item.rawData);
@@ -909,32 +1100,208 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
     }
   }
 
+  Future<({Uint8List bytes, String safeName})?> _preparePdfBytesAndName(
+      _PdfDocItem item) async {
+    if (item.docType == 'boq') {
+      final pipelineId = item.rawData['pipeline_id']?.toString() ?? '';
+      if (pipelineId.isNotEmpty) {
+        setState(() => _activeGeneratingId = item.id);
+        List<Boq> boqsList = [];
+        try {
+          final supabase = ref.read(supabaseClientProvider);
+          final boqsRes = await supabase
+              .from('boqs')
+              .select(
+                  '*, sales_pipelines(*, customers(*), products(*), quotations(*))')
+              .eq('pipeline_id', pipelineId)
+              .order('created_at', ascending: true);
+          boqsList = (boqsRes as List? ?? [])
+              .map((e) => Boq.fromJson(e as Map<String, dynamic>))
+              .toList();
+        } catch (_) {}
+        setState(() => _activeGeneratingId = null);
+
+        Boq chosenBoq = Boq.fromJson(item.rawData);
+
+        // 1. If multiple BOQ versions exist, show version selection dialog
+        if (boqsList.length > 1) {
+          if (!mounted) return null;
+          final chosenIdx = await showDialog<int>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Select BOQ Version',
+                  style: TextStyle(
+                      fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: boqsList.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (c, idx) {
+                    final b = boqsList[idx];
+                    final dtStr = DateFormat('dd MMM yyyy, hh:mm a')
+                        .format(b.createdAt.toLocal());
+                    final ver = b.boqNumber.contains('-v')
+                        ? b.boqNumber
+                            .substring(b.boqNumber.lastIndexOf('-') + 1)
+                        : 'v${idx + 1}';
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppColors.primary.withValues(alpha: 0.12),
+                        child: Text(ver,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary)),
+                      ),
+                      title: Text('BOQ $ver (${b.boqNumber})',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text('${b.items.length} items • $dtStr',
+                          style: const TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                      onTap: () => Navigator.pop(ctx, idx),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel')),
+              ],
+            ),
+          );
+
+          if (chosenIdx == null) return null;
+          chosenBoq = boqsList[chosenIdx];
+        }
+
+        // 2. Select Scope (Main, Company Scope, Customer Scope)
+        if (!mounted) return null;
+        final scope = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Select Scope to Preview',
+                style: TextStyle(
+                    fontFamily: 'Inter', fontWeight: FontWeight.bold)),
+            content: const Text(
+              'Choose which scope you want to include in this BOQ PDF:',
+              style: TextStyle(fontFamily: 'Inter'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'all'),
+                child: const Text('Main (Both Scopes)'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'company'),
+                child: const Text('Company Scope Only'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'customer'),
+                child: const Text('Customer Scope Only'),
+              ),
+            ],
+          ),
+        );
+
+        if (scope == null) return null;
+
+        setState(() => _activeGeneratingId = item.id);
+        try {
+          final templateConfig =
+              (await _fetchTemplateConfig('boq')) ?? <String, dynamic>{};
+          final pipe =
+              item.rawData['sales_pipelines'] as Map<String, dynamic>? ?? {};
+          final customer = Customer.fromJson(
+              pipe['customers'] as Map<String, dynamic>? ??
+                  {'id': '', 'company_name': item.customerName});
+          final product = Product.fromJson(
+              pipe['products'] as Map<String, dynamic>? ??
+                  {'id': '', 'name': item.productName ?? 'Product'});
+          Map<String, dynamic> quotData;
+          final rawQuot = pipe['quotations'];
+          if (rawQuot is Map<String, dynamic>) {
+            quotData = rawQuot;
+          } else if (rawQuot is List && rawQuot.isNotEmpty) {
+            quotData = rawQuot.first as Map<String, dynamic>;
+          } else {
+            quotData = <String, dynamic>{
+              'id': '',
+              'pipeline_id': chosenBoq.pipelineId,
+              'quotation_number': 'REF',
+              'product_id': chosenBoq.id,
+              'status': 'draft',
+            };
+          }
+          final quotation = Quotation.fromJson(quotData);
+          final bytes = await PdfService.generateBoqPdf(
+            boq: chosenBoq,
+            customer: customer,
+            product: product,
+            quotation: quotation,
+            templateConfig: templateConfig,
+            scopeFilter: scope,
+          );
+
+          final scopeSuffix = scope == 'company'
+              ? '_Company_Scope'
+              : (scope == 'customer' ? '_Customer_Scope' : '');
+          final safeName =
+              '${chosenBoq.boqNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}$scopeSuffix.pdf';
+
+          return (bytes: bytes, safeName: safeName);
+        } catch (e) {
+          rethrow;
+        } finally {
+          if (mounted) setState(() => _activeGeneratingId = null);
+        }
+      }
+    }
+
+    final bytes = await _generatePdfBytes(item);
+    if (bytes == null) return null;
+    final safeName =
+        '${item.docNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf';
+    return (bytes: bytes, safeName: safeName);
+  }
+
   Future<void> _handlePreview(_PdfDocItem item) async {
     setState(() => _activeGeneratingId = item.id);
     try {
-      final pdfBytes = await _generatePdfBytes(item);
-      if (pdfBytes != null && mounted) {
-        final safeName = '${item.docNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf';
+      final prep = await _preparePdfBytesAndName(item);
+      if (prep != null && mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => PdfPreviewScreen(
-              pdfBytes: pdfBytes,
-              fileName: safeName,
+              pdfBytes: prep.bytes,
+              fileName: prep.safeName,
             ),
           ),
         );
-      } else {
+      } else if (prep == null && item.docType != 'boq') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not generate PDF.'), backgroundColor: AppColors.error),
+            const SnackBar(
+                content: Text('Could not generate PDF.'),
+                backgroundColor: AppColors.error),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating PDF: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error generating PDF: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -945,16 +1312,19 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
   Future<void> _handleDownload(_PdfDocItem item) async {
     setState(() => _activeGeneratingId = item.id);
     try {
-      final pdfBytes = await _generatePdfBytes(item);
-      if (pdfBytes == null) throw Exception('PDF generation returned empty');
+      final prep = await _preparePdfBytesAndName(item);
+      if (prep == null) return;
 
-      final safeName = '${item.docNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf';
+      final pdfBytes = prep.bytes;
+      final safeName = prep.safeName;
 
       if (kIsWeb) {
         await Printing.sharePdf(bytes: pdfBytes, filename: safeName);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✓ Downloaded: $safeName'), backgroundColor: AppColors.success),
+            SnackBar(
+                content: Text('✓ Downloaded: $safeName'),
+                backgroundColor: AppColors.success),
           );
         }
         return;
@@ -987,13 +1357,17 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
       await Printing.sharePdf(bytes: pdfBytes, filename: safeName);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✓ PDF ready: $safeName'), backgroundColor: AppColors.success),
+          SnackBar(
+              content: Text('✓ PDF ready: $safeName'),
+              backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error downloading PDF: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error downloading PDF: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -1004,17 +1378,19 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
   Future<void> _handlePrint(_PdfDocItem item) async {
     setState(() => _activeGeneratingId = item.id);
     try {
-      final pdfBytes = await _generatePdfBytes(item);
-      if (pdfBytes != null) {
+      final prep = await _preparePdfBytesAndName(item);
+      if (prep != null) {
         await Printing.layoutPdf(
-          onLayout: (_) async => pdfBytes,
-          name: '${item.docNumber}.pdf',
+          onLayout: (_) async => prep.bytes,
+          name: prep.safeName,
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error printing PDF: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error printing PDF: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -1025,22 +1401,27 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
   Future<void> _handleShare(_PdfDocItem item) async {
     setState(() => _activeGeneratingId = item.id);
     try {
-      final pdfBytes = await _generatePdfBytes(item);
-      if (pdfBytes != null) {
-        final safeName = '${item.docNumber.replaceAll(RegExp(r'[/\\?%*:|"<>]'), '_')}.pdf';
+      final prep = await _preparePdfBytesAndName(item);
+      if (prep != null) {
         try {
+          // ignore: deprecated_member_use
           await Share.shareXFiles(
-            [XFile.fromData(pdfBytes, name: safeName, mimeType: 'application/pdf')],
+            [
+              XFile.fromData(prep.bytes,
+                  name: prep.safeName, mimeType: 'application/pdf')
+            ],
             subject: '${widget.category.title} - ${item.docNumber}',
           );
         } catch (_) {
-          await Printing.sharePdf(bytes: pdfBytes, filename: safeName);
+          await Printing.sharePdf(bytes: prep.bytes, filename: prep.safeName);
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sharing PDF: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Error sharing PDF: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -1085,12 +1466,16 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                 onChanged: _onSearchChanged,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: 'Search by ${widget.category.title} #, customer, product...',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white70, size: 20),
+                  hintText:
+                      'Search by ${widget.category.title} #, customer, product...',
+                  hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+                  prefixIcon:
+                      const Icon(Icons.search, color: Colors.white70, size: 20),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.white70, size: 18),
+                          icon: const Icon(Icons.clear,
+                              color: Colors.white70, size: 18),
                           onPressed: () {
                             _searchController.clear();
                             _onSearchChanged('');
@@ -1099,7 +1484,8 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                       : null,
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.12),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -1114,7 +1500,8 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
               color: const Color(0xFFF1F5F9),
               child: Row(
                 children: [
-                  Icon(widget.category.icon, size: 16, color: widget.category.color),
+                  Icon(widget.category.icon,
+                      size: 16, color: widget.category.color),
                   const SizedBox(width: 6),
                   Text(
                     'Active Generated ${widget.category.title}s',
@@ -1127,7 +1514,8 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: widget.category.color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
@@ -1150,7 +1538,8 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     )
                   : _errorMessage != null
                       ? Center(
@@ -1159,12 +1548,14 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+                                const Icon(Icons.error_outline,
+                                    color: AppColors.error, size: 40),
                                 const SizedBox(height: 10),
                                 Text(
                                   'Error: $_errorMessage',
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(color: AppColors.error),
+                                  style:
+                                      const TextStyle(color: AppColors.error),
                                 ),
                                 const SizedBox(height: 14),
                                 ElevatedButton(
@@ -1204,7 +1595,9 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                       _searchController.text.isNotEmpty
                                           ? 'Try adjusting your search keywords.'
                                           : 'Generated active documents will be listed here automatically.',
-                                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF94A3B8)),
                                     ),
                                   ],
                                 ),
@@ -1215,19 +1608,23 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                               child: ListView.separated(
                                 padding: const EdgeInsets.all(16),
                                 itemCount: _filteredItems.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 12),
                                 itemBuilder: (context, index) {
                                   final item = _filteredItems[index];
-                                  final isThisGenerating = _activeGeneratingId == item.id;
+                                  final isThisGenerating =
+                                      _activeGeneratingId == item.id;
 
                                   return Container(
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      border: Border.all(
+                                          color: const Color(0xFFE2E8F0)),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.03),
+                                          color: Colors.black
+                                              .withValues(alpha: 0.03),
                                           blurRadius: 6,
                                           offset: const Offset(0, 2),
                                         ),
@@ -1236,17 +1633,22 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                     child: Padding(
                                       padding: const EdgeInsets.all(14),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           // Top Row: Doc # and Status / Date
                                           Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Container(
-                                                padding: const EdgeInsets.all(8),
+                                                padding:
+                                                    const EdgeInsets.all(8),
                                                 decoration: BoxDecoration(
-                                                  color: widget.category.color.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  color: widget.category.color
+                                                      .withValues(alpha: 0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
                                                 ),
                                                 child: Icon(
                                                   widget.category.icon,
@@ -1257,24 +1659,30 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                               const SizedBox(width: 10),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       item.docNumber,
                                                       style: const TextStyle(
                                                         fontFamily: 'Inter',
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         fontSize: 14,
-                                                        color: Color(0xFF0F172A),
+                                                        color:
+                                                            Color(0xFF0F172A),
                                                       ),
                                                     ),
                                                     if (item.date != null) ...[
                                                       const SizedBox(height: 2),
                                                       Text(
-                                                        DateFormat('dd MMM yyyy, hh:mm a').format(item.date!),
+                                                        DateFormat(
+                                                                'dd MMM yyyy, hh:mm a')
+                                                            .format(item.date!),
                                                         style: const TextStyle(
                                                           fontSize: 11,
-                                                          color: Color(0xFF64748B),
+                                                          color:
+                                                              Color(0xFF64748B),
                                                         ),
                                                       ),
                                                     ],
@@ -1283,49 +1691,74 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                               ),
                                               if (item.amount != null) ...[
                                                 Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
                                                   children: [
                                                     Text(
                                                       '₹${currencyFormat.format(item.amount)}',
                                                       style: TextStyle(
                                                         fontFamily: 'Inter',
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         fontSize: 14,
-                                                        color: widget.category.color,
+                                                        color: widget
+                                                            .category.color,
                                                       ),
                                                     ),
-                                                    if (item.status != null && item.status!.isNotEmpty) ...[
+                                                    if (item.status != null &&
+                                                        item.status!
+                                                            .isNotEmpty) ...[
                                                       const SizedBox(height: 2),
                                                       Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                                        decoration: BoxDecoration(
-                                                          color: const Color(0xFFDCFCE7),
-                                                          borderRadius: BorderRadius.circular(4),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 1),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: const Color(
+                                                              0xFFDCFCE7),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(4),
                                                         ),
                                                         child: Text(
-                                                          item.status!.toUpperCase(),
-                                                          style: const TextStyle(
+                                                          item.status!
+                                                              .toUpperCase(),
+                                                          style:
+                                                              const TextStyle(
                                                             fontSize: 9,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: Color(0xFF166534),
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Color(
+                                                                0xFF166534),
                                                           ),
                                                         ),
                                                       ),
                                                     ],
                                                   ],
                                                 ),
-                                              ] else if (item.status != null && item.status!.isNotEmpty) ...[
+                                              ] else if (item.status != null &&
+                                                  item.status!.isNotEmpty) ...[
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2),
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFFEFF6FF),
-                                                    borderRadius: BorderRadius.circular(6),
+                                                    color:
+                                                        const Color(0xFFEFF6FF),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
                                                   ),
                                                   child: Text(
                                                     item.status!.toUpperCase(),
                                                     style: const TextStyle(
                                                       fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       color: Color(0xFF1D4ED8),
                                                     ),
                                                   ),
@@ -1334,13 +1767,17 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                             ],
                                           ),
                                           const SizedBox(height: 10),
-                                          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                          const Divider(
+                                              height: 1,
+                                              color: Color(0xFFF1F5F9)),
                                           const SizedBox(height: 10),
 
                                           // Middle Row: Customer and Product
                                           Row(
                                             children: [
-                                              const Icon(Icons.person_outline, size: 15, color: Color(0xFF64748B)),
+                                              const Icon(Icons.person_outline,
+                                                  size: 15,
+                                                  color: Color(0xFF64748B)),
                                               const SizedBox(width: 6),
                                               Expanded(
                                                 child: Text(
@@ -1353,7 +1790,9 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                                   ),
                                                 ),
                                               ),
-                                              if (item.customerPhone != null && item.customerPhone!.isNotEmpty) ...[
+                                              if (item.customerPhone != null &&
+                                                  item.customerPhone!
+                                                      .isNotEmpty) ...[
                                                 Text(
                                                   item.customerPhone!,
                                                   style: const TextStyle(
@@ -1364,17 +1803,22 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                               ],
                                             ],
                                           ),
-                                          if (item.productName != null && item.productName!.isNotEmpty) ...[
+                                          if (item.productName != null &&
+                                              item.productName!.isNotEmpty) ...[
                                             const SizedBox(height: 6),
                                             Row(
                                               children: [
-                                                const Icon(Icons.inventory_2_outlined, size: 15, color: Color(0xFF64748B)),
+                                                const Icon(
+                                                    Icons.inventory_2_outlined,
+                                                    size: 15,
+                                                    color: Color(0xFF64748B)),
                                                 const SizedBox(width: 6),
                                                 Expanded(
                                                   child: Text(
                                                     item.productName!,
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                     style: const TextStyle(
                                                       fontSize: 12,
                                                       color: Color(0xFF64748B),
@@ -1390,19 +1834,26 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                           if (isThisGenerating) ...[
                                             const Center(
                                               child: Padding(
-                                                padding: EdgeInsets.symmetric(vertical: 6),
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: 6),
                                                 child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: [
                                                     SizedBox(
                                                       width: 16,
                                                       height: 16,
-                                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                              strokeWidth: 2),
                                                     ),
                                                     SizedBox(width: 10),
                                                     Text(
                                                       'Generating PDF...',
-                                                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                                      style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Color(
+                                                              0xFF64748B)),
                                                     ),
                                                   ],
                                                 ),
@@ -1413,59 +1864,107 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                               children: [
                                                 Expanded(
                                                   child: ElevatedButton.icon(
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: const Color(0xFF1E293B),
-                                                      foregroundColor: Colors.white,
-                                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(8),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          const Color(
+                                                              0xFF1E293B),
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 8),
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
                                                       ),
                                                       elevation: 0,
                                                     ),
-                                                    icon: const Icon(Icons.visibility_outlined, size: 16),
+                                                    icon: const Icon(
+                                                        Icons
+                                                            .visibility_outlined,
+                                                        size: 16),
                                                     label: const Text(
                                                       'Preview PDF',
                                                       style: TextStyle(
                                                         fontFamily: 'Inter',
                                                         fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
+                                                        fontWeight:
+                                                            FontWeight.w600,
                                                       ),
                                                     ),
-                                                    onPressed: () => _handlePreview(item),
+                                                    onPressed: () =>
+                                                        _handlePreview(item),
                                                   ),
                                                 ),
                                                 const SizedBox(width: 8),
                                                 IconButton(
                                                   style: IconButton.styleFrom(
-                                                    backgroundColor: const Color(0xFFF1F5F9),
-                                                    padding: const EdgeInsets.all(8),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    backgroundColor:
+                                                        const Color(0xFFF1F5F9),
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8)),
                                                   ),
-                                                  icon: const Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF0F172A)),
+                                                  icon: const Icon(
+                                                      Icons
+                                                          .file_download_outlined,
+                                                      size: 18,
+                                                      color: Color(0xFF0F172A)),
                                                   tooltip: 'Download PDF',
-                                                  onPressed: () => _handleDownload(item),
+                                                  onPressed: () =>
+                                                      _handleDownload(item),
                                                 ),
                                                 const SizedBox(width: 6),
                                                 IconButton(
                                                   style: IconButton.styleFrom(
-                                                    backgroundColor: const Color(0xFFF1F5F9),
-                                                    padding: const EdgeInsets.all(8),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    backgroundColor:
+                                                        const Color(0xFFF1F5F9),
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8)),
                                                   ),
-                                                  icon: const Icon(Icons.print_outlined, size: 18, color: Color(0xFF0F172A)),
+                                                  icon: const Icon(
+                                                      Icons.print_outlined,
+                                                      size: 18,
+                                                      color: Color(0xFF0F172A)),
                                                   tooltip: 'Print PDF',
-                                                  onPressed: () => _handlePrint(item),
+                                                  onPressed: () =>
+                                                      _handlePrint(item),
                                                 ),
                                                 const SizedBox(width: 6),
                                                 IconButton(
                                                   style: IconButton.styleFrom(
-                                                    backgroundColor: const Color(0xFFF1F5F9),
-                                                    padding: const EdgeInsets.all(8),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    backgroundColor:
+                                                        const Color(0xFFF1F5F9),
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8)),
                                                   ),
-                                                  icon: const Icon(Icons.share_outlined, size: 18, color: Color(0xFF0F172A)),
+                                                  icon: const Icon(
+                                                      Icons.share_outlined,
+                                                      size: 18,
+                                                      color: Color(0xFF0F172A)),
                                                   tooltip: 'Share PDF',
-                                                  onPressed: () => _handleShare(item),
+                                                  onPressed: () =>
+                                                      _handleShare(item),
                                                 ),
                                               ],
                                             ),

@@ -376,6 +376,111 @@ class WorkProgressService {
     return null;
   }
 
+  /// Resolves ALL installation tickets corresponding to a specific pipeline/deal.
+  static List<Map<String, dynamic>> resolveAllInstallationsForPipeline({
+    required List<dynamic> installations,
+    required String pipelineId,
+    String? dealNumber,
+    String? productName,
+    DateTime? dealCreatedAt,
+    bool customerHasMultipleDeals = false,
+  }) {
+    if (installations.isEmpty) return [];
+
+    final cleanPipeId = pipelineId.trim().toLowerCase();
+    final cleanDealNum = dealNumber?.trim().toLowerCase();
+    final List<Map<String, dynamic>> matched = [];
+
+    // 1. Strict match
+    for (final item in installations) {
+      final m = Map<String, dynamic>.from(item as Map);
+      final notes = (m['notes'] ?? '').toString();
+      final notesLower = notes.toLowerCase();
+
+      final colPipeId = m['pipeline_id']?.toString().toLowerCase();
+      final colDealId = m['deal_id']?.toString().toLowerCase();
+      if ((colPipeId != null && colPipeId == cleanPipeId) ||
+          (cleanDealNum != null && cleanDealNum.isNotEmpty && colDealId != null && colDealId == cleanDealNum)) {
+        matched.add(m);
+        continue;
+      }
+
+      final dealMatch = RegExp(r'Deal ID:\s*([^\s\(\)\n]+)').firstMatch(notes);
+      if (dealMatch != null) {
+        final matchedTag = dealMatch.group(1)?.trim().toLowerCase();
+        if (matchedTag == cleanPipeId ||
+            (cleanDealNum != null && cleanDealNum.isNotEmpty && matchedTag == cleanDealNum)) {
+          matched.add(m);
+          continue;
+        }
+      }
+
+      if (cleanPipeId.isNotEmpty && notesLower.contains(cleanPipeId)) {
+        matched.add(m);
+        continue;
+      }
+      if (cleanDealNum != null && cleanDealNum.isNotEmpty && notesLower.contains(cleanDealNum)) {
+        matched.add(m);
+        continue;
+      }
+    }
+
+    if (matched.isNotEmpty) return matched;
+
+    // 2. Fallback to single resolver if no explicit tags found
+    final single = resolveInstallationForPipeline(
+      installations: installations,
+      pipelineId: pipelineId,
+      dealNumber: dealNumber,
+      productName: productName,
+      dealCreatedAt: dealCreatedAt,
+      customerHasMultipleDeals: customerHasMultipleDeals,
+    );
+    if (single != null) return [single];
+    return [];
+  }
+
+  static List<String> getSkippedSteps(SalesPipeline pipeline) {
+    return pipeline.skippedSteps;
+  }
+
+  static bool isStepSkipped(SalesPipeline pipeline, String stepKey) {
+    return pipeline.isStepSkipped(stepKey);
+  }
+
+  static Future<void> setStepSkipped(
+    SupabaseClient supabase,
+    String pipelineId,
+    String stepKey,
+    bool skipped,
+  ) async {
+    final res = await supabase
+        .from('sales_pipelines')
+        .select('notes')
+        .eq('id', pipelineId)
+        .maybeSingle();
+
+    final currentNotes = res?['notes']?.toString() ?? '';
+    final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
+    final List<String> list = (currentMeta['skipped_steps'] is List)
+        ? List<String>.from((currentMeta['skipped_steps'] as List).map((e) => e.toString()))
+        : [];
+
+    if (skipped) {
+      if (!list.contains(stepKey)) list.add(stepKey);
+    } else {
+      list.remove(stepKey);
+    }
+    currentMeta['skipped_steps'] = list;
+
+    final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
+    final newNotes = _replaceWorkProgressTag(currentNotes, newTag);
+
+    await supabase.from('sales_pipelines').update({
+      'notes': newNotes,
+    }).eq('id', pipelineId);
+  }
+
   /// Checks whether an installation ticket for this customer & pipeline is completed (resolved, closed, or completed).
   static Future<bool> isInstallationComplete(
     SupabaseClient supabase,
@@ -565,6 +670,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
   String? _installationTicketNumber;
   String? _installationId;
   String _installationStatus = 'none';
+  List<Map<String, dynamic>> _dealInstallations = [];
 
   QgNocDocument? _nocDoc;
   bool _isNocCompleted = false;
@@ -610,7 +716,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         }
       } catch (_) {}
 
-      final ticket = WorkProgressService.resolveInstallationForPipeline(
+      final allTickets = WorkProgressService.resolveAllInstallationsForPipeline(
         installations: (instList as List? ?? []),
         pipelineId: pId,
         dealNumber: widget.pipeline.dealId,
@@ -619,19 +725,27 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         customerHasMultipleDeals: hasMultipleDeals,
       );
 
+      _dealInstallations = allTickets;
+
       bool isCreated = false;
       bool isDone = false;
       String? tNum;
       String? tId;
       String sStatus = 'none';
 
-      if (ticket != null) {
+      if (allTickets.isNotEmpty) {
         isCreated = true;
-        tId = ticket['id']?.toString();
-        tNum = ticket['ticket_number']?.toString();
-        final s = (ticket['status']?.toString() ?? '').toLowerCase().trim();
+        final primaryTicket = allTickets.first;
+        tId = primaryTicket['id']?.toString();
+        tNum = primaryTicket['ticket_number']?.toString();
+        final s = (primaryTicket['status']?.toString() ?? '').toLowerCase().trim();
         sStatus = s;
-        if (s == 'resolved' || s == 'closed' || s == 'completed') {
+
+        // Marked completed if any ticket is completed or all completed
+        if (allTickets.any((t) {
+          final st = (t['status']?.toString() ?? '').toLowerCase().trim();
+          return st == 'resolved' || st == 'closed' || st == 'completed';
+        })) {
           isDone = true;
         }
       }
@@ -931,51 +1045,84 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_dealInstallations.isNotEmpty) ...[
+              Text(
+                'Installation Tickets (${_dealInstallations.length}):',
+                style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 180),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _dealInstallations.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (c, idx) {
+                    final t = _dealInstallations[idx];
+                    final tNum = t['ticket_number']?.toString() ?? 'Ticket #${idx + 1}';
+                    final st = (t['status']?.toString() ?? 'assigned').toLowerCase();
+                    final isRes = st == 'resolved' || st == 'closed' || st == 'completed';
+                    final tId = t['id']?.toString() ?? '';
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(tNum, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text(
+                                  st.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isRes ? AppColors.success : const Color(0xFFD97706),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              if (tId.isNotEmpty) {
+                                context.push('/installations/details/$tId');
+                              }
+                            },
+                            child: const Text('Open ➔', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (_isInstallationCompleted) ...[
               const Text(
-                'Customer installation ticket for this deal has been completed and resolved!',
-                style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
-              ),
-              const SizedBox(height: 8),
-              if (_installationTicketNumber != null)
-                Text(
-                  'Ticket #: $_installationTicketNumber',
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                ),
-              const SizedBox(height: 4),
-              const Text(
-                'Status: Resolved / Closed ✓',
-                style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'The NOC step has been unlocked and can now be issued.',
+                'Installation verified and marked resolved! The NOC certificate can now be issued.',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.success),
               ),
-            ] else if (_isInstallationCreated) ...[
+            ] else if (_dealInstallations.isNotEmpty) ...[
               const Text(
-                'An installation ticket has been created for this deal, but is not yet marked as resolved/closed.',
-                style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
-              ),
-              const SizedBox(height: 8),
-              if (_installationTicketNumber != null)
-                Text(
-                  'Ticket #: $_installationTicketNumber',
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                ),
-              const SizedBox(height: 4),
-              Text(
-                'Status: ${_installationStatus.toUpperCase()}',
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Complete the installation and mark ticket as resolved to unlock the NOC certificate.',
+                'Complete all installations and resolve ticket to unlock the NOC certificate.',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
               ),
             ] else ...[
               const Text(
-                'No installation ticket found for this deal. To complete this step and unlock NOC, an installation ticket must be created and marked resolved.',
+                'No installation ticket created yet for this deal. You can book one or more installation tickets below.',
                 style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: AppColors.textPrimary, height: 1.4),
               ),
             ],
@@ -983,38 +1130,37 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          if (!_isInstallationCreated)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+          if (_dealInstallations.isNotEmpty)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.add, size: 14),
+              label: const Text('Book Another Ticket'),
               onPressed: () async {
                 Navigator.pop(ctx);
                 await context.push('${AppRoutes.bookInstallation}?customerId=${widget.pipeline.customerId}&dealId=${widget.pipeline.id}');
                 _fetchAuxData();
               },
-              child: const Text('Book Installation Ticket'),
-            )
-          else
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () async {
-                Navigator.pop(ctx);
+            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              if (_dealInstallations.isNotEmpty) {
                 if (_installationId != null && _installationId!.isNotEmpty) {
                   await context.push('/installations/details/$_installationId');
                 } else {
                   await context.push(AppRoutes.installationsList);
                 }
-                _fetchAuxData();
-              },
-              child: const Text('View Installation Ticket'),
-            ),
+              } else {
+                await context.push('${AppRoutes.bookInstallation}?customerId=${widget.pipeline.customerId}&dealId=${widget.pipeline.id}');
+              }
+              _fetchAuxData();
+            },
+            child: Text(_dealInstallations.isNotEmpty ? 'View Latest Ticket' : 'Book Installation Ticket'),
+          ),
         ],
       ),
     );
@@ -1028,37 +1174,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         builder: (_) => const Center(child: CircularProgressIndicator()),
       );
 
-      final payload = QgNocPayload(
-        companyName: doc.companySnapshot['company_name'] ?? 'INSIYA TRADING CORPORATION',
-        companyAddress: doc.companySnapshot['company_address'] ?? '',
-        companyEmail: doc.companySnapshot['company_email'] ?? '',
-        companyPhone: doc.companySnapshot['company_phone'] ?? '',
-        companyWebsite: doc.companySnapshot['company_website'] ?? 'www.izyheat.com',
-        logoUrl: doc.companySnapshot['logo_url'],
-        salutation: 'M/s',
-        customerName: doc.customerName,
-        address: doc.siteAddress,
-        productName: doc.productName,
-        subject: 'No Objection Certificate for Installation & Commissioning of ${doc.productName}.',
-        date: doc.issuedOn,
-        equipmentLabel: doc.productName,
-        equipmentLines: doc.equipmentLines,
-        workType: '${doc.productName} Installation work',
-        wiring: 'Done',
-        testing: 'Done',
-        remark: 'All Installation & Commissioning work Completed as per work order',
-        confirmations: doc.confirmations.isNotEmpty
-            ? doc.confirmations
-            : (await QgNocRepository.instance.getProfileForProduct(doc.productName))
-                .confirmationLines
-                .map((l) => l.replaceAll('{Product}', doc.productName))
-                .toList(),
-        closingSentence: doc.closingSentence ??
-            'This NOC is issued upon request for installation and operation of the ${doc.productName} System.',
-        wordingMode: NocWordingMode.templateExact,
-        quotationNumber: doc.quotationNumber,
-      );
-
+      final payload = doc.toPayload();
       final pdfBytes = await PdfNocBuilder.buildNocPdf(payload);
 
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
@@ -1379,7 +1495,9 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
 
     // Live Step 4: Installation
     final bool step4InstallDone = _isInstallationCompleted;
-    final bool step4InstallActive = (step3DispatchDone || _isInstallationCreated) && !step4InstallDone;
+    final bool hasAnyChallanOrDispatch = deliveryChallans.isNotEmpty || siteDispatched || step3DispatchDone;
+    final bool isInstallUnlocked = hasAnyChallanOrDispatch || _isInstallationCreated;
+    final bool step4InstallActive = (isInstallUnlocked) && !step4InstallDone;
 
     // Live Step 5: NOC
     final bool step5NocDone = _isNocCompleted;
@@ -1789,7 +1907,11 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                 const SizedBox(height: 12),
 
                 // Dedicated Slot: Delivery Challans
-                _buildDeliveryChallansSlot(deliveryChallans, canGenerate: canGenerateDeliveryChallan),
+                _buildDeliveryChallansSlot(
+                  deliveryChallans,
+                  canGenerate: canGenerateDeliveryChallan,
+                  isDispatchStepReached: step2SalesOrderDone,
+                ),
 
                 const SizedBox(height: 10),
               ],
@@ -1800,7 +1922,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
           _buildVerticalNode(
             isCompleted: step4InstallDone,
             isActive: step4InstallActive,
-            isLocked: !step3DispatchDone && !_isInstallationCreated,
+            isLocked: !isInstallUnlocked,
             title: 'Installation',
             statusText: step4InstallDone
                 ? 'Done'
@@ -1808,16 +1930,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                     ? (_installationStatus == 'in_progress'
                         ? 'In Progress'
                         : (_installationStatus == 'assigned' ? 'Assigned' : 'Created'))
-                    : (step3DispatchDone ? 'Ready' : 'Locked')),
+                    : (isInstallUnlocked ? 'Ready' : 'Locked')),
             statusColor: step4InstallDone
                 ? AppColors.success
                 : (_isInstallationCreated
                     ? const Color(0xFFD97706)
-                    : (step3DispatchDone ? const Color(0xFF2563EB) : AppColors.textDisabled)),
-            onTap: (step3DispatchDone || _isInstallationCreated) ? _showInstallationDialog : null,
+                    : (isInstallUnlocked ? const Color(0xFF2563EB) : AppColors.textDisabled)),
+            onTap: isInstallUnlocked ? _showInstallationDialog : null,
             child: Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 8),
-              child: (_isInstallationCreated || step3DispatchDone)
+              child: isInstallUnlocked
                   ? Row(
                       children: [
                         if (_isInstallationCreated && _installationTicketNumber != null) ...[
@@ -1828,7 +1950,9 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              _installationTicketNumber!,
+                              _dealInstallations.length > 1
+                                  ? '${_dealInstallations.length} Tickets'
+                                  : _installationTicketNumber!,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -1841,14 +1965,14 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                         InkWell(
                           onTap: _showInstallationDialog,
                           child: Text(
-                            _isInstallationCreated ? 'View Ticket & Status ➔' : 'Assign / Check Installation ➔',
+                            _isInstallationCreated ? 'View Tickets & Status ➔' : 'Assign / Check Installation ➔',
                             style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
                           ),
                         ),
                       ],
                     )
                   : const Text(
-                      'Unlocks automatically once Material & Dispatch step is completed.',
+                      'Unlocks automatically once Material & Dispatch step is started.',
                       style: TextStyle(fontSize: 11.5, color: AppColors.textDisabled),
                     ),
             ),
@@ -2346,7 +2470,11 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
   }
 
   // Dedicated Slot: Delivery Challans
-  Widget _buildDeliveryChallansSlot(List<Map<String, dynamic>> challans, {bool canGenerate = false}) {
+  Widget _buildDeliveryChallansSlot(
+    List<Map<String, dynamic>> challans, {
+    bool canGenerate = false,
+    bool isDispatchStepReached = true,
+  }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2471,18 +2599,22 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
               height: 40,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF16A34A),
-                  foregroundColor: Colors.white,
-                  elevation: 1,
+                  backgroundColor: isDispatchStepReached ? const Color(0xFF16A34A) : Colors.grey.shade300,
+                  foregroundColor: isDispatchStepReached ? Colors.white : Colors.grey.shade600,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  disabledForegroundColor: Colors.grey.shade500,
+                  elevation: isDispatchStepReached ? 1 : 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                onPressed: _openDeliveryChallanModal,
+                onPressed: isDispatchStepReached ? _openDeliveryChallanModal : null,
                 icon: const Icon(Icons.add, size: 16),
                 label: Text(
-                  challans.isEmpty ? 'Generate Delivery Challan' : 'Add Another Delivery Challan',
+                  !isDispatchStepReached
+                      ? 'Challan Locked (Sales Order Required)'
+                      : (challans.isEmpty ? 'Generate Delivery Challan' : 'Add Another Delivery Challan'),
                   style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ),

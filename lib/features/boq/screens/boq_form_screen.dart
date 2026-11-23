@@ -19,11 +19,19 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/services/notification_backend_helper.dart';
 import '../../admin/providers/manage_boq_items_provider.dart';
+import '../../pipelines/widgets/work_progress_box.dart';
 
 class BoqFormScreen extends ConsumerStatefulWidget {
   final String pipelineId;
+  final String? boqId;
+  final bool isNew;
 
-  const BoqFormScreen({super.key, required this.pipelineId});
+  const BoqFormScreen({
+    super.key,
+    required this.pipelineId,
+    this.boqId,
+    this.isNew = false,
+  });
 
   @override
   ConsumerState<BoqFormScreen> createState() => _BoqFormScreenState();
@@ -38,6 +46,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditing = false;
+  bool _isSkipped = false;
   Boq? _existingBoq;
   SalesPipeline? _pipeline;
   Quotation? _quotation;
@@ -67,10 +76,11 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       // Load pipeline
       final pipelineData = await supabase
           .from('sales_pipelines')
-          .select('*, products(*), customers(*)')
+          .select('*, products(*), customers(*), boqs(*)')
           .eq('id', widget.pipelineId)
           .single();
       _pipeline = SalesPipeline.fromJson(pipelineData);
+      _isSkipped = _pipeline?.isStepSkipped('boq') ?? false;
       _product = _pipeline!.product;
       if (_product != null) {
         ref.read(productBoqItemsProvider(_product!.id));
@@ -89,13 +99,27 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       }
 
       // Load existing BOQ
-      final boqData = await supabase
-          .from('boqs')
-          .select()
-          .eq('pipeline_id', widget.pipelineId)
-          .maybeSingle();
+      Map<String, dynamic>? boqData;
+      if (widget.isNew) {
+        _existingBoq = null;
+        _isEditing = true;
+      } else if (widget.boqId != null) {
+        boqData = await supabase
+            .from('boqs')
+            .select()
+            .eq('id', widget.boqId!)
+            .maybeSingle();
+      } else {
+        boqData = await supabase
+            .from('boqs')
+            .select()
+            .eq('pipeline_id', widget.pipelineId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      }
 
-      if (boqData != null) {
+      if (boqData != null && !widget.isNew) {
         _existingBoq = Boq.fromJson(boqData);
         _isEditing = !_existingBoq!.isSubmitted;
         _tentativeDispatchDate = _existingBoq!.tentativeDispatchDate;
@@ -109,6 +133,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
               'component': TextEditingController(text: item.component),
               'qty': TextEditingController(text: item.qty.toInt().toString()),
               'unit': TextEditingController(text: item.unit),
+              'spec': TextEditingController(text: item.spec ?? item.remarks ?? ''),
               'scope': item.scope,
             });
           }
@@ -128,12 +153,13 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
     }
   }
 
-  void _addBoqItem(String scope, {String? component, String? unit, String? qty}) {
+  void _addBoqItem(String scope, {String? component, String? unit, String? qty, String? spec}) {
     setState(() {
       _boqItems.add({
         'component': TextEditingController(text: component ?? ''),
         'qty': TextEditingController(text: qty ?? '1'),
         'unit': TextEditingController(text: unit ?? 'NOS'),
+        'spec': TextEditingController(text: spec ?? ''),
         'scope': scope,
       });
     });
@@ -142,9 +168,11 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
   void _removeBoqItem(Map<String, dynamic> item) {
     setState(() {
       final controller1 = item['component'] as TextEditingController?;
+      final controller2 = item['spec'] as TextEditingController?;
       final controller3 = item['qty'] as TextEditingController?;
       final controller4 = item['unit'] as TextEditingController?;
       controller1?.dispose();
+      controller2?.dispose();
       controller3?.dispose();
       controller4?.dispose();
       _boqItems.remove(item);
@@ -227,11 +255,23 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       final supabase = ref.read(supabaseClientProvider);
 
       final items = _boqItems.map((item) {
+        final comp = item['component'] is TextEditingController
+            ? (item['component'] as TextEditingController).text.trim()
+            : (item['component']?.toString() ?? '');
+        final spec = item['spec'] is TextEditingController
+            ? (item['spec'] as TextEditingController).text.trim()
+            : (item['spec']?.toString() ?? '');
+        final qtyStr = item['qty'] is TextEditingController
+            ? (item['qty'] as TextEditingController).text.trim()
+            : (item['qty']?.toString() ?? '1');
+        final unit = item['unit'] is TextEditingController
+            ? (item['unit'] as TextEditingController).text.trim()
+            : (item['unit']?.toString() ?? 'NOS');
         return {
-          'component': (item['component'] as TextEditingController).text.trim(),
-          'spec': '',
-          'qty': (int.tryParse((item['qty'] as TextEditingController).text) ?? 1).toDouble(),
-          'unit': (item['unit'] as TextEditingController).text.trim(),
+          'component': comp,
+          'spec': spec,
+          'qty': (int.tryParse(qtyStr) ?? 1).toDouble(),
+          'unit': unit,
           'scope': item['scope'] ?? 'company',
         };
       }).toList();
@@ -246,12 +286,50 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       };
 
       String boqId;
-      if (_existingBoq != null) {
+      if (_existingBoq != null && !widget.isNew) {
         await supabase.from('boqs').update(data).eq('id', _existingBoq!.id);
         boqId = _existingBoq!.id;
       } else {
-        final res = await supabase.from('boqs').insert(data).select('id').single();
+        // Fetch existing BOQs for this pipeline to calculate versioned boq_number (-v1, -v2, ...)
+        final existingBoqsRes = await supabase
+            .from('boqs')
+            .select('id, boq_number, created_at')
+            .eq('pipeline_id', widget.pipelineId)
+            .order('created_at', ascending: true);
+        final existingBoqs = (existingBoqsRes as List? ?? []);
+
+        if (existingBoqs.isNotEmpty) {
+          final firstBoq = existingBoqs.first as Map<String, dynamic>;
+          final firstBoqNumber = firstBoq['boq_number']?.toString() ?? '';
+          final baseNumber = firstBoqNumber.replaceAll(RegExp(r'-v\d+$', caseSensitive: false), '');
+          final nextVer = existingBoqs.length + 1;
+          data['boq_number'] = '$baseNumber-v$nextVer';
+
+          // If the first BOQ was saved before versioning and lacks -v, update it to -v1
+          if (!firstBoqNumber.contains(RegExp(r'-v\d+$', caseSensitive: false))) {
+            try {
+              await supabase
+                  .from('boqs')
+                  .update({'boq_number': '$baseNumber-v1'})
+                  .eq('id', firstBoq['id']);
+            } catch (_) {}
+          }
+        }
+
+        final res = await supabase.from('boqs').insert(data).select('id, boq_number').single();
         boqId = (res as Map)['id'] as String;
+        final genBoqNum = (res as Map)['boq_number']?.toString() ?? '';
+        // If the first BOQ was generated by DB trigger without -v1, ensure -v1 is appended
+        if (existingBoqs.isEmpty &&
+            genBoqNum.isNotEmpty &&
+            !genBoqNum.contains(RegExp(r'-v\d+$', caseSensitive: false))) {
+          try {
+            await supabase
+                .from('boqs')
+                .update({'boq_number': '$genBoqNum-v1'})
+                .eq('id', boqId);
+          } catch (_) {}
+        }
       }
 
       // Generate and upload BOQ PDF
@@ -273,9 +351,10 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       final custName = _pipeline?.customer?.companyName ?? '';
       final prodName = _product?.name ?? _pipeline?.product?.name ?? 'deal';
       final custSuffix = custName.isNotEmpty ? ' for $custName ($prodName)' : '';
-      await NotificationBackendHelper.notifyUser(
+      await NotificationBackendHelper.notifyWorkflowStep(
         supabase: supabase,
-        userId: supabase.auth.currentUser!.id,
+        targetRoles: ['factory'],
+        dealOwnerId: _pipeline?.createdBy,
         title: 'Factory Order Unlocked',
         body: 'BOQ submitted$custSuffix. Factory order step is now available.',
         type: 'step_unlocked',
@@ -317,11 +396,23 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       final supabase = ref.read(supabaseClientProvider);
 
       final items = _boqItems.map((item) {
+        final comp = item['component'] is TextEditingController
+            ? (item['component'] as TextEditingController).text.trim()
+            : (item['component']?.toString() ?? '');
+        final spec = item['spec'] is TextEditingController
+            ? (item['spec'] as TextEditingController).text.trim()
+            : (item['spec']?.toString() ?? '');
+        final qtyStr = item['qty'] is TextEditingController
+            ? (item['qty'] as TextEditingController).text.trim()
+            : (item['qty']?.toString() ?? '1');
+        final unit = item['unit'] is TextEditingController
+            ? (item['unit'] as TextEditingController).text.trim()
+            : (item['unit']?.toString() ?? 'NOS');
         return {
-          'component': (item['component'] as TextEditingController).text.trim(),
-          'spec': (item['spec'] as TextEditingController).text.trim(),
-          'qty': int.tryParse((item['qty'] as TextEditingController).text) ?? 1,
-          'unit': (item['unit'] as TextEditingController).text.trim(),
+          'component': comp,
+          'spec': spec,
+          'qty': int.tryParse(qtyStr) ?? 1,
+          'unit': unit,
           'scope': item['scope'] ?? 'company',
         };
       }).toList();
@@ -370,6 +461,55 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _toggleBoqSkip() async {
+    final supabase = ref.read(supabaseClientProvider);
+    if (!_isSkipped) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text('Skip BOQ Step?'),
+          content: const Text(
+            'Are you sure you want to skip BOQ? It will be marked as skipped and the deal will proceed to the next step.',
+            style: TextStyle(fontFamily: 'Inter'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF64748B),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Skip Step'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+      await WorkProgressService.setStepSkipped(supabase, widget.pipelineId, 'boq', true);
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('BOQ step marked as skipped.')),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      await WorkProgressService.setStepSkipped(supabase, widget.pipelineId, 'boq', false);
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      if (mounted) {
+        setState(() => _isSkipped = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('BOQ step unskipped.')),
+        );
+      }
     }
   }
 
@@ -587,7 +727,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: AppColors.primary.withOpacity(0.12),
+                                          color: AppColors.primary.withValues(alpha: 0.12),
                                           borderRadius: BorderRadius.circular(10),
                                         ),
                                         child: Text(
@@ -759,12 +899,26 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
     final quotationItemNames = _quotation?.lineItems.map((li) => li.description).where((d) => d.isNotEmpty).join(', ') ?? '';
     final displayProductName = quotationItemNames.isNotEmpty ? quotationItemNames : (_product?.name ?? 'Product');
 
+    final companyItems = _boqItems
+        .where((item) => (item['scope'] ?? 'company') == 'company')
+        .toList();
+    final customerItems = _boqItems
+        .where((item) => (item['scope'] ?? 'company') == 'customer')
+        .toList();
+
+    final hasAnyExistingBoq = widget.isNew ||
+        _existingBoq != null ||
+        (_pipeline?.allBoqs.isNotEmpty ?? false) ||
+        _pipeline?.boq != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(isSubmitted && !_isEditing
-            ? 'BOQ (Submitted)'
-            : 'Bill of Quantities (BOQ)'),
+        title: Text(widget.isNew
+            ? 'New Bill of Quantities'
+            : (isSubmitted && !_isEditing
+                ? 'BOQ (Submitted)'
+                : 'Bill of Quantities (BOQ)')),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
@@ -805,7 +959,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -837,7 +991,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.primarySurface,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -909,22 +1063,26 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            if (_boqItems.where((item) => (item['scope'] ?? 'company') == 'company').isEmpty)
+            // Company Scope Items
+            if (companyItems.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12.0),
                 child: Text(
                   'No company scope items added yet. Tap "Open list" above or "Add Item" below.',
-                  style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary, fontSize: 13),
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: AppColors.textSecondary,
+                      fontSize: 13),
                 ),
               )
             else
-              ..._boqItems.where((item) => (item['scope'] ?? 'company') == 'company').map((item) {
-                final globalIndex = _boqItems.indexOf(item);
+              ...companyItems.asMap().entries.map((entry) {
                 return _BoqItemRow(
-                  index: globalIndex,
-                  item: item,
-                  onRemove: !enabled ? null : () => _removeBoqItem(item),
+                  index: entry.key,
+                  item: entry.value,
+                  onRemove: !enabled ? null : () => _removeBoqItem(entry.value),
                   enabled: enabled,
+                  onQtyChanged: () => setState(() {}),
                 );
               }),
             if (enabled) ...[
@@ -958,35 +1116,45 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.list_alt, size: 16, color: Colors.white),
+                    icon: const Icon(Icons.list_alt,
+                        size: 16, color: Colors.white),
                     label: const Text(
                       'Open list',
-                      style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13),
                     ),
                     onPressed: () => _openMasterBoqListSheet('customer'),
                   ),
               ],
             ),
             const SizedBox(height: 8),
-            if (_boqItems.where((item) => (item['scope'] ?? 'company') == 'customer').isEmpty)
+            // Customer Scope Items
+            if (customerItems.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12.0),
                 child: Text(
                   'No customer scope items added yet. Tap "Open list" above or "Add Item" below.',
-                  style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary, fontSize: 13),
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: AppColors.textSecondary,
+                      fontSize: 13),
                 ),
               )
             else
-              ..._boqItems.where((item) => (item['scope'] ?? 'company') == 'customer').map((item) {
-                final globalIndex = _boqItems.indexOf(item);
+              ...customerItems.asMap().entries.map((entry) {
                 return _BoqItemRow(
-                  index: globalIndex,
-                  item: item,
-                  onRemove: !enabled ? null : () => _removeBoqItem(item),
+                  index: entry.key,
+                  item: entry.value,
+                  onRemove: !enabled ? null : () => _removeBoqItem(entry.value),
                   enabled: enabled,
+                  onQtyChanged: () => setState(() {}),
                 );
               }),
             if (enabled) ...[
@@ -1008,7 +1176,7 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -1081,6 +1249,27 @@ class _BoqFormScreenState extends ConsumerState<BoqFormScreen> {
 
             const SizedBox(height: 24),
 
+            // Skip Step Button (only visible if no BOQ has been generated yet and not creating a new BOQ)
+            if (!hasAnyExistingBoq)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isSaving ? null : _toggleBoqSkip,
+                  icon: Icon(_isSkipped ? Icons.undo : Icons.skip_next, size: 18),
+                  label: Text(
+                    _isSkipped ? 'Unskip BOQ Step' : 'Skip BOQ Step (Not Required)',
+                    style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _isSkipped ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                    side: BorderSide(color: _isSkipped ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+
             if (!isSubmitted || _isEditing)
               SizedBox(
                 width: double.infinity,
@@ -1146,104 +1335,259 @@ class _BoqItemRow extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback? onRemove;
   final bool enabled;
+  final VoidCallback? onQtyChanged;
 
   const _BoqItemRow({
     required this.index,
     required this.item,
     this.onRemove,
     required this.enabled,
+    this.onQtyChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final compCtrl = item['component'] as TextEditingController?;
+    final qtyCtrl = item['qty'] as TextEditingController?;
+    final unitCtrl = item['unit'] as TextEditingController?;
+    final specCtrl = item['spec'] as TextEditingController?;
+    final scope = (item['scope']?.toString() ?? 'company').toLowerCase();
+    final isCustomerScope = scope == 'customer';
+
+    final compName = compCtrl?.text.trim() ?? '';
+    final unitText = (unitCtrl?.text.trim().isNotEmpty == true) ? unitCtrl!.text.trim() : 'NOS';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row with #index, component name / autocomplete, and delete button
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(6),
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'Item ${index + 1}',
+                  '#${index + 1}',
                   style: const TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primary,
                   ),
                 ),
               ),
-              const Spacer(),
-              if (onRemove != null)
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (compName.isNotEmpty && !enabled)
+                      Text(
+                        compName,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      )
+                    else if (compCtrl != null)
+                      InventoryAutocomplete(
+                        controller: compCtrl,
+                        enabled: enabled,
+                        labelText: 'Component Description *',
+                        onChanged: () {},
+                        onItemSelected: (selection) {
+                          if (unitCtrl != null && unitCtrl.text.isEmpty) {
+                            unitCtrl.text = selection.uom ?? 'NOS';
+                          }
+                        },
+                      ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Text(
+                            'Unit: $unitText',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: isCustomerScope ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: isCustomerScope ? const Color(0xFFFDE68A) : const Color(0xFFBFDBFE)),
+                          ),
+                          child: Text(
+                            isCustomerScope ? 'Customer Scope' : 'Company Scope',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: isCustomerScope ? const Color(0xFFB45309) : const Color(0xFF1D4ED8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (onRemove != null && enabled)
                 IconButton(
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline,
-                      color: AppColors.error, size: 20),
+                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 19),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  onPressed: onRemove,
                   tooltip: 'Remove item',
                 ),
             ],
           ),
           const SizedBox(height: 10),
-          InventoryAutocomplete(
-            controller: item['component'] as TextEditingController,
-            enabled: enabled,
-            labelText: 'Component Description *',
-            onChanged: () {},
-            onItemSelected: (selection) {
-              final unitController = item['unit'] as TextEditingController;
-              if (unitController.text.isEmpty) unitController.text = selection.uom ?? '';
-            },
-          ),
-          const SizedBox(height: 10),
+
+          // Stepper row for Qty
           Row(
             children: [
-              Expanded(
-                flex: 3,
-                child: TextFormField(
-                  controller: item['qty'] as TextEditingController,
-                  enabled: enabled,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: 'Qty (Integer) *',
-                    hintText: 'e.g. 1, 2, 5',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    final n = int.tryParse(v);
-                    if (n == null || n <= 0) return 'Must be >= 1';
-                    return null;
-                  },
+              const Text(
+                'Qty:',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: TextFormField(
-                  controller: item['unit'] as TextEditingController,
-                  enabled: enabled,
-                  decoration: const InputDecoration(
-                    labelText: 'Unit',
-                    hintText: 'NOS, MTR, SET',
-                  ),
+              const Spacer(),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: enabled
+                          ? () {
+                              if (qtyCtrl != null) {
+                                final current = int.tryParse(qtyCtrl.text.trim()) ?? 1;
+                                final next = (current - 1).clamp(1, 99999);
+                                qtyCtrl.text = next.toString();
+                                if (onQtyChanged != null) onQtyChanged!();
+                              }
+                            }
+                          : null,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Icon(Icons.remove, size: 16, color: AppColors.textPrimary),
+                      ),
+                    ),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 44),
+                      alignment: Alignment.center,
+                      child: qtyCtrl != null
+                          ? SizedBox(
+                              width: 50,
+                              child: TextFormField(
+                                controller: qtyCtrl,
+                                enabled: enabled,
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(vertical: 6),
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    InkWell(
+                      onTap: enabled
+                          ? () {
+                              if (qtyCtrl != null) {
+                                final current = int.tryParse(qtyCtrl.text.trim()) ?? 1;
+                                final next = (current + 1).clamp(1, 99999);
+                                qtyCtrl.text = next.toString();
+                                if (onQtyChanged != null) onQtyChanged!();
+                              }
+                            }
+                          : null,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Icon(Icons.add, size: 16, color: AppColors.textPrimary),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
+
+          // Remark / Specification field
+          if (specCtrl != null)
+            TextFormField(
+              controller: specCtrl,
+              enabled: enabled,
+              style: const TextStyle(fontSize: 12, fontFamily: 'Inter'),
+              decoration: InputDecoration(
+                hintText: 'Remark / Specification (optional)',
+                hintStyle: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+                isDense: true,
+                filled: true,
+                fillColor: AppColors.background,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+              ),
+            ),
         ],
       ),
     );

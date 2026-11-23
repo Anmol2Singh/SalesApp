@@ -20,6 +20,7 @@ import '../../../core/services/pdf_service.dart';
 import '../../../core/services/notification_backend_helper.dart';
 import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/router/app_router.dart';
+import '../../pipelines/widgets/work_progress_box.dart';
 
 enum FactoryCustomFieldType {
   text,
@@ -62,26 +63,27 @@ class FactoryCustomFieldDef {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'label': label,
-    'type': type.name,
-    'placeholder': placeholder,
-    'is_required': isRequired,
-    'options': options,
-  };
+        'id': id,
+        'label': label,
+        'type': type.name,
+        'placeholder': placeholder,
+        'is_required': isRequired,
+        'options': options,
+      };
 
-  factory FactoryCustomFieldDef.fromJson(Map<String, dynamic> json) => FactoryCustomFieldDef(
-    id: json['id'] as String? ?? UniqueKey().toString(),
-    label: json['label'] as String? ?? '',
-    type: FactoryCustomFieldType.fromString(json['type'] as String?),
-    placeholder: json['placeholder'] as String? ?? '',
-    isRequired: json['is_required'] as bool? ?? false,
-    options: (json['options'] as List<dynamic>?)
-            ?.map((e) => e.toString().trim())
-            .where((s) => s.isNotEmpty)
-            .toList() ??
-        [],
-  );
+  factory FactoryCustomFieldDef.fromJson(Map<String, dynamic> json) =>
+      FactoryCustomFieldDef(
+        id: json['id'] as String? ?? UniqueKey().toString(),
+        label: json['label'] as String? ?? '',
+        type: FactoryCustomFieldType.fromString(json['type'] as String?),
+        placeholder: json['placeholder'] as String? ?? '',
+        isRequired: json['is_required'] as bool? ?? false,
+        options: (json['options'] as List<dynamic>?)
+                ?.map((e) => e.toString().trim())
+                .where((s) => s.isNotEmpty)
+                .toList() ??
+            [],
+      );
 
   FactoryCustomFieldDef copyWith({
     String? id,
@@ -120,6 +122,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditing = false;
+  bool _isSkipped = false;
   FactoryOrder? _existingOrder;
   SalesPipeline? _pipeline;
   List<FactoryOrderItem> _items = [];
@@ -163,6 +166,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
           .eq('id', widget.pipelineId)
           .single();
       _pipeline = SalesPipeline.fromJson(pipelineData);
+      _isSkipped = _pipeline?.isStepSkipped('factory_order') ?? false;
 
       // Fetch BOQ dispatch date
       final boqData = await supabase
@@ -172,7 +176,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
           .maybeSingle();
 
       if (boqData != null && boqData['tentative_dispatch_date'] != null) {
-        _boqDispatchDate = DateTime.tryParse(boqData['tentative_dispatch_date'] as String);
+        _boqDispatchDate =
+            DateTime.tryParse(boqData['tentative_dispatch_date'] as String);
       }
 
       // Load existing factory order
@@ -215,7 +220,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
     if (existingSpecs != null && existingSpecs.isNotEmpty) {
       if (existingSpecs['custom_fields_title'] is String &&
           (existingSpecs['custom_fields_title'] as String).trim().isNotEmpty) {
-        _customSectionTitle = (existingSpecs['custom_fields_title'] as String).trim();
+        _customSectionTitle =
+            (existingSpecs['custom_fields_title'] as String).trim();
       }
       if (existingSpecs['custom_fields_defs'] is List) {
         _customFieldDefs = (existingSpecs['custom_fields_defs'] as List)
@@ -237,7 +243,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
         if (templateData != null) {
           if (templateData['section_title'] != null &&
               (templateData['section_title'] as String).trim().isNotEmpty) {
-            _customSectionTitle = (templateData['section_title'] as String).trim();
+            _customSectionTitle =
+                (templateData['section_title'] as String).trim();
           }
           if (templateData['fields'] is List) {
             _customFieldDefs = (templateData['fields'] as List)
@@ -370,75 +377,22 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
             {'current_step': 'purchase_order'}).eq('id', widget.pipelineId);
 
         final customerName = _pipeline?.customer?.companyName ?? '';
-        final productName = _pipeline?.product?.name ?? 'product';
-        final custSuffix = customerName.isNotEmpty ? ' (Customer: $customerName)' : '';
+        final productName = _pipeline?.product?.name ?? 'deal';
+        final custSuffix = customerName.isNotEmpty
+            ? ' for $customerName ($productName)'
+            : ' ($productName)';
 
-        // Notify sales executive who created the pipeline
-        if (_pipeline?.createdBy != null && _pipeline!.createdBy.isNotEmpty) {
-          await NotificationBackendHelper.notifyUser(
-            supabase: supabase,
-            userId: _pipeline!.createdBy,
-            title: 'Factory Order Completed',
-            body:
-                'The factory order for $productName$custSuffix has been completed by the factory team.',
-            type: 'step_unlocked',
-            relatedPipelineId: widget.pipelineId,
-          );
-        }
-
-        // Notify admin team
-        final adminUsers = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'admin')
-            .eq('is_active', true);
-
-        final Set<String> adminIds = {};
-        for (final u in (adminUsers as List<dynamic>)) {
-          final adminId = (u as Map)['id']?.toString();
-          if (adminId != null && adminId.isNotEmpty && adminId != _pipeline?.createdBy) {
-            adminIds.add(adminId);
-          }
-        }
-
-        for (final adminId in adminIds) {
-          await NotificationBackendHelper.notifyUser(
-            supabase: supabase,
-            userId: adminId,
-            title: 'Factory Order Completed',
-            body:
-                'The factory order for $productName$custSuffix has been completed.',
-            type: 'step_unlocked',
-            relatedPipelineId: widget.pipelineId,
-          );
-        }
-
-        // Notify purchase team
-        final purchaseUsers = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'purchase')
-            .eq('is_active', true);
-
-        final Set<String> purchaseIds = {};
-        for (final u in (purchaseUsers as List<dynamic>)) {
-          final pId = (u as Map)['id']?.toString();
-          if (pId != null && pId.isNotEmpty) {
-            purchaseIds.add(pId);
-          }
-        }
-
-        for (final pId in purchaseIds) {
-          await NotificationBackendHelper.notifyUser(
-            supabase: supabase,
-            userId: pId,
-            title: 'New Material Requisition Assigned',
-            body:
-                'Factory order completed$custSuffix. Material Requisition step is now available.',
-            type: 'step_unlocked',
-            relatedPipelineId: widget.pipelineId,
-          );
-        }
+        // Notify sales executive who created the pipeline, admins, managers, and purchase team
+        await NotificationBackendHelper.notifyWorkflowStep(
+          supabase: supabase,
+          targetRoles: ['purchase'],
+          dealOwnerId: _pipeline?.createdBy,
+          title: 'New Material Requisition Assigned',
+          body:
+              'Factory order completed$custSuffix. Material Requisition step is now available.',
+          type: 'step_unlocked',
+          relatedPipelineId: widget.pipelineId,
+        );
 
         // Audit log
         await supabase.from('step_audit_log').insert({
@@ -470,7 +424,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId));
+        context
+            .go(AppRoutes.pipelineDetail.replaceAll(':id', widget.pipelineId));
       }
     } catch (e) {
       if (mounted) {
@@ -483,6 +438,59 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _toggleFactorySkip() async {
+    final supabase = ref.read(supabaseClientProvider);
+    if (!_isSkipped) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text('Skip Factory Order Step?'),
+          content: const Text(
+            'Are you sure you want to skip Factory Order? It will be marked as skipped and the deal will proceed to the next step.',
+            style: TextStyle(fontFamily: 'Inter'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF64748B),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Skip Step'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+      await WorkProgressService.setStepSkipped(
+          supabase, widget.pipelineId, 'factory_order', true);
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Factory Order step marked as skipped.')),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      await WorkProgressService.setStepSkipped(
+          supabase, widget.pipelineId, 'factory_order', false);
+      ref.invalidate(pipelineDetailProvider(widget.pipelineId));
+      if (mounted) {
+        setState(() => _isSkipped = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Factory Order step unskipped.')),
+        );
+      }
     }
   }
 
@@ -766,7 +774,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                                     fontFamily: 'Inter',
                                                     fontSize: 14,
                                                     fontWeight: FontWeight.bold,
-                                                    color: AppColors.textPrimary,
+                                                    color:
+                                                        AppColors.textPrimary,
                                                   ),
                                                   overflow:
                                                       TextOverflow.ellipsis,
@@ -775,15 +784,16 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                               if (field.isRequired) ...[
                                                 const SizedBox(width: 6),
                                                 Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.error
                                                         .withValues(alpha: 0.1),
                                                     borderRadius:
-                                                        BorderRadius.circular(4),
+                                                        BorderRadius.circular(
+                                                            4),
                                                   ),
                                                   child: const Text(
                                                     'Required',
@@ -802,7 +812,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                           const SizedBox(height: 2),
                                           Text(
                                             field.type ==
-                                                    FactoryCustomFieldType.dropdown
+                                                    FactoryCustomFieldType
+                                                        .dropdown
                                                 ? 'Dropdown • ${field.options.join(", ")}'
                                                 : '${field.type.label}${field.placeholder.isNotEmpty ? " • Placeholder: ${field.placeholder}" : ""}',
                                             style: const TextStyle(
@@ -990,7 +1001,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                         const SizedBox(height: 14),
 
                         // Options (if Dropdown)
-                        if (selectedType == FactoryCustomFieldType.dropdown) ...[
+                        if (selectedType ==
+                            FactoryCustomFieldType.dropdown) ...[
                           const Text(
                             'Dropdown Choices * (Comma Separated)',
                             style: TextStyle(
@@ -1254,13 +1266,16 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                           title: Text(
                             item['name'] ?? '',
                             style: const TextStyle(
-                                fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w600),
                           ),
                           subtitle: item['description'] != null
                               ? Text(item['description'],
-                                  style: const TextStyle(fontFamily: 'Inter', fontSize: 12))
+                                  style: const TextStyle(
+                                      fontFamily: 'Inter', fontSize: 12))
                               : null,
-                          trailing: const Icon(Icons.add, color: AppColors.primary),
+                          trailing:
+                              const Icon(Icons.add, color: AppColors.primary),
                           onTap: () {
                             setState(() {
                               _items.add(FactoryOrderItem(
@@ -1288,8 +1303,9 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                 .insert({'name': name})
                                 .select('id, name, description')
                                 .single();
-                            
-                            final newItem = Map<String, dynamic>.from(response as Map);
+
+                            final newItem =
+                                Map<String, dynamic>.from(response as Map);
                             setState(() {
                               _catalogItems.add(newItem);
                               _items.add(FactoryOrderItem(
@@ -1297,7 +1313,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                 qty: 1,
                               ));
                             });
-                            
+
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -1334,7 +1350,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
     ).then((_) => searchController.dispose());
   }
 
-  Future<void> _generateAndUploadPdf(String orderId, {bool showPrintDialog = true}) async {
+  Future<void> _generateAndUploadPdf(String orderId,
+      {bool showPrintDialog = true}) async {
     final supabase = ref.read(supabaseClientProvider);
     final foData = await supabase
         .from('factory_orders')
@@ -1351,25 +1368,28 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
         .single();
     final pipeline = SalesPipeline.fromJson(pipelineData);
 
-    final customer = pipeline.customer ?? Customer(
-      id: pipeline.customerId,
-      companyName: 'Default Customer',
-      contactPerson: 'Contact Person',
-      phone: '',
-      email: '',
-      createdBy: '',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    final product = pipeline.product ?? Product(
-      id: pipeline.productId,
-      name: 'Default Product',
-      category: 'HVAC',
-      baseSpecs: const ProductBaseSpecs(quotationFields: [], boqRequiredFields: []),
-      isActive: true,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
+    final customer = pipeline.customer ??
+        Customer(
+          id: pipeline.customerId,
+          companyName: 'Default Customer',
+          contactPerson: 'Contact Person',
+          phone: '',
+          email: '',
+          createdBy: '',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+    final product = pipeline.product ??
+        Product(
+          id: pipeline.productId,
+          name: 'Default Product',
+          category: 'HVAC',
+          baseSpecs: const ProductBaseSpecs(
+              quotationFields: [], boqRequiredFields: []),
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
 
     Map<String, dynamic> templateConfig;
     try {
@@ -1486,7 +1506,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.notifications_active, color: AppColors.primary, size: 22),
+                    const Icon(Icons.notifications_active,
+                        color: AppColors.primary, size: 22),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1494,11 +1515,19 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                         children: [
                           const Text(
                             'Tentative Dispatch Scheduled',
-                            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.primary),
+                            style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppColors.primary),
                           ),
                           Text(
                             'Dispatch Target: ${DateFormat('dd MMMM yyyy').format(_boqDispatchDate!)}',
-                            style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary),
                           ),
                         ],
                       ),
@@ -1514,7 +1543,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primarySurface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                border:
+                    Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1675,7 +1705,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                           children: [
                             // Decrement button (-)
                             InkWell(
-                              borderRadius: const BorderRadius.horizontal(left: Radius.circular(7)),
+                              borderRadius: const BorderRadius.horizontal(
+                                  left: Radius.circular(7)),
                               onTap: !enabled || currentQty <= 1
                                   ? null
                                   : () {
@@ -1688,7 +1719,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                       });
                                     },
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
                                 child: Icon(
                                   Icons.remove,
                                   size: 16,
@@ -1700,14 +1732,18 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                             ),
                             // Click to change Qty (strictly integer, no decimals)
                             InkWell(
-                              onTap: !enabled ? null : () => _showChangeQtyDialog(idx, item),
+                              onTap: !enabled
+                                  ? null
+                                  : () => _showChangeQtyDialog(idx, item),
                               child: Container(
                                 constraints: const BoxConstraints(minWidth: 44),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   border: Border.symmetric(
-                                    vertical: BorderSide(color: Colors.grey.shade300),
+                                    vertical:
+                                        BorderSide(color: Colors.grey.shade300),
                                   ),
                                 ),
                                 child: Text(
@@ -1724,7 +1760,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                             ),
                             // Increment button (+)
                             InkWell(
-                              borderRadius: const BorderRadius.horizontal(right: Radius.circular(7)),
+                              borderRadius: const BorderRadius.horizontal(
+                                  right: Radius.circular(7)),
                               onTap: !enabled
                                   ? null
                                   : () {
@@ -1737,7 +1774,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                                       });
                                     },
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
                                 child: Icon(
                                   Icons.add,
                                   size: 16,
@@ -1753,7 +1791,8 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                       if (enabled) ...[
                         const SizedBox(width: 8),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                          icon: const Icon(Icons.delete_outline,
+                              color: AppColors.error, size: 20),
                           tooltip: 'Remove Item',
                           onPressed: () {
                             setState(() {
@@ -1822,8 +1861,7 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppColors.border,
-                            style: BorderStyle.solid),
+                            color: AppColors.border, style: BorderStyle.solid),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1886,8 +1924,11 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
                           const SizedBox(height: 6),
                           if (field.type == FactoryCustomFieldType.dropdown)
                             DropdownButtonFormField<String>(
-                              value: (_customDropdownValues[field.id]?.isNotEmpty ?? false) &&
-                                      field.options.contains(_customDropdownValues[field.id])
+                              value: (_customDropdownValues[field.id]
+                                              ?.isNotEmpty ??
+                                          false) &&
+                                      field.options.contains(
+                                          _customDropdownValues[field.id])
                                   ? _customDropdownValues[field.id]
                                   : null,
                               decoration: InputDecoration(
@@ -1980,6 +2021,35 @@ class _FactoryOrderScreenState extends ConsumerState<FactoryOrderScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Skip Step Button (placed just before Complete/Save Changes button)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isSaving ? null : _toggleFactorySkip,
+                icon: Icon(_isSkipped ? Icons.undo : Icons.skip_next, size: 18),
+                label: Text(
+                  _isSkipped
+                      ? 'Unskip Factory Order Step'
+                      : 'Skip Factory Order Step (Not Required)',
+                  style: const TextStyle(
+                      fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _isSkipped
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFF64748B),
+                  side: BorderSide(
+                      color: _isSkipped
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFFCBD5E1)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
 
             // Actions
             if ((!isCompleted || _isEditing) && role != UserRole.purchase) ...[

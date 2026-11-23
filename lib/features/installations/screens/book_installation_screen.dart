@@ -682,8 +682,32 @@ class _BookInstallationScreenState
                             labelText: 'Select Deal / Product',
                             border: OutlineInputBorder(),
                             isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                           ),
                           value: _selectedDeal,
+                          selectedItemBuilder: (context) {
+                            return _customerCompletedDeals.map((deal) {
+                              final productName = deal['products']?['name'] ?? 'Unknown Product';
+                              final dealId = (deal['deal_id'] != null && deal['deal_id'].toString().trim().isNotEmpty)
+                                  ? deal['deal_id'].toString().trim()
+                                  : '';
+                              final dt = deal['created_at'];
+                              String dateStr = '';
+                              if (dt is DateTime) {
+                                dateStr = DateFormat('dd MMM yy').format(dt);
+                              } else if (dt != null) {
+                                final parsed = DateTime.tryParse(dt.toString());
+                                if (parsed != null) dateStr = DateFormat('dd MMM yy').format(parsed);
+                              }
+                              final prefix = dealId.isNotEmpty ? '[$dealId] ' : '';
+                              final suffix = dateStr.isNotEmpty ? ' ($dateStr)' : '';
+                              return Text(
+                                '$prefix$productName$suffix',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              );
+                            }).toList();
+                          },
                           items: _customerCompletedDeals.map((deal) {
                             final productName =
                                 deal['products']?['name'] ?? 'Unknown Product';
@@ -779,12 +803,13 @@ class _BookInstallationScreenState
                           child: DropdownButtonFormField<String>(
                             value: _selectedPriority,
                             isExpanded: true,
+                            iconSize: 18,
                             decoration: const InputDecoration(
                               labelText: 'Priority',
                               border: OutlineInputBorder(),
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 10),
+                                  horizontal: 8, vertical: 10),
                             ),
                             items: [
                               'High Priority',
@@ -797,7 +822,7 @@ class _BookInstallationScreenState
                                         p,
                                         overflow: TextOverflow.ellipsis,
                                         maxLines: 1,
-                                        style: const TextStyle(fontSize: 13),
+                                        style: const TextStyle(fontSize: 12),
                                       ),
                                     ))
                                 .toList(),

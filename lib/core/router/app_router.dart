@@ -24,6 +24,7 @@ import '../../features/quotation_generator/ui/screens/noc_hub_screen.dart';
 import '../../features/quotation_generator/ui/screens/noc_builder_screen.dart';
 import '../../features/sales_order/screens/sales_order_form_screen.dart';
 import '../../features/boq/screens/boq_form_screen.dart';
+import '../../features/boq/screens/boq_list_screen.dart';
 import '../../features/admin/screens/manage_boq_items_screen.dart';
 import '../../features/factory_order/screens/factory_order_screen.dart';
 import '../../features/factory_order/screens/factory_queue_screen.dart';
@@ -120,6 +121,7 @@ class AppRoutes {
   static const String pipelineDetail = '/pipelines/:id';
   static const String quotationForm = '/pipelines/:id/quotation';
   static const String salesOrderForm = '/pipelines/:id/sales-order';
+  static const String boqList = '/pipelines/:id/boqs';
   static const String boqForm = '/pipelines/:id/boq';
   static const String factoryOrderForm = '/pipelines/:id/factory-order';
   static const String factoryQueue = '/factory/queue';
@@ -862,10 +864,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutes.boqList,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return BoqListScreen(pipelineId: id);
+        },
+      ),
+      GoRoute(
         path: AppRoutes.boqForm,
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return BoqFormScreen(pipelineId: id);
+          final isNew = state.uri.queryParameters['isNew'] == 'true';
+          final boqId = state.uri.queryParameters['boqId'];
+          return BoqFormScreen(pipelineId: id, isNew: isNew, boqId: boqId);
         },
       ),
       GoRoute(

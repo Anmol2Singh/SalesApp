@@ -20,9 +20,12 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   final bool _isAdmin;
 
   int _page = 0;
-  static const int _pageSize = 25;
+  static const int _pageSize = 100;
   bool _hasMore = true;
   bool _isLoading = false;
+
+  bool get hasMore => _hasMore;
+  bool get isLoading => _isLoading;
   String _stepFilter = '';
   String _statusFilter = '';
   RealtimeChannel? _realtimeChannel;
