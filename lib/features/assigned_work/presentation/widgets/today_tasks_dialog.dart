@@ -13,12 +13,20 @@ import 'add_edit_work_dialog.dart';
 class TodayTasksDialog extends ConsumerWidget {
   const TodayTasksDialog({super.key});
 
-  static Future<void> show(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (_) => const TodayTasksDialog(),
-    );
+  static bool _isOpen = false;
+
+  static Future<void> show(BuildContext context) async {
+    if (_isOpen) return;
+    _isOpen = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (_) => const TodayTasksDialog(),
+      );
+    } finally {
+      _isOpen = false;
+    }
   }
 
   @override

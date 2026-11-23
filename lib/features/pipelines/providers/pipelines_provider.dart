@@ -16,8 +16,7 @@ import '../../auth/providers/auth_provider.dart';
 // Paginated pipeline list
 class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   final SupabaseClient _supabase;
-  final String? _userId;
-  final bool _isAdmin;
+  final Profile? _profile;
 
   int _page = 0;
   static const int _pageSize = 100;
@@ -31,7 +30,7 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
   RealtimeChannel? _realtimeChannel;
   Timer? _pollingTimer;
 
-  PipelinesNotifier(this._supabase, this._userId, this._isAdmin)
+  PipelinesNotifier(this._supabase, this._profile)
       : super(const AsyncValue.loading()) {
     load();
     _initRealtime();
@@ -129,24 +128,48 @@ class PipelinesNotifier extends StateNotifier<AsyncValue<List<SalesPipeline>>> {
             purchase_orders(id, status)
           ''').isFilter('deleted_at', null);
 
-      if (!_isAdmin && _userId != null) {
-        List<String> assignedCustomerIds = [];
-        try {
-          final custRes = await _supabase
-              .from('customers')
-              .select('id')
-              .eq('assigned_to', _userId);
-          assignedCustomerIds = (custRes as List)
-              .map((c) => c['id']?.toString() ?? '')
-              .where((id) => id.isNotEmpty)
-              .toList();
-        } catch (_) {}
+      final profile = _profile;
+      final roles = (profile != null && profile.roles.isNotEmpty)
+          ? profile.roles
+          : (profile != null ? [profile.primaryRole] : <UserRole>[]);
+      final canViewAll = roles.contains(UserRole.admin) ||
+          roles.contains(UserRole.manager) ||
+          roles.contains(UserRole.salesHead);
 
-        if (assignedCustomerIds.isNotEmpty) {
-          final idList = assignedCustomerIds.join(',');
-          query = query.or('created_by.eq.$_userId,customer_id.in.($idList)');
-        } else {
-          query = query.eq('created_by', _userId);
+      if (!canViewAll && profile != null) {
+        final hasBoqOrService = roles.contains(UserRole.boq) ||
+            roles.contains(UserRole.serviceHead) ||
+            roles.contains(UserRole.installation) ||
+            roles.contains(UserRole.complaints);
+        final hasFactory = roles.contains(UserRole.factory);
+        final hasPurchase = roles.contains(UserRole.purchase);
+        final hasSales = roles.contains(UserRole.sales);
+
+        if (hasBoqOrService) {
+          query = query.or('current_step.in.(boq,factory_order,purchase_order),status.eq.completed');
+        } else if (hasFactory) {
+          query = query.or('current_step.in.(factory_order,purchase_order),status.eq.completed');
+        } else if (hasPurchase) {
+          query = query.or('current_step.eq.purchase_order,status.eq.completed');
+        } else if (hasSales) {
+          List<String> assignedCustomerIds = [];
+          try {
+            final custRes = await _supabase
+                .from('customers')
+                .select('id')
+                .eq('assigned_to', profile.id);
+            assignedCustomerIds = (custRes as List)
+                .map((c) => c['id']?.toString() ?? '')
+                .where((id) => id.isNotEmpty)
+                .toList();
+          } catch (_) {}
+
+          if (assignedCustomerIds.isNotEmpty) {
+            final idList = assignedCustomerIds.join(',');
+            query = query.or('created_by.eq.${profile.id},customer_id.in.($idList)');
+          } else {
+            query = query.eq('created_by', profile.id);
+          }
         }
       }
 
@@ -199,12 +222,9 @@ final pipelinesNotifierProvider =
         (ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
-  final canViewAll = profile?.primaryRole.canViewAllPipelines == true ||
-      profile?.roles.any((r) => r.canViewAllPipelines) == true;
   return PipelinesNotifier(
     supabase,
-    profile?.id,
-    canViewAll,
+    profile,
   );
 });
 
@@ -224,8 +244,14 @@ class DealCounts {
 final dealCountsProvider = FutureProvider<DealCounts>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
   final profile = ref.watch(currentProfileProvider);
-  final canViewAll = profile?.primaryRole.canViewAllPipelines == true ||
-      profile?.roles.any((r) => r.canViewAllPipelines) == true;
+  if (profile == null) {
+    return const DealCounts(needsAction: 0, active: 0, completed: 0);
+  }
+
+  final roles = profile.roles.isNotEmpty ? profile.roles : [profile.primaryRole];
+  final canViewAll = roles.contains(UserRole.admin) ||
+      roles.contains(UserRole.manager) ||
+      roles.contains(UserRole.salesHead);
 
   try {
     if (canViewAll) {
@@ -261,40 +287,60 @@ final dealCountsProvider = FutureProvider<DealCounts>((ref) async {
       );
     }
 
-    // 2. Scoped query for non-admin/assigned users
-    var query = supabase
+    // 2. Scoped query for non-admin/assigned roles (Service Head, Factory, Purchase, Sales, etc.)
+    final rows = await supabase
         .from('sales_pipelines')
-        .select('id, status, quotations(id, status)')
+        .select('''
+          id,
+          status,
+          current_step,
+          created_by,
+          customer_id,
+          customers(assigned_to),
+          quotations(id, status)
+        ''')
         .isFilter('deleted_at', null);
 
-    if (!canViewAll && profile?.id != null) {
-      List<String> assignedCustomerIds = [];
-      try {
-        final custRes = await supabase
-            .from('customers')
-            .select('id')
-            .eq('assigned_to', profile!.id);
-        assignedCustomerIds = (custRes as List)
-            .map((c) => c['id']?.toString() ?? '')
-            .where((id) => id.isNotEmpty)
-            .toList();
-      } catch (_) {}
+    final hasBoqOrServiceRole = roles.contains(UserRole.boq) ||
+        roles.contains(UserRole.serviceHead) ||
+        roles.contains(UserRole.installation) ||
+        roles.contains(UserRole.complaints);
+    final hasFactoryRole = roles.contains(UserRole.factory);
+    final hasPurchaseRole = roles.contains(UserRole.purchase);
+    final hasSalesRole = roles.contains(UserRole.sales);
 
-      if (assignedCustomerIds.isNotEmpty) {
-        final idList = assignedCustomerIds.join(',');
-        query = query.or('created_by.eq.${profile!.id},customer_id.in.($idList)');
-      } else {
-        query = query.eq('created_by', profile!.id);
-      }
-    }
-
-    final rows = await query;
     int needsAction = 0;
     int active = 0;
     int completed = 0;
 
     for (final r in (rows as List)) {
-      final status = r['status']?.toString();
+      final statusStr = r['status']?.toString() ?? 'in_progress';
+      final isCompletedStatus = statusStr == 'completed';
+      final currentStepStr = r['current_step']?.toString() ?? 'quotation';
+      final step = PipelineStep.fromString(currentStepStr);
+      final isCompleted = isCompletedStatus || step == PipelineStep.completed;
+
+      final createdBy = r['created_by']?.toString() ?? '';
+      final custMap = r['customers'] is Map ? r['customers'] as Map : null;
+      final assignedTo = custMap?['assigned_to']?.toString();
+
+      // Check visibility matching RoleAccess.isDealVisibleForUser
+      bool isVisible = false;
+      if (isCompleted &&
+          (hasBoqOrServiceRole || hasFactoryRole || hasPurchaseRole || hasSalesRole)) {
+        isVisible = true;
+      } else if (hasBoqOrServiceRole && step.stepIndex >= PipelineStep.boq.stepIndex) {
+        isVisible = true;
+      } else if (hasFactoryRole && step.stepIndex >= PipelineStep.factoryOrder.stepIndex) {
+        isVisible = true;
+      } else if (hasPurchaseRole && step.stepIndex >= PipelineStep.purchaseOrder.stepIndex) {
+        isVisible = true;
+      } else if (hasSalesRole && (createdBy == profile.id || assignedTo == profile.id)) {
+        isVisible = true;
+      }
+
+      if (!isVisible) continue;
+
       final quote = r['quotations'] ?? r['quotation'];
       String? quoteStatus;
       if (quote is List && quote.isNotEmpty) {
@@ -303,10 +349,10 @@ final dealCountsProvider = FutureProvider<DealCounts>((ref) async {
         quoteStatus = quote['status']?.toString();
       }
 
-      if (quoteStatus == 'pending_approval') {
+      if (quoteStatus == 'pending_approval' && hasSalesRole) {
         needsAction++;
       }
-      if (status == 'completed') {
+      if (isCompletedStatus) {
         completed++;
       } else {
         active++;

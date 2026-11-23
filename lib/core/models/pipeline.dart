@@ -10,6 +10,8 @@ import 'boq.dart';
 import 'factory_order.dart';
 import 'purchase_order.dart';
 
+export 'customer.dart' show PipelineStatus;
+
 class SalesPipeline {
   final String id;
   final String? dealId;

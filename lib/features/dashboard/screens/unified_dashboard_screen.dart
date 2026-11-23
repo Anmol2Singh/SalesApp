@@ -288,10 +288,10 @@ class UnifiedDashboardScreen extends ConsumerWidget {
     final bool hasDealsAccess = (hasOperations || hasSales) && !isPureAccounts;
 
     // Build user display name and avatar initial
-    final rawName = profile?.fullName.trim() ?? '';
+    final rawName = profile.fullName.trim();
     final displayName = rawName.isNotEmpty
         ? rawName
-        : (profile?.primaryRole.displayName ?? 'Staff User');
+        : profile.primaryRole.displayName;
     final avatarInitial =
         displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
 
@@ -310,7 +310,7 @@ class UnifiedDashboardScreen extends ConsumerWidget {
 
     final headerRoleLabel = roleNames.isNotEmpty
         ? roleNames.take(2).join(' · ').toUpperCase()
-        : (profile?.primaryRole.displayName.toUpperCase() ?? 'STAFF');
+        : profile.primaryRole.displayName.toUpperCase();
 
     return Scaffold(
       backgroundColor:
@@ -339,24 +339,30 @@ class UnifiedDashboardScreen extends ConsumerWidget {
                     BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
               flexibleSpace: FlexibleSpaceBar(
-                background: Stack(
-                  children: [
-                    // Unified purple-violet gradient matching Admin & screenshot
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF0F172A),
-                            Color(0xFF2E1065),
-                            Color(0xFF6B21A8),
-                            Color(0xFF4F46E5),
-                            Color(0xFF2563EB),
-                          ],
+                background: ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(28)),
+                  child: Stack(
+                    children: [
+                      // Unified purple-violet gradient matching Admin & screenshot
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF0F172A),
+                              Color(0xFF2E1065),
+                              Color(0xFF6B21A8),
+                              Color(0xFF4F46E5),
+                              Color(0xFF2563EB),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(28),
+                          ),
                         ),
                       ),
-                    ),
                     // Ambient light glow
                     Positioned(
                       top: -40,
@@ -485,6 +491,7 @@ class UnifiedDashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            ),
               actions: [
                 const DashboardSwitcherButton(),
                 IconButton(
@@ -743,7 +750,6 @@ class UnifiedDashboardScreen extends ConsumerWidget {
           final installationsCount = stats['active_installations_count'] ??
               stats['installations_count'] ??
               0;
-          final pendingApproval = stats['pending_approval_count'] ?? 0;
 
           cards = [
             _UnifiedStatCard(
@@ -1466,9 +1472,9 @@ class _UnifiedRecentPipelineTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: badgeColor.withOpacity(0.1),
+                color: badgeColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: badgeColor.withOpacity(0.3)),
+                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
               ),
               child: Text(
                 stepName,

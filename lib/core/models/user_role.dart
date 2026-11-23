@@ -100,12 +100,7 @@ enum UserRole {
   bool get canViewAllPipelines =>
       this == UserRole.admin ||
       this == UserRole.manager ||
-      this == UserRole.salesHead ||
-      this == UserRole.serviceHead ||
-      this == UserRole.installation ||
-      this == UserRole.factory ||
-      this == UserRole.purchase ||
-      this == UserRole.boq;
+      this == UserRole.salesHead;
 
   bool get canCreateCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.salesHead;
   bool get canEditCustomers => this == UserRole.sales || this == UserRole.admin || this == UserRole.salesHead;

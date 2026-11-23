@@ -559,6 +559,8 @@ class WorkProgressService {
     required SupabaseClient supabase,
     required SalesPipeline pipeline,
   }) async {
+    if (pipeline.status == PipelineStatus.completed) return true;
+
     // 1. Quotation
     if (pipeline.quotation == null) return false;
 
@@ -594,12 +596,30 @@ class WorkProgressService {
     return true;
   }
 
+  /// Fast synchronous deduction of the active work stage from local pipeline metadata
+  /// so UI never flickers or waits for network queries.
+  static String getFastInitialWorkStage(SalesPipeline pipeline) {
+    if (pipeline.status == PipelineStatus.completed) return 'Completed';
+    final meta = parseProgressMeta(pipeline);
+    final bool factoryDispatched = meta['factory_dispatched'] == true;
+    final deliveryChallans = getDeliveryChallans(pipeline);
+    final bool siteDispatched = meta['site_dispatched'] == true || deliveryChallans.isNotEmpty;
+    if (!factoryDispatched || !siteDispatched) {
+      if (!factoryDispatched && !siteDispatched) return 'Dispatch';
+      if (!factoryDispatched) return 'Factory Dispatch';
+      return 'Site Dispatch';
+    }
+    return 'Installation';
+  }
+
   /// Evaluates which operational phase in Work Progress is currently active/pending.
   /// E.g. 'Dispatch', 'Installation', 'NOC', or 'Completed'.
   static Future<String> getWorkProgressStage({
     required SupabaseClient supabase,
     required SalesPipeline pipeline,
   }) async {
+    if (pipeline.status == PipelineStatus.completed) return 'Completed';
+
     // 1. Quotation
     if (pipeline.quotation == null) return 'Quotation';
 
@@ -678,6 +698,13 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
   @override
   void initState() {
     super.initState();
+    final isDealCompleted = widget.pipeline.status == PipelineStatus.completed;
+    if (isDealCompleted) {
+      _isInstallationCreated = true;
+      _isInstallationCompleted = true;
+      _isNocCompleted = true;
+      _loadingAux = false;
+    }
     _fetchAuxData();
   }
 
@@ -755,6 +782,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       final noc = nocList.isNotEmpty ? nocList.first : null;
 
       if (mounted) {
+        final isDealCompleted = widget.pipeline.status == PipelineStatus.completed;
         final meta = WorkProgressService.parseProgressMeta(widget.pipeline);
         final deliveryChallans = WorkProgressService.getDeliveryChallans(widget.pipeline);
         final bool factoryDispatched = meta['factory_dispatched'] == true;
@@ -762,20 +790,20 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         final bool step1QuotationDone = widget.pipeline.quotation != null;
         final bool step2SalesOrderDone = widget.pipeline.salesOrder != null;
         final bool step3DispatchDone = factoryDispatched || siteDispatched;
-        final bool isAllDone = step1QuotationDone &&
+        final bool isAllDone = isDealCompleted || (step1QuotationDone &&
             step2SalesOrderDone &&
             step3DispatchDone &&
             isDone &&
-            (noc != null);
+            (noc != null));
 
         setState(() {
-          _isInstallationCreated = isCreated;
-          _isInstallationCompleted = isDone;
+          _isInstallationCreated = isCreated || isDealCompleted;
+          _isInstallationCompleted = isDone || isDealCompleted;
           _installationTicketNumber = tNum;
           _installationId = tId;
           _installationStatus = sStatus;
           _nocDoc = noc;
-          _isNocCompleted = noc != null;
+          _isNocCompleted = (noc != null) || isDealCompleted;
           _loadingAux = false;
         });
 
@@ -783,8 +811,16 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _loadingAux = false);
-        widget.onProgressEvaluated?.call(false);
+        final isDealCompleted = widget.pipeline.status == PipelineStatus.completed;
+        setState(() {
+          if (isDealCompleted) {
+            _isInstallationCreated = true;
+            _isInstallationCompleted = true;
+            _isNocCompleted = true;
+          }
+          _loadingAux = false;
+        });
+        widget.onProgressEvaluated?.call(isDealCompleted);
       }
     }
   }
@@ -1952,7 +1988,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                             child: Text(
                               _dealInstallations.length > 1
                                   ? '${_dealInstallations.length} Tickets'
-                                  : _installationTicketNumber!,
+                                  : (_installationTicketNumber ?? 'Ticket'),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -1991,17 +2027,19 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             statusColor: step5NocDone
                 ? AppColors.success
                 : (step4InstallDone ? const Color(0xFF2563EB) : AppColors.textDisabled),
-            onTap: step5NocDone
+            onTap: (step5NocDone && _nocDoc != null)
                 ? () => _viewNocPdf(_nocDoc!)
                 : (step4InstallDone ? _generateNoc : null),
             child: Padding(
               padding: const EdgeInsets.only(top: 6, bottom: 4),
               child: step5NocDone
                   ? OutlinedButton.icon(
-                      onPressed: () => _viewNocPdf(_nocDoc!),
+                      onPressed: _nocDoc != null ? () => _viewNocPdf(_nocDoc!) : null,
                       icon: const Icon(Icons.verified, size: 14, color: Color(0xFF059669)),
                       label: Text(
-                        'View NOC PDF (${_nocDoc!.nocNumber})',
+                        _nocDoc != null
+                            ? 'View NOC PDF (${_nocDoc!.nocNumber})'
+                            : 'View NOC PDF',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
                       ),
                       style: OutlinedButton.styleFrom(

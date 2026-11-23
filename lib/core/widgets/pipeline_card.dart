@@ -172,13 +172,13 @@ class PipelineCard extends ConsumerWidget {
     final workStageAsync = ref.watch(pipelineWorkStageProvider(pipeline));
     final workStage = workStageAsync.valueOrNull;
 
+    final isDealCompleted = pipeline.status == PipelineStatus.completed;
     final isAllDealStepsDone = completedStepsCount == 5;
-    final isWorkCompleted = workStage == 'Completed';
-    final isBoth100 = isAllDealStepsDone && isWorkCompleted && pipeline.status == PipelineStatus.completed;
-    final isWorkPending = isAllDealStepsDone && !isWorkCompleted;
+    final isBoth100 = isAllDealStepsDone && isDealCompleted;
+    final isWorkPending = isAllDealStepsDone && !isDealCompleted;
     final pendingWorkStage = (workStage != null && workStage != 'Completed')
         ? workStage
-        : 'In Progress';
+        : WorkProgressService.getFastInitialWorkStage(pipeline);
 
     return InkWell(
       onTap: () => context.push(

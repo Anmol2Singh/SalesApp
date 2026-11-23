@@ -737,7 +737,8 @@ class ExcelService {
       'Under Product Category',
       'HSN / SAC Code',
       'Unit (UOM)',
-      'Default Price (â‚¹)',
+      'Default Price (₹)',
+      'GST Rate (%)',
       'Warranty (Months)',
       'Created Date',
       'Item ID',
@@ -759,6 +760,7 @@ class ExcelService {
       final item = items[rowIdx];
       final row = rowIdx + 1;
       final underProduct = itemToProductName[item.itemName.trim().toLowerCase()] ?? '';
+      final gstStr = '${item.gstRate.toStringAsFixed(item.gstRate.truncateToDouble() == item.gstRate ? 0 : 2)}%';
 
       final data = [
         (rowIdx + 1).toString(),
@@ -766,7 +768,8 @@ class ExcelService {
         underProduct.isNotEmpty ? underProduct : '-',
         item.hsnSac != null && item.hsnSac!.isNotEmpty ? item.hsnSac! : '-',
         item.uom != null && item.uom!.isNotEmpty ? item.uom! : 'NOS',
-        'â‚¹${_currencyFormat.format(item.price)}',
+        '₹${_currencyFormat.format(item.price)}',
+        gstStr,
         '${item.warrantyMonths}m',
         _dateFormat.format(item.createdAt.toLocal()),
         item.id,
@@ -780,9 +783,10 @@ class ExcelService {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(item.hsnSac ?? '');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = TextCellValue(item.uom ?? 'NOS');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = DoubleCellValue(item.price);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = IntCellValue(item.warrantyMonths);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = TextCellValue(_dateFormat.format(item.createdAt.toLocal()));
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row)).value = TextCellValue(item.id);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = DoubleCellValue(item.gstRate);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = IntCellValue(item.warrantyMonths);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row)).value = TextCellValue(_dateFormat.format(item.createdAt.toLocal()));
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: row)).value = TextCellValue(item.id);
 
       if (row.isEven) {
         for (int c = 0; c < headers.length; c++) {
@@ -823,6 +827,7 @@ class ExcelService {
       'HSN / SAC Code',
       'Unit (UOM)',
       'Default Price (₹)',
+      'GST Rate (%)',
       'Warranty (Months)',
     ];
 
@@ -845,6 +850,7 @@ class ExcelService {
         '84186990',
         'NOS',
         '85000',
+        '18',
         '24',
       ],
       [
@@ -853,6 +859,7 @@ class ExcelService {
         '73090090',
         'NOS',
         '35000',
+        '18',
         '12',
       ],
       [
@@ -861,6 +868,7 @@ class ExcelService {
         '84137010',
         'NOS',
         '8500',
+        '18',
         '12',
       ],
     ];
@@ -872,7 +880,8 @@ class ExcelService {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(sampleRows[r][2]);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(sampleRows[r][3]);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = DoubleCellValue(double.tryParse(sampleRows[r][4]) ?? 0);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = IntCellValue(int.tryParse(sampleRows[r][5]) ?? 12);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = DoubleCellValue(double.tryParse(sampleRows[r][5]) ?? 18);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = IntCellValue(int.tryParse(sampleRows[r][6]) ?? 12);
     }
 
     final fileBytes = excel.save();

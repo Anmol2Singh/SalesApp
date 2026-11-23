@@ -3321,9 +3321,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       final excel = Excel.decodeBytes(bytes);
 
       final supabase = ref.read(supabaseClientProvider);
-      final existingItems = ref.read(inventoryProvider).valueOrNull ?? [];
-      final existingNames =
-          existingItems.map((e) => e.itemName.toLowerCase()).toSet();
+      final existingDbRows = await supabase
+          .from('inventory_items')
+          .select('id, item_name, hsn_sac, uom, price, gst_rate, warranty_months');
+
+      final Map<String, Map<String, dynamic>> existingItemMap = {};
+      for (final row in (existingDbRows as List)) {
+        final m = Map<String, dynamic>.from(row as Map);
+        final name = (m['item_name'] ?? '').toString().trim().toLowerCase();
+        if (name.isNotEmpty) {
+          existingItemMap[name] = m;
+        }
+      }
 
       final existingProducts = ref.read(productsProvider).valueOrNull ?? [];
       final Map<String, Product> productByName = {};
@@ -3338,6 +3347,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
 
       final Set<String> modifiedProductIds = {};
       int importedCount = 0;
+      int updatedCount = 0;
       int skippedCount = 0;
 
       for (var table in excel.tables.keys) {
@@ -3349,6 +3359,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         int hsnCol = -1;
         int unitCol = -1;
         int priceCol = -1;
+        int gstCol = -1;
         int warrantyCol = -1;
 
         bool isFirstRow = true;
@@ -3387,6 +3398,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 hsnCol = i;
               } else if (header.contains('unit') || header.contains('uom')) {
                 unitCol = i;
+              } else if (header.contains('gst') || header.contains('tax')) {
+                gstCol = i;
               } else if (header.contains('price') ||
                   header.contains('cost') ||
                   header.contains('rate') ||
@@ -3412,16 +3425,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                 nameCol = 0;
               }
             }
-            if (underProductCol == -1 && row.length > (nameCol == 0 ? 1 : 2))
-              underProductCol = (nameCol == 0) ? 1 : 2;
-            if (hsnCol == -1 && row.length > (nameCol == 0 ? 2 : 3))
-              hsnCol = (nameCol == 0) ? 2 : 3;
-            if (unitCol == -1 && row.length > (nameCol == 0 ? 3 : 4))
-              unitCol = (nameCol == 0) ? 3 : 4;
-            if (priceCol == -1 && row.length > (nameCol == 0 ? 4 : 5))
-              priceCol = (nameCol == 0) ? 4 : 5;
-            if (warrantyCol == -1 && row.length > (nameCol == 0 ? 5 : 6))
-              warrantyCol = (nameCol == 0) ? 5 : 6;
+            final offset = (nameCol == 0) ? 0 : 1;
+            if (underProductCol == -1 && row.length > 1 + offset) {
+              underProductCol = 1 + offset;
+            }
+            if (hsnCol == -1 && row.length > 2 + offset) {
+              hsnCol = 2 + offset;
+            }
+            if (unitCol == -1 && row.length > 3 + offset) {
+              unitCol = 3 + offset;
+            }
+            if (priceCol == -1 && row.length > 4 + offset) {
+              priceCol = 4 + offset;
+            }
+            if (gstCol == -1 && row.length > 5 + offset) {
+              gstCol = 5 + offset;
+            }
+            if (warrantyCol == -1 && row.length > 6 + offset) {
+              warrantyCol = 6 + offset;
+            }
             continue;
           }
 
@@ -3442,6 +3464,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           final priceCell = (priceCol >= 0 && row.length > priceCol)
               ? row[priceCol]?.value
               : null;
+          final gstCell =
+              (gstCol >= 0 && row.length > gstCol) ? row[gstCol]?.value : null;
           final warrantyCell = (warrantyCol >= 0 && row.length > warrantyCol)
               ? row[warrantyCol]?.value
               : null;
@@ -3466,11 +3490,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             }
           }
 
-          if (existingNames.contains(itemName.toLowerCase())) {
-            skippedCount++;
-            continue;
-          }
-
           final hsn = hsnCell?.toString().trim() ?? '';
           final unit = unitCell?.toString().trim() ?? 'NOS';
 
@@ -3490,6 +3509,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             }
           }
 
+          double gstRate = 18.0;
+          if (gstCell != null) {
+            if (gstCell is DoubleCellValue) {
+              gstRate = gstCell.value;
+            } else if (gstCell is IntCellValue) {
+              gstRate = gstCell.value.toDouble();
+            } else {
+              gstRate = double.tryParse(
+                      gstCell.toString().replaceAll('%', '').trim()) ??
+                  18.0;
+            }
+          }
+
           int warranty = 12;
           if (warrantyCell != null) {
             if (warrantyCell is IntCellValue) {
@@ -3504,15 +3536,54 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             }
           }
 
-          await supabase.from('inventory_items').insert({
-            'item_name': itemName,
+          final cleanItemName = itemName.trim();
+          final lowerName = cleanItemName.toLowerCase();
+
+          if (existingItemMap.containsKey(lowerName)) {
+            final existing = existingItemMap[lowerName]!;
+            final oldHsn = (existing['hsn_sac'] ?? '').toString().trim();
+            final oldUom = (existing['uom'] ?? 'NOS').toString().trim();
+            final oldPrice = (existing['price'] as num?)?.toDouble() ?? 0.0;
+            final oldGst = (existing['gst_rate'] as num?)?.toDouble() ?? 18.0;
+            final oldWarranty = (existing['warranty_months'] as num?)?.toInt() ?? 12;
+
+            final bool hasChanges = (hsn.isNotEmpty && hsn != oldHsn) ||
+                (unit.isNotEmpty && unit != oldUom) ||
+                (price != oldPrice) ||
+                (gstRate != oldGst) ||
+                (warranty != oldWarranty);
+
+            if (hasChanges) {
+              await supabase.from('inventory_items').update({
+                if (hsn.isNotEmpty) 'hsn_sac': hsn,
+                'uom': unit,
+                'price': price,
+                'gst_rate': gstRate,
+                'warranty_months': warranty,
+              }).eq('id', existing['id']);
+
+              existing['hsn_sac'] = hsn;
+              existing['uom'] = unit;
+              existing['price'] = price;
+              existing['gst_rate'] = gstRate;
+              existing['warranty_months'] = warranty;
+              updatedCount++;
+            } else {
+              skippedCount++;
+            }
+            continue;
+          }
+
+          final inserted = await supabase.from('inventory_items').insert({
+            'item_name': cleanItemName,
             'hsn_sac': hsn,
             'uom': unit,
             'price': price,
+            'gst_rate': gstRate,
             'warranty_months': warranty,
-          });
+          }).select('id, item_name, hsn_sac, uom, price, gst_rate, warranty_months').single();
 
-          existingNames.add(itemName.toLowerCase());
+          existingItemMap[lowerName] = Map<String, dynamic>.from(inserted);
           importedCount++;
         }
       }
@@ -3531,7 +3602,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         ref.invalidate(productsProvider);
       }
 
-      if (importedCount > 0) {
+      if (importedCount > 0 || updatedCount > 0) {
         ref.invalidate(inventoryProvider);
       }
 
@@ -3545,14 +3616,18 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         final linkedMsg = modifiedProductIds.isNotEmpty
             ? ' Linked to ${modifiedProductIds.length} products.'
             : '';
+        final updateMsg =
+            updatedCount > 0 ? ', updated $updatedCount items' : '';
+        final skipMsg =
+            skippedCount > 0 ? ', skipped $skippedCount unchanged' : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Imported $importedCount items. Skipped $skippedCount duplicates.$linkedMsg'),
-            backgroundColor:
-                (importedCount > 0 || modifiedProductIds.isNotEmpty)
-                    ? AppColors.success
-                    : Colors.orange,
+            content: Text('Imported $importedCount items$updateMsg$skipMsg.$linkedMsg'),
+            backgroundColor: (importedCount > 0 ||
+                    updatedCount > 0 ||
+                    modifiedProductIds.isNotEmpty)
+                ? AppColors.success
+                : Colors.orange,
           ),
         );
       }

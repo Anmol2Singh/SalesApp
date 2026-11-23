@@ -147,6 +147,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _triggerStartupTodayTasksPopup() {
     if (_hasCheckedTodayTasks) return;
+    _hasCheckedTodayTasks = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -156,11 +157,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       final profile = ref.read(currentProfileProvider);
       if (profile == null) return;
       if (profile.primaryRole == UserRole.customer) {
-        _hasCheckedTodayTasks = true;
         return;
       }
-
-      _hasCheckedTodayTasks = true;
 
       try {
         final tasks = await ref.read(todayTasksForCurrentUserProvider.future);
