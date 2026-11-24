@@ -1539,6 +1539,51 @@ class _StepActionCard extends ConsumerWidget {
                         minimumSize: const Size(0, 36),
                       ),
                     ),
+                  ] else if (isSkipped && canAct) ...[
+                    OutlinedButton(
+                      onPressed: () => _navigate(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF475569),
+                        side: const BorderSide(color: Color(0xFF94A3B8)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 36),
+                      ),
+                      child: Text(
+                        hasData ? 'View / Edit' : 'Open Form',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () =>
+                          _showReverseSkipDialog(context, ref, pipeline),
+                      icon: const Icon(Icons.undo, size: 14),
+                      label: const Text(
+                        'Reverse Skip',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF475569),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 36),
+                      ),
+                    ),
                   ] else if (canAct && !isSkipped) ...[
                     ElevatedButton(
                       onPressed:
@@ -1663,6 +1708,83 @@ class _StepActionCard extends ConsumerWidget {
         break;
       case PipelineStep.completed:
         break;
+    }
+  }
+
+  Future<void> _showReverseSkipDialog(
+    BuildContext context,
+    WidgetRef ref,
+    SalesPipeline pipeline,
+  ) async {
+    final stepKey = _stepKey;
+    if (stepKey == null) return;
+
+    final stepTitle = _getStepTitle();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.undo, color: Color(0xFF475569)),
+            SizedBox(width: 8),
+            Text('Reverse Skip?'),
+          ],
+        ),
+        content: Text(
+          'Do you want to reverse the skip for "$stepTitle"?\n\nThis step will be restored to active status so it can be filled and completed.',
+          style: const TextStyle(fontFamily: 'Inter', fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF475569),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Reverse Skip'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final supabase = ref.read(supabaseClientProvider);
+    try {
+      await WorkProgressService.setStepSkipped(
+        supabase,
+        pipeline.id,
+        stepKey,
+        false,
+      );
+
+      ref.invalidate(pipelineDetailProvider(pipeline.id));
+      ref.invalidate(pipelinesNotifierProvider);
+      ref.invalidate(dealCountsProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ "$stepTitle" has been restored to active.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error reversing skip: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 }

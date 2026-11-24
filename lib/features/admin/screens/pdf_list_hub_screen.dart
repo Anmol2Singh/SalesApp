@@ -29,6 +29,7 @@ import '../../installations/data/models/installation_model.dart';
 import '../../installations/services/installation_pdf_service.dart';
 import '../../../core/models/pipeline.dart';
 import '../../pipelines/widgets/work_progress_box.dart';
+import '../../sales_order/widgets/delivery_challan_modal.dart';
 
 enum PdfCategoryType {
   quotation,
@@ -1273,6 +1274,37 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
     return (bytes: bytes, safeName: safeName);
   }
 
+  Future<void> _handleEditDeliveryChallan(_PdfDocItem item) async {
+    try {
+      final pipeJson = item.rawData['pipeline'] as Map<String, dynamic>;
+      final challanJson = item.rawData['challan'] as Map<String, dynamic>;
+      final pipeline = SalesPipeline.fromJson(pipeJson);
+      final customer = pipeline.customer ??
+          Customer.fromJson(pipeJson['customers'] as Map<String, dynamic>? ??
+              {'id': '', 'company_name': item.customerName});
+
+      await DeliveryChallanModal.show(
+        context,
+        pipelineId: pipeline.id,
+        customer: customer,
+        existingChallan: challanJson,
+      );
+
+      if (mounted) {
+        _fetchCategoryDocuments();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error editing Delivery Challan: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _handlePreview(_PdfDocItem item) async {
     setState(() => _activeGeneratingId = item.id);
     try {
@@ -1899,6 +1931,37 @@ class _PdfCategoryListScreenState extends ConsumerState<PdfCategoryListScreen> {
                                                         _handlePreview(item),
                                                   ),
                                                 ),
+                                                if (item.docType ==
+                                                    'delivery_challan') ...[
+                                                  const SizedBox(width: 8),
+                                                  IconButton(
+                                                    style:
+                                                        IconButton.styleFrom(
+                                                      backgroundColor:
+                                                          const Color(
+                                                              0xFFE0F2FE),
+                                                      padding:
+                                                          const EdgeInsets
+                                                              .all(8),
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                      ),
+                                                    ),
+                                                    icon: const Icon(
+                                                        Icons.edit_outlined,
+                                                        size: 18,
+                                                        color:
+                                                            Color(0xFF0284C7)),
+                                                    tooltip:
+                                                        'Edit Delivery Challan',
+                                                    onPressed: () =>
+                                                        _handleEditDeliveryChallan(
+                                                            item),
+                                                  ),
+                                                ],
                                                 const SizedBox(width: 8),
                                                 IconButton(
                                                   style: IconButton.styleFrom(

@@ -42,17 +42,20 @@ class _ChallanItemRow {
 class DeliveryChallanModal extends ConsumerStatefulWidget {
   final String pipelineId;
   final Customer customer;
+  final Map<String, dynamic>? existingChallan;
 
   const DeliveryChallanModal({
     super.key,
     required this.pipelineId,
     required this.customer,
+    this.existingChallan,
   });
 
   static Future<void> show(
     BuildContext context, {
     required String pipelineId,
     required Customer customer,
+    Map<String, dynamic>? existingChallan,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -61,6 +64,7 @@ class DeliveryChallanModal extends ConsumerStatefulWidget {
       builder: (ctx) => DeliveryChallanModal(
         pipelineId: pipelineId,
         customer: customer,
+        existingChallan: existingChallan,
       ),
     );
   }
@@ -481,7 +485,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
   Map<String, double> _getAlreadySentMap(SalesPipeline pipeline) {
     final existingChallans = WorkProgressService.getDeliveryChallans(pipeline);
     final map = <String, double>{};
+    final currentChallanId = widget.existingChallan?['id']?.toString();
+    final currentChallanNo = widget.existingChallan?['challan_number']?.toString();
     for (final ch in existingChallans) {
+      if (currentChallanId != null && ch['id']?.toString() == currentChallanId) continue;
+      if (currentChallanNo != null && ch['challan_number']?.toString() == currentChallanNo) continue;
       final items = ch['items'];
       if (items is List) {
         for (final it in items) {
@@ -503,6 +511,39 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
     _initialized = true;
 
     _loadCustomDeliveryPersons();
+
+    if (widget.existingChallan != null) {
+      final ec = widget.existingChallan!;
+      if (ec['date'] != null) {
+        _challanDate = DateTime.tryParse(ec['date'].toString()) ?? DateTime.now();
+      }
+      _vehicleNumberController.text = ec['vehicle_number']?.toString() ?? '';
+      _shippingCompanyController.text = ec['shipping_company']?.toString() ?? '';
+      _driverContactController.text = ec['driver_contact']?.toString() ?? '';
+      final dtb = ec['delivery_taken_by']?.toString();
+      if (dtb != null && dtb.isNotEmpty) {
+        _selectedDeliveryPerson = dtb;
+        _deliveryPersonController.text = dtb;
+      }
+      _currentSource = ec['source']?.toString() ?? 'sales_order';
+      _items.clear();
+      final itemsRaw = ec['items'] as List? ?? [];
+      for (final raw in itemsRaw) {
+        if (raw is Map) {
+          final m = Map<String, dynamic>.from(raw);
+          _items.add(_ChallanItemRow(
+            name: m['name']?.toString() ?? '',
+            uom: (m['uom']?.toString() ?? 'NOS').isNotEmpty ? m['uom'].toString() : 'NOS',
+            qty: (m['qty'] as num?)?.toDouble() ?? 1.0,
+            requiredQty: (m['required_qty'] as num?)?.toDouble(),
+            sentQty: (m['sent_qty'] as num?)?.toDouble() ?? 0.0,
+            remark: m['remark']?.toString(),
+          ));
+        }
+      }
+      _syncControllers();
+      return;
+    }
 
     final so = pipeline.salesOrder;
     if (so != null) {
@@ -860,7 +901,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
       final baseChallanNo = PdfService.formatDeliveryChallanNumber(baseDocRef, _challanDate);
 
       final nextSuffix = (existingCount + 1).toString().padLeft(2, '0');
-      final challanNo = existingCount == 0 ? '$baseChallanNo-01' : '$baseChallanNo-$nextSuffix';
+      final isEditing = widget.existingChallan != null;
+      final existingChallanNo = widget.existingChallan?['challan_number']?.toString();
+      final challanNo = (isEditing && existingChallanNo != null && existingChallanNo.isNotEmpty)
+          ? existingChallanNo
+          : (existingCount == 0 ? '$baseChallanNo-01' : '$baseChallanNo-$nextSuffix');
       final fileName = '${challanNo.replaceAll('/', '_')}.pdf';
 
       // Fetch template config
@@ -938,7 +983,7 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
 
       // Record this Delivery Challan in Work Progress metadata
       final challanRecord = {
-        'id': 'dc_${DateTime.now().millisecondsSinceEpoch}',
+        'id': widget.existingChallan?['id']?.toString() ?? 'dc_${DateTime.now().millisecondsSinceEpoch}',
         'challan_number': challanNo,
         'date': _challanDate.toIso8601String(),
         'vehicle_number': _vehicleNumberController.text.trim(),
@@ -956,15 +1001,25 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
           'pending_qty': it.pendingQty,
           'remark': it.remark,
         }).toList(),
-        'created_at': DateTime.now().toIso8601String(),
-        'created_by': profile?.fullName ?? 'Staff',
+        'created_at': widget.existingChallan?['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+        'created_by': widget.existingChallan?['created_by']?.toString() ?? (profile?.fullName ?? 'Staff'),
+        if (isEditing) 'updated_at': DateTime.now().toIso8601String(),
+        if (isEditing) 'updated_by': profile?.fullName ?? 'Staff',
       };
 
-      await WorkProgressService.recordDeliveryChallan(
-        supabase,
-        widget.pipelineId,
-        challanRecord,
-      );
+      if (isEditing) {
+        await WorkProgressService.updateDeliveryChallan(
+          supabase,
+          widget.pipelineId,
+          challanRecord,
+        );
+      } else {
+        await WorkProgressService.recordDeliveryChallan(
+          supabase,
+          widget.pipelineId,
+          challanRecord,
+        );
+      }
 
       // Invalidate pipeline provider so the whole deal screen updates live!
       ref.invalidate(pipelineDetailProvider(widget.pipelineId));
@@ -1074,9 +1129,11 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                         children: [
                           Row(
                             children: [
-                              const Text(
-                                'Generate Delivery Challan',
-                                style: TextStyle(
+                              Text(
+                                widget.existingChallan != null
+                                    ? 'Edit Delivery Challan'
+                                    : 'Generate Delivery Challan',
+                                style: const TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -1736,10 +1793,14 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                         : const Icon(Icons.picture_as_pdf_outlined, size: 20),
                     label: Text(
                       _isGenerating
-                          ? 'Generating Challan PDF...'
+                          ? (widget.existingChallan != null
+                              ? 'Updating Challan PDF...'
+                              : 'Generating Challan PDF...')
                           : (!_canGenerateChallan
-                              ? 'Fill All Required Fields to Generate'
-                              : 'Generate Delivery Challan'),
+                              ? 'Fill All Required Fields to ${widget.existingChallan != null ? "Update" : "Generate"}'
+                              : (widget.existingChallan != null
+                                  ? 'Update Delivery Challan'
+                                  : 'Generate Delivery Challan')),
                       style: const TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ),

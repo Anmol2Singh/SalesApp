@@ -190,6 +190,59 @@ class WorkProgressService {
     }).eq('id', pipelineId);
   }
 
+  /// Updates an existing delivery challan in-place for this pipeline.
+  static Future<void> updateDeliveryChallan(
+    SupabaseClient supabase,
+    String pipelineId,
+    Map<String, dynamic> challanData,
+  ) async {
+    final res = await supabase
+        .from('sales_pipelines')
+        .select('notes')
+        .eq('id', pipelineId)
+        .maybeSingle();
+
+    final currentNotes = res?['notes']?.toString() ?? '';
+    final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
+
+    final List<dynamic> challans = (currentMeta['delivery_challans'] is List)
+        ? List<dynamic>.from(currentMeta['delivery_challans'] as List)
+        : [];
+
+    final targetId = challanData['id']?.toString();
+    final targetNo = challanData['challan_number']?.toString();
+    int matchIdx = -1;
+    if (targetId != null && targetId.isNotEmpty) {
+      matchIdx = challans.indexWhere((c) => c is Map && c['id']?.toString() == targetId);
+    }
+    if (matchIdx == -1 && targetNo != null && targetNo.isNotEmpty) {
+      matchIdx = challans.indexWhere((c) => c is Map && c['challan_number']?.toString() == targetNo);
+    }
+
+    if (matchIdx >= 0) {
+      challans[matchIdx] = challanData;
+    } else {
+      challans.add(challanData);
+    }
+
+    currentMeta['delivery_challans'] = challans;
+    currentMeta['challan_generated'] = true;
+    currentMeta['site_dispatched'] = true;
+    currentMeta['dispatch_ready'] = true;
+
+    final bool fDisp = currentMeta['factory_dispatched'] == true;
+    if (fDisp || challans.isNotEmpty) {
+      currentMeta['dispatched'] = true;
+    }
+
+    final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
+    final newNotes = _replaceWorkProgressTag(currentNotes, newTag);
+
+    await supabase.from('sales_pipelines').update({
+      'notes': newNotes,
+    }).eq('id', pipelineId);
+  }
+
   /// Updates specific sub-track statuses (Factory / Site)
   static Future<void> updateTrackStatus(
     SupabaseClient supabase,
@@ -456,11 +509,12 @@ class WorkProgressService {
   ) async {
     final res = await supabase
         .from('sales_pipelines')
-        .select('notes')
+        .select('notes, status')
         .eq('id', pipelineId)
         .maybeSingle();
 
     final currentNotes = res?['notes']?.toString() ?? '';
+    final currentStatus = res?['status']?.toString();
     final Map<String, dynamic> currentMeta = _extractMetaFromNotes(currentNotes);
     final List<String> list = (currentMeta['skipped_steps'] is List)
         ? List<String>.from((currentMeta['skipped_steps'] as List).map((e) => e.toString()))
@@ -476,9 +530,15 @@ class WorkProgressService {
     final newTag = '$_wpTagPrefix${jsonEncode(currentMeta)}$_wpTagSuffix';
     final newNotes = _replaceWorkProgressTag(currentNotes, newTag);
 
-    await supabase.from('sales_pipelines').update({
+    final Map<String, dynamic> updatePayload = {
       'notes': newNotes,
-    }).eq('id', pipelineId);
+    };
+    if (!skipped && currentStatus == 'completed') {
+      updatePayload['status'] = 'in_progress';
+      updatePayload['current_step'] = stepKey;
+    }
+
+    await supabase.from('sales_pipelines').update(updatePayload).eq('id', pipelineId);
   }
 
   /// Checks whether an installation ticket for this customer & pipeline is completed (resolved, closed, or completed).
@@ -938,6 +998,22 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
     );
   }
 
+  void _editExistingChallan(Map<String, dynamic> challan) {
+    final cust = widget.pipeline.customer;
+    if (cust == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Customer information missing on deal.'), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    DeliveryChallanModal.show(
+      context,
+      pipelineId: widget.pipeline.id,
+      customer: cust,
+      existingChallan: challan,
+    );
+  }
+
   Future<void> _viewQuotationPdf() async {
     final quot = widget.pipeline.quotation;
     if (quot == null) return;
@@ -986,6 +1062,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
         ),
       );
       if (variant == null) return;
+      if (!mounted) return;
     } else if (hasTechnical) {
       variant = 'technical';
     } else if (hasProduction) {
@@ -2606,6 +2683,21 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
                         ],
                       ),
                     ),
+                    if (canGenerate) ...[
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0284C7),
+                          side: const BorderSide(color: Color(0xFF38BDF8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: const Size(50, 28),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: () => _editExistingChallan(dc),
+                        icon: const Icon(Icons.edit_outlined, size: 13),
+                        label: const Text('Edit', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF166534),
