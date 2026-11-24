@@ -1524,8 +1524,17 @@ class _DeliveryChallanModalState extends ConsumerState<DeliveryChallanModal> {
                         ..._items.asMap().entries.map((entry) {
                           final idx = entry.key;
                           final item = entry.value;
-                          final remarkCtrl = _remarkControllers[idx]!;
-                          final qtyCtrl = _qtyControllers[idx]!;
+                          final remarkCtrl = _remarkControllers.putIfAbsent(
+                            idx,
+                            () => TextEditingController(text: item.remark ?? ''),
+                          );
+                          final qStr = item.qty == item.qty.roundToDouble()
+                              ? item.qty.toInt().toString()
+                              : item.qty.toString();
+                          final qtyCtrl = _qtyControllers.putIfAbsent(
+                            idx,
+                            () => TextEditingController(text: qStr),
+                          );
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 10),

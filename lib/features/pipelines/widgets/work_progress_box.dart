@@ -2309,6 +2309,7 @@ class _WorkProgressBoxState extends ConsumerState<WorkProgressBox> {
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   InkWell(

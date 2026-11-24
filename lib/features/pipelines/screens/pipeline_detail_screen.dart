@@ -1185,12 +1185,15 @@ class _StepActionCard extends ConsumerWidget {
         hasData && (step != PipelineStep.quotation || !isQuotationPending);
     final displayActive = !hasData && !isLocked && (isActive || isCompleted);
 
+    // Determine if this user can act on this step
+    final canAct = _canUserAct(ref);
+
     // Show action section when: the step is the current active step OR step has data (completed)
     // Or when the step is earlier than current (so Sales Head/Admin can fill missing steps)
-    // Or if the step is skipped so the user can unskip
-    final showActionSection =
-        (!isLocked && (isActive || isCompleted || hasData)) ||
-            (isSkipped && canApproveQuotations || isSkipped);
+    // Or if the step is skipped and the user can act to reverse skip it
+    final showActionSection = isSkipped
+        ? canAct
+        : (!isLocked && (isActive || isCompleted || hasData));
 
     bool isButtonEnabled = !isLocked && !isSkipped;
     String buttonText = hasData ? 'View / Edit' : 'Fill In';
@@ -1217,9 +1220,6 @@ class _StepActionCard extends ConsumerWidget {
         isButtonEnabled = false;
       }
     }
-
-    // Determine if this user can act on this step
-    final canAct = _canUserAct(ref);
 
     // PDF visibility: role-based
     bool isPdfVisible = false;
@@ -1441,7 +1441,7 @@ class _StepActionCard extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
               child: Row(
                 children: [
-                  if (hasData && isPdfVisible) ...[
+                  if (hasData && isPdfVisible && !isSkipped) ...[
                     InkWell(
                       onTap: () async {
                         if (step == PipelineStep.quotation) {
@@ -1495,7 +1495,31 @@ class _StepActionCard extends ConsumerWidget {
                     ),
                   ],
                   const Spacer(),
-                  if (step == PipelineStep.quotation &&
+                  if (isSkipped && canAct) ...[
+                    ElevatedButton.icon(
+                      onPressed: () =>
+                          _showReverseSkipDialog(context, ref, pipeline),
+                      icon: const Icon(Icons.undo, size: 14),
+                      label: const Text(
+                        'Reverse Skip',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF475569),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 36),
+                      ),
+                    ),
+                  ] else if (step == PipelineStep.quotation &&
                       isQuotationPending &&
                       canApproveQuotations) ...[
                     OutlinedButton(
@@ -1530,51 +1554,6 @@ class _StepActionCard extends ConsumerWidget {
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFD97706),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        minimumSize: const Size(0, 36),
-                      ),
-                    ),
-                  ] else if (isSkipped && canAct) ...[
-                    OutlinedButton(
-                      onPressed: () => _navigate(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF475569),
-                        side: const BorderSide(color: Color(0xFF94A3B8)),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        minimumSize: const Size(0, 36),
-                      ),
-                      child: Text(
-                        hasData ? 'View / Edit' : 'Open Form',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () =>
-                          _showReverseSkipDialog(context, ref, pipeline),
-                      icon: const Icon(Icons.undo, size: 14),
-                      label: const Text(
-                        'Reverse Skip',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF475569),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
